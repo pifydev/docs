@@ -1,0 +1,25 @@
+[book]
+title = "Pi Agent Book (中文)"
+description = "Pi Agent SDK 源码阅读笔记"
+authors = ["Pi Docs Contributors"]
+language = "zh"
+multilingual = false
+src = "src"
+
+[preprocessor.mermaid]
+command = "mdbook-mermaid install"
+
+[output.html]
+default-theme = "light"
+preferred-dark-theme = "navy"
+git-repository-url = "https://github.com/OWNER/pi-docs"
+edit-url-template = "https://github.com/OWNER/pi-docs/edit/main/zh/src/{path}"
+
+[output.html.fold]
+enable = true
+level = 1
+
+[output.html.playground]
+editable = false
+copyable = true
+copy-js = true

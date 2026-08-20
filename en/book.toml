@@ -1,0 +1,25 @@
+[book]
+title = "Pi Agent Book (English)"
+description = "Source-code reading notes for Pi Agent SDK"
+authors = ["Pi Docs Contributors"]
+language = "en"
+multilingual = false
+src = "src"
+
+[preprocessor.mermaid]
+command = "mdbook-mermaid install"
+
+[output.html]
+default-theme = "light"
+preferred-dark-theme = "navy"
+git-repository-url = "https://github.com/OWNER/pi-docs"
+edit-url-template = "https://github.com/OWNER/pi-docs/edit/main/en/src/{path}"
+
+[output.html.fold]
+enable = true
+level = 1
+
+[output.html.playground]
+editable = false
+copyable = true
+copy-js = true

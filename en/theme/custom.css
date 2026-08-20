@@ -1,0 +1,38 @@
+/* Pi Docs — custom theme overrides */
+
+:root {
+  --content-max-width: 850px;
+  --line-height: 1.6;
+}
+
+code {
+  font-family: "JetBrains Mono", "Cascadia Code", Consolas, monospace;
+  font-size: 0.9em;
+}
+
+blockquote {
+  border-left: 4px solid var(--quote-border);
+  background: var(--quote-bg);
+  padding: 0.75rem 1rem;
+  margin: 1rem 0;
+}
+
+table {
+  margin: 1rem 0;
+}
+
+table th {
+  background: var(--table-header-bg);
+}
+
+.mermaid {
+  background: var(--bg);
+  text-align: center;
+  margin: 1.5rem 0;
+}
+
+/* Code block tweaks for readability */
+pre code {
+  padding: 0.75rem 1rem;
+  line-height: 1.45;
+}
