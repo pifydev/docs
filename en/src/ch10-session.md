@@ -7,9 +7,9 @@ title_vi: "Chương 10: Quản lý Session — Lưu trữ, khôi phục và phâ
 source_url: https://www.dgzhuya.com/modules/ch10-session
 language: en
 version_pairs:
-  zh: zh/src/ch10-session.md
-  en: en/src/ch10-session.md
-  vi: vi/src/ch10-session.md
+ zh: zh/src/ch10-session.md
+ en: en/src/ch10-session.md
+ vi: vi/src/ch10-session.md
 original_chars: 6407
 code_lines: 187
 reading_minutes: 33
@@ -29,7 +29,7 @@ When talking about the compaction algorithm in Chapter 9, we kept mentioning one
 
 This chapter answers: what exactly is a Session Tree?
 
-But before explaining Session Tree, we have to answer a more fundamental question — **how is session data actually stored?** The original article skipped this question, but it is the real starting point of this chapter.
+But before explaining Session Tree, we have to answer a more fundamental question — **how is session data stored?** The original article skipped this question, but it is the real starting point of this chapter.
 
 ---
 
@@ -39,7 +39,7 @@ The first 8 chapters we kept working with `context.messages` — it is an array 
 
 This leads to the most basic engineering question: **how is session data stored?**
 
-This question actually contains **two independent sub-questions** that need to be separated:
+This question contains **two independent sub-questions** that need to be separated:
 
 - **Sub-question A: where is it stored?** (storage medium)
 - **Sub-question B: what does it look like?** (data structure)
@@ -69,7 +69,7 @@ So the choice for the "where is it stored" layer is: **coding-agent chose local 
 
 Where to store is solved, but there is a deeper question: **what is the logical form of dialog data?**
 
-The most intuitive answer: **linear array**. `messages = [msg1, msg2, msg3, ...]`, one after another. This structure is the simplest, also the default form of mysql-style `messages` tables.
+The most intuitive answer: **linear array**. `messages = [msg1, msg2, msg3,. ..]`, one after another. This structure is the simplest, also the default form of mysql-style `messages` tables.
 
 But in real usage scenarios, dialogs are **not always linear**:
 
@@ -266,7 +266,7 @@ e1 (model_change)
 
 Why keep them? Because you don't know whether in the future you'll want to return to the old branch. Maybe the new approach doesn't work out after half a day, you want to go back and see the original "problem is on line 23" analysis. If rewind deleted, it could never be recovered.
 
-### Step 7: change approach, re-ask — new branch naturally grows
+### Step 7: change approach, re-ask — new branch grows
 
 From the e2 fork point, you change the question, producing a new node:
 
@@ -330,7 +330,7 @@ Now that we've seen how the tree grows, let's look at the node itself in detail.
 
 ### A complete MessageEntry looks like this
 
-The AssistantMessage from step 3, in the .jsonl file, is one line like this:
+The AssistantMessage from step 3, in the. jsonl file, is one line like this:
 
 ```
 {
@@ -371,7 +371,7 @@ Section 2 showed four node types: `model_change`, `user`, `assistant`, `toolResu
 
 **Group 1: Enter the LLM context (4 types)**
 
-These 4 ultimately become one entry in the messages array, sent to the LLM:
+These 4 become one entry in the messages array, sent to the LLM:
 
 | Type | What message is produced | Example |
 | --- | --- | --- |
@@ -404,10 +404,10 @@ These 3 produce no message and don't change LLM parameters — purely for UI or 
 9 Entry types on the Session Tree
 
 Dark mode policy override.
-  prose.css applies `invert(1) hue-rotate(180deg)` to `.prose figure svg` by default.
-  When `darkMode="native"` or `"none"`, we need to opt out of that filter.
-  Since `<img src="*.svg">` renders as an `<img>` element (not inline SVG), the global `.prose figure svg` selector does not match it — but if the host page inlines the SVG into the DOM, this override is needed.
-  The rule below strategically opts out for the inline-SVG case.
+ prose.css applies `invert(1) hue-rotate(180deg)` to `.prose figure svg` by default.
+ When `darkMode="native"` or `"none"`, we need to opt out of that filter.
+ Since `<img src="*.svg">` renders as an `<img>` element (not inline SVG), the global `.prose figure svg` selector does not match it — but if the host page inlines the SVG into the DOM, this override is needed.
+ The rule below strategically opts out for the inline-SVG case.
 
 **Diagram caption:** All Entries share the base fields (`type` / `id` / `parentId` / `timestamp`), grouped by "impact on the LLM call" into three groups — ① Enter context (4 types, red, pushed into the messages array); ② Affect state (2 types, black, only modify `model` / `thinkingLevel` variables); ③ Pure metadata (3 types, dashed gray, skipped by `buildSessionContext`). This classification drives the dispatch logic of `buildSessionContext` in the next section.
 
@@ -450,7 +450,7 @@ appendEntry({ type: "message", id: "e3", parentId: "e2", message: ... });
 ```
 
 
-**e2 was not modified** — we simply created e3 with its `parentId` pointing to e2. e2 has no idea it gained a child, but a reverse lookup through the `byId` table finds all nodes whose `parentId` references it. That is exactly what "recognize-father-not-child + `byId` reverse lookup" means: the parent doesn't store children, the global index does.
+**e2 was not modified** — we created e3 with its `parentId` pointing to e2. e2 has no idea it gained a child, but a reverse lookup through the `byId` table finds all nodes whose `parentId` references it. That is exactly what "recognize-father-not-child + `byId` reverse lookup" means: the parent doesn't store children, the global index does.
 
 Cost? One extra `Map.has()` per append. Negligible. The benefit is that all old nodes stay immutable, every `parentId` pointer is forever valid, and you can rewind/branch freely without any cascading rewrites.
 
@@ -472,9 +472,9 @@ branch(branchFromId: "e2"): void {
 
 - No tree restructuring
 - No file rewriting
-- No need to compute "new current path" (the next append will naturally start from e2)
+- No need to compute "new current path" (the next append will start from e2)
 
-If you just want a clean retry without keeping any history hint, `branch()` is enough. But Pi also offers a more thoughtful option — generate a summary of the abandoned branch, hang it on the new branch so the Agent knows "we tried X before, here's what we learned":
+If you want a clean retry without keeping any history hint, `branch()` is enough. But Pi also offers a more thoughtful option — generate a summary of the abandoned branch, hang it on the new branch so the Agent knows "we tried X before, here's what we learned":
 
 
 ### Operation 3: branch — the natural result of appending after a rewind
@@ -507,7 +507,7 @@ e2 (user)
 ```
 
 
-**Difference between `BranchSummaryEntry` and an ordinary message**: it is the "last words" of the abandoned branch, not a dialog that actually happened. `buildSessionContext` turns it into a **`BranchSummaryMessage`** (distinct from the `CompactionSummaryMessage` produced by compaction — two different message types; see `createBranchSummaryMessage` at `session-manager.ts:397` vs `createCompactionSummaryMessage` at `:403`; Chapter 6 covered how `convertToLlm` translates this into a `<summary>` UserMessage). So the Agent on the new branch sees: "We previously tried X and concluded Y" — it knows the history, but it is not drowned in the old branch's details.
+**Difference between `BranchSummaryEntry` and an ordinary message**: it is the "last words" of the abandoned branch, not a dialog that happened. `buildSessionContext` turns it into a **`BranchSummaryMessage`** (distinct from the `CompactionSummaryMessage` produced by compaction — two different message types; see `createBranchSummaryMessage` at `session-manager.ts:397` vs `createCompactionSummaryMessage` at `:403`; Chapter 6 covered how `convertToLlm` translates this into a `<summary>` UserMessage). So the Agent on the new branch sees: "We previously tried X and concluded Y" — it knows the history, but it is not drowned in the old branch's details.
 
 **This is optional** — if the old branch doesn't matter at all, just call `branch()`, no summary generated. `branchWithSummary()` is for scenarios where you want to preserve the essence of history but not the full conversation.
 
@@ -597,7 +597,7 @@ If the path contains multiple `model_change` entries (say first switched to 4.6,
 
 > **Initial-value fallback:** in `buildSessionContext` the `model` state variable initializes to `null` (`session-manager.ts:367`). If the path has **no `model_change` node at all** (e.g. never switched models), the function returns `model: null`; the caller (`agent-session-runtime`) falls back to the initial model configured at session start. Assistant messages themselves don't carry "which model generated them" info — the model is determined entirely by `model_change` nodes.
 
-**This is exactly why Pi stores "switching the model" as a node rather than a state variable** — a node fully records "when did we switch, at which position", while a state variable can only hold the last value. If you rewind to a point before the model switch, `buildSessionContext`'s path doesn't include that `model_change`, so `model` falls back to the pre-switch value automatically. **Node-ifying state makes rewind naturally correct.**
+**This is exactly why Pi stores "switching the model" as a node rather than a state variable** — a node fully records "when did we switch, at which position", while a state variable can only hold the last value. If you rewind to a point before the model switch, `buildSessionContext`'s path doesn't include that `model_change`, so `model` falls back to the pre-switch value automatically. **Node-ifying state makes rewind correct.**
 
 
 ### CompactionEntry special handling: selective collection
@@ -636,7 +636,7 @@ The resulting `messages` array:
 
 ### Format: one Entry per line
 
-**This is the concrete implementation of "compaction result replaces old messages" mentioned in Chapter 9** — it does not actually delete e1 and e2 (append-only forbids deletion); instead, `buildSessionContext` "skips" them during traversal based on `firstKeptEntryId`. Next time you rewind to before e4, the path of `buildSessionContext` will not include e4, and e1–e3 will reappear as normal messages — compaction is not destructive, it is just a "view on the current path".
+**This is the concrete implementation of "compaction result replaces old messages" mentioned in Chapter 9** — it does not delete e1 and e2 (append-only forbids deletion); instead, `buildSessionContext` "skips" them during traversal based on `firstKeptEntryId`. Next time you rewind to before e4, the path of `buildSessionContext` will not include e4, and e1–e3 will reappear as normal messages — compaction is not destructive, it is just a "view on the current path".
 
 Notice that `firstKeptEntryId` is a field recorded on the `CompactionEntry` itself — it was calculated at compaction time as "which recent messages to keep". The "find a cutting point" logic from Chapter 9 exists precisely to determine this `firstKeptEntryId`.
 
@@ -699,7 +699,7 @@ Rewriting does not break the append-only principle — the rewrite produces a ne
 
 Session Tree has two layers of implementation, echoing the "interface allows swapping the database" point from §1:
 
-|  | agent-core layer | coding-agent layer |
+| | agent-core layer | coding-agent layer |
 | --- | --- | --- |
 | **API style** | Asynchronous | Synchronous |
 | **Entry types** | 11 types | 9 types |
@@ -742,7 +742,7 @@ Why path traversal? Because the LLM only understands a linear `messages` array, 
 
 **2. Use append-only data structures for "undo / rewind / branch" scenarios.** When the system needs these capabilities, don't delete old data. Use append-only + pointer positioning (`leafId`) to keep history fully intact. The cost is storage space, but disk is cheap, data is priceless.
 
-**3. Node-ify state variables so rewind is naturally correct.** Pi also stores "switch model" and "adjust thinking level" as nodes (`ModelChangeEntry` etc.), instead of stuffing them into a global state object. The benefit is that on rewind the state variable automatically returns to what it was at that point — path traversal only sees changes on the current path, automatically ignoring changes that have been rewound past. This is a design worth borrowing in your own projects.
+**3. Node-ify state variables so rewind is correct.** Pi also stores "switch model" and "adjust thinking level" as nodes (`ModelChangeEntry` etc.), instead of stuffing them into a global state object. The benefit is that on rewind the state variable automatically returns to what it was at that point — path traversal only sees changes on the current path, automatically ignoring changes that have been rewound past. This is a design worth borrowing in your own projects.
 
 ---
 

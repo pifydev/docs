@@ -7,9 +7,9 @@ title_vi: "Chương 7: Hướng sự kiện — Hệ thần kinh của Agent"
 source_url: https://www.dgzhuya.com/modules/ch07-event-driven
 language: vi
 version_pairs:
-  zh: zh/src/ch07-event-driven.md
-  en: en/src/ch07-event-driven.md
-  vi: vi/src/ch07-event-driven.md
+ zh: zh/src/ch07-event-driven.md
+ en: en/src/ch07-event-driven.md
+ vi: vi/src/ch07-event-driven.md
 original_chars: 3423
 code_lines: 164
 reading_minutes: 18

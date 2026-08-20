@@ -7,9 +7,9 @@ title_vi: "Chương 6: Hệ thống Message — Bộ nhớ của Agent được 
 source_url: https://www.dgzhuya.com/modules/ch06-messages
 language: vi
 version_pairs:
-  zh: zh/src/ch06-messages.md
-  en: en/src/ch06-messages.md
-  vi: vi/src/ch06-messages.md
+ zh: zh/src/ch06-messages.md
+ en: en/src/ch06-messages.md
+ vi: vi/src/ch06-messages.md
 original_chars: 4947
 code_lines: 181
 reading_minutes: 25
@@ -357,7 +357,7 @@ Logic cốt lõi của `convertToLlm` trong coding-agent là một câu lệnh `
 
 Nhận xét then chốt: **mọi custom message đều được dịch thành message vai `user`**.
 
-Tại sao đều thành `user`? Vì LLM API có yêu cầu chặt về thứ tự vai — format hội thoại phải xen kẽ `user -> assistant -> user -> ...`, không được có hai `assistant` liên tiếp. Custom message về bản chất là "thông tin do hệ thống tiêm vào" (kết quả thực thi Bash, tóm tắt compression, tóm tắt nhánh), đặt vào vai `user` là an toàn nhất.
+Tại sao đều thành `user`? Vì LLM API có yêu cầu chặt về thứ tự vai — format hội thoại phải xen kẽ `user -> assistant -> user ->. ..`, không được có hai `assistant` liên tiếp. Custom message về bản chất là "thông tin do hệ thống tiêm vào" (kết quả thực thi Bash, tóm tắt compression, tóm tắt nhánh), đặt vào vai `user` là an toàn nhất.
 
 ### Ví dụ cụ thể: dịch BashExecutionMessage
 

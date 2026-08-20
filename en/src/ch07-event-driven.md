@@ -7,9 +7,9 @@ title_vi: "Chương 7: Hướng sự kiện — Hệ thần kinh của Agent"
 source_url: https://www.dgzhuya.com/modules/ch07-event-driven
 language: en
 version_pairs:
-  zh: zh/src/ch07-event-driven.md
-  en: en/src/ch07-event-driven.md
-  vi: vi/src/ch07-event-driven.md
+ zh: zh/src/ch07-event-driven.md
+ en: en/src/ch07-event-driven.md
+ vi: vi/src/ch07-event-driven.md
 original_chars: 3423
 code_lines: 164
 reading_minutes: 18
@@ -29,7 +29,7 @@ In the previous six chapters, one thing kept appearing but we never dug into in 
 
 Chapter 3 said "Agent Loop emits an event at every step to let the UI update in real time". Chapter 5 said "when the tool executes it emits the `tool_execution_start`, `tool_execution_update`, `tool_execution_end` events". In Chapter 6, events everywhere carried `AgentMessage`.
 
-But we never answered: how do events actually get transmitted from inside the Agent to the outside? Who is listening? Why does the Agent "wait" for listeners to finish processing before continuing?
+But we never answered: how do events get transmitted from inside the Agent to the outside? Who is listening? Why does the Agent "wait" for listeners to finish processing before continuing?
 
 This chapter opens the Agent's "nervous system".
 

@@ -7,9 +7,9 @@ title_vi: "Chương 1: Mở đầu — Tại sao Pi-Agent đáng để bạn dà
 source_url: https://www.dgzhuya.com/modules/ch01-overview
 language: en
 version_pairs:
-  zh: zh/src/ch01-overview.md
-  en: en/src/ch01-overview.md
-  vi: vi/src/ch01-overview.md
+ zh: zh/src/ch01-overview.md
+ en: en/src/ch01-overview.md
+ vi: vi/src/ch01-overview.md
 original_chars: 6787
 code_lines: 89
 reading_minutes: 34
@@ -18,34 +18,34 @@ reviewed_by: null
 last_updated: 2026-08-20
 status: translated
 official_refs:
-  - https://pi.dev/docs/latest/index
-  - https://pi.dev/docs/latest/quickstart
-  - https://pi.dev/docs/latest/usage
-  - https://pi.dev/docs/latest/providers
-  - https://pi.dev/docs/latest/settings
-  - https://pi.dev/docs/latest/extensions
-  - https://pi.dev/docs/latest/skills
-  - https://pi.dev/docs/latest/packages
-  - https://pi.dev/docs/latest/models
-  - https://pi.dev/docs/latest/security
-  - https://pi.dev/docs/latest/keybindings
-  - https://pi.dev/docs/latest/sessions
-  - https://pi.dev/docs/latest/compaction
+ - https://pi.dev/docs/latest/index
+ - https://pi.dev/docs/latest/quickstart
+ - https://pi.dev/docs/latest/usage
+ - https://pi.dev/docs/latest/providers
+ - https://pi.dev/docs/latest/settings
+ - https://pi.dev/docs/latest/extensions
+ - https://pi.dev/docs/latest/skills
+ - https://pi.dev/docs/latest/packages
+ - https://pi.dev/docs/latest/models
+ - https://pi.dev/docs/latest/security
+ - https://pi.dev/docs/latest/keybindings
+ - https://pi.dev/docs/latest/sessions
+ - https://pi.dev/docs/latest/compaction
 terms_used:
-  - Pi Agent
-  - Agent Loop
-  - Tool System
-  - Session Tree
-  - TUI
-  - Skills
-  - Extensions
-  - Pi Package
-  - Prompt Template
-  - Theme
-  - Provider
-  - MCP
-  - SDK
-  - YOLO mode
+ - Pi Agent
+ - Agent Loop
+ - Tool System
+ - Session Tree
+ - TUI
+ - Skills
+ - Extensions
+ - Pi Package
+ - Prompt Template
+ - Theme
+ - Provider
+ - MCP
+ - SDK
+ - YOLO mode
 mermaid_blocks: 1
 code_blocks: 8
 ---
@@ -61,8 +61,8 @@ code_blocks: 8
 
 You probably opened this series for one of three reasons:
 
-1. **"I want a coding agent that actually works"** — you are tired of bloated tools and want something minimal, transparent, fast.
-2. **"I want to understand how an agent is actually built"** — you have poked at the source of other agent frameworks, and they were either too complex (tens of thousands of lines) or too naive (a single `while` loop calling itself an agent).
+1. **"I want a coding agent that works"** — you are tired of bloated tools and want something minimal, transparent, fast.
+2. **"I want to understand how an agent is built"** — you have poked at the source of other agent frameworks, and they were either too complex (tens of thousands of lines) or too naive (a single `while` loop calling itself an agent).
 3. **"I want to build my own agent"** — you have a vertical use case and need to build on top of an SDK rather than start from scratch.
 
 These three questions line up exactly with Pi's three identities. The fact that they all point to a single project is itself worth being curious about.
@@ -92,7 +92,7 @@ Breaking it apart:
 | Built-in tools | 4 core + 3 helpers | Core: `read` / `write` / `edit` / `bash`; helpers: `grep` / `find` / `ls`. |
 | System prompt | Static template ~90 words (200–400 words at runtime) | Compare with Claude Code's tens of thousands of words. |
 | TUI codebase | ~12,000 lines | The core `tui.ts` file alone is about 1,700 lines; Mario's game-engine background shows in the restraint. |
-| Supported providers | 30+ | The source `KnownProvider` enum actually lists 35 (including regional variants); about 27 unique brands: Anthropic, OpenAI, Google, Groq, Ollama, etc. |
+| Supported providers | 30+ | The source `KnownProvider` enum lists 35 (including regional variants); about 27 unique brands: Anthropic, OpenAI, Google, Groq, Ollama, etc. |
 | Core packages | 4 | `pi-ai` / `pi-agent-core` / `pi-tui` / `pi-coding-agent`. |
 | Run modes | 4 | Interactive / print-JSON / RPC / SDK. |
 
@@ -145,13 +145,13 @@ Pi-Agent four-layer architecture
 
 ---
 
-## 3. View 1: as a coding agent — a daily tool that is actually good
+## 3. View 1: as a coding agent — a daily tool that is good
 
 ### 3.1 What Pi is: building blocks, not a finished car
 
 State Pi's position in one sentence: **Pi is not another Cursor or Claude Code — it is a box of building blocks for assembling your own coding agent, your way.**
 
-A useful analogy. Cursor is a finished car — seats, air conditioning, navigation all installed, you sit down and drive. Claude Code is also a finished car, just with a race-engine and reinforced suspension. Pi is different — it gives you the engine, chassis, steering column, and wiring harness, plus a guarantee that "we have already verified this combination works." It ships with a default configuration that runs out of the box (just type `pi` and you are up), but its core value is this: you can take the parts apart, reassemble them, add new ones, or restyle them, and build a **car that fits your workflow exactly**.
+A useful analogy. Cursor is a finished car — seats, air conditioning, navigation all installed, you sit down and drive. Claude Code is also a finished car, just with a race-engine and reinforced suspension. Pi is different — it gives you the engine, chassis, steering column, and wiring harness, plus a guarantee that "we have already verified this combination works." It ships with a default configuration that runs out of the box (type `pi` and you are up), but its core value is this: you can take the parts apart, reassemble them, add new ones, or restyle them, and build a **car that fits your workflow exactly**.
 
 This positioning is the source of every design decision in Pi. Once you understand it, the following all make sense:
 
@@ -231,7 +231,7 @@ Here are a few dividends you get out of the box:
 
 **Tree-shaped sessions: when you go down the wrong path, fork.** Pi stores sessions as a **tree structure** (a DAG, a directed acyclic graph), not a linear log. `/tree` jumps to any historical message and forks a new branch from there. All branches live in the same file. Especially useful for debugging — you can try three different fixes from the same starting point without worrying about "not being able to go back".
 
-**YOLO mode and the safety philosophy.** Pi defaults to YOLO — the agent executes actions without approval prompts. Mario's argument: approval-based safety measures cause user fatigue ("prompt fatigue"), and end up either disabled wholesale or reduced to mechanical "yes-clicking" that becomes "security theater". He recommends containerization as the security boundary. If you really need approval flows, about 50 lines of Extension code can build them — the framework exposes every hook you need.
+**YOLO mode and the safety philosophy.** Pi defaults to YOLO — the agent executes actions without approval prompts. Mario's argument: approval-based safety measures cause user fatigue ("prompt fatigue"), and end up either disabled wholesale or reduced to mechanical "yes-clicking" that becomes "security theater". He recommends containerization as the security boundary. If you need approval flows, about 50 lines of Extension code can build them — the framework exposes every hook you need.
 
 ### 3.4 Up and running in one minute
 
@@ -286,7 +286,7 @@ Breaking down the key fields:
 - **`providers`** — top level is a provider map; the keys (`zhipu` / `deepseek`) are names you pick and become the model's `provider` field in the UI.
 - **`api`** — pick the protocol. Most common is `openai-completions` (OpenAI-compatible; nearly every Chinese provider supports it), then `anthropic-messages`, then `openai-responses`. This field decides which request format Pi uses.
 - **`baseUrl`** — the provider endpoint.
-- **`apiKey`** — stored in plaintext. **Make sure `.pi/` is in your `.gitignore`**, otherwise one careless `git add .` leaks it.
+- **`apiKey`** — stored in plaintext. **Make sure `.pi/` is in your `.gitignore`**, otherwise one careless `git add. ` leaks it.
 - **`models`** — the list of models under this provider. `id` is the actual model name passed to the API; `name` is the friendly label shown in the TUI.
 - **`contextWindow` / `maxTokens`** — optional; tells Pi the window and max output length of this model, which informs the context-compaction strategy.
 
@@ -335,7 +335,7 @@ Each chapter answers three layers of questions: **what** (the concept), **how** 
 
 ### 4.3 Pi's "philosophy of subtraction": the real lesson is in the trade-offs
 
-Looking at a framework that "does everything", you can only learn "what they built". Looking at a framework that deliberately does nothing, you learn "what is actually necessary to build an agent".
+Looking at a framework that "does everything", you can only learn "what they built". Looking at a framework that deliberately does nothing, you learn "what is necessary to build an agent".
 
 The "What we did not build" section of Pi's official site is a manifesto written upside down. Competitors list features; Pi lists what it gave up. Every sacrifice is backed by a clear engineering reason:
 
@@ -358,7 +358,7 @@ The third identity: Pi is a set of independently reusable SDKs that let you buil
 
 ### 5.1 SDK stack: three-layer architecture plus one orthogonal UI library
 
-Look again at the four-layer architecture diagram from section 2 — note that `pi-tui` is drawn **side by side** with `pi-agent-core`. It is not in the stack chain; it is a "side dependency" used by `pi-coding-agent` only in interactive mode. So from an SDK-reuse perspective, Pi is actually a **three-layer stack** (`pi-ai` → `pi-agent-core` → `pi-coding-agent`), plus an **orthogonal terminal UI library** (`pi-tui`). Each layer of the stack is independently usable, and the UI library is independently usable too — but it solves a different class of problem unrelated to the agent.
+Look again at the four-layer architecture diagram from section 2 — note that `pi-tui` is drawn **side by side** with `pi-agent-core`. It is not in the stack chain; it is a "side dependency" used by `pi-coding-agent` only in interactive mode. So from an SDK-reuse perspective, Pi is a **three-layer stack** (`pi-ai` → `pi-agent-core` → `pi-coding-agent`), plus an **orthogonal terminal UI library** (`pi-tui`). Each layer of the stack is independently usable, and the UI library is independently usable too — but it solves a different class of problem unrelated to the agent.
 
 **Layer 1: `pi-ai` — model calls only**
 
@@ -432,7 +432,7 @@ await session.prompt("Read the codebase and explain the architecture.");
 
 `pi-tui` is Mario's old trade (the libGDX game-engine author), about 12,000 lines implementing:
 
-- **Differential rendering** — only the changed cells are redrawn each frame, basically flicker-free.
+- **Differential rendering** — only the changed cells are redrawn each frame, flicker-free.
 - **Retained-mode UI** — a declarative component system similar to React, not the imperative style of ncurses.
 - **Built-in components** — input boxes with autocomplete, a Markdown renderer, syntax highlighting, fuzzy search.
 
@@ -477,7 +477,7 @@ Pi is a "trinity" project:
 
 1. **As a tool**: a minimal, transparent, steerable terminal coding agent. Clean context, model freedom, tree-shaped sessions, YOLO by default — for developers who want full control of their tools.
 2. **As a textbook**: a high-quality, finishable Agent design reference. 10 chapters cover the core decision points of agent architecture (from Agent Loop to session management), and every line of code comes with a "why this way" answer.
-3. **As an SDK**: a clearly layered, independently reusable development kit. The three-layer stack (`pi-ai` → `pi-agent-core` → `pi-coding-agent`) is usable layer by layer, plus a `pi-tui` terminal UI library decoupled from agents; four run modes cover everything from local to production.
+3. **As an SDK**: a layered, independently reusable development kit. The three-layer stack (`pi-ai` → `pi-agent-core` → `pi-coding-agent`) is usable layer by layer, plus a `pi-tui` terminal UI library decoupled from agents; four run modes cover everything from local to production.
 
 But the most important thing Pi proves is that **subtraction is a competitive product stance**. In a market racing toward "all-inclusive", the sentence "what I do not need will not be built" is itself a real feature.
 
@@ -499,7 +499,7 @@ Extensions can implement:
 - **Themes** — customize the TUI look.
 - **Prompt templates** — reusable prompt fragments.
 
-These five customization levers (Extensions, Skills, Prompt Templates, Themes, Pi Packages) essentially provide **a smooth upgrade path from "using Pi" to "modifying Pi"**.
+These five customization levers (Extensions, Skills, Prompt Templates, Themes, Pi Packages) provide **a smooth upgrade path from "using Pi" to "modifying Pi"**.
 
 
 

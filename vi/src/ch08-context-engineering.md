@@ -7,9 +7,9 @@ title_vi: "Chương 8: Context Engineering — Nhồi cuộc hội thoại vô h
 source_url: https://www.dgzhuya.com/modules/ch08-context-engineering
 language: vi
 version_pairs:
-  zh: zh/src/ch08-context-engineering.md
-  en: en/src/ch08-context-engineering.md
-  vi: vi/src/ch08-context-engineering.md
+ zh: zh/src/ch08-context-engineering.md
+ en: en/src/ch08-context-engineering.md
+ vi: vi/src/ch08-context-engineering.md
 original_chars: 5631
 code_lines: 215
 reading_minutes: 29

@@ -7,9 +7,9 @@ title_vi: "Chương 2: Kiến trúc ba lớp — Bộ xương của Pi-Agent"
 source_url: https://www.dgzhuya.com/modules/ch02-three-layer-arch
 language: vi
 version_pairs:
-  zh: zh/src/ch02-three-layer-arch.md
-  en: en/src/ch02-three-layer-arch.md
-  vi: vi/src/ch02-three-layer-arch.md
+ zh: zh/src/ch02-three-layer-arch.md
+ en: en/src/ch02-three-layer-arch.md
+ vi: vi/src/ch02-three-layer-arch.md
 original_chars: 4215
 code_lines: 203
 reading_minutes: 22
@@ -18,46 +18,46 @@ reviewed_by: null
 last_updated: 2026-08-20
 status: translated
 official_refs:
-  - https://pi.dev/docs/latest/index
-  - https://pi.dev/docs/latest/quickstart
-  - https://pi.dev/docs/latest/usage
-  - https://pi.dev/docs/latest/providers
-  - https://pi.dev/docs/latest/settings
-  - https://pi.dev/docs/latest/extensions
-  - https://pi.dev/docs/latest/skills
-  - https://pi.dev/docs/latest/packages
-  - https://pi.dev/docs/latest/models
-  - https://pi.dev/docs/latest/security
-  - https://pi.dev/docs/latest/keybindings
-  - https://pi.dev/docs/latest/sessions
-  - https://pi.dev/docs/latest/compaction
+ - https://pi.dev/docs/latest/index
+ - https://pi.dev/docs/latest/quickstart
+ - https://pi.dev/docs/latest/usage
+ - https://pi.dev/docs/latest/providers
+ - https://pi.dev/docs/latest/settings
+ - https://pi.dev/docs/latest/extensions
+ - https://pi.dev/docs/latest/skills
+ - https://pi.dev/docs/latest/packages
+ - https://pi.dev/docs/latest/models
+ - https://pi.dev/docs/latest/security
+ - https://pi.dev/docs/latest/keybindings
+ - https://pi.dev/docs/latest/sessions
+ - https://pi.dev/docs/latest/compaction
 terms_used:
-  - Pi Agent
-  - Agent Loop
-  - Tool System
-  - Tool
-  - TUI
-  - MCP
-  - Provider
-  - KnownProvider
-  - Skills
-  - Extensions
-  - Pi Package
-  - Theme
-  - SDK
-  - DAG
-  - Hot Reload
-  - pi-ai
-  - pi-agent-core
-  - pi-coding-agent
-  - pi-tui
-  - pi-orchestrator
-  - monorepo
-  - npm workspaces
-  - TypeScript
-  - TypeBox
-  - Static
-  - TSchema
+ - Pi Agent
+ - Agent Loop
+ - Tool System
+ - Tool
+ - TUI
+ - MCP
+ - Provider
+ - KnownProvider
+ - Skills
+ - Extensions
+ - Pi Package
+ - Theme
+ - SDK
+ - DAG
+ - Hot Reload
+ - pi-ai
+ - pi-agent-core
+ - pi-coding-agent
+ - pi-tui
+ - pi-orchestrator
+ - monorepo
+ - npm workspaces
+ - TypeScript
+ - TypeBox
+ - Static
+ - TSchema
 code_blocks: 16
 mermaid_blocks: 0
 ---

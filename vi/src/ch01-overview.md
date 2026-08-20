@@ -7,9 +7,9 @@ title_vi: "Chương 1: Mở đầu — Tại sao Pi-Agent đáng để bạn dà
 source_url: https://www.dgzhuya.com/modules/ch01-overview
 language: vi
 version_pairs:
-  zh: zh/src/ch01-overview.md
-  en: en/src/ch01-overview.md
-  vi: vi/src/ch01-overview.md
+ zh: zh/src/ch01-overview.md
+ en: en/src/ch01-overview.md
+ vi: vi/src/ch01-overview.md
 original_chars: 6787
 code_lines: 89
 reading_minutes: 34
@@ -18,34 +18,34 @@ reviewed_by: null
 last_updated: 2026-08-20
 status: translated
 official_refs:
-  - https://pi.dev/docs/latest/index
-  - https://pi.dev/docs/latest/quickstart
-  - https://pi.dev/docs/latest/usage
-  - https://pi.dev/docs/latest/providers
-  - https://pi.dev/docs/latest/settings
-  - https://pi.dev/docs/latest/extensions
-  - https://pi.dev/docs/latest/skills
-  - https://pi.dev/docs/latest/packages
-  - https://pi.dev/docs/latest/models
-  - https://pi.dev/docs/latest/security
-  - https://pi.dev/docs/latest/keybindings
-  - https://pi.dev/docs/latest/sessions
-  - https://pi.dev/docs/latest/compaction
+ - https://pi.dev/docs/latest/index
+ - https://pi.dev/docs/latest/quickstart
+ - https://pi.dev/docs/latest/usage
+ - https://pi.dev/docs/latest/providers
+ - https://pi.dev/docs/latest/settings
+ - https://pi.dev/docs/latest/extensions
+ - https://pi.dev/docs/latest/skills
+ - https://pi.dev/docs/latest/packages
+ - https://pi.dev/docs/latest/models
+ - https://pi.dev/docs/latest/security
+ - https://pi.dev/docs/latest/keybindings
+ - https://pi.dev/docs/latest/sessions
+ - https://pi.dev/docs/latest/compaction
 terms_used:
-  - Pi Agent
-  - Agent Loop
-  - Tool System
-  - Session Tree
-  - TUI
-  - Skills
-  - Extensions
-  - Pi Package
-  - Prompt Template
-  - Theme
-  - Provider
-  - MCP
-  - SDK
-  - YOLO mode
+ - Pi Agent
+ - Agent Loop
+ - Tool System
+ - Session Tree
+ - TUI
+ - Skills
+ - Extensions
+ - Pi Package
+ - Prompt Template
+ - Theme
+ - Provider
+ - MCP
+ - SDK
+ - YOLO mode
 mermaid_blocks: 1
 code_blocks: 8
 ---
@@ -286,7 +286,7 @@ Tách ra các trường chính:
 - **`providers`** — tầng trên cùng là map nhà cung cấp; các khóa (`zhipu` / `deepseek`) là tên bạn tự đặt và sẽ trở thành trường `provider` của model trong UI.
 - **`api`** — chọn giao thức. Phổ biến nhất là `openai-completions` (tương thích OpenAI; hầu hết nhà cung cấp Trung Quốc đều hỗ trợ), tiếp theo `anthropic-messages`, rồi `openai-responses`. Trường này quyết định định dạng request Pi sẽ dùng.
 - **`baseUrl`** — endpoint của nhà cung cấp.
-- **`apiKey`** — lưu dạng plaintext. **Hãy chắc chắn `.pi/` có trong `.gitignore`**, nếu không một `git add .` bất cẩn sẽ làm lộ key.
+- **`apiKey`** — lưu dạng plaintext. **Hãy chắc chắn `.pi/` có trong `.gitignore`**, nếu không một `git add. ` bất cẩn sẽ làm lộ key.
 - **`models`** — danh sách model của nhà cung cấp này. `id` là tên model thực tế truyền cho API; `name` là nhãn thân thiện hiển thị trong TUI.
 - **`contextWindow` / `maxTokens`** — tùy chọn; cho Pi biết cửa sổ và độ dài output tối đa của model, từ đó quyết định chiến lược nén ngữ cảnh.
 

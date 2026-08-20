@@ -7,9 +7,9 @@ title_vi: "Chương 9: Nén ngữ cảnh — Khi cuộc hội thoại quá dài"
 source_url: https://www.dgzhuya.com/modules/ch09-compaction
 language: en
 version_pairs:
-  zh: zh/src/ch09-compaction.md
-  en: en/src/ch09-compaction.md
-  vi: vi/src/ch09-compaction.md
+ zh: zh/src/ch09-compaction.md
+ en: en/src/ch09-compaction.md
+ vi: vi/src/ch09-compaction.md
 original_chars: 3944
 code_lines: 183
 reading_minutes: 20
@@ -125,7 +125,7 @@ function estimateTokens(message: AgentMessage): number {
 ```
 
 
-An English character is about 0.25 tokens (4 chars ~= 1 token, the estimate is close to actual). **Chinese is a reverse bias**: 1 Chinese character is actually about 1-2 tokens, but `chars/4` only counts it as 0.25 tokens — **severely underestimates** conversations with high Chinese content. This means in pure Chinese scenarios, Pi thinks "not yet at the compaction threshold" while actual tokens are close to the upper limit. This is a known precision issue, but `chars/4` is accurate enough when English dominates, and the implementation is extremely simple.
+An English character is about 0.25 tokens (4 chars ~= 1 token, the estimate is close to actual). **Chinese is a reverse bias**: 1 Chinese character is about 1-2 tokens, but `chars/4` only counts it as 0.25 tokens — **severely underestimates** conversations with high Chinese content. This means in pure Chinese scenarios, Pi thinks "not yet at the compaction threshold" while actual tokens are close to the upper limit. This is a known precision issue, but `chars/4` is accurate enough when English dominates, and the implementation is extremely simple.
 
 **Why use imprecise estimation?** Because it's better to over-estimate than to under-estimate. Over-estimation at worst triggers one extra compaction (harmless); under-estimation makes the API error out (harmful). This is a "conservative strategy" — trade precision for safety.
 
@@ -172,7 +172,7 @@ Source findValidCutPoints has a clear rule: **`user` and `assistant` are both va
 
 ### Cut point semantics: the start of the kept area
 
-To understand the cut point grasp one key — **the cut point is not "the last message to be cut off", it is "the first message of the kept area"**. This semantic is very important and will clarify all your subsequent questions.
+To understand the cut point grasp one key — **the cut point is not "the last message to be cut off", it is "the first message of the kept area"**. This semantic is important and will clarify all your subsequent questions.
 
 The cut point is `user`, what does that mean? user itself enters the kept area, **the assistant and toolResult following it also enter the kept area** — this user-led entire Turn is all kept. What gets compressed is the messages **before** this user.
 
@@ -188,13 +188,13 @@ entry:  0     1     2      3       4     5      6       7      8
 ```
 
 
-So cutting after `user` is **the safest choice** — naturally guaranteeing the Turn is complete, because the assistant and toolResult following `user` all enter the kept area.
+So cutting after `user` is **the safest choice** — guaranteeing the Turn is complete, because the assistant and toolResult following `user` all enter the kept area.
 
 ### Backward traversal: protecting the most important things
 
 After determining valid cut points, where to cut from? Pi's strategy is **accumulating backward** (findCutPoint L392-454):
 
-Why backward? Because **the most recent context is the most important**. The model needs to know "what did we just do", "what files did we just read", "what did the user just say". Walk backward until enough tokens are accumulated (20,000), ensuring enough recent context is kept.
+Why backward? Because **the most recent context is the most important**. The model needs to know "what did we do", "what files did we just read", "what did the user just say". Walk backward until enough tokens are accumulated (20,000), ensuring enough recent context is kept.
 
 ```
 从最新消息往回走，累积 token 数。
@@ -205,7 +205,7 @@ Why backward? Because **the most recent context is the most important**. The mod
 
 The cut result splits messages into two groups: kept area (entry 7 and after) and compressed area (entry 6 and before). Each side is then processed differently.
 
-Why backward? Because **the most recent context is the most important**. The model needs to know "what did we just do", "what files did we just read", "what did the user just say". Walk backward until enough tokens are accumulated (20,000), ensuring enough recent context is kept.
+Why backward? Because **the most recent context is the most important**. The model needs to know "what did we do", "what files did we just read", "what did the user just say". Walk backward until enough tokens are accumulated (20,000), ensuring enough recent context is kept.
 
 ```
 function findCutPoint(entries, keepRecentTokens) {
@@ -296,7 +296,7 @@ If a long dialog is compressed multiple times (the first time compresses turns 1
 
 This makes the LLM do **update rather than rewrite** — existing Goal/Constraints are kept, new Progress is appended. More stable than writing the summary from scratch each time.
 
-### File tracking: compaction is not just summary text
+### File tracking: compaction is summary text
 
 For the coding Agent, "which files were modified" is crucial info. Pi's summary also maintains a file tracking list:
 
@@ -320,7 +320,7 @@ These lists accumulate across compactions — the second compression merges the 
 
 Section 3 talked about both user cut points and assistant cut points being valid. But they have different natures:
 
-- **user cut point**: naturally ensures Turn completeness (the assistant + toolResult following user also enter the kept area)
+- **user cut point**: ensures Turn completeness (the assistant + toolResult following user also enter the kept area)
 - **assistant cut point**: **will split the Turn** — the user corresponding to this assistant is in the compressed area while the assistant itself is in the kept area
 
 Source findCutPoint L444-453 judgment logic:
@@ -329,7 +329,7 @@ Source findCutPoint L444-453 judgment logic:
 
 ### Why allow assistant cut points?
 
-The most intuitive question is: since assistant cut points will split the Turn, why not just cut only at user? Wouldn't this completely avoid split turns?
+The most intuitive question is: since assistant cut points will split the Turn, why cut only at user? Wouldn't this completely avoid split turns?
 
 The answer lies in the precision of token control. Look at this scenario:
 
@@ -401,7 +401,7 @@ Each compaction produces a `CompactionEntry`, stored on the Session Tree (Chapte
 
 Next time the Agent runs, `buildSessionContext()` reconstructs the context based on CompactionEntry:
 
-Recalling the message system in Chapter 6: `CompactionSummaryMessage` is a custom message type of coding-agent; `convertToLlm` translates it into a `UserMessage` wrapped in `<summary>` tags. What the LLM sees is: "The conversation history before this point was compacted into the following summary: ..."
+Recalling the message system in Chapter 6: `CompactionSummaryMessage` is a custom message type of coding-agent; `convertToLlm` translates it into a `UserMessage` wrapped in `<summary>` tags. What the LLM sees is: "The conversation history before this point was compacted into the following summary:. .."
 
 **To the LLM, the dozens of turns of dialog turn into one summary**. It doesn't know the details of the raw messages, but it knows the goals, progress, decisions, and file operation records — usually enough to continue working.
 

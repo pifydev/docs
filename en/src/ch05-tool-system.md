@@ -161,19 +161,19 @@ Now that the type definitions are clear, look at the actual execution process of
 
 ### Why cannot we just call the function directly?
 
-The simplest handling: find the `read` tool -> read the file -> stuff the content into `ToolResultMessage` -> done. One function call, very intuitive.
+The simplest handling: find the `read` tool -> read the file -> stuff the content into `ToolResultMessage` -> done. One function call, intuitive.
 
 But model outputs are not always well-behaved:
 
 - **Wrong parameter format**: the `Edit` tool expects `edits` to be an array, but some models serialize the array as the string `"[{...}]"`
 - **Wrong parameter type**: the `Read` tool's `path` parameter is `string`, but the model may pass a number `12345`
-- **Dangerous operations**: the model asks to run `rm -rf /`, does your Agent really do it?
+- **Dangerous operations**: the model asks to run `rm -rf /`, does your Agent do it?
 
 These issues mean "directly calling the function" is not enough. You need a few checkpoints before execution.
 
 ### Pi's answer: the five-step pipeline
 
-Each step has clear responsibility and exit mechanism. The first 3 steps are "preparation" — failure in any step does not execute the tool. Step 4 is "actually doing the work". Step 5 is "wrapping up". Let us expand step by step.
+Each step has clear responsibility and exit mechanism. The first 3 steps are "preparation" — failure in any step does not execute the tool. Step 4 is "doing the work". Step 5 is "wrapping up". Let us expand step by step.
 
 
 ```
@@ -244,7 +244,7 @@ After parameter validation passes, before execution, the product layer has one m
 
 ### Step 4: `tool.execute` — actual execution
 
-After the first 3 steps pass, the tool's `execute` function is actually called. Let us look at its signature again:
+After the first 3 steps pass, the tool's `execute` function is called. Let us look at its signature again:
 
 
 ```
@@ -255,13 +255,13 @@ After： 验证失败 → 报错 → 不执行工具
 
 Four parameters — `toolCallId` is the ID of this call, `params` is the validated parameters, `signal` is the `AbortSignal` used for cancellation (triggered when the user presses Ctrl+C). What is the fourth, `onUpdate`?
 
-**It solves the problem of "long-task progress awareness".** Suppose the Bash tool has to run a 30-second command — if it can only report to the outside at "start execution" and "execution complete", during those 30 seconds the user can only stare at the loading animation. `onUpdate` lets the tool **push messages outward while executing**: the Bash tool pushes the current terminal output every 100ms, the Grep tool pushes every time it finds a batch of matches, the Read tool reports progress in chunks when reading a large file. These pushes are wrapped as `tool_execution_update` events and ultimately flow to the UI.
+**It solves the problem of "long-task progress awareness".** Suppose the Bash tool has to run a 30-second command — if it can only report to the outside at "start execution" and "execution complete", during those 30 seconds the user can only stare at the loading animation. `onUpdate` lets the tool **push messages outward while executing**: the Bash tool pushes the current terminal output every 100ms, the Grep tool pushes every time it finds a batch of matches, the Read tool reports progress in chunks when reading a large file. These pushes are wrapped as `tool_execution_update` events and flow to the UI.
 
 In short: **without `onUpdate`, tool execution is a black box; with it, tool execution is "observable".** This is the key mechanism that lets tools report progress to the user in real time.
 
 But there is an edge case that needs handling. The tool's `execute` is an async function; after it `return`s, there may still be unfinished async operations inside — for example the Bash tool's child process is asynchronously printing the last few lines of log after the main command returns. If these delayed callbacks still push data to `onUpdate`, they will pollute a tool call that has already finished, confusing the UI context. Pi uses an `acceptingUpdates` flag to solve this: once `execute` returns (or throws), immediately turn off the flag; all subsequent `onUpdate` calls are silently discarded. This is a defensive engineering detail, not complex, but must exist.
 
-Where do the messages pushed by `onUpdate` ultimately flow? This question is important — it is the core topic of the next chapter, the "message system", which we will expand there. For now you only need to remember: tool execution is not a black box, progress is observable.
+Where do the messages pushed by `onUpdate` flow? This question is important — it is the core topic of the next chapter, the "message system", which we will expand there. For now you only need to remember: tool execution is not a black box, progress is observable.
 
 What if `tool.execute()` throws an exception? Don't worry, §4 will explain in detail how this is handled — spoiler: the exception is translated into an `isError: true` message sent to the model.
 
@@ -294,7 +294,7 @@ This message is appended to the conversation history and sent to the model as co
 
 ---
 
-## 3. Parallel vs serial: a batch of tools is not "just run them together"
+## 3. Parallel vs serial: a batch of tools is not "run them together"
 
 **Diagram caption:** The top shows the "one-vote-veto" decision — as long as one tool declares `sequential`, the whole batch runs serially. On the left is the green three-phase design (sequential prepare -> parallel execute -> ordered events), on the right is the black waterfall serial execution. At the bottom is the explanation of "why the prepare phase must be sequential" and "when to use serial".
 
@@ -339,7 +339,7 @@ So Pi needs a mechanism to judge "which tools can run in parallel, which must ru
 
 Pi's strategy is simple — **as long as one tool is marked `sequential`, the entire batch runs serially**:
 
-**Why a one-vote veto instead of only serializing the conflicting tools?** Because "which tools will conflict" is very hard to judge precisely. Can two `edit`s running on different files be parallel? What if the files they edit have dependency relationships? Pi chose the conservative strategy: **better to wait longer than to make a mistake**.
+**Why a one-vote veto instead of only serializing the conflicting tools?** Because "which tools will conflict" is hard to judge precisely. Can two `edit`s running on different files be parallel? What if the files they edit have dependency relationships? Pi chose the conservative strategy: **better to wait longer than to make a mistake**.
 
 
 ```
@@ -354,7 +354,7 @@ ToolCall 2: edit { path: "app.ts", oldText: "v3", newText: "v4" }
 
 When it is decided that parallel execution is OK, Pi does not simply `Promise.all` and call it done — it splits execution into three phases:
 
-Why design it this way? Because **the prepare phase may have side effects** (`beforeToolCall` may modify shared state) and must run serially. And **the order of result messages the model depends on is the call order** (the model first asks `read`, then `grep`, the messages must be in that order), so `ToolResultMessage` must be ordered. Only `tool.execute()` is actually parallel.
+Why design it this way? Because **the prepare phase may have side effects** (`beforeToolCall` may modify shared state) and must run serially. And **the order of result messages the model depends on is the call order** (the model first asks `read`, then `grep`, the messages must be in that order), so `ToolResultMessage` must be ordered. Only `tool.execute()` is parallel.
 
 > One more detail: all 7 built-in tools in v0.80.2 (read/write/edit/bash/grep/find/ls) **do not explicitly declare `executionMode`**, they all default to `"parallel"` (the `ToolExecutionMode` type is in `agent/src/types.ts:41`, runtime checks whether it is `"sequential"` only at `agent-loop.ts:382`, undeclared is treated as parallel). So how does the Edit tool guarantee file safety? The answer is the tool's internal `withFileMutationQueue` (file mutation queue, `file-mutation-queue.ts:32-61`) — Edit calls it in `edit.ts:312`, ensuring serialization of edits to the **same file**. This is a second line of defense the tool itself builds, with no need to rely on the outer `executionMode` declaration. **Extension tools that need serial execution can explicitly declare `executionMode: "sequential"`.**
 
@@ -480,7 +480,7 @@ The difference between an exception and a message is not in "what the content is
 
 ### Why is "disguising as a message" the best handling?
 
-You might think: why not just throw the exception out and let the outer layer handle it uniformly? Why bother translating into a message that "looks like a normal result"?
+You might think: why throw the exception out and let the outer layer handle it uniformly? Why bother translating into a message that "looks like a normal result"?
 
 The core of the answer is: **letting the model decide the next step is better than the framework deciding for it.**
 
@@ -528,7 +528,7 @@ When the model sees "Read failed", it can only blindly retry or give up; when it
 
 ### Pi's actual practice: two-layer error handling, layered responsibility
 
-Looking back at the source code to see how Pi's own tools do it, you will find that it **does not rely on the framework's safety net**, but rather makes the error description very specific inside the tool:
+Looking back at the source code to see how Pi's own tools do it, you will find that it **does not rely on the framework's safety net**, but rather makes the error description specific inside the tool:
 
 **Read tool** (`read.ts:275`) — appends total line count when out of bounds:
 
@@ -548,18 +548,18 @@ Looking back at the source code to see how Pi's own tools do it, you will find t
 ```
 
 
-Notice Bash's strategy — it **actively identifies** known error types (abort, timeout, non-zero exit code), each is packaged by `appendStatus(text, ...)` with the "already output content" and "specific reason" into a new Error. Only when it encounters an exception that really cannot be identified does it `throw err` and pass it through as-is.
+Notice Bash's strategy — it **actively identifies** known error types (abort, timeout, non-zero exit code), each is packaged by `appendStatus(text,. ..)` with the "already output content" and "specific reason" into a new Error. Only when it encounters an exception that cannot be identified does it `throw err` and pass it through as-is.
 
 This is Pi's real design: **two-layer error handling, layered responsibility**.
 
 **Layer 1 (inside the tool, active)**: identify known error types, package them into specific, readable descriptions
-   - Read / Edit / Bash all do this — Bash even attaches "already output content" to the error
-   - Purpose: provide the model with concrete clues of "why it failed, how to fix it"
+ - Read / Edit / Bash all do this — Bash even attaches "already output content" to the error
+ - Purpose: provide the model with concrete clues of "why it failed, how to fix it"
 
 **Layer 2 (framework safety net, passive)**: the catch of `executePreparedToolCall`
-   - Only kicks in when the tool did not identify the error
-   - Does not create new error descriptions, only passes the `error.message` straight through to the model
-   - Purpose: guarantee no exception ever penetrates to Agent Loop
+ - Only kicks in when the tool did not identify the error
+ - Does not create new error descriptions, only passes the `error.message` straight through to the model
+ - Purpose: guarantee no exception ever penetrates to Agent Loop
 
 
 ```
@@ -607,7 +607,7 @@ throw new Error(`Could not edit file: ${path}. ${errorMessage}.`);
 ```
 
 
-Note Bash's strategy — it **actively identifies** known error types (abort, timeout, non-zero exit code), each is packaged by `appendStatus(text, ...)` with "already output content" and "specific reason" into a new Error. Only when it encounters an exception that really cannot be identified does it `throw err` and pass it through as-is.
+Note Bash's strategy — it **actively identifies** known error types (abort, timeout, non-zero exit code), each is packaged by `appendStatus(text,. ..)` with "already output content" and "specific reason" into a new Error. Only when it encounters an exception that cannot be identified does it `throw err` and pass it through as-is.
 
 This is Pi's real design: **two-layer error handling, layered responsibility**.
 
@@ -650,7 +650,7 @@ Borrowing from the Bash tool's writing style, a custom tool's `execute` should l
 1. **Always wrap errors you can identify**: attach clues of "what went wrong, why, what to do". For example, "file does not exist" is 10x stronger than "operation failed"; "file /a.ts does not exist, the directory has [b.ts, c.ts]" is another 10x stronger than "file does not exist".
 2. **Do not hard-code descriptions for unrecognized errors**: just `throw err`, let the framework's fallback catch pass `err.message` through. **Do not write `throw new Error("Operation failed")` and similar vague descriptions** — that equals painting all unknown errors in the same color, and the model cannot distinguish them.
 
-**This is why "even unknown errors should become a message"** — it does not mean "uniformly describe unknown errors as 'something went wrong'", but rather "let the framework fallback catch take over, at least guaranteeing that unknown exceptions are also translated into `isError: true` messages sent to the model, rather than penetrating to break the loop". The error description itself should still be as specific as possible; only when it is truly impossible to identify, let `err.message` be passed through to the model as-is.
+**This is why "even unknown errors should become a message"** — it does not mean "uniformly describe unknown errors as 'something went wrong'", but rather "let the framework fallback catch take over, at least guaranteeing that unknown exceptions are also translated into `isError: true` messages sent to the model, rather than penetrating to break the loop". The error description itself should still be as specific as possible; only when it is impossible to identify, let `err.message` be passed through to the model as-is.
 
 
 ```
@@ -805,7 +805,7 @@ Looking back at the entire tool system, there are four design patterns worth reu
 
 ## 7. Closing
 
-Back to the opening question: "when the model says 'read this file', what actually happened?"
+Back to the opening question: "when the model says 'read this file', what happened?"
 
 Now you have the complete answer:
 

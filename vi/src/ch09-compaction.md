@@ -7,9 +7,9 @@ title_vi: "Chương 9: Nén ngữ cảnh — Khi cuộc hội thoại quá dài"
 source_url: https://www.dgzhuya.com/modules/ch09-compaction
 language: vi
 version_pairs:
-  zh: zh/src/ch09-compaction.md
-  en: en/src/ch09-compaction.md
-  vi: vi/src/ch09-compaction.md
+ zh: zh/src/ch09-compaction.md
+ en: en/src/ch09-compaction.md
+ vi: vi/src/ch09-compaction.md
 original_chars: 3944
 code_lines: 183
 reading_minutes: 20
@@ -401,7 +401,7 @@ Moi lan nen sinh ra mot `CompactionEntry`, duoc luu tren Session Tree (Chuong 10
 
 Lan Agent chay tiep theo, `buildSessionContext()` tai tao context dua tren CompactionEntry:
 
-Nho lai he thong message o Chuong 6: `CompactionSummaryMessage` la kieu message tuy chinh cua coding-agent; `convertToLlm` dich no thanh `UserMessage` boc bang the `<summary>`. Nhung LLM thay la: "The conversation history before this point was compacted into the following summary: ..."
+Nho lai he thong message o Chuong 6: `CompactionSummaryMessage` la kieu message tuy chinh cua coding-agent; `convertToLlm` dich no thanh `UserMessage` boc bang the `<summary>`. Nhung LLM thay la: "The conversation history before this point was compacted into the following summary:. .."
 
 **Doi voi LLM, vai chuc luot hoi thoai bien thanh mot tom tat**. No khong biet chi tiet cua message tho, nhung no biet muc tieu, tien do, quyet dinh va ban ghi thao tac file — thuong du de tiep tuc lam viec.
 

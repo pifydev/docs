@@ -7,9 +7,9 @@ title_vi: "Chương 10: Quản lý Session — Lưu trữ, khôi phục và phâ
 source_url: https://www.dgzhuya.com/modules/ch10-session
 language: vi
 version_pairs:
-  zh: zh/src/ch10-session.md
-  en: en/src/ch10-session.md
-  vi: vi/src/ch10-session.md
+ zh: zh/src/ch10-session.md
+ en: en/src/ch10-session.md
+ vi: vi/src/ch10-session.md
 original_chars: 6407
 code_lines: 187
 reading_minutes: 33
@@ -69,7 +69,7 @@ Vay lua chon tang "luu o dau": **coding-agent chon file JSONL cuc bo, nhung inte
 
 Luu o dau da giai, nhung con mot cau hoi sau hon: **hinh thai logic cua du lieu hoi thoai la gi?**
 
-Cau tra loi truc giac nhat: **mang tuyen tinh**. `messages = [msg1, msg2, msg3, ...]`, mot cai noi tiep mot cai. Cau truc nay don gian nhat, cung la dang mac dinh cua bang `messages` kieu mysql.
+Cau tra loi truc giac nhat: **mang tuyen tinh**. `messages = [msg1, msg2, msg3,. ..]`, mot cai noi tiep mot cai. Cau truc nay don gian nhat, cung la dang mac dinh cua bang `messages` kieu mysql.
 
 Nhung trong kich ban su dung that, hoi thoai **khong luon luon tuyen tinh**:
 
@@ -330,7 +330,7 @@ Da xem cay truong the nao, bay gio xem chi tiet node.
 
 ### Mot MessageEntry day du trong nhu the nay
 
-AssistantMessage o buoc 3, trong file .jsonl, la mot dong nhu the nay:
+AssistantMessage o buoc 3, trong file. jsonl, la mot dong nhu the nay:
 
 ```
 {
@@ -404,10 +404,10 @@ Ví dụ ở §2 đã xuất hiện bốn loại node: `model_change`, `user`, `
 9 loại Entry trên Session Tree
 
 Ghi đè chính sách dark mode.
-  prose.css mặc định áp `invert(1) hue-rotate(180deg)` cho `.prose figure svg`.
-  Khi `darkMode="native"` hoặc `"none"`, ta cần thoát khỏi filter này.
-  Vì `<img src="*.svg">` được render thành phần tử `<img>` (không phải inline SVG), selector toàn cục `.prose figure svg` không khớp nó — nhưng nếu trang chủ inline SVG vào DOM thì cần ghi đè này.
-  Quy tắc dưới đây thoát filter một cách chiến lược cho trường hợp inline SVG.
+ prose.css mặc định áp `invert(1) hue-rotate(180deg)` cho `.prose figure svg`.
+ Khi `darkMode="native"` hoặc `"none"`, ta cần thoát khỏi filter này.
+ Vì `<img src="*.svg">` được render thành phần tử `<img>` (không phải inline SVG), selector toàn cục `.prose figure svg` không khớp nó — nhưng nếu trang chủ inline SVG vào DOM thì cần ghi đè này.
+ Quy tắc dưới đây thoát filter một cách chiến lược cho trường hợp inline SVG.
 
 **Chú thích hình:** Mọi Entry đều chia sẻ các trường cơ sở (`type` / `id` / `parentId` / `timestamp`), chia theo "tác động lên lệnh gọi LLM" thành ba nhóm — ① Vào context (4 loại, đỏ, sẽ đẩy vào mảng messages); ② Ảnh hưởng trạng thái (2 loại, đen, chỉ sửa biến `model` / `thinkingLevel`); ③ Metadata thuần (3 loại, xám nét đứt, `buildSessionContext` bỏ qua). Phân loại này quyết định logic phân phối của `buildSessionContext` ở mục kế tiếp.
 
@@ -699,7 +699,7 @@ Ghi lại không phá vỡ nguyên tắc append-only — ghi lại sinh ra file 
 
 Session Tree có hai lớp triển khai, hồi đáp ý "interface cho phép đổi cơ sở dữ liệu" ở §1:
 
-|  | Tầng agent-core | Tầng coding-agent |
+| | Tầng agent-core | Tầng coding-agent |
 | --- | --- | --- |
 | **Phong cách API** | Bất đồng bộ | Đồng bộ |
 | **Số loại Entry** | 11 loại | 9 loại |

@@ -7,9 +7,9 @@ title_vi: "Chương 3: Agent Loop — Động cơ quay mô hình"
 source_url: https://www.dgzhuya.com/modules/ch03-agent-loop
 language: vi
 version_pairs:
-  zh: zh/src/ch03-agent-loop.md
-  en: en/src/ch03-agent-loop.md
-  vi: vi/src/ch03-agent-loop.md
+ zh: zh/src/ch03-agent-loop.md
+ en: en/src/ch03-agent-loop.md
+ vi: vi/src/ch03-agent-loop.md
 original_chars: 6859
 code_lines: 385
 reading_minutes: 35
@@ -600,7 +600,7 @@ Dòng này đứng trên ranh giới giữa lõi Agent và LLM. Để hiểu vì
 
 Khi Agent duy trì lịch sử hội thoại bên trong, nó cần ghi lại không chỉ người dùng nói gì, AI trả lời gì — mà còn trạng thái nội bộ của chính nó. Ví dụ, coding-agent ghi: context đã được nén (CompactionSummaryMessage), chi tiết thực thi lệnh Bash (BashExecutionMessage), record chuyển nhánh (BranchSummaryMessage). Đây là ngôn ngữ nội bộ của Agent, và LLM hoàn toàn không nhận dạng các kiểu message này — nó chỉ nhận ba kiểu chuẩn: UserMessage, AssistantMessage, ToolResultMessage.
 
-convertToLlm là người phiên dịch đứng ở ranh giới này: dịch ngôn ngữ nội bộ của Agent sang giao thức LLM hiểu được. Cài đặt mặc định chỉ là một .filter() — giữ lại ba kiểu chuẩn:
+convertToLlm là người phiên dịch đứng ở ranh giới này: dịch ngôn ngữ nội bộ của Agent sang giao thức LLM hiểu được. Cài đặt mặc định chỉ là một. filter() — giữ lại ba kiểu chuẩn:
 
 ```
 function defaultConvertToLlm(messages: AgentMessage[]): Message[] {

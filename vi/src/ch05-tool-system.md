@@ -548,18 +548,18 @@ Nhìn lại source code xem các tool của Pi làm thế nào, bạn sẽ thấ
 ```
 
 
-Chú ý chiến lược của Bash — nó **chủ động nhận diện** các loại lỗi đã biết (abort, timeout, exit code khác không), mỗi loại đều được `appendStatus(text, ...)` đóng gói "nội dung đã output" và "lý do cụ thể" vào một Error mới. Chỉ khi gặp exception thật sự không nhận diện được thì mới `throw err` nguyên bản.
+Chú ý chiến lược của Bash — nó **chủ động nhận diện** các loại lỗi đã biết (abort, timeout, exit code khác không), mỗi loại đều được `appendStatus(text,. ..)` đóng gói "nội dung đã output" và "lý do cụ thể" vào một Error mới. Chỉ khi gặp exception thật sự không nhận diện được thì mới `throw err` nguyên bản.
 
 Đây là thiết kế thật của Pi: **xử lý lỗi hai lớp, phân công theo lớp**.
 
 **Lớp 1 (bên trong tool, chủ động)**: nhận diện các loại lỗi đã biết, đóng gói thành mô tả cụ thể, dễ đọc
-   - Read / Edit / Bash đều làm vậy — Bash còn kèm "nội dung đã output" vào lỗi
-   - Mục đích: cung cấp cho model manh mối cụ thể "tại sao lỗi, sửa thế nào"
+ - Read / Edit / Bash đều làm vậy — Bash còn kèm "nội dung đã output" vào lỗi
+ - Mục đích: cung cấp cho model manh mối cụ thể "tại sao lỗi, sửa thế nào"
 
 **Lớp 2 (lưới an toàn framework, bị động)**: catch của `executePreparedToolCall`
-   - Chỉ vào cuộc khi tool không nhận diện được lỗi
-   - Không tạo mô tả lỗi mới, chỉ chuyển nguyên `error.message` cho model
-   - Mục đích: bảo đảm không exception nào xuyên đến Agent Loop
+ - Chỉ vào cuộc khi tool không nhận diện được lỗi
+ - Không tạo mô tả lỗi mới, chỉ chuyển nguyên `error.message` cho model
+ - Mục đích: bảo đảm không exception nào xuyên đến Agent Loop
 
 
 ```
@@ -607,7 +607,7 @@ throw new Error(`Could not edit file: ${path}. ${errorMessage}.`);
 ```
 
 
-Chú ý chiến lược của Bash — nó **chủ động nhận diện** các loại lỗi đã biết (abort, timeout, exit code khác không), mỗi loại đều được `appendStatus(text, ...)` đóng gói "nội dung đã output" và "lý do cụ thể" vào một Error mới. Chỉ khi gặp exception thật sự không nhận diện được thì mới `throw err` nguyên bản.
+Chú ý chiến lược của Bash — nó **chủ động nhận diện** các loại lỗi đã biết (abort, timeout, exit code khác không), mỗi loại đều được `appendStatus(text,. ..)` đóng gói "nội dung đã output" và "lý do cụ thể" vào một Error mới. Chỉ khi gặp exception thật sự không nhận diện được thì mới `throw err` nguyên bản.
 
 Đây là thiết kế thật của Pi: **xử lý lỗi hai lớp, phân công theo lớp**.
 

@@ -7,9 +7,9 @@ title_vi: "Chương 3: Agent Loop — Động cơ quay mô hình"
 source_url: https://www.dgzhuya.com/modules/ch03-agent-loop
 language: en
 version_pairs:
-  zh: zh/src/ch03-agent-loop.md
-  en: en/src/ch03-agent-loop.md
-  vi: vi/src/ch03-agent-loop.md
+ zh: zh/src/ch03-agent-loop.md
+ en: en/src/ch03-agent-loop.md
+ vi: vi/src/ch03-agent-loop.md
 original_chars: 6859
 code_lines: 385
 reading_minutes: 35
@@ -126,7 +126,7 @@ A Trace is the entire process from the user pressing Enter, to the Agent complet
 
 ### Turn (one round)
 
-A Turn's definition is very precise: one model call + all tool executions triggered by that call.
+A Turn's definition is precise: one model call + all tool executions triggered by that call.
 
 Each Turn is wrapped by a pair of turn_start and turn_end events. Key point: a Turn contains exactly one model call. The model returns a toolUse, execute that batch of tools, emit turn_end, this Turn is finished. Feeding the tool results back to call the model again is the next Turn.
 
@@ -240,12 +240,12 @@ The loop's gas and brake is concentrated on one field: stopReason. Each Assistan
 
 But before that, we must clarify a key insight: the model never says I am done. The model is just a token predictor — given context, guess the next token, repeat. It does not know whether the task is done. Although the stopReason field is attached to the model's return value, its values come from two different places:
 
-Three values actually returned by the model API:
+Three values returned by the model API:
 
 | stopReason | Meaning |
 | --- | --- |
 | toolUse | The model output a tool-call JSON; the API detected it and returned |
-| stop | Generation ended naturally (hit stop token), no tool call |
+| stop | Generation ended (hit stop token), no tool call |
 | length | Token count hit maxTokens cap, truncated |
 
 Two values injected by the framework's streaming layer (the model API itself never returns these):
@@ -257,7 +257,7 @@ Two values injected by the framework's streaming layer (the model API itself nev
 
 > Code evidence (packages/ai/src/): when the API call inside streamSimple throws an exception, the catch block executes output.stopReason = options?.signal?.aborted ? aborted : error. This is not said by the model; it is the framework falling back for it.
 
-The loop actually only looks at one thing — whether the model's output contains tool calls. Behind this is a human-defined engineering convention:
+The loop only looks at one thing — whether the model's output contains tool calls. Behind this is a human-defined engineering convention:
 
 > If one model output contains no tool calls, then this round needs no more operations; the loop can stop.
 
@@ -276,7 +276,7 @@ if (toolCalls.length > 0) {
 ### One rule drives the entire loop
 
 
-> Note: what actually drives the loop is not stopReason === toolUse, but rather toolCalls array length > 0 && !terminate. That means: even if stopReason === length (truncated), as long as content contains a toolCall block, the loop will still execute the tool; conversely, even if stopReason === toolUse, if all tool results set terminate: true, the loop will also stop.
+> Note: what drives the loop is not stopReason === toolUse, but rather toolCalls array length > 0 && !terminate. That means: even if stopReason === length (truncated), as long as content contains a toolCall block, the loop will still execute the tool; conversely, even if stopReason === toolUse, if all tool results set terminate: true, the loop will also stop.
 
 The inner loop's condition is while (hasMoreToolCalls || pendingMessages.length > 0):
 
@@ -324,7 +324,7 @@ Diagram description: the five stopReason values are handled in three branches �
 
 Section 3 gave you the conceptual panorama: how messages flow, how stopReason drives the loop, when to stop. But that was all what is. This section dives into the code to answer how is it done.
 
-Before looking at Pi's source, let us make one thing clear: the simplest Agent Loop is actually extremely short.
+Before looking at Pi's source, let us make one thing clear: the simplest Agent Loop is extremely short.
 
 ```
 // 最简 Agent Loop（伪代码）
@@ -365,7 +365,7 @@ Pi's coding-agent is an interactive coding assistant — the user talks to it in
 
 Key insight: these layered designs are all functional choices of coding-agent, not universal laws of Agents. If you are making a simple Agent that does Q&A plus tools, the entire table above is redundant — you only need the minimal loop.
 
-But understanding how coding-agent layers these designs is valuable — your own product scenario will very likely need similar mechanisms. Next, using coding-agent's full source as an example, we walk through these designs step by step. Following that please read src/main.ts message, walk through the journey from entry to finish.
+But understanding how coding-agent layers these designs is valuable — your own product scenario will likely need similar mechanisms. Next, using coding-agent's full source as an example, we walk through these designs step by step. Following that please read src/main.ts message, walk through the journey from entry to finish.
 
 ### 4.1 Entry: what runAgentLoop() receives
 
@@ -499,7 +499,7 @@ But coding-agent, as an interactive coding assistant, needs two more things outs
 
 Layering 1: steering message injection (checked at the start of the inner loop + at the end of each iteration). The user types a new instruction while the Agent is working — these messages cannot wait for the current task to finish; they must be urgently injected at the start of the next iteration. So the inner loop condition gains an extra || pendingMessages.length > 0.
 
-Layering 2: outer followUp loop (wrapping the entire inner loop). After the Agent naturally stops, the system may want to append more tasks (e.g., also run tests). The outer loop lets these appended tasks keep running within the same Trace, without needing to start a new Loop.
+Layering 2: outer followUp loop (wrapping the entire inner loop). After the Agent stops, the system may want to append more tasks (e.g., also run tests). The outer loop lets these appended tasks keep running within the same Trace, without needing to start a new Loop.
 
 Combining the core and the two layers is the full runLoop skeleton:
 
@@ -600,7 +600,7 @@ This line stands on the boundary between the Agent core and the LLM. To understa
 
 When an Agent maintains its conversation history internally, it needs to record not only what the user said and what AI replied — it also needs to record its own internal state. For example, coding-agent records: that context was compacted (CompactionSummaryMessage), the execution details of a Bash command (BashExecutionMessage), the record of a branch switch (BranchSummaryMessage). These are the Agent's own internal language, and the LLM does not recognize these message types at all — it only recognizes three standard messages: UserMessage, AssistantMessage, ToolResultMessage.
 
-convertToLlm is the translator standing on this boundary: it translates the Agent's internal language into the protocol the LLM understands. The default implementation is just a .filter() — keep only the three standard messages:
+convertToLlm is the translator standing on this boundary: it translates the Agent's internal language into the protocol the LLM understands. The default implementation is just a. filter() — keep only the three standard messages:
 
 ```
 function defaultConvertToLlm(messages: AgentMessage[]): Message[] {
@@ -666,7 +666,7 @@ Building Context is the main thread of this step. Note that llmContext is a bran
 - messages — the llmMessages filtered by the previous step convertToLlm, only the three standard messages LLM recognizes
 - tools — tool list (with schema definitions), letting the model know what tools are available this time
 
-Note one detail: llmContext.tools = context.tools is reference assignment — every iteration wraps a new wrapper object, but the tools array itself is the same reference, byte-stable in content. systemPrompt is the same. Only messages actually grows (each iteration appends a new ToolResultMessage).
+Note one detail: llmContext.tools = context.tools is reference assignment — every iteration wraps a new wrapper object, but the tools array itself is the same reference, byte-stable in content. systemPrompt is the same. Only messages grows (each iteration appends a new ToolResultMessage).
 
 So why rebuild llmContext this wrapper every iteration? Because some Turns do change one of these three: the prepareNextTurn hook (§4.7) may switch the model or modify systemPrompt; the extension system (§5) may dynamically register new tools. The cost of rebuilding the wrapper is negligible (one JS object), but it ensures we do not get hard-to-trace state pollution from shared references.
 
@@ -789,7 +789,7 @@ Veto strategy: as long as any one tool in this batch declares executionMode: seq
 ```
 
 
-Note the subtlety of parallel mode: the prepare phase is always sequential (because validation and permission checks cannot be parallel — if B is blocked, C should not execute). Only after all tools have been validated can they actually execute in parallel.
+Note the subtlety of parallel mode: the prepare phase is always sequential (because validation and permission checks cannot be parallel — if B is blocked, C should not execute). Only after all tools have been validated can they execute in parallel.
 
 ```
 工具执行后：

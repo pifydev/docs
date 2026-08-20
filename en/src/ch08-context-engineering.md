@@ -7,9 +7,9 @@ title_vi: "Chương 8: Context Engineering — Nhồi cuộc hội thoại vô h
 source_url: https://www.dgzhuya.com/modules/ch08-context-engineering
 language: en
 version_pairs:
-  zh: zh/src/ch08-context-engineering.md
-  en: en/src/ch08-context-engineering.md
-  vi: vi/src/ch08-context-engineering.md
+ zh: zh/src/ch08-context-engineering.md
+ en: en/src/ch08-context-engineering.md
+ vi: vi/src/ch08-context-engineering.md
 original_chars: 5631
 code_lines: 215
 reading_minutes: 29
@@ -27,9 +27,9 @@ mermaid_blocks: 0
 
 When we talked about the message system in Chapter 6 we said: inside the Agent it expresses freely with 7 kinds of `AgentMessage`, but before calling the LLM it goes through a `convertToLlm` translation boundary and is translated into the 3 standard `Message`. When we talked about event-driven in Chapter 7 we mentioned: after the `agent_end` event, a "context check" is triggered.
 
-Behind these two things there is actually the same core problem — **the LLM's context window is fixed, but a coding-agent's dialog grows without limit**.
+Behind these two things there is the same core problem — **the LLM's context window is fixed, but a coding-agent's dialog grows without limit**.
 
-This chapter opens Pi's full picture of "context engineering". You will see: context compaction (which you may already have seen in [Chapter 9](ch09-compaction.md)) is just the tip of the iceberg. Pi actually deploys defenses in both the **input and history** stages, each layer corresponding to a specific engineering problem.
+This chapter opens Pi's full picture of "context engineering". You will see: context compaction (which you may already have seen in [Chapter 9](ch09-compaction.md)) is just the tip of the iceberg. Pi deploys defenses in both the **input and history** stages, each layer corresponding to a specific engineering problem.
 
 ---
 
@@ -123,7 +123,7 @@ Every tool output is trimmed by "**at most 2000 lines**" or "**at most 50KB**", 
 
 Why dual limits? Single limits each have failure modes:
 
-- Limiting lines only: a single line can be very long (compressed JS, minified CSS), 3 lines can blow the bytes
+- Limiting lines only: a single line can be long (compressed JS, minified CSS), 3 lines can blow the bytes
 - Limiting bytes only: a 50KB source file might have only 200 lines, but you want to see the full structure; cutting by bytes might slice line 100 in half
 
 Dual limits back each other up — lines manage "display readability", bytes manage "hard volume".
@@ -141,7 +141,7 @@ Tool output truncation: dual limits + bidirectional strategies
 | `truncateHead` | Head | read files | File head usually has imports / class definitions / interface signatures — **the most info-dense** |
 | `truncateTail` | Tail | bash output | bash's error stack and final results live at the tail — **the tail has the most signal** |
 
-The bash tool's description writes this very clearly in source (`bash.ts:284`):
+The bash tool's description writes this in source (`bash.ts:284`):
 
 > Output is truncated to last 2000 lines or 50KB (whichever is hit first). If truncated, full output is saved to a temp file.
 
@@ -356,7 +356,7 @@ Stringing all of the above elements together, the complete prompt structure that
 ```
 
 
-**At the end** come `Current date` and `cwd` — these seemingly simple pieces of info are actually the "basic metadata" of context engineering. The LLM needs to know "what day is today" (to handle relative time like "yesterday", "last week"), "which directory I'm in" (to handle relative paths).
+**At the end** come `Current date` and `cwd` — these seemingly simple pieces of info are the "basic metadata" of context engineering. The LLM needs to know "what day is today" (to handle relative time like "yesterday", "last week"), "which directory I'm in" (to handle relative paths).
 
 > **Summary**: system prompt assembly is "addition" context engineering — through **multi-layer file recursion + XML structuring + Skills lazy loading**, letting the LLM automatically receive project specs without the user having to repeat them.
 
@@ -596,7 +596,7 @@ Pi's Skills are "**pull**" mode: the system just provides a list (lightweight); 
 
 **Core insight**: when the LLM has tool-call capability, "tools" themselves are the carrier of context engineering — you don't need to stuff every possibly-useful piece of information into the prompt; let the LLM use tools to fetch on demand.
 
-This idea is increasingly important in modern Agent systems. Claude Code's "Skills", Cursor's "docs", Cline's "context files" — essentially all the same mechanism with different implementations. Pi's implementation is the cleanest: XML list + read tool + path-resolution convention, three lines define the entire contract.
+This idea is increasingly important in modern Agent systems. Claude Code's "Skills", Cursor's "docs", Cline's "context files" — all the same mechanism with different implementations. Pi's implementation is the cleanest: XML list + read tool + path-resolution convention, three lines define the entire contract.
 
 > Implementation: `formatSkillsForPrompt` (`skills.ts:335`) + the hint in prompt `"Use the read tool to load a skill's file when the task matches its description"`
 

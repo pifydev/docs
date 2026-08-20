@@ -138,7 +138,7 @@ Use an analogy to understand. Imagine an international translation company:
 
 Agent Loop is that "customer" — it hands the request to the front desk (Layer 1), gets back a standard-format report (Layer 2), and never directly contacts translators (Layer 3).
 
-**Diagram caption:** Four layers from top to bottom — customer (Agent Loop) → front desk (`stream`) → standard report protocol (12 events) → translators (4 Providers). Left labels the "directory" (registry); right labels `streamSimple` as the convenience wrapper for the entry. All translators ultimately emit a unified event stream back to Agent Loop.
+**Diagram caption:** Four layers from top to bottom — customer (Agent Loop) → front desk (`stream`) → standard report protocol (12 events) → translators (4 Providers). Left labels the "directory" (registry); right labels `streamSimple` as the convenience wrapper for the entry. All translators emit a unified event stream back to Agent Loop.
 
 Now expand layer by layer.
 
@@ -282,12 +282,12 @@ Now that we understand the three-layer architecture, look at actual usage. Two s
 
 ### Scenario 1: Call the model
 
-Agent Loop does not actually call `stream()`, it calls `streamSimple()`. Why are there two versions?
+Agent Loop does not call `stream()`, it calls `streamSimple()`. Why are there two versions?
 
 `stream()` is the low-level entry — it only does "lookup + dispatch" and does not handle thinking-level translation. `streamSimple()` wraps `stream()` with a layer of convenience features — auto handles thinking level (ThinkingLevel) translation, auto adjusts token caps, etc. In short:
 
 - **`stream()`**: the lowest level, no convenience features. If you use it directly you must handle many translation details yourself
-- **`streamSimple()`**: helps you handle thinking level and other translation work, the entry actually used in development
+- **`streamSimple()`**: helps you handle thinking level and other translation work, the entry used in development
 
 Typical code for Agent Loop using `streamSimple()`:
 
@@ -328,7 +328,7 @@ Suppose you want to plug in a new model Pi does not yet support — say a domest
 
 **Step 1: Write a translator** (corresponds to Layer 3)
 
-A translator is essentially a function matching the `StreamFunction` signature. What you do:
+A translator is a function matching the `StreamFunction` signature. What you do:
 
 - Translate Pi's unified message format into your model's API format (request direction)
 - Translate your model's streaming response into Pi's 12 unified events (response direction)

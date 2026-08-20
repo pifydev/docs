@@ -7,9 +7,9 @@ title_vi: "Chương 6: Hệ thống Message — Bộ nhớ của Agent được 
 source_url: https://www.dgzhuya.com/modules/ch06-messages
 language: en
 version_pairs:
-  zh: zh/src/ch06-messages.md
-  en: en/src/ch06-messages.md
-  vi: vi/src/ch06-messages.md
+ zh: zh/src/ch06-messages.md
+ en: en/src/ch06-messages.md
+ vi: vi/src/ch06-messages.md
 original_chars: 4947
 code_lines: 181
 reading_minutes: 25
@@ -25,7 +25,7 @@ mermaid_blocks: 0
 
 # Chapter 6: Message System — How Agent Memory Is Organized and Passed
 
-Last chapter we learned the tool system — the model says "read the file", Agent Loop executes the `read` tool through a five-step pipeline, and finally produces a `ToolResultMessage`. But have you noticed: we have been saying "message" all along, yet we never actually opened it up to see what it looks like.
+Last chapter we learned the tool system — the model says "read the file", Agent Loop executes the `read` tool through a five-step pipeline, and finally produces a `ToolResultMessage`. But have you noticed: we have been saying "message" all along, yet we never opened it up to see what it looks like.
 
 `UserMessage`, `AssistantMessage`, `ToolResultMessage` — these three names appear again and again in the first five chapters. Chapter 3 says "messages flow in the Loop", Chapter 4 says "messages are sent to the model", Chapter 5 says "a tool result is a message".
 
@@ -175,7 +175,7 @@ This is the world the LLM understands — what the user said, what the AI replie
 
 Good, now back to the opening scenario. You executed `!ls -la`, and Pi needs to record the information of this execution internally.
 
-There is actually a more general problem hiding here: **besides the "LLM dialog", the Agent internally has a lot of functional data to manage** — Bash command execution records, summaries after context compression, Git branch switch records, user-uploaded attachment metadata...
+There is a more general problem hiding here: **besides the "LLM dialog", the Agent internally has a lot of functional data to manage** — Bash command execution records, summaries after context compression, Git branch switch records, user-uploaded attachment metadata...
 
 These functional data have **two independent readers**, and their needs conflict:
 
@@ -219,7 +219,7 @@ Each kind has its own structured fields. Taking `BashExecutionMessage` as exampl
 ```
 
 
-All structured fields are preserved. But here we need to stop and emphasize — **custom messages are not just an "intermediate format for translation to LLM", they themselves bring three independent capabilities**:
+All structured fields are preserved. But here we need to stop and emphasize — **custom messages are an "intermediate format for translation to LLM", they themselves bring three independent capabilities**:
 
 **1. UI-dedicated rendering.** The UI dispatches based on the `role` field — `bashExecution` renders with terminal styling, `compactionSummary` renders with a summary card. Command, output, exit code each get their own line, no interference. Without custom messages, the UI can only get a piece of flat text, and all rendering flair has to fall back to "all in big blocks of text".
 
@@ -304,7 +304,7 @@ declare module "@earendil-works/pi-agent-core" {
 
 The effect of this code is: **the compiler automatically adds these 4 types into the `AgentMessage` union type**. From then on in the coding-agent project, `AgentMessage` becomes a union of 7 kinds of messages (3 standard + 4 custom), and TypeScript will do full type checking for you.
 
-**Why not just use inheritance or generics?** Because inheritance requires modifying the base class — you cannot modify the `pi-agent-core` package. Generics require passing parameters everywhere — every function signature that uses `AgentMessage` would need a generic parameter. The benefit of declaration merging is: **the core package has zero awareness of extensions (zero dependencies), yet the extension package gets full type safety**.
+**Why not use inheritance or generics?** Because inheritance requires modifying the base class — you cannot modify the `pi-agent-core` package. Generics require passing parameters everywhere — every function signature that uses `AgentMessage` would need a generic parameter. The benefit of declaration merging is: **the core package has zero awareness of extensions (zero dependencies), yet the extension package gets full type safety**.
 
 Different applications can have different custom messages. For example the Web UI registers its own message types (`user-with-attachments`, `artifact`). **Each application only sees the message types it needs.**
 
@@ -318,7 +318,7 @@ Now we know the Agent internally uses 7 kinds of message types to express freely
 
 ### When does the translation happen?
 
-In the `streamAssistantResponse` function (the "call the model" step mentioned in Chapter 3), the timing of the translation is very precise:
+In the `streamAssistantResponse` function (the "call the model" step mentioned in Chapter 3), the timing of the translation is precise:
 
 ```
 每次 LLM 调用前的消息处理管道：
@@ -357,7 +357,7 @@ The core logic of coding-agent's `convertToLlm` is a `switch` statement that dis
 
 Key insight: **all custom messages get converted to `user`-role messages**.
 
-Why all become `user`? Because LLM APIs have strict requirements on role ordering — the dialog format must alternate `user -> assistant -> user -> ...`, two consecutive `assistant`s are not allowed. Custom messages are essentially "system-injected information" (Bash execution results, compaction summaries, branch summaries), and putting them in the `user` role is safest.
+Why all become `user`? Because LLM APIs have strict requirements on role ordering — the dialog format must alternate `user -> assistant -> user ->. ..`, two consecutive `assistant`s are not allowed. Custom messages are "system-injected information" (Bash execution results, compaction summaries, branch summaries), and putting them in the `user` role is safest.
 
 ### Specific example: BashExecutionMessage translation
 
@@ -432,7 +432,7 @@ Up to now, all custom messages eventually became `UserMessage` and were seen by 
 
 Pi's Bash tool has a feature: when you execute a command with the `!!` prefix (e.g. `!!secret_cmd`), the execution result of that command is invisible to the LLM.
 
-The implementation is very simple — `BashExecutionMessage` has an `excludeFromContext` field. In `convertToLlm`, this field is checked:
+The implementation is simple — `BashExecutionMessage` has an `excludeFromContext` field. In `convertToLlm`, this field is checked:
 
 ```
 case "bashExecution":
@@ -449,7 +449,7 @@ This is the "UI can see, LLM cannot" mechanism — one boolean field, filter at 
 
 ### Three message visibility levels
 
-Synthesizing the above analysis, Pi's message system actually has three visibility levels:
+Synthesizing the above analysis, Pi's message system has three visibility levels:
 
 | Visibility level | LLM can see? | UI can see? | Implementation | Typical message |
 | --- | --- | --- | --- | --- |

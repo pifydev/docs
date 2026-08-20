@@ -7,9 +7,9 @@ title_vi: "Chương 2: Kiến trúc ba lớp — Bộ xương của Pi-Agent"
 source_url: https://www.dgzhuya.com/modules/ch02-three-layer-arch
 language: en
 version_pairs:
-  zh: zh/src/ch02-three-layer-arch.md
-  en: en/src/ch02-three-layer-arch.md
-  vi: vi/src/ch02-three-layer-arch.md
+ zh: zh/src/ch02-three-layer-arch.md
+ en: en/src/ch02-three-layer-arch.md
+ vi: vi/src/ch02-three-layer-arch.md
 original_chars: 4215
 code_lines: 203
 reading_minutes: 22
@@ -18,46 +18,46 @@ reviewed_by: null
 last_updated: 2026-08-20
 status: translated
 official_refs:
-  - https://pi.dev/docs/latest/index
-  - https://pi.dev/docs/latest/quickstart
-  - https://pi.dev/docs/latest/usage
-  - https://pi.dev/docs/latest/providers
-  - https://pi.dev/docs/latest/settings
-  - https://pi.dev/docs/latest/extensions
-  - https://pi.dev/docs/latest/skills
-  - https://pi.dev/docs/latest/packages
-  - https://pi.dev/docs/latest/models
-  - https://pi.dev/docs/latest/security
-  - https://pi.dev/docs/latest/keybindings
-  - https://pi.dev/docs/latest/sessions
-  - https://pi.dev/docs/latest/compaction
+ - https://pi.dev/docs/latest/index
+ - https://pi.dev/docs/latest/quickstart
+ - https://pi.dev/docs/latest/usage
+ - https://pi.dev/docs/latest/providers
+ - https://pi.dev/docs/latest/settings
+ - https://pi.dev/docs/latest/extensions
+ - https://pi.dev/docs/latest/skills
+ - https://pi.dev/docs/latest/packages
+ - https://pi.dev/docs/latest/models
+ - https://pi.dev/docs/latest/security
+ - https://pi.dev/docs/latest/keybindings
+ - https://pi.dev/docs/latest/sessions
+ - https://pi.dev/docs/latest/compaction
 terms_used:
-  - Pi Agent
-  - Agent Loop
-  - Tool System
-  - Tool
-  - TUI
-  - MCP
-  - Provider
-  - KnownProvider
-  - Skills
-  - Extensions
-  - Pi Package
-  - Theme
-  - SDK
-  - DAG
-  - Hot Reload
-  - pi-ai
-  - pi-agent-core
-  - pi-coding-agent
-  - pi-tui
-  - pi-orchestrator
-  - monorepo
-  - npm workspaces
-  - TypeScript
-  - TypeBox
-  - Static
-  - TSchema
+ - Pi Agent
+ - Agent Loop
+ - Tool System
+ - Tool
+ - TUI
+ - MCP
+ - Provider
+ - KnownProvider
+ - Skills
+ - Extensions
+ - Pi Package
+ - Theme
+ - SDK
+ - DAG
+ - Hot Reload
+ - pi-ai
+ - pi-agent-core
+ - pi-coding-agent
+ - pi-tui
+ - pi-orchestrator
+ - monorepo
+ - npm workspaces
+ - TypeScript
+ - TypeBox
+ - Static
+ - TSchema
 code_blocks: 16
 mermaid_blocks: 0
 ---
@@ -93,7 +93,7 @@ If you have worked on Node.js projects before, you have probably used a monorepo
 
 But that is not the point. The point is: **why five packages (four extending the core three-piece set, plus one outer orchestration layer)? What is the relationship between them? Can they be merged?**
 
-To answer that, we need to figure out what each package actually does.
+To answer that, we need to figure out what each package does.
 
 ---
 
@@ -250,7 +250,7 @@ After reading the section above, you probably have a picture in your head alread
 └──────────┘
 ```
 
-A very intuitive layering: the bottom calls models, the middle runs the loop, the top handles the business. Right?
+A intuitive layering: the bottom calls models, the middle runs the loop, the top handles the business. Right?
 
 But wait —
 
@@ -272,7 +272,7 @@ If your mental model says "upper layers may only depend on the adjacent lower la
 }
 ```
 
-pi-coding-agent depends on **both** the middle layer (pi-agent-core) **and** the bottom layer (pi-ai). That looks like a violation of "strict layering", but it is actually a deliberate design choice.
+pi-coding-agent depends on **both** the middle layer (pi-agent-core) **and** the bottom layer (pi-ai). That looks like a violation of "strict layering", but it is a deliberate design choice.
 
 ### The answer is hiding in the type system
 
@@ -398,7 +398,7 @@ interface AgentTool<TParameters extends TSchema = TSchema, TDetails = any> exten
 }
 ```
 
-`AgentTool` is a "molecule" — it still has the `name`, `description`, and `parameters`, but it adds the ability to actually **run**. The Agent loop iterates over `AgentTool[]`, calls each tool''s `execute`, and feeds the result back into the model.
+`AgentTool` is a "molecule" — it still has the `name`, `description`, and `parameters`, but it adds the ability to **run**. The Agent loop iterates over `AgentTool[]`, calls each tool''s `execute`, and feeds the result back into the model.
 
 ### Layer 3: pi-coding-agent builds molecules into materials
 
@@ -475,11 +475,11 @@ interface ToolDefinition {
 
 ---
 
-## 6. Do I really need three layers when writing my own Agent?
+## 6. Do I need three layers when writing my own Agent?
 
 You might wonder: this Pi layering looks great, but is it overdesigned for my own Agent project?
 
-Let us actually walk through three scenarios to see.
+Let us walk through three scenarios to see.
 
 ### Scenario A: no layering, everything in one file
 
@@ -598,7 +598,7 @@ In this chapter we took an outside look at Pi''s overall architecture. You now k
 - Types expand progressively from bottom to top: `Tool` → `AgentTool` → `ToolDefinition`
 - Three layers are not required; the number of layers depends on your complexity. But dependency-direction control is required.
 
-But we have not yet answered a more fundamental question: how does the Agent actually run? How does the LLM keep thinking, calling tools, reading results, thinking again? What does the famous "Agent Loop" actually look like?
+But we have not yet answered a more fundamental question: how does the Agent run? How does the LLM keep thinking, calling tools, reading results, thinking again? What does the famous "Agent Loop" look like?
 
 In the next chapter we drill into the Agent''s heart — **the Agent Loop**. We will first understand why a loop is needed (instead of finishing in one call), then trace a single user message''s full journey from pressing Enter until the Agent says "I am done".
 
