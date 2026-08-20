@@ -11,7 +11,7 @@ version_pairs:
   en: en/src/ch01-overview.md
   vi: vi/src/ch01-overview.md
 original_chars: 6787
-code_lines: 91
+code_lines: 89
 reading_minutes: 34
 translator: pi-docs-bot
 reviewed_by: null
@@ -93,16 +93,14 @@ Breaking it apart:
 ```
 ┌──────────────────────────────────────────┐
 │          pi-coding-agent                 │  ← full CLI product + SDK
-│  System prompt · Built-in tools ·        │
-│  Session management · Extensions         │
+│  System prompt · Built-in tools · Session management · Extensions  │
 ├──────────────────────────────────────────┤
 │  pi-tui              │  pi-agent-core    │  ← terminal UI + Agent engine
 │  Differential render  │  AgentLoop · Tool │
 │  · component system   │  system · events  │
 ├──────────────────────┴───────────────────┤
 │              pi-ai                       │  ← multi-provider LLM abstraction
-│  Unified API · Context hand-off ·        │
-│  Streaming · Token tracking              │
+│  Unified API · Context hand-off · Streaming · Token tracking  │
 └──────────────────────────────────────────┘
 ```
 
@@ -469,5 +467,8 @@ Extensions can implement:
 - **Prompt templates** — reusable prompt fragments.
 
 These five customization levers (Extensions, Skills, Prompt Templates, Themes, Pi Packages) essentially provide **a smooth upgrade path from "using Pi" to "modifying Pi"**.
+
+
+
 
 

@@ -320,7 +320,7 @@ Pi 官网的 “What we didn’t build” 章节是一份倒过来的宣言。�
 
 **Layer 1: `pi-ai` — 只管调模型**
 
-```
+```typescript
 // 入口在 compat 子模块（不在主入口）
 import { getModel, stream } from '@earendil-works/pi-ai/compat';
 import type { Context } from '@earendil-works/pi-ai';
@@ -343,7 +343,7 @@ for await (const event of eventStream) {
 
 **Layer 2: `pi-agent-core` — 只管跑循环**
 
-```
+```typescript
 // 教学示意（简化）；真实 API 见 agent.ts:166 的 Agent 类
 // Agent 类构造函数只接受 AgentOptions（convertToLlm/streamFn/beforeToolCall 等）
 // model/tools/systemPrompt 是在调用 prompt() 时通过 AgentSessionConfig 传入
@@ -365,7 +365,7 @@ const agent = new Agent({
 
 这是堆栈的最顶层，把下面两层组装成一个完整的编码 Agent 产品。同时也暴露出 SDK 接口，让你以”无头”（headless）模式在自己的应用中嵌入 Agent：
 
-```
+```typescript
 import { createAgentSession } from '@earendil-works/pi-coding-agent';
 import { getModel } from '@earendil-works/pi-ai/compat';
 
@@ -458,4 +458,5 @@ Pi 是一个”三位一体”的项目：
 
 > 版本说明
 > 本文档系列基于 Pi **v0.80.2** 编写。代码分析以 [earendil-works/pi](https://github.com/earendil-works/pi) 仓库的实际源码为准（教程链接指向 main 分支，可能与 v0.80.2 有微小差异）。
+
 
