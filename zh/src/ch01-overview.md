@@ -17,44 +17,8 @@ translator: null
 reviewed_by: null
 last_updated: 2026-08-20
 status: translated
-official_refs:
-  - https://pi.dev/docs/latest/index
-  - https://pi.dev/docs/latest/quickstart
-  - https://pi.dev/docs/latest/usage
-  - https://pi.dev/docs/latest/providers
-  - https://pi.dev/docs/latest/settings
-  - https://pi.dev/docs/latest/extensions
-  - https://pi.dev/docs/latest/skills
-  - https://pi.dev/docs/latest/packages
-  - https://pi.dev/docs/latest/models
-  - https://pi.dev/docs/latest/security
-  - https://pi.dev/docs/latest/keybindings
-  - https://pi.dev/docs/latest/sessions
-  - https://pi.dev/docs/latest/compaction
-terms_used:
-  - Pi Agent
-  - Agent Loop
-  - Tool System
-  - Tool
-  - TUI
-  - MCP
-  - Provider
-  - KnownProvider
-  - Skills
-  - Extensions
-  - Pi Package
-  - Prompt Template
-  - Theme
-  - SDK
-  - RPC
-  - DAG
-  - YOLO mode
-  - Hot Reload
-  - Harness
-  - AGENTS.md
-  - ~/.pi/agent/settings.json
-  - models.json
-  - ANTHROPIC_API_KEY
+official_refs: []
+terms_used: []
 code_blocks: 8
 mermaid_blocks: 1
 ---
@@ -123,16 +87,16 @@ mermaid_blocks: 1
 ```
 
 ```mermaid
-%% Pi-Agent four-package architecture
+%% Pi-Agent 四层架构
 graph TB
-    subgraph TOP["Top layer — full CLI product + SDK"]
-        PCA["pi-coding-agent<br/>system prompt · built-in tools · session mgmt · extensions"]
+    subgraph TOP["顶层 —— 完整 CLI 产品 + SDK"]
+        PCA["pi-coding-agent<br/>系统提示词 · 内置工具 · 会话管理 · 扩展"]
     end
-    subgraph MID["Middle layer — Agent engine + orthogonal UI"]
-        PAC["pi-agent-core<br/>AgentLoop · tool system · events"]
-        TUI["pi-tui<br/>differential render · component system"]
+    subgraph MID["中层 —— Agent 引擎 + 正交 UI"]
+        PAC["pi-agent-core<br/>AgentLoop · 工具系统 · 事件流"]
+        TUI["pi-tui<br/>差分渲染 · 组件系统"]
     end
-    BOT["pi-ai<br/>unified API · context hand-off · streaming · token tracking"]
+    BOT["pi-ai<br/>统一 API · 上下文交接 · 流式 · Token 追踪"]
     PCA --> PAC
     PCA --> BOT
     PCA --> TUI
@@ -517,5 +481,4 @@ Pi 是一个”三位一体”的项目：
 
 > 版本说明
 > 本文档系列基于 Pi **v0.80.2** 编写。代码分析以 [earendil-works/pi](https://github.com/earendil-works/pi) 仓库的实际源码为准（教程链接指向 main 分支，可能与 v0.80.2 有微小差异）。
-
 

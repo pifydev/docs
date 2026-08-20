@@ -36,8 +36,8 @@ $slugByNum = @{
     "01" = "ch01-overview"
     "02" = "ch02-three-layer-arch"
     "03" = "ch03-agent-loop"
-    "04" = "ch04-model-invocation"
-    "05" = "ch05-tool-system"
+    "04" = "ch04-model-call"
+    "05" = "ch05-tools"
     "06" = "ch06-messages"
     "07" = "ch07-event-driven"
     "08" = "ch08-context-engineering"
@@ -220,6 +220,7 @@ $($info.Body)
 Write-Host ""
 Write-Host "Done. Wrote $wrote chapter file(s)." -ForegroundColor Green
 exit 0
+
 
 
 

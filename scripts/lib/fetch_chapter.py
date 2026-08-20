@@ -25,8 +25,8 @@ CHAPTERS = [
     "ch01-overview",
     "ch02-three-layer-arch",
     "ch03-agent-loop",
-    "ch04-model-invocation",
-    "ch05-tool-system",
+    "ch04-model-call",
+    "ch05-tools",
     "ch06-messages",
     "ch07-event-driven",
     "ch08-context-engineering",
@@ -282,4 +282,5 @@ def main(argv) -> int:
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))
+
 
