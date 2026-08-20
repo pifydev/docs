@@ -688,4 +688,3 @@ Compaction 的结果存为 CompactionEntry，“追加到 Session Tree”。Bran
 > `packages/coding-agent/src/core/skills.ts:335-361` — Skills 懒加载（formatSkillsForPrompt）
 > `packages/agent/src/harness/compaction/branch-summarization.ts` — 分支摘要（LCA + 5 section 模板；同名文件在 coding-agent 包有更详细的 371 行实现，本节引用 agent 包行号）
 > `packages/agent/src/harness/compaction/compaction.ts` — Compaction 主算法（详见第9章）
-

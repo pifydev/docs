@@ -556,4 +556,3 @@ Session Tree 是什么？为什么对话历史不是线性数组而是一棵树�
 > `packages/coding-agent/src/core/session-manager.ts` — CompactionEntry 定义 + buildSessionContext
 > `packages/coding-agent/src/core/messages.ts` — CompactionSummaryMessage
 > `packages/coding-agent/src/core/agent-session.ts` — 自动压缩集成（agent_end 后触发）
-

@@ -972,6 +972,3 @@ Loop 跑起来了——我们知道它怎么调用模型、怎么执行工具。
 > `agent-loop.ts:253` — steering 每圈二次检查
 > `agent.ts:118-152` — `PendingMessageQueue` 和 drain 模式
 > `agent.ts:451-474` — `runWithLifecycle()` 生命周期管理
-FAIL ch04-model-invocation: article body (.prose) not found in HTML
-FAIL ch05-tool-system: article body (.prose) not found in HTML
-

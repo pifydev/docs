@@ -473,4 +473,3 @@ Agent 内核只定义 4 层生命周期的 10 种事件。Session 层用联合�
 > `packages/agent/src/agent.ts:168,231-233` — `subscribe` 和 `listeners`
 > `packages/agent/src/agent-loop.ts:628-669` — `executePreparedToolCall`（update 特殊处理）
 > `packages/coding-agent/src/core/agent-session.ts:126-150` — `AgentSessionEvent`（17 种事件）
-

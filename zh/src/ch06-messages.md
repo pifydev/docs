@@ -558,4 +558,3 @@ case "bashExecution":
 > `packages/agent/src/agent-loop.ts:275-308` — 转换管道（transformContext → convertToLlm）
 > `packages/coding-agent/src/core/messages.ts:82-195` — 自定义转换规则
 > `packages/coding-agent/src/core/messages.ts:38-39` — excludeFromContext 字段
-

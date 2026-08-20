@@ -552,4 +552,3 @@ AI 层把模型差异封装得干干净净——Agent Loop 完全不知道底层
 > `packages/ai/src/types.ts:74-76` — `ThinkingLevel` / `ThinkingLevelMap`
 > `packages/ai/src/models.ts:410-429` — `clampThinkingLevel` 回退策略
 > `packages/ai/src/utils/overflow.ts:126-155` — `isContextOverflow` 三重检测
-

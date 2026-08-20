@@ -784,4 +784,3 @@ ToolResultMessage { content: 文件内容, isError: false }
 > `packages/coding-agent/src/core/tools/read.ts:275` — Read 工具附加文件总行数
 > `packages/coding-agent/src/core/tools/edit.ts:330` — Edit 工具附加文件路径
 > `packages/coding-agent/src/core/tools/read.ts:43-50` — ReadOperations（Operations 抽象）
-

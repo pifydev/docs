@@ -731,4 +731,3 @@ agent-core 提供了通用的 Session 管理框架和 `SessionStorage` 接口。
 > `packages/agent/src/harness/session/memory-storage.ts` — InMemorySessionStorage（测试用）
 > `packages/coding-agent/src/core/session-manager.ts` — coding-agent 的 SessionManager（buildSessionContext、appendEntry、branchWithSummary 等）
 > `packages/coding-agent/src/core/compaction/branch-summarization.ts` — 分支摘要生成
-
