@@ -1,7 +1,7 @@
 ---
-title: Chương 6: Hệ thống Message: Bộ nhớ của Agent được tổ chức và truyền đi ra sao
+title: "Chương 6: Hệ thống Message: Bộ nhớ của Agent được tổ chức và truyền đi ra sao"
 chapter: 6
-slug: ch06-messages
+slug: vi/ch06-messages
 title_zh: "第6章：消息系统: Agent 的记忆如何组织与传递"
 title_en: "Chapter 6: Message System: How Agent Memory Is Organized and Passed"
 title_vi: "Chương 6: Hệ thống Message: Bộ nhớ của Agent được tổ chức và truyền đi ra sao"
@@ -16,7 +16,7 @@ code_lines: 181
 reading_minutes: 25
 translator: hypnguyen1209
 reviewed_by: null
-last_updated: 2026-08-20
+last_updated: "2026-08-20"
 status: translated
 official_refs: []
 terms_used: []

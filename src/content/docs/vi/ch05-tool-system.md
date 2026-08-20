@@ -1,7 +1,7 @@
 ---
-title: Chương 5: Hệ thống Tool
+title: "Chương 5: Hệ thống Tool"
 chapter: 5
-slug: ch05-tool-system
+slug: vi/ch05-tool-system
 title_zh: "第5章：工具系统"
 title_en: "Chapter 5: Tool System"
 title_vi: "Chương 5: Hệ thống Tool"
@@ -13,7 +13,7 @@ code_lines: 279
 reading_minutes: 34
 translator: hypnguyen1209
 reviewed_by: null
-last_updated: 2026-08-20
+last_updated: "2026-08-20"
 status: translated
 official_refs: []
 terms_used: []

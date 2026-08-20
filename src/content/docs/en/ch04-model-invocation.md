@@ -1,7 +1,7 @@
 ---
-title: Chapter 4: Model Invocation: One Line, Many Providers
+title: "Chapter 4: Model Invocation: One Line, Many Providers"
 chapter: 4
-slug: ch04-model-invocation
+slug: en/ch04-model-invocation
 title_zh: "第4章：模型调用: 一行代码驾驭多个模型"
 title_en: "Chapter 4: Model Invocation: One Line, Many Providers"
 title_vi: "Chương 4: Gọi model: Một dòng, nhiều nhà cung cấp"
@@ -13,7 +13,7 @@ code_lines: 138
 reading_minutes: 27
 translator: hypnguyen1209
 reviewed_by: null
-last_updated: 2026-08-20
+last_updated: "2026-08-20"
 status: translated
 official_refs: []
 terms_used: []

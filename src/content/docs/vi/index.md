@@ -1,5 +1,5 @@
 ---
-title: Sách Pify Agent
+title: "Sách Pify Agent"
 template: splash
 tableOfContents: false
 next: false

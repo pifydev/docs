@@ -1,7 +1,7 @@
 ---
-title: Chương 8: Context Engineering: Nhồi cuộc hội thoại vô hạn vào cửa sổ hữu hạn
+title: "Chương 8: Context Engineering: Nhồi cuộc hội thoại vô hạn vào cửa sổ hữu hạn"
 chapter: 8
-slug: ch08-context-engineering
+slug: vi/ch08-context-engineering
 title_zh: "第8章：上下文工程: 让有限窗口装下无限对话"
 title_en: "Chapter 8: Context Engineering: Fitting Infinite Dialogue Into a Finite Window"
 title_vi: "Chương 8: Context Engineering: Nhồi cuộc hội thoại vô hạn vào cửa sổ hữu hạn"
@@ -16,7 +16,7 @@ code_lines: 215
 reading_minutes: 29
 translator: hypnguyen1209
 reviewed_by: null
-last_updated: 2026-08-20
+last_updated: "2026-08-20"
 status: translated
 official_refs: []
 terms_used: []

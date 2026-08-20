@@ -1,7 +1,7 @@
 ---
-title: Chapter 2: Three-Layer Architecture: Pi-Agent Project Skeleton
+title: "Chapter 2: Three-Layer Architecture: Pi-Agent Project Skeleton"
 chapter: 2
-slug: ch02-three-layer-arch
+slug: en/ch02-three-layer-arch
 title_zh: "第2章：三层架构: Pi-Agent 项目的骨骼"
 title_en: "Chapter 2: Three-Layer Architecture: Pi-Agent Project Skeleton"
 title_vi: "Chương 2: Kiến trúc ba lớp: Bộ xương của Pi-Agent"
@@ -16,7 +16,7 @@ code_lines: 203
 reading_minutes: 22
 translator: pi-docs-bot
 reviewed_by: null
-last_updated: 2026-08-20
+last_updated: "2026-08-20"
 status: translated
 official_refs:
  - https://pi.dev/docs/latest/index

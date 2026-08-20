@@ -1,7 +1,7 @@
 ---
-title: Chương 7: Hướng sự kiện: Hệ thần kinh của Agent
+title: "Chương 7: Hướng sự kiện: Hệ thần kinh của Agent"
 chapter: 7
-slug: ch07-event-driven
+slug: vi/ch07-event-driven
 title_zh: "第7章：事件驱动: Agent 的神经系统"
 title_en: "Chapter 7: Event-Driven: Agent's Nervous System"
 title_vi: "Chương 7: Hướng sự kiện: Hệ thần kinh của Agent"
@@ -16,7 +16,7 @@ code_lines: 164
 reading_minutes: 18
 translator: hypnguyen1209
 reviewed_by: null
-last_updated: 2026-08-20
+last_updated: "2026-08-20"
 status: translated
 official_refs: []
 terms_used: []

@@ -1,5 +1,5 @@
 ---
-title: Pify Agent Book
+title: "Pify Agent Book"
 template: splash
 tableOfContents: false
 next: false

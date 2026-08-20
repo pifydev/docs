@@ -1,7 +1,7 @@
 ---
-title: 第1章：开篇 —— 为什么 Pi-Agent 值得你花时间
+title: "第1章：开篇 —— 为什么 Pi-Agent 值得你花时间"
 chapter: 1
-slug: ch01-overview
+slug: zh/ch01-overview
 title_zh: "第1章：开篇 —— 为什么 Pi-Agent 值得你花时间"
 title_en: "Chapter 1: Introduction — Why Pi-Agent Is Worth Your Time"
 title_vi: "Chương 1: Mở đầu — Tại sao Pi-Agent đáng để bạn dành thời gian"
@@ -16,7 +16,7 @@ code_lines: 89
 reading_minutes: 34
 translator: null
 reviewed_by: null
-last_updated: 2026-08-20
+last_updated: "2026-08-20"
 status: translated
 official_refs: []
 terms_used: []

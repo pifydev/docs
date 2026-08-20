@@ -1,7 +1,7 @@
 ---
-title: 第10章：会话管理 —— 对话的存储、恢复与分叉
+title: "第10章：会话管理 —— 对话的存储、恢复与分叉"
 chapter: 10
-slug: ch10-session
+slug: zh/ch10-session
 title_zh: "第10章：会话管理 —— 对话的存储、恢复与分叉"
 title_en: "Chapter 10: Session Management — Storing, Resuming, and Forking Conversations"
 title_vi: "Chương 10: Quản lý Session — Lưu trữ, khôi phục và phân nhánh cuộc hội thoại"
@@ -16,7 +16,7 @@ code_lines: 187
 reading_minutes: 33
 translator: null
 reviewed_by: null
-last_updated: 2026-08-20
+last_updated: "2026-08-20"
 status: translated
 official_refs: []
 terms_used: []

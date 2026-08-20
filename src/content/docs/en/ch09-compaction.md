@@ -1,7 +1,7 @@
 ---
-title: Chapter 9: Context Compaction: When the Conversation Gets Too Long
+title: "Chapter 9: Context Compaction: When the Conversation Gets Too Long"
 chapter: 9
-slug: ch09-compaction
+slug: en/ch09-compaction
 title_zh: "第9章：上下文压缩: 当对话太长怎么办"
 title_en: "Chapter 9: Context Compaction: When the Conversation Gets Too Long"
 title_vi: "Chương 9: Nén ngữ cảnh: Khi cuộc hội thoại quá dài"
@@ -16,7 +16,7 @@ code_lines: 183
 reading_minutes: 20
 translator: hypnguyen1209
 reviewed_by: null
-last_updated: 2026-08-20
+last_updated: "2026-08-20"
 status: translated
 official_refs: []
 terms_used: []

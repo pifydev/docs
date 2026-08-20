@@ -19,22 +19,22 @@ export default defineConfig({
       },
       sidebar: [
         {
-          label: "About",
+          label: "Giới thiệu",
           translations: {
-            en: { label: "About" },
-            vi: { label: "Giới thiệu" },
-            zh: { label: "关于" },
+            en: "About",
+            vi: "Giới thiệu",
+            zh: "关于",
           },
           items: [{ label: "Introduction", link: "" }],
         },
         {
-          label: "Chapters",
+          label: "章节目录",
           translations: {
-            en: { label: "Chapters" },
-            vi: { label: "Các chương" },
-            zh: { label: "章节目录" },
+            en: "Chapters",
+            vi: "Các chương",
+            zh: "章节目录",
           },
-          autogenerate: { directory: "ch01-overview" },
+          items: [{ autogenerate: { directory: "ch01-overview" } }],
         },
       ],
       customCss: ["/src/styles/custom.css"],
@@ -47,13 +47,17 @@ export default defineConfig({
       head: [
         {
           tag: "meta",
-          property: "og:image",
-          content: "https://pifydev.github.io/docs/og-image.png",
+          attrs: {
+            property: "og:image",
+            content: "https://pifydev.github.io/docs/og-image.png",
+          },
         },
         {
           tag: "meta",
-          name: "twitter:card",
-          content: "summary_large_image",
+          attrs: {
+            name: "twitter:card",
+            content: "summary_large_image",
+          },
         },
       ],
     }),

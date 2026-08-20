@@ -1,7 +1,7 @@
 ---
-title: Chapter 3: Agent Loop: The Engine That Spins the Model
+title: "Chapter 3: Agent Loop: The Engine That Spins the Model"
 chapter: 3
-slug: ch03-agent-loop
+slug: en/ch03-agent-loop
 title_zh: "第3章：Agent Loop: 让模型转动起来的引擎"
 title_en: "Chapter 3: Agent Loop: The Engine That Spins the Model"
 title_vi: "Chương 3: Agent Loop: Động cơ quay mô hình"
@@ -16,7 +16,7 @@ code_lines: 385
 reading_minutes: 35
 translator: hypnguyen1209
 reviewed_by: null
-last_updated: 2026-08-20
+last_updated: "2026-08-20"
 status: translated
 official_refs: []
 terms_used: []
