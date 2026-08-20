@@ -19,6 +19,15 @@ export default defineConfig({
       },
       sidebar: [
         {
+          label: "About",
+          translations: {
+            en: { label: "About" },
+            vi: { label: "Giới thiệu" },
+            zh: { label: "关于" },
+          },
+          items: [{ label: "Introduction", link: "" }],
+        },
+        {
           label: "Chapters",
           translations: {
             en: { label: "Chapters" },
