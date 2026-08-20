@@ -31,8 +31,96 @@ table th {
   margin: 1.5rem 0;
 }
 
-/* Code block tweaks for readability */
 pre code {
   padding: 0.75rem 1rem;
   line-height: 1.45;
 }
+
+/* ---- Sidebar branding ----
+   Inject logo at top of sidebar TOC. The sidebar list lives inside a
+   <mdbook-sidebar-scrollbox> custom element; CSS selectors still reach
+   across it (no shadow DOM). Target the .chapter <ol> directly. */
+.chapter {
+  position: relative !important;
+  padding-top: 110px !important;
+}
+
+.chapter::before {
+  content: "";
+  position: absolute !important;
+  top: 8px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  width: 88px !important;
+  height: 88px !important;
+  background-image: url("../pify-logo.png") !important;
+  background-repeat: no-repeat !important;
+  background-size: contain !important;
+  background-position: center !important;
+  pointer-events: none !important;
+}
+
+html.navy .chapter::before,
+html.coal .chapter::before,
+html.ayu  .chapter::before,
+html.rust .chapter::before {
+  background-image: url("../pify-logo-dark.png") !important;
+}
+
+/* Top menu bar — replace the default book-title text with a smaller logo. */
+.menu-title {
+  font-size: 0 !important;
+  line-height: 0 !important;
+  width: 32px !important;
+  height: 32px !important;
+  background-image: url("../pify-logo.png") !important;
+  background-repeat: no-repeat !important;
+  background-size: contain !important;
+  background-position: left center !important;
+  margin: 0 !important;
+  padding: 0 8px !important;
+  color: transparent !important;
+  text-indent: -9999px !important;
+}
+
+html.navy .menu-title,
+html.coal .menu-title,
+html.ayu  .menu-title,
+html.rust .menu-title {
+  background-image: url("../pify-logo-dark.png") !important;
+}
+
+/* ---- Hero logo on index.md ----
+   Inline SVG with semantic classes; theme via CSS rather than filter or
+   <picture> so the swap works for every mdBook dark theme (navy/coal/ayu/rust)
+   regardless of the user's OS color-scheme preference. */
+.hero-logo {
+  display: flex;
+  justify-content: center;
+  margin: 1.5rem auto;
+}
+
+.hero-logo svg {
+  width: 160px;
+  height: 160px;
+  display: block;
+}
+
+.hero-logo .hero-bg     { fill: #ffffff; }
+.hero-logo .hero-mark   { fill: #09090b; }
+.hero-logo .hero-accent { fill: #6366f1; }
+
+html.navy .hero-logo .hero-bg,
+html.coal .hero-logo .hero-bg,
+html.ayu  .hero-logo .hero-bg,
+html.rust .hero-logo .hero-bg     { fill: #09090b; }
+
+html.navy .hero-logo .hero-mark,
+html.coal .hero-logo .hero-mark,
+html.ayu  .hero-logo .hero-mark,
+html.rust .hero-logo .hero-mark   { fill: #ffffff; }
+
+html.navy .hero-logo .hero-accent,
+html.coal .hero-logo .hero-accent,
+html.ayu  .hero-logo .hero-accent,
+html.rust .hero-logo .hero-accent { fill: #818cf8; }

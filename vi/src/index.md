@@ -1,3 +1,12 @@
+
+<div class="hero-logo">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" width="160" height="160" role="img" aria-label="Pi Docs">
+    <rect class="hero-bg" width="800" height="800"/>
+    <path class="hero-mark" fill-rule="evenodd" d="M165.29 165.29 H517.36 V400 H400 V517.36 H282.65 V634.72 H165.29 Z M282.65 282.65 V400 H400 V282.65 Z"/>
+    <rect class="hero-accent" x="517.36" y="400" width="117.36" height="117.36"/>
+  </svg>
+</div>
+
 # Pi Agent Book (Tiếng Việt)
 
 Ghi chú đọc source code của [Pi Agent SDK](https://github.com/earendil-works/pi), được dịch từ [Pi Agent Book](https://www.dgzhuya.com/). Bản gốc tiếng Trung là canonical; bản dịch tiếng Việt này bám sát cấu trúc và thứ tự chương của bản gốc.
