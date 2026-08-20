@@ -24,10 +24,12 @@
 
   function detectCurrentLang() {
     var path = window.location.pathname;
-    var match = path.match(/^\/(en|vi)\//);
+    // Look for /en/ or /vi/ anywhere in the path (handles GitHub
+    // Pages subpath deployments like /docs/en/... and file:// URLs
+    // like /E:/project/.../en/...).
+    var match = path.match(/\/(en|vi)\//);
     if (match) return match[1];
-    // Fallback: mdBook may serve at root for one of the languages.
-    // Detect from <html lang="..."> as a last resort.
+    // Fallback: detect from <html lang="...">.
     var htmlLang = (document.documentElement.getAttribute("lang") || "").toLowerCase();
     if (htmlLang.indexOf("vi") === 0) return "vi";
     return "en";
@@ -35,9 +37,8 @@
 
   function buildTargetUrl(targetLang) {
     var path = window.location.pathname;
-    // Strip current /en/ or /vi/ prefix.
-    var stripped = path.replace(/^\/(en|vi)\//, "/");
-    return "/" + targetLang + stripped;
+    // Replace the first /en/ or /vi/ segment anywhere in the path.
+    return path.replace(/\/(en|vi)\//, "/" + targetLang + "/");
   }
 
   function isCurrentPage() {
