@@ -191,6 +191,8 @@ def render_block(el, out: list) -> None:
         out.append("---")
         out.append("")
         return
+    if name in ("script", "style", "noscript"):
+        return
     if name in ("div", "section", "article"):
         for c in el.children:
             render_block(c, out)
@@ -280,3 +282,4 @@ def main(argv) -> int:
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))
+
