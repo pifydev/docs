@@ -1,6 +1,6 @@
 # Contributing to Pi Docs
 
-Pi Docs is a community translation of the [Pify Agent Book](https://www.dgzhuya.com/) source-code reading notes. This guide covers how to contribute, the style rules, and the local workflow.
+Pi Docs is a community translation of the [Pi Agent Book](https://www.dgzhuya.com/) source-code reading notes. This guide covers how to contribute, the style rules, and the local workflow.
 
 ## Code of Conduct
 
