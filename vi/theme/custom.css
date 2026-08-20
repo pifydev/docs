@@ -1,4 +1,4 @@
-/* Pi Docs — custom theme overrides */
+﻿/* Pi Docs — custom theme overrides */
 
 :root {
   --content-max-width: 850px;
@@ -64,29 +64,6 @@ html.navy .chapter::before,
 html.coal .chapter::before,
 html.ayu  .chapter::before,
 html.rust .chapter::before {
-  background-image: url("../pify-logo-dark.png") !important;
-}
-
-/* Top menu bar — replace the default book-title text with a smaller logo. */
-.menu-title {
-  font-size: 0 !important;
-  line-height: 0 !important;
-  width: 32px !important;
-  height: 32px !important;
-  background-image: url("../pify-logo.png") !important;
-  background-repeat: no-repeat !important;
-  background-size: contain !important;
-  background-position: left center !important;
-  margin: 0 !important;
-  padding: 0 8px !important;
-  color: transparent !important;
-  text-indent: -9999px !important;
-}
-
-html.navy .menu-title,
-html.coal .menu-title,
-html.ayu  .menu-title,
-html.rust .menu-title {
   background-image: url("../pify-logo-dark.png") !important;
 }
 
