@@ -1,16 +1,16 @@
 # Summary
 
-[Giới thiệu](./index.md)
+[Gioi thieu](./index.md)
 
-# Chương
+# Cac chuong
 
-- [Chương 1: Mở đầu — Tại sao Pi-Agent đáng để bạn dành thời gian](./chapter-01.md)
-- [Chương 2: Kiến trúc ba lớp](./chapter-02.md)
-- [Chương 3: Agent Loop](./chapter-03.md)
-- [Chương 4: Gọi model — Một dòng, nhiều nhà cung cấp](./chapter-04.md)
-- [Chương 5: Hệ thống Tool](./chapter-05.md)
-- [Chương 6: Hệ thống Message](./chapter-06.md)
-- [Chương 7: Kiến trúc hướng sự kiện](./chapter-07.md)
-- [Chương 8: Context Engineering](./chapter-08.md)
-- [Chương 9: Nén ngữ cảnh](./chapter-09.md)
-- [Chương 10: Quản lý Session](./chapter-10.md)
+- [Chuong 1: Mo dau — Tai sao Pi-Agent dang de ban danh thoi gian](./ch01-introduction.md)
+- [Chuong 2: Kien truc ba lop](./ch02-three-layer-architecture.md)
+- [Chuong 3: Agent Loop](./ch03-agent-loop.md)
+- [Chuong 4: Goi model — Mot dong, nhieu nha cung cap](./ch04-model-invocation.md)
+- [Chuong 5: He thong Tool](./ch05-tool-system.md)
+- [Chuong 6: He thong Message](./ch06-message-system.md)
+- [Chuong 7: Kien truc huong su kien](./ch07-event-driven.md)
+- [Chuong 8: Context Engineering](./ch08-context-engineering.md)
+- [Chuong 9: Nen ngu canh](./ch09-context-compaction.md)
+- [Chuong 10: Quan ly Session](./ch10-session-management.md)
