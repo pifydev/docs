@@ -2,8 +2,8 @@
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/pify-logo-dark-bg.svg">
-    <img src="assets/pify-logo-light-bg.svg" alt="Pi Docs" width="160">
+    <source media="(prefers-color-scheme: dark)" srcset="src/assets/logo-dark-bg.svg">
+    <img src="src/assets/logo-light-bg.svg" alt="Pi Docs" width="160">
   </picture>
 </p>
 
