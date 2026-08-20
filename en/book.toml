@@ -15,9 +15,9 @@ command = "python \"../scripts/lib/strip-frontmatter.py\""
 default-theme = "light"
 preferred-dark-theme = "navy"
 git-repository-url = "https://github.com/OWNER/pi-docs"
-additional-css = ["theme/custom.css"]
+additional-css = ["theme/custom.css", "theme/lang-switcher.css"]
 edit-url-template = "https://github.com/OWNER/pi-docs/edit/main/en/src/{path}"
-additional-js = ["mermaid.min.js", "mermaid-init.js"]
+additional-js = ["theme/lang-switcher.js", "mermaid.min.js", "mermaid-init.js"]
 
 [output.html.fold]
 enable = true
