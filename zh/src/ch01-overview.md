@@ -17,8 +17,44 @@ translator: null
 reviewed_by: null
 last_updated: 2026-08-20
 status: translated
-official_refs: []
-terms_used: []
+official_refs:
+  - https://pi.dev/docs/latest/index
+  - https://pi.dev/docs/latest/quickstart
+  - https://pi.dev/docs/latest/usage
+  - https://pi.dev/docs/latest/providers
+  - https://pi.dev/docs/latest/settings
+  - https://pi.dev/docs/latest/extensions
+  - https://pi.dev/docs/latest/skills
+  - https://pi.dev/docs/latest/packages
+  - https://pi.dev/docs/latest/models
+  - https://pi.dev/docs/latest/security
+  - https://pi.dev/docs/latest/keybindings
+  - https://pi.dev/docs/latest/sessions
+  - https://pi.dev/docs/latest/compaction
+terms_used:
+  - Pi Agent
+  - Agent Loop
+  - Tool System
+  - Tool
+  - TUI
+  - MCP
+  - Provider
+  - KnownProvider
+  - Skills
+  - Extensions
+  - Pi Package
+  - Prompt Template
+  - Theme
+  - SDK
+  - RPC
+  - DAG
+  - YOLO mode
+  - Hot Reload
+  - Harness
+  - AGENTS.md
+  - ~/.pi/agent/settings.json
+  - models.json
+  - ANTHROPIC_API_KEY
 code_blocks: 7
 mermaid_blocks: 0
 ---
