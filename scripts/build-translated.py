@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
-"""
-Build en/vi chapter files from a worksheet JSON.
+"""Build en/vi chapter files from a worksheet JSON + translations JSON.
 
 Usage:
   python scripts/build-translated.py scripts/worksheets/ch03-agent-loop.json
 
 Reads:
   - worksheets/<chapter>.json  : segments + frontmatter
-  - worksheets/<chapter>.translations.json : {"<index>": {"en": "...", "vi": "..."}, ...}
+  - translations/<chapter>.json : {"<index>": {"en": "...", "vi": "..."}, ...}
 
 Writes:
   - en/src/<chapter>.md
@@ -19,25 +18,25 @@ from pathlib import Path
 
 ROOT = Path(r"E:\project\pi-docs")
 WORKSHEETS = ROOT / "scripts" / "worksheets"
+TRANSLATIONS = ROOT / "scripts" / "translations"
 
 
 def build_language(worksheet, translations, lang):
     fm = worksheet["frontmatter"]
-    # Tweak frontmatter: set language, set status, fill in translator
     lines = fm.splitlines()
     new_lines = []
     for line in lines:
-        if line.strip() == "language: zh":
+        s = line.strip()
+        if s == "language: zh":
             new_lines.append(f"language: {lang}")
-        elif line.strip() == "translator: null":
-            new_lines.append("translator: pi-docs-bot")
-        elif line.strip() == "status: translated":
+        elif s == "translator: null":
+            new_lines.append("translator: hypnguyen1209")
+        elif s.startswith("status:"):
             new_lines.append("status: translated")
         else:
             new_lines.append(line)
     fm_out = "\n".join(new_lines)
 
-    # Interleave: for each segment, use prose translation or code verbatim
     body_parts = [fm_out]
     for seg in worksheet["segments"]:
         idx = seg["index"]
@@ -55,7 +54,7 @@ def build_language(worksheet, translations, lang):
 def main():
     ws_path = Path(sys.argv[1])
     chapter = ws_path.stem
-    tr_path = WORKSHEETS / f"{chapter}.translations.json"
+    tr_path = TRANSLATIONS / f"{chapter}.json"
 
     if not tr_path.exists():
         raise SystemExit(f"ERROR: missing translations file {tr_path}")
