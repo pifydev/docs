@@ -1,0 +1,29 @@
+# Build outputs (mdBook)
+zh/book/
+en/book/
+vi/book/
+dist/
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Node (used by mermaid-cli)
+node_modules/
+package-lock.json
+
+# Python (helper scripts)
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Env / secrets
+.env
+.env.local
