@@ -1,4 +1,5 @@
 ---
+title: 第9章：上下文压缩 —— 当对话太长怎么办
 chapter: 9
 slug: ch09-compaction
 title_zh: "第9章：上下文压缩 —— 当对话太长怎么办"

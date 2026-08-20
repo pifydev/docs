@@ -1,4 +1,5 @@
 ---
+title: Chương 5: Hệ thống Tool
 chapter: 5
 slug: ch05-tool-system
 title_zh: "第5章：工具系统"

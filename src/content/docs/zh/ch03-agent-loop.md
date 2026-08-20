@@ -1,4 +1,5 @@
 ---
+title: 第3章：Agent Loop —— 让模型转动起来的引擎
 chapter: 3
 slug: ch03-agent-loop
 title_zh: "第3章：Agent Loop —— 让模型转动起来的引擎"

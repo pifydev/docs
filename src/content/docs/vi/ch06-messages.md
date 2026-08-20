@@ -1,4 +1,5 @@
 ---
+title: Chương 6: Hệ thống Message: Bộ nhớ của Agent được tổ chức và truyền đi ra sao
 chapter: 6
 slug: ch06-messages
 title_zh: "第6章：消息系统: Agent 的记忆如何组织与传递"

@@ -1,4 +1,5 @@
 ---
+title: Chapter 6: Message System: How Agent Memory Is Organized and Passed
 chapter: 6
 slug: ch06-messages
 title_zh: "第6章：消息系统: Agent 的记忆如何组织与传递"

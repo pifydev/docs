@@ -1,4 +1,5 @@
 ---
+title: 第1章：开篇 —— 为什么 Pi-Agent 值得你花时间
 chapter: 1
 slug: ch01-overview
 title_zh: "第1章：开篇 —— 为什么 Pi-Agent 值得你花时间"

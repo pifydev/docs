@@ -1,4 +1,5 @@
 ---
+title: 第8章：上下文工程 —— 让有限窗口装下无限对话
 chapter: 8
 slug: ch08-context-engineering
 title_zh: "第8章：上下文工程 —— 让有限窗口装下无限对话"

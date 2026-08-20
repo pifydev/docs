@@ -1,4 +1,5 @@
 ---
+title: Chapter 10: Session Management: Storing, Resuming, and Forking Conversations
 chapter: 10
 slug: ch10-session
 title_zh: "第10章：会话管理: 对话的存储、恢复与分叉"

@@ -1,4 +1,5 @@
 ---
+title: Chương 10: Quản lý Session: Lưu trữ, khôi phục và phân nhánh cuộc hội thoại
 chapter: 10
 slug: ch10-session
 title_zh: "第10章：会话管理: 对话的存储、恢复与分叉"

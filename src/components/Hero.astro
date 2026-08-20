@@ -1,0 +1,38 @@
+---
+const { lang } = Astro.props;
+const titles = {
+  zh: "Pify Agent Book",
+  en: "Pify Agent Book",
+  vi: "Sách Pify Agent",
+};
+const tagline = {
+  zh: "Pi Agent SDK 源码阅读笔记",
+  en: "Source-code reading notes for the Pi Agent SDK",
+  vi: "Ghi chú đọc mã nguồn cho Pi Agent SDK",
+};
+---
+
+<div class="hero">
+  <img src="/src/assets/logo-light-bg.svg" alt="Pify" class="hero-logo" />
+  <h1>{titles[lang]}</h1>
+  <p class="hero-tagline">{tagline[lang]}</p>
+</div>
+
+<style>
+  .hero {
+    text-align: center;
+    padding: 2rem 1rem 1rem;
+  }
+  .hero-logo {
+    width: 120px;
+    height: 120px;
+  }
+  .hero h1 {
+    margin: 0.75rem 0 0.25rem;
+    font-size: 2.25rem;
+  }
+  .hero-tagline {
+    color: var(--sl-color-gray-2);
+    font-size: 1.05rem;
+  }
+</style>

@@ -1,4 +1,5 @@
 ---
+title: 第7章：事件驱动 —— Agent 的神经系统
 chapter: 7
 slug: ch07-event-driven
 title_zh: "第7章：事件驱动 —— Agent 的神经系统"

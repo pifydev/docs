@@ -1,4 +1,5 @@
 ---
+title: 第6章：消息系统 —— Agent 的记忆如何组织与传递
 chapter: 6
 slug: ch06-messages
 title_zh: "第6章：消息系统 —— Agent 的记忆如何组织与传递"

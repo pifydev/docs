@@ -1,4 +1,5 @@
 ---
+title: Chương 4: Gọi model: Một dòng, nhiều nhà cung cấp
 chapter: 4
 slug: ch04-model-invocation
 title_zh: "第4章：模型调用: 一行代码驾驭多个模型"

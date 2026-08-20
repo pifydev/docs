@@ -1,4 +1,5 @@
 ---
+title: 第2章：三层架构 —— Pi-Agent 项目的骨骼
 chapter: 2
 slug: ch02-three-layer-arch
 title_zh: "第2章：三层架构 —— Pi-Agent 项目的骨骼"

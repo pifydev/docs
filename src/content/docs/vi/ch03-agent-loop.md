@@ -1,4 +1,5 @@
 ---
+title: Chương 3: Agent Loop: Động cơ quay mô hình
 chapter: 3
 slug: ch03-agent-loop
 title_zh: "第3章：Agent Loop: 让模型转动起来的引擎"
