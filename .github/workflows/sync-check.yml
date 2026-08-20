@@ -1,0 +1,22 @@
+name: Sync Check (PR only)
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    name: Validate sync + frontmatter
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PowerShell
+        uses: microsoft/powershell@v1
+      - name: Sync check
+        run: pwsh scripts/sync-check.ps1
+      - name: Frontmatter validate
+        run: pwsh scripts/validate-frontmatter.ps1
+      - name: Install mermaid-cli
+        run: npm install -g @mermaid-js/mermaid-cli
+      - name: Validate mermaid
+        run: pwsh scripts/validate-mermaid.ps1
