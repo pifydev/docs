@@ -1,7 +1,4 @@
-# Build outputs (mdBook)
-zh/book/
-en/book/
-vi/book/
+# Build outputs
 dist/
 
 # OS junk
@@ -15,24 +12,13 @@ desktop.ini
 *.swp
 *.swo
 
-# Node (used by mermaid-cli)
+# Node
 node_modules/
 package-lock.json
-
-# Python (helper scripts)
-__pycache__/
-*.pyc
-.pytest_cache/
 
 # Env / secrets
 .env
 .env.local
-
-# Translation worksheets are intermediate artifacts (re-generated from zh/src/)
-scripts/worksheets/
-
-# ch03-prose-source.txt is a dump of zh prose (regeneratable)
-scripts/worksheets/ch03-prose-source.txt
 
 # Astro
 .astro/
