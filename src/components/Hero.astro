@@ -1,4 +1,7 @@
 ---
+import { Image } from "astro:assets";
+import logoLight from "../assets/logo-light-bg.svg";
+
 const { lang } = Astro.props;
 const titles = {
   zh: "Pify Agent Book",
@@ -13,7 +16,7 @@ const tagline = {
 ---
 
 <div class="hero">
-  <img src="/src/assets/logo-light-bg.svg" alt="Pify" class="hero-logo" />
+  <Image src={logoLight} alt="Pify" class="hero-logo" width="120" height="120" />
   <h1>{titles[lang]}</h1>
   <p class="hero-tagline">{tagline[lang]}</p>
 </div>
