@@ -35,8 +35,20 @@ function Get-MarkdownStats {
         $content = ''
     }
 
-    # Strip frontmatter (if any) so we don't count headings/code inside it
-    $fmPattern = '(?ms)^---\r?\n.*?\r?\n---\r?\n?'
+    # Strip frontmatter (if any) so we don't count headings/code inside it.
+    # Line-based scan: opening --- on line 1, closing --- on a later line that
+    # starts with --- and has nothing else on that line. Avoids false matches
+    # with horizontal-rule --- in the body.
+    $body = $content
+    $rawLines = $content -split "\r?\n"
+    if ($rawLines.Count -gt 0 -and $rawLines[0].TrimEnd() -match '^---\s*$') {
+        for ($j = 1; $j -lt $rawLines.Count; $j++) {
+            if ($rawLines[$j] -match '^---\s*$') {
+                $body = ($rawLines[($j+1)..($rawLines.Count-1)] -join "`n")
+                break
+            }
+        }
+    }
     $body = [regex]::Replace($content, $fmPattern, '')
 
     # Headings: #, ##, ###, ####, #####, ###### (followed by space)
