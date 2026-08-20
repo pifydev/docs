@@ -1,6 +1,9 @@
 ---
 title: Pify Agent Book
 template: splash
+tableOfContents: false
+next: false
+prev: false
 ---
 
 import Hero from "../../../components/Hero.astro";

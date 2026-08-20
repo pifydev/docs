@@ -1,6 +1,9 @@
 ---
 title: Sách Pify Agent
 template: splash
+tableOfContents: false
+next: false
+prev: false
 ---
 
 import Hero from "../../../components/Hero.astro";
