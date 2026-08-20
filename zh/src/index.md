@@ -9,7 +9,7 @@
 
 # Pify Agent Book 中文版
 
-Pi Agent SDK 源码阅读笔记。本站收录 [Pi Agent Book](https://www.dgzhuya.com/) 的中文原文（canonical），英文和越南语译本见侧边栏导航。
+Pi Agent SDK 源码阅读笔记。本站收录 [Pi Agent Book](https://www.dgzhuya.com/) 的中文原文（canonical），英文、越南语译本见侧边栏。
 
 ## 阅读建议
 

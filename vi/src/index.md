@@ -9,7 +9,7 @@
 
 # Pify Agent Book (Tiếng Việt)
 
-Ghi chú đọc source code của [Pi Agent SDK](https://github.com/earendil-works/pi). Bản dịch tiếng Việt của [Pi Agent Book](https://www.dgzhuya.com/), với tiếng Trung là bản canonical. Bản tiếng Việt theo cấu trúc và thứ tự chương của bản gốc.
+Ghi chú đọc source code của [Pi Agent SDK](https://github.com/earendil-works/pi). Bản dịch tiếng Việt của [Pi Agent Book](https://www.dgzhuya.com/); tiếng Trung là bản canonical. Bản tiếng Việt bám theo cấu trúc và thứ tự chương của bản gốc.
 
 ## Cách đọc
 

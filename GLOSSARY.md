@@ -1,6 +1,6 @@
 # Glossary
 
-English technical terms we keep across all translations of the Pi Agent Book. **Do not translate** any term on this page. Use each one verbatim in the Chinese, English, and Vietnamese chapters.
+English technical terms used across all translations of the Pi Agent Book. **Do not translate** anything on this page. Use each term verbatim in every language.
 
 When you encounter a term not yet listed here, append a row with: `term | category | short explanation | source`.
 

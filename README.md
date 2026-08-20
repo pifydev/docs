@@ -8,7 +8,7 @@
 </p>
 
 
-Multilingual translations of the [Pi Agent Book](https://www.dgzhuya.com/). Source-code reading notes for the [Pi Agent SDK](https://github.com/earendil-works/pi), with Chinese as the canonical source. Companion to the official [pi.dev](https://pi.dev) docs.
+Translations of the [Pi Agent Book](https://www.dgzhuya.com/) source-code reading notes. This site covers the [Pi Agent SDK](https://github.com/earendil-works/pi); Chinese is the canonical source. See also the [pi.dev](https://pi.dev) docs.
 
 ## Available Languages
 
