@@ -1,6 +1,6 @@
 # Pi Docs — Pi Agent Book Translations
 
-Multilingual translations of the [Pi Agent Book](https://www.dgzhuya.com/) (source-code reading notes for the [Pi Agent SDK](https://github.com/earendil-works/pi)).
+Multilingual translations of the [Pi Agent Book](https://www.dgzhuya.com/) — source-code reading notes for the [Pi Agent SDK](https://github.com/earendil-works/pi). Companion to the official [pi.dev](https://pi.dev) docs.
 
 ## Available Languages
 
