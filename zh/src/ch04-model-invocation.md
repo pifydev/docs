@@ -10,9 +10,9 @@ version_pairs:
   zh: zh/src/ch04-model-invocation.md
   en: en/src/ch04-model-invocation.md
   vi: vi/src/ch04-model-invocation.md
-original_chars: 0
-code_lines: 0
-reading_minutes: 0
+original_chars: 5321
+code_lines: 134
+reading_minutes: 27
 translator: null
 reviewed_by: null
 last_updated: 2026-08-20
@@ -26,3 +26,7 @@ code_blocks: 0
 # 第4章：模型调用 —— 一行代码驾驭多个模型
 
 占位符。译文待补充。
+
+
+
+

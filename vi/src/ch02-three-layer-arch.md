@@ -1,18 +1,18 @@
 ---
 chapter: 2
-slug: ch02-three-layer-architecture
+slug: ch02-three-layer-arch
 title_zh: "第2章：三层架构"
 title_en: "Chapter 2: Three-Layer Architecture"
 title_vi: "Chương 2: Kiến trúc ba lớp"
-source_url: https://www.dgzhuya.com/modules/ch02-three-layer-architecture
+source_url: https://www.dgzhuya.com/modules/ch02-three-layer-arch
 language: vi
 version_pairs:
-  zh: zh/src/ch02-three-layer-architecture.md
-  en: en/src/ch02-three-layer-architecture.md
-  vi: vi/src/ch02-three-layer-architecture.md
-original_chars: 0
-code_lines: 0
-reading_minutes: 0
+  zh: zh/src/ch02-three-layer-arch.md
+  en: en/src/ch02-three-layer-arch.md
+  vi: vi/src/ch02-three-layer-arch.md
+original_chars: 4215
+code_lines: 190
+reading_minutes: 22
 translator: null
 reviewed_by: null
 last_updated: 2026-08-20
@@ -26,3 +26,7 @@ code_blocks: 0
 # Chương 2: Kiến trúc ba lớp
 
 Placeholder. Bản dịch đang được chuẩn bị.
+
+
+
+

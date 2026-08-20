@@ -10,9 +10,9 @@ version_pairs:
   zh: zh/src/ch08-context-engineering.md
   en: en/src/ch08-context-engineering.md
   vi: vi/src/ch08-context-engineering.md
-original_chars: 0
-code_lines: 0
-reading_minutes: 0
+original_chars: 5631
+code_lines: 200
+reading_minutes: 29
 translator: null
 reviewed_by: null
 last_updated: 2026-08-20
@@ -26,3 +26,7 @@ code_blocks: 0
 # Chương 8: Context Engineering
 
 Placeholder. Bản dịch đang được chuẩn bị.
+
+
+
+

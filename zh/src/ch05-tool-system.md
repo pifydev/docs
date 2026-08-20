@@ -10,9 +10,9 @@ version_pairs:
   zh: zh/src/ch05-tool-system.md
   en: en/src/ch05-tool-system.md
   vi: vi/src/ch05-tool-system.md
-original_chars: 0
-code_lines: 0
-reading_minutes: 0
+original_chars: 6618
+code_lines: 270
+reading_minutes: 34
 translator: null
 reviewed_by: null
 last_updated: 2026-08-20
@@ -26,3 +26,7 @@ code_blocks: 0
 # 第5章：工具系统
 
 占位符。译文待补充。
+
+
+
+

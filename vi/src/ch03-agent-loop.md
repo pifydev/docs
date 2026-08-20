@@ -10,9 +10,9 @@ version_pairs:
   zh: zh/src/ch03-agent-loop.md
   en: en/src/ch03-agent-loop.md
   vi: vi/src/ch03-agent-loop.md
-original_chars: 0
-code_lines: 0
-reading_minutes: 0
+original_chars: 6859
+code_lines: 358
+reading_minutes: 35
 translator: null
 reviewed_by: null
 last_updated: 2026-08-20
@@ -26,3 +26,7 @@ code_blocks: 0
 # Chương 3: Agent Loop
 
 Placeholder. Bản dịch đang được chuẩn bị.
+
+
+
+

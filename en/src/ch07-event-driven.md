@@ -10,9 +10,9 @@ version_pairs:
   zh: zh/src/ch07-event-driven.md
   en: en/src/ch07-event-driven.md
   vi: vi/src/ch07-event-driven.md
-original_chars: 0
-code_lines: 0
-reading_minutes: 0
+original_chars: 3423
+code_lines: 152
+reading_minutes: 18
 translator: null
 reviewed_by: null
 last_updated: 2026-08-20
@@ -26,3 +26,7 @@ code_blocks: 0
 # Chapter 7: Event-Driven Architecture
 
 Placeholder. Translation pending.
+
+
+
+

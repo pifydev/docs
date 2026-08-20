@@ -1,18 +1,18 @@
 ---
 chapter: 9
-slug: ch09-context-compaction
+slug: ch09-compaction
 title_zh: "第9章：上下文压缩"
 title_en: "Chapter 9: Context Compaction"
 title_vi: "Chương 9: Nén ngữ cảnh"
-source_url: https://www.dgzhuya.com/modules/ch09-context-compaction
+source_url: https://www.dgzhuya.com/modules/ch09-compaction
 language: en
 version_pairs:
-  zh: zh/src/ch09-context-compaction.md
-  en: en/src/ch09-context-compaction.md
-  vi: vi/src/ch09-context-compaction.md
-original_chars: 0
-code_lines: 0
-reading_minutes: 0
+  zh: zh/src/ch09-compaction.md
+  en: en/src/ch09-compaction.md
+  vi: vi/src/ch09-compaction.md
+original_chars: 3944
+code_lines: 172
+reading_minutes: 20
 translator: null
 reviewed_by: null
 last_updated: 2026-08-20
@@ -26,3 +26,7 @@ code_blocks: 0
 # Chapter 9: Context Compaction
 
 Placeholder. Translation pending.
+
+
+
+
