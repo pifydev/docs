@@ -44,6 +44,18 @@ export default defineConfig({
       editLink: {
         baseUrl: "https://github.com/pifydev/docs/edit/main/",
       },
+      head: [
+        {
+          tag: "meta",
+          property: "og:image",
+          content: "https://pifydev.github.io/docs/og-image.png",
+        },
+        {
+          tag: "meta",
+          name: "twitter:card",
+          content: "summary_large_image",
+        },
+      ],
     }),
   ],
 });
