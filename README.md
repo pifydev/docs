@@ -1,5 +1,13 @@
 # Pi Docs — Pi Agent Book Translations
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/pify-logo-dark-bg.svg">
+    <img src="assets/pify-logo-light-bg.svg" alt="Pi Docs" width="160">
+  </picture>
+</p>
+
+
 Multilingual translations of the [Pi Agent Book](https://www.dgzhuya.com/) — source-code reading notes for the [Pi Agent SDK](https://github.com/earendil-works/pi). Companion to the official [pi.dev](https://pi.dev) docs.
 
 ## Available Languages
@@ -14,6 +22,7 @@ Multilingual translations of the [Pi Agent Book](https://www.dgzhuya.com/) — s
 
 - [mdBook](https://rust-lang.github.io/mdBook/) — generates static HTML sites from Markdown
 - [mdbook-mermaid](https://github.com/badboy/mdbook-mermaid) — renders Mermaid diagrams to SVG
+- Python 3 — scripts/lib/strip-frontmatter.py mdBook preprocessor (strips leading YAML frontmatter at build time)
 - GitHub Actions — CI/CD build & deploy to GitHub Pages
 - PowerShell 7+ — validation scripts (cross-platform via `pwsh`)
 
@@ -30,7 +39,7 @@ pi-docs/
 
 ## Local Development
 
-Prerequisites: [`mdbook`](https://rust-lang.github.io/mdBook/), [`mdbook-mermaid`](https://github.com/badboy/mdbook-mermaid), and [`pwsh`](https://learn.microsoft.com/powershell/scripting/install/installing-powershell) (PowerShell 7+).
+Prerequisites: [`mdbook`](https://rust-lang.github.io/mdBook/), [`mdbook-mermaid`](https://github.com/badboy/mdbook-mermaid), [Python 3](https://www.python.org/), and [`pwsh`](https://learn.microsoft.com/powershell/scripting/install/installing-powershell) (PowerShell 7+). Python must be on `PATH` so mdBook can invoke the preprocessor.
 
 ```powershell
 # Build all three languages
