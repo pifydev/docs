@@ -7,7 +7,7 @@
   </svg>
 </div>
 
-# Pi Agent Book 中文版
+# Pify Agent Book 中文版
 
 Pi Agent SDK 源码阅读笔记。本站收录 [Pi Agent Book](https://www.dgzhuya.com/) 的中文原文（canonical），英文与越南语译本见侧边栏导航。
 

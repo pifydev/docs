@@ -7,7 +7,7 @@
   </svg>
 </div>
 
-# Pi Agent Book (Tiếng Việt)
+# Pify Agent Book (Tiếng Việt)
 
 Ghi chú đọc source code của [Pi Agent SDK](https://github.com/earendil-works/pi), được dịch từ [Pi Agent Book](https://www.dgzhuya.com/). Bản gốc tiếng Trung là canonical; bản dịch tiếng Việt này bám sát cấu trúc và thứ tự chương của bản gốc.
 

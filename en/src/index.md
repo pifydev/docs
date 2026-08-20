@@ -7,7 +7,7 @@
   </svg>
 </div>
 
-# Pi Agent Book (English)
+# Pify Agent Book (English)
 
 Source-code reading notes for the [Pi Agent SDK](https://github.com/earendil-works/pi), translated from the [Pi Agent Book](https://www.dgzhuya.com/). The Chinese original is canonical; this English translation mirrors its structure and chapter order.
 
