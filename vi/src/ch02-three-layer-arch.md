@@ -1,9 +1,9 @@
 ---
 chapter: 2
 slug: ch02-three-layer-arch
-title_zh: "第2章：三层架构 —— Pi-Agent 项目的骨骼"
-title_en: "Chapter 2: Three-Layer Architecture — Pi-Agent Project Skeleton"
-title_vi: "Chương 2: Kiến trúc ba lớp — Bộ xương của Pi-Agent"
+title_zh: "第2章：三层架构 : Pi-Agent 项目的骨骼"
+title_en: "Chapter 2: Three-Layer Architecture : Pi-Agent Project Skeleton"
+title_vi: "Chương 2: Kiến trúc ba lớp : Bộ xương của Pi-Agent"
 source_url: https://www.dgzhuya.com/modules/ch02-three-layer-arch
 language: vi
 version_pairs:
@@ -62,9 +62,9 @@ code_blocks: 16
 mermaid_blocks: 0
 ---
 
-# Chương 2: Kiến trúc ba lớp — Bộ xương của Pi-Agent
+# Chương 2: Kiến trúc ba lớp : Bộ xương của Pi-Agent
 
-> Trong chương này, chúng ta đứng từ trên cao nhìn xuống toàn bộ kiến trúc của Pi — code nằm ở đâu, các package phụ thuộc lẫn nhau ra sao, và kiểu dữ liệu chảy giữa các lớp như thế nào. Khi đã có bức tranh toàn cảnh này, việc đào sâu vào bất kỳ module nào sau này cũng không làm bạn lạc.
+> Trong chương này, chúng ta đứng từ trên cao nhìn xuống toàn bộ kiến trúc của Pi : code nằm ở đâu, các package phụ thuộc lẫn nhau ra sao, và kiểu dữ liệu chảy giữa các lớp như thế nào. Khi đã có bức tranh toàn cảnh này, việc đào sâu vào bất kỳ module nào sau này cũng không làm bạn lạc.
 
 ---
 
@@ -89,7 +89,7 @@ Năm package, xếp thẳng hàng gọn gàng.
 > Ghi chú 1: Trước đây từng có package `pi-web-ui` (thư viện component Lit cho trình duyệt), nhưng nó đã bị xoá khỏi workspace tại commit `b141e1fa` ngày 2026-05-20; kho chứa hiện tại không còn chứa package đó nữa.
 > Ghi chú 2: `pi-orchestrator` là package điều phối thử nghiệm, được thêm vào v0.80.x. Nó phụ thuộc vào `pi-coding-agent` và xử lý việc phối hợp đa Agent, giao tiếp giữa các tiến trình qua RPC, và giám sát bằng Supervisor. Nó thuộc về **lớp điều phối ngoài**, không nằm trong lộ trình học "bộ ba lõi", và sẽ được mô tả riêng ở cuối module này.
 
-Nếu bạn đã từng làm dự án Node.js, chắc hẳn bạn đã dùng monorepo (nhiều package được quản lý trong cùng một kho chứa). Pi dùng cách tiếp cận npm workspaces tiêu chuẩn — `package.json` gốc khai báo `"workspaces": ["packages/*"]`, và npm sẽ tự động coi mỗi thư mục con dưới `packages/` là một package độc lập.
+Nếu bạn đã từng làm dự án Node.js, chắc hẳn bạn đã dùng monorepo (nhiều package được quản lý trong cùng một kho chứa). Pi dùng cách tiếp cận npm workspaces tiêu chuẩn : `package.json` gốc khai báo `"workspaces": ["packages/*"]`, và npm sẽ tự động coi mỗi thư mục con dưới `packages/` là một package độc lập.
 
 Nhưng đó chưa phải là điều quan trọng. Điều quan trọng là: **tại sao lại là năm package (bốn package mở rộng từ bộ ba lõi, cộng thêm một lớp điều phối ngoài)? Mối quan hệ giữa chúng là gì? Có thể gộp lại không?**
 
@@ -111,7 +111,7 @@ Mô tả một dòng trong `package.json` của nó là:
 
 Cụ thể, nó làm ba việc:
 
-1. **Định nghĩa các kiểu dữ liệu thống nhất (unified types)**: dù bạn dùng OpenAI, Anthropic, Google hay AWS Bedrock, định dạng thông điệp đều giống nhau — `UserMessage`, `AssistantMessage`, `ToolResultMessage`, và định nghĩa mô hình là `Model<TApi>`.
+1. **Định nghĩa các kiểu dữ liệu thống nhất (unified types)**: dù bạn dùng OpenAI, Anthropic, Google hay AWS Bedrock, định dạng thông điệp đều giống nhau : `UserMessage`, `AssistantMessage`, `ToolResultMessage`, và định nghĩa mô hình là `Model<TApi>`.
 2. **Hợp nhất luồng gọi (unify streaming calls)**: mọi luồng gọi tới các nhà cung cấp được gom về một hàm `streamSimple()` duy nhất, trả về `AssistantMessageEventStream` (một stream bạn có thể đọc từng token).
 3. **Thích ứng với hơn 30 nhà cung cấp**: hỗ trợ trên 30 nhà cung cấp, từ OpenAI, Claude, Gemini tới DeepSeek, Groq, Xiaomi, v.v., mỗi nhà cung cấp có một file adapter riêng.
 
@@ -174,7 +174,7 @@ Mô tả trong `package.json` của nó là:
 
 > "Coding agent CLI with read, bash, edit, write tools and session management"
 
-Lớp này "dày" nhất — hơn một trăm file source, nhiều hơn tổng hai lớp trên cộng lại. Bởi nó biết hết mọi thứ cụ thể:
+Lớp này "dày" nhất : hơn một trăm file source, nhiều hơn tổng hai lớp trên cộng lại. Bởi nó biết hết mọi thứ cụ thể:
 
 - Bảy công cụ lập trình (read, bash, edit, write, grep, find, ls) được hiện thực như thế nào
 - Hệ thống Extension tải và chạy ra sao
@@ -207,7 +207,7 @@ Một điểm vào tí xíu, nhưng đằng sau là cả một chuỗi khởi đ
 
 Package cuối cùng là lớp UI:
 
-- **pi-tui**: thư viện UI terminal, chịu trách nhiệm render Markdown, tô màu cú pháp, và hiển thị sai phân (differential display) trong terminal. `dependencies` của nó **không chứa package nào liên quan tới AI** — runtime chỉ có `marked` (render Markdown) cộng `get-east-asian-width` (tính độ rộng ký tự Đông Á); `chalk` và `@xterm/headless` nằm trong devDependencies và không được đóng gói lúc runtime.
+- **pi-tui**: thư viện UI terminal, chịu trách nhiệm render Markdown, tô màu cú pháp, và hiển thị sai phân (differential display) trong terminal. `dependencies` của nó **không chứa package nào liên quan tới AI** : runtime chỉ có `marked` (render Markdown) cộng `get-east-asian-width` (tính độ rộng ký tự Đông Á); `chalk` và `@xterm/headless` nằm trong devDependencies và không được đóng gói lúc runtime.
 
 Package này không liên quan tới "Agent hoạt động thế nào". Nó chỉ render những gì Agent đang làm để người dùng nhìn thấy. Sau này trong sách chúng ta sẽ không đào sâu vào lớp này.
 
@@ -217,10 +217,10 @@ Package này không liên quan tới "Agent hoạt động thế nào". Nó ch�
 
 Phần lõi của nó gồm vài file:
 
-- `supervisor.ts` — supervisor quản lý vòng đời của các Agent con
-- `rpc-process.ts` — giao tiếp giữa các tiến trình dựa trên RPC
-- `radius.ts` — kiểm soát phạm vi/ranh giới cho việc điều phối
-- `serve.ts` / `storage.ts` — phơi bày dịch vụ và bền vững hoá trạng thái
+- `supervisor.ts` : supervisor quản lý vòng đời của các Agent con
+- `rpc-process.ts` : giao tiếp giữa các tiến trình dựa trên RPC
+- `radius.ts` : kiểm soát phạm vi/ranh giới cho việc điều phối
+- `serve.ts` / `storage.ts` : phơi bày dịch vụ và bền vững hoá trạng thái
 
 Lưu ý vị trí của nó: nó **phụ thuộc vào `pi-coding-agent`** và nằm trên coding-agent. Bản thân nó không hiện thực bất kỳ logic lõi nào của Agent (vòng lặp, trạng thái, compaction vẫn do agent-core cung cấp). Nó chỉ "dệt" nhiều thể hiện coding-agent lại với nhau để chúng có thể phân chia công việc, giao tiếp và được giám sát.
 
@@ -252,13 +252,13 @@ Sau khi đọc phần trên, có lẽ bạn đã có một bức tranh trong đ�
 
 Phân lớp rất trực giác: tầng dưới gọi mô hình, tầng giữa chạy vòng lặp, tầng trên lo business. Đúng không?
 
-Nhưng khoan —
+Nhưng khoan :
 
 ---
 
 ## 4. Mở package.json ra, mọi thứ không đơn giản như vậy
 
-> **Gợi ý đường đọc**: Mục 4–5 là **phần kiến trúc nâng cao**, đi sâu vào chi tiết quan hệ phụ thuộc và luồng kiểu dữ liệu. Mục 4 sửa lại hiểu lầm thường gặp về "phân lớp chặt" và làm rõ hướng phụ thuộc — **bắt buộc đọc nếu bạn dự định xây dựng trên SDK**. Mục 5 mở rộng sự tiến hoá kiểu dữ liệu qua ba lớp; phần này nghiêng về chi tiết hệ thống kiểu, bạn có thể quên tên trường mà không ảnh hưởng tới việc học sau này. **Nếu chỉ muốn lập và chạy nhanh, bạn có thể bỏ qua hai mục này và nhảy thẳng tới Mục 6 để xem "lời hứa phân lớp được giữ thế nào".**
+> **Gợi ý đường đọc**: Mục 4–5 là **phần kiến trúc nâng cao**, đi sâu vào chi tiết quan hệ phụ thuộc và luồng kiểu dữ liệu. Mục 4 sửa lại hiểu lầm thường gặp về "phân lớp chặt" và làm rõ hướng phụ thuộc : **bắt buộc đọc nếu bạn dự định xây dựng trên SDK**. Mục 5 mở rộng sự tiến hoá kiểu dữ liệu qua ba lớp; phần này nghiêng về chi tiết hệ thống kiểu, bạn có thể quên tên trường mà không ảnh hưởng tới việc học sau này. **Nếu chỉ muốn lập và chạy nhanh, bạn có thể bỏ qua hai mục này và nhảy thẳng tới Mục 6 để xem "lời hứa phân lớp được giữ thế nào".**
 
 Nếu trực giác phân lớp của bạn là "tầng trên chỉ được phép phụ thuộc vào tầng dưới kề nó", thì khi mở `packages/coding-agent/package.json` và nhìn vào trường `dependencies`, bạn sẽ thấy một chi tiết bất ngờ:
 
@@ -285,7 +285,7 @@ Lý do pi-coding-agent "với tay" sang pi-ai là ở cấp độ kiểu:
 
 Nói ngắn gọn, pi-coding-agent **dùng** pi-agent-core lúc runtime (để chạy vòng lặp Agent) nhưng chỉ **re-export kiểu từ** pi-ai (để Extensions có một mặt phẳng import duy nhất).
 
-Bạn có thể kiểm chứng bằng cách mở `packages/agent/src/types.ts` — hầu như mọi kiểu nền tảng mà pi-agent-core cần đều đến từ pi-ai:
+Bạn có thể kiểm chứng bằng cách mở `packages/agent/src/types.ts` : hầu như mọi kiểu nền tảng mà pi-agent-core cần đều đến từ pi-ai:
 
 ```
 // packages/agent/src/types.ts:1-14
@@ -305,7 +305,7 @@ import type {
 } from "@earendil-works/pi-ai";
 ```
 
-Các định nghĩa kiểu của pi-agent-core import rất nhiều kiểu nền tảng từ pi-ai: `Message`, `Model`, `ImageContent`, `Tool`... Đây là những "khái niệm nguyên tử" của cả hệ thống — như các nguyên tố hoá học, mọi tầng đều cần định nghĩa của các "nguyên tử".
+Các định nghĩa kiểu của pi-agent-core import rất nhiều kiểu nền tảng từ pi-ai: `Message`, `Model`, `ImageContent`, `Tool`... Đây là những "khái niệm nguyên tử" của cả hệ thống : như các nguyên tố hoá học, mọi tầng đều cần định nghĩa của các "nguyên tử".
 
 ### Vậy quy tắc phân lớp thực sự là gì?
 
@@ -321,7 +321,7 @@ Tức là:
 
 Sự bất đối xứng được cho phép vì "phụ thuộc tầng dưới" lúc runtime chỉ là trường hợp rõ ràng nhất; quy tắc hướng phụ thuộc quan tâm tới chuyện "tầng dưới không được biết tầng trên".
 
-> Phản ví dụ: nếu `index.ts` của pi-ai chứa `import { AgentState } from "@earendil-works/pi-agent-core"`, đó sẽ là vi phạm phân lớp. Nhưng pi-ai chưa bao giờ mang bất kỳ import nào như vậy — có thể kiểm chứng bằng `grep -r "@earendil-works/pi-agent-core\|@earendil-works/pi-coding-agent" packages/ai/src/`, lệnh này trả về không kết quả.
+> Phản ví dụ: nếu `index.ts` của pi-ai chứa `import { AgentState } from "@earendil-works/pi-agent-core"`, đó sẽ là vi phạm phân lớp. Nhưng pi-ai chưa bao giờ mang bất kỳ import nào như vậy : có thể kiểm chứng bằng `grep -r "@earendil-works/pi-agent-core\|@earendil-works/pi-coding-agent" packages/ai/src/`, lệnh này trả về không kết quả.
 
 Vậy quy tắc phân lớp không phải "chỉ tầng kề". Nó là "**nghiêm ngặt một chiều: tầng dưới không biết tầng trên**".
 
@@ -340,7 +340,7 @@ pi-ai（底层）
        pi-orchestrator（实验性外围编排层，可选）
 ```
 
-Tất cả mũi tên đều chỉ lên. **Tầng dưới không bao giờ biết về sự tồn tại của tầng trên** — không có import nào trong code pi-ai trỏ tới pi-agent-core hay pi-coding-agent; orchestrator cũng không xâm nhập ngược vào bên trong coding-agent. Đó mới là quy tắc thực sự của phân lớp: **không giới hạn chiều sâu tham chiếu, mà đảm bảo hướng phụ thuộc nghiêm ngặt đi lên.**
+Tất cả mũi tên đều chỉ lên. **Tầng dưới không bao giờ biết về sự tồn tại của tầng trên** : không có import nào trong code pi-ai trỏ tới pi-agent-core hay pi-coding-agent; orchestrator cũng không xâm nhập ngược vào bên trong coding-agent. Đó mới là quy tắc thực sự của phân lớp: **không giới hạn chiều sâu tham chiếu, mà đảm bảo hướng phụ thuộc nghiêm ngặt đi lên.**
 
 ---
 
@@ -350,14 +350,14 @@ Bây giờ quy tắc phụ thuộc đã rõ, ta có thể dùng hệ thống ki�
 
 ### Lớp 1: pi-ai định nghĩa các nguyên tử
 
-Trong pi-ai, một `Tool` là đơn vị tool nhỏ nhất có thể — chỉ đủ trường để mô tả tool đó là gì:
+Trong pi-ai, một `Tool` là đơn vị tool nhỏ nhất có thể : chỉ đủ trường để mô tả tool đó là gì:
 
 ```
 // packages/ai/src/types.ts（节选）
-// 最基础的消息类型——所有 LLM 都认的格式
+// 最基础的消息类型:所有 LLM 都认的格式
 type Message = UserMessage | AssistantMessage | ToolResultMessage
 
-// 模型定义——描述一个 LLM 的全部信息
+// 模型定义:描述一个 LLM 的全部信息
 interface Model<TApi> {
     id: string           // 如 "claude-sonnet-4-6"
     name: string
@@ -366,7 +366,7 @@ interface Model<TApi> {
     // ... 更多字段
 }
 
-// 工具定义——描述一个工具的 schema
+// 工具定义:描述一个工具的 schema
 interface Tool<TSchema> {
     name: string
     description: string
@@ -398,7 +398,7 @@ interface AgentTool<TParameters extends TSchema = TSchema, TDetails = any> exten
 }
 ```
 
-`AgentTool` là một "phân tử" — nó vẫn có `name`, `description`, và `parameters`, nhưng thêm khả năng **chạy thực sự**. Vòng lặp Agent sẽ duyệt qua `AgentTool[]`, gọi `execute` của từng tool, và đưa kết quả ngược về mô hình.
+`AgentTool` là một "phân tử" : nó vẫn có `name`, `description`, và `parameters`, nhưng thêm khả năng **chạy thực sự**. Vòng lặp Agent sẽ duyệt qua `AgentTool[]`, gọi `execute` của từng tool, và đưa kết quả ngược về mô hình.
 
 ### Lớp 3: pi-coding-agent kết hợp phân tử thành vật liệu
 
@@ -406,7 +406,7 @@ Trong pi-coding-agent, `ToolDefinition` cuối cùng bao bọc `AgentTool` với
 
 ```
 // packages/coding-agent/src/core/extensions/types.ts:435-482（节选）
-// 工具定义（产品视角）——完整接口有 10+ 个字段，下面列出关键字段
+// 工具定义（产品视角）:完整接口有 10+ 个字段，下面列出关键字段
 // 注意：ToolDefinition 在 TypeScript 层面是独立 interface 重新声明，
 // 与 AgentTool 是"结构兼容"而非用 extends 继承（详见 types.ts:435）
 interface ToolDefinition<TParams extends TSchema, TDetails = unknown, TState = any> {
@@ -509,7 +509,7 @@ import { Agent, agentLoop } from "@earendil-works/pi-agent-core";
 import { streamSimple } from "@earendil-works/pi-ai";
 ```
 
-Tốt hơn, nhưng bạn phải tự viết lại phần phân tích tham số CLI và quản lý session mỗi lần. Và các tool của bạn sẽ bị ghép chặt với kịch bản Agent cụ thể — chúng không thể được các Agent khác tái sử dụng.
+Tốt hơn, nhưng bạn phải tự viết lại phần phân tích tham số CLI và quản lý session mỗi lần. Và các tool của bạn sẽ bị ghép chặt với kịch bản Agent cụ thể : chúng không thể được các Agent khác tái sử dụng.
 
 ### Kịch bản C: chỉ một lớp (chỉ pi-ai)
 
@@ -523,9 +523,9 @@ for await (const event of stream) {
 }
 ```
 
-Cũng hoàn toàn ổn. Bản thân pi-ai đã là một package độc lập — gọi LLM, streaming kết quả, không cần framework Agent nào.
+Cũng hoàn toàn ổn. Bản thân pi-ai đã là một package độc lập : gọi LLM, streaming kết quả, không cần framework Agent nào.
 
-Nhưng khi đó bạn sẽ phải tự viết vòng lặp, tự quản lý trạng thái thông điệp, và tự xử lý các lời gọi tool. Đó chính là lý do pi-agent-core tồn tại — **nó làm phần khó nhất của một Agent (vòng lặp, trạng thái, sự kiện, nén) thay bạn, bạn chỉ cần nói với nó dùng những tool nào.**
+Nhưng khi đó bạn sẽ phải tự viết vòng lặp, tự quản lý trạng thái thông điệp, và tự xử lý các lời gọi tool. Đó chính là lý do pi-agent-core tồn tại : **nó làm phần khó nhất của một Agent (vòng lặp, trạng thái, sự kiện, nén) thay bạn, bạn chỉ cần nói với nó dùng những tool nào.**
 
 ### Phân lớp không phải giáo điều; kiểm soát hướng phụ thuộc mới là
 
@@ -577,7 +577,7 @@ Từ thiết kế phân lớp của Pi, tôi rút ra ba phương pháp có thể
 
 ### Phương pháp 3: test "có thể dùng độc lập"
 
-**Nó là gì**: sau khi thiết kế xong mỗi lớp, làm một bài test đơn giản — bỏ tầng trên đi, lớp này còn hoạt động được không?
+**Nó là gì**: sau khi thiết kế xong mỗi lớp, làm một bài test đơn giản : bỏ tầng trên đi, lớp này còn hoạt động được không?
 
 Cả ba lớp của Pi đều vượt qua bài test này:
 
@@ -598,9 +598,9 @@ Trong chương này chúng ta đã nhìn từ bên ngoài vào toàn bộ kiến
 - Kiểu dữ liệu mở rộng dần từ dưới lên trên: `Tool` → `AgentTool` → `ToolDefinition`
 - Ba lớp không phải là bắt buộc; số lớp tuỳ thuộc vào độ phức tạp. Nhưng kiểm soát hướng phụ thuộc là bắt buộc.
 
-Nhưng ta vẫn chưa trả lời một câu hỏi nền tảng hơn: Agent thực sự chạy thế nào? LLM cứ suy nghĩ, gọi tool, đọc kết quả, lại suy nghĩ — như thế nào? "Vòng lặp Agent" nổi tiếng kia trông ra sao?
+Nhưng ta vẫn chưa trả lời một câu hỏi nền tảng hơn: Agent thực sự chạy thế nào? LLM cứ suy nghĩ, gọi tool, đọc kết quả, lại suy nghĩ : như thế nào? "Vòng lặp Agent" nổi tiếng kia trông ra sao?
 
-Ở chương sau, ta đào vào trung tâm của Agent — **Vòng lặp Agent**. Ta sẽ hiểu vì sao cần một vòng lặp (thay vì gọi một lần là xong), rồi truy ngược hành trình đầy đủ của một thông điệp người dùng từ lúc nhấn Enter cho tới khi Agent nói "tôi đã xong".
+Ở chương sau, ta đào vào trung tâm của Agent : **Vòng lặp Agent**. Ta sẽ hiểu vì sao cần một vòng lặp (thay vì gọi một lần là xong), rồi truy ngược hành trình đầy đủ của một thông điệp người dùng từ lúc nhấn Enter cho tới khi Agent nói "tôi đã xong".
 
 ---
 

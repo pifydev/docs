@@ -1,4 +1,4 @@
-﻿/* Pi Docs — custom theme overrides */
+﻿/* Pi Docs : custom theme overrides */
 
 :root {
   --content-max-width: 850px;
@@ -45,7 +45,7 @@ pre code {
   padding-top: 110px !important;
 }
 
-.chapter::before {
+.chapter:before {
   content: "";
   position: absolute !important;
   top: 8px !important;
@@ -60,10 +60,10 @@ pre code {
   pointer-events: none !important;
 }
 
-html.navy .chapter::before,
-html.coal .chapter::before,
-html.ayu  .chapter::before,
-html.rust .chapter::before {
+html.navy .chapter:before,
+html.coal .chapter:before,
+html.ayu  .chapter:before,
+html.rust .chapter:before {
   background-image: url("../pify-logo-dark.png") !important;
 }
 

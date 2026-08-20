@@ -1,9 +1,9 @@
 ---
 chapter: 3
 slug: ch03-agent-loop
-title_zh: "第3章：Agent Loop —— 让模型转动起来的引擎"
-title_en: "Chapter 3: Agent Loop — The Engine That Spins the Model"
-title_vi: "Chương 3: Agent Loop — Động cơ quay mô hình"
+title_zh: "第3章：Agent Loop : 让模型转动起来的引擎"
+title_en: "Chapter 3: Agent Loop : The Engine That Spins the Model"
+title_vi: "Chương 3: Agent Loop : Động cơ quay mô hình"
 source_url: https://www.dgzhuya.com/modules/ch03-agent-loop
 language: en
 version_pairs:
@@ -23,9 +23,9 @@ code_blocks: 37
 mermaid_blocks: 0
 ---
 
-# Chapter 3: Agent Loop — The Engine That Spins the Model
+# Chapter 3: Agent Loop : The Engine That Spins the Model
 
-> The previous chapter walked through Pi's layered architecture. The architecture is just the "skeleton" — the real vitality of an Agent comes from the "loop." This chapter, we start from the most basic questions: **why do we need a loop? how does it spin? when does it stop?** Then we trace the complete journey of a user message to see every heartbeat of the Agent Loop.
+> The previous chapter walked through Pi's layered architecture. The architecture is just the "skeleton" : the real vitality of an Agent comes from the "loop." This chapter, we start from the most basic questions: **why do we need a loop? how does it spin? when does it stop?** Then we trace the complete journey of a user message to see every heartbeat of the Agent Loop.
 
 ---
 
@@ -33,7 +33,7 @@ mermaid_blocks: 0
 
 Before talking about the Agent Loop, let's step back and see how many modes "using an LLM" itself has. This is essential for understanding "why we need a loop."
 
-### Mode 1: direct call — "model, answer me"
+### Mode 1: direct call : "model, answer me"
 
 The most primitive and intuitive usage. You build a prompt, call the API once, get the result, done.
 
@@ -58,9 +58,9 @@ console.log(response.content);
 
 **The core work is "build the prompt."** A good prompt gives a good result. One call, one output, no back-and-forth.
 
-Applicable scenarios: translation, summarization, Q&A, code completion — anything a "one-question-one-answer" can handle.
+Applicable scenarios: translation, summarization, Q&A, code completion : anything a "one-question-one-answer" can handle.
 
-### Mode 2: Workflow — "model, you do step one first; I check, then you do step two"
+### Mode 2: Workflow : "model, you do step one first; I check, then you do step two"
 
 When the task gets complex, you find it hard to get a satisfactory result in one go. So you break the big task into steps, calling the model once per step, with **your code** controlling the flow between steps.
 
@@ -71,11 +71,11 @@ When the task gets complex, you find it hard to get a satisfactory result in one
 ```
 
 
-At each step the model only does its own share of the work, **the decision power is in your hands** — you know when to advance to the next step; the model is just one link on the assembly line.
+At each step the model only does its own share of the work, **the decision power is in your hands** : you know when to advance to the next step; the model is just one link on the assembly line.
 
 Applicable scenarios: document generation pipelines, code review automation, RAG (Retrieval-Augmented Generation).
 
-### Mode 3: Agent Loop — "model, you decide how"
+### Mode 3: Agent Loop : "model, you decide how"
 
 In Agent mode, you hand the decision power over to the model.
 
@@ -91,7 +91,7 @@ Key difference: the flow between steps is no longer hard-coded by you; it is dri
 1. Feed the user's input and tool execution results back to the model
 2. If the model's output contains a tool-call request, execute it; if not, the task is considered complete
 
-As for which tools to call and how many times — those are decided by the model's output. When to stop — this is a human-defined rule: when one model output no longer contains a tool call, we consider the loop finished.
+As for which tools to call and how many times : those are decided by the model's output. When to stop : this is a human-defined rule: when one model output no longer contains a tool call, we consider the loop finished.
 
 A comparison table makes the three modes obvious:
 
@@ -149,7 +149,7 @@ while (hasMoreToolCalls || ...) {
 
 One iteration of the inner loop equals one Turn equals one turn_start then one model call then tool execution then one turn_end.
 
-If the model in one Turn requests 3 tools at once (read + grep + find), those 3 tools are all executed within the same Turn — because they are all products of the same model call. But the moment the results are fed back and the model is called again, we are already in the next Turn.
+If the model in one Turn requests 3 tools at once (read + grep + find), those 3 tools are all executed within the same Turn : because they are all products of the same model call. But the moment the results are fed back and the model is called again, we are already in the next Turn.
 
 ### So the relationship between Trace and Turn is
 
@@ -191,7 +191,7 @@ Diagram description: a Trace outer shell nests 3 Turns; each Turn is a complete 
 │
 UserMessage { role: "user", content: "帮我读一下 src/main.ts" }
 │
-│  ② 进入循环（agentLoop 入口）—— agent_start（一个 Trace 开始了）
+│  ② 进入循环（agentLoop 入口）: agent_start（一个 Trace 开始了）
 │
 └── runLoop()
     │
@@ -232,13 +232,13 @@ UserMessage { role: "user", content: "帮我读一下 src/main.ts" }
     └── agent_end（一个 Trace 结束，共 2 个 Turn）
 ```
 
-### How the loop spins: stopReason — the only signal
+### How the loop spins: stopReason : the only signal
 
 
 
 The loop's gas and brake is concentrated on one field: stopReason. Each AssistantMessage returned by the model carries it.
 
-But before that, we must clarify a key insight: the model never says I am done. The model is just a token predictor — given context, guess the next token, repeat. It does not know whether the task is done. Although the stopReason field is attached to the model's return value, its values come from two different places:
+But before that, we must clarify a key insight: the model never says I am done. The model is just a token predictor : given context, guess the next token, repeat. It does not know whether the task is done. Although the stopReason field is attached to the model's return value, its values come from two different places:
 
 Three values returned by the model API:
 
@@ -257,7 +257,7 @@ Two values injected by the framework's streaming layer (the model API itself nev
 
 > Code evidence (packages/ai/src/): when the API call inside streamSimple throws an exception, the catch block executes output.stopReason = options?.signal?.aborted ? aborted : error. This is not said by the model; it is the framework falling back for it.
 
-The loop only looks at one thing — whether the model's output contains tool calls. Behind this is a human-defined engineering convention:
+The loop only looks at one thing : whether the model's output contains tool calls. Behind this is a human-defined engineering convention:
 
 > If one model output contains no tool calls, then this round needs no more operations; the loop can stop.
 
@@ -305,11 +305,11 @@ The inner loop's condition is while (hasMoreToolCalls || pendingMessages.length 
 ### Minimal Loop: lowest common denominator of all Agents
 
 
-Why not let the code more intelligently judge is the task complete? Because this is exactly the essential difference between Agent and Workflow. In a Workflow you know how many steps the flow has, and you can use code to judge progress. But in Agent mode, you don't know how many files the model needs to read, or how many places it needs to change — the only signal you can reliably rely on is: whether the output contains tool calls. This is both a limitation and elegance — no task completeness judgment logic is needed; the code only does the simplest layer of judgment.
+Why not let the code more intelligently judge is the task complete? Because this is exactly the essential difference between Agent and Workflow. In a Workflow you know how many steps the flow has, and you can use code to judge progress. But in Agent mode, you don't know how many files the model needs to read, or how many places it needs to change : the only signal you can reliably rely on is: whether the output contains tool calls. This is both a limitation and elegance : no task completeness judgment logic is needed; the code only does the simplest layer of judgment.
 
 ### All exit paths of the loop
 
-Diagram description: the five stopReason values are handled in three branches — toolUse keeps the loop spinning; stop/length prepare a normal stop (still checks followUp); error/aborted are hard stops (do not check followUp). Note the two sources of stopReason: three from the model API, two are framework-streaming-layer fallbacks.
+Diagram description: the five stopReason values are handled in three branches : toolUse keeps the loop spinning; stop/length prepare a normal stop (still checks followUp); error/aborted are hard stops (do not check followUp). Note the two sources of stopReason: three from the model API, two are framework-streaming-layer fallbacks.
 
 | Exit path | Trigger condition | Reason |
 | --- | --- | --- |
@@ -351,10 +351,10 @@ async function simpleLoop(messages, model, tools) {
 ### What coding-agent layers on top
 
 
-A dozen lines of code. One while loop: call the model, execute tools, call the model again, until the model no longer requests tools. This is the minimal implementation of the logic from Section 3 — any Agent needs this core.
+A dozen lines of code. One while loop: call the model, execute tools, call the model again, until the model no longer requests tools. This is the minimal implementation of the logic from Section 3 : any Agent needs this core.
 
 
-Pi's coding-agent is an interactive coding assistant — the user talks to it in the terminal; it may need to read several files, edit code, run tests. This product scenario has more real needs than the minimal loop:
+Pi's coding-agent is an interactive coding assistant : the user talks to it in the terminal; it may need to read several files, edit code, run tests. This product scenario has more real needs than the minimal loop:
 
 | Real need | Layered design | Source location |
 | --- | --- | --- |
@@ -363,13 +363,13 @@ Pi's coding-agent is an interactive coding assistant — the user talks to it in
 | Different complexity tasks want different tier models | prepareNextTurn hook: can switch model/context at the end of each Turn | After turn_end |
 | Context window almost full, need to trigger compaction | shouldStopAfterTurn hook: external judgment of whether to stop | After prepareNextTurn |
 
-Key insight: these layered designs are all functional choices of coding-agent, not universal laws of Agents. If you are making a simple Agent that does Q&A plus tools, the entire table above is redundant — you only need the minimal loop.
+Key insight: these layered designs are all functional choices of coding-agent, not universal laws of Agents. If you are making a simple Agent that does Q&A plus tools, the entire table above is redundant : you only need the minimal loop.
 
-But understanding how coding-agent layers these designs is valuable — your own product scenario will likely need similar mechanisms. Next, using coding-agent's full source as an example, we walk through these designs step by step. Following that please read src/main.ts message, walk through the journey from entry to finish.
+But understanding how coding-agent layers these designs is valuable : your own product scenario will likely need similar mechanisms. Next, using coding-agent's full source as an example, we walk through these designs step by step. Following that please read src/main.ts message, walk through the journey from entry to finish.
 
 ### 4.1 Entry: what runAgentLoop() receives
 
-> Section 3 briefly showed the flow panorama; here we expand into code details — the same process, a deeper perspective.
+> Section 3 briefly showed the flow panorama; here we expand into code details : the same process, a deeper perspective.
 
 After you press Enter, the call chain is: Agent.prompt(), runPromptMessages(), runAgentLoop(). Stop at the entry:
 
@@ -388,7 +388,7 @@ async function runAgentLoop(
 
 The three most important of the six parameters:
 
-prompts — your messages have already been wrapped into standard format:
+prompts : your messages have already been wrapped into standard format:
 
 
 ```
@@ -400,7 +400,7 @@ prompts — your messages have already been wrapped into standard format:
 ```
 
 
-context — a snapshot of the conversation context. Note that it is a copy (created by createContextSnapshot() at agent.ts:414-420); modifications to context during Loop execution do not affect the Agent class's original state:
+context : a snapshot of the conversation context. Note that it is a copy (created by createContextSnapshot() at agent.ts:414-420); modifications to context during Loop execution do not affect the Agent class's original state:
 
 
 ```
@@ -415,7 +415,7 @@ context — a snapshot of the conversation context. Note that it is a copy (crea
 ```
 
 
-config — the Loop's behavior configuration. This contains a set of key hooks (all functions, not data):
+config : the Loop's behavior configuration. This contains a set of key hooks (all functions, not data):
 
 
 ```
@@ -433,7 +433,7 @@ config — the Loop's behavior configuration. This contains a set of key hooks (
 ```
 
 
-These hooks are all functions rather than data — the Loop calls them at runtime to pull the latest state. This makes the Loop completely decoupled from external message sources.
+These hooks are all functions rather than data : the Loop calls them at runtime to pull the latest state. This makes the Loop completely decoupled from external message sources.
 
 The entry function only does three prep steps:
 
@@ -473,7 +473,7 @@ Data change:
 ---
 
 
-Now we enter runLoop() — the most core code in the whole system. Don't be intimidated by its length; we look at the core first, then the layering.
+Now we enter runLoop() : the most core code in the whole system. Don't be intimidated by its length; we look at the core first, then the layering.
 
 
 If we only keep the minimal Loop logic, runLoop looks like this:
@@ -492,12 +492,12 @@ while (hasMoreToolCalls) {
 #### Layering: coding-agent adds two outer shells
 
 
-This is the minimal Loop — call the model, execute tools, turn_end, repeat. The exit condition hasMoreToolCalls of the inner loop is driven by toolCalls array length > 0 && !terminate (covered in Section 3). This is the core that all Agents need.
+This is the minimal Loop : call the model, execute tools, turn_end, repeat. The exit condition hasMoreToolCalls of the inner loop is driven by toolCalls array length > 0 && !terminate (covered in Section 3). This is the core that all Agents need.
 
 
 But coding-agent, as an interactive coding assistant, needs two more things outside the core:
 
-Layering 1: steering message injection (checked at the start of the inner loop + at the end of each iteration). The user types a new instruction while the Agent is working — these messages cannot wait for the current task to finish; they must be urgently injected at the start of the next iteration. So the inner loop condition gains an extra || pendingMessages.length > 0.
+Layering 1: steering message injection (checked at the start of the inner loop + at the end of each iteration). The user types a new instruction while the Agent is working : these messages cannot wait for the current task to finish; they must be urgently injected at the start of the next iteration. So the inner loop condition gains an extra || pendingMessages.length > 0.
 
 Layering 2: outer followUp loop (wrapping the entire inner loop). After the Agent stops, the system may want to append more tasks (e.g., also run tests). The outer loop lets these appended tasks keep running within the same Trace, without needing to start a new Loop.
 
@@ -553,7 +553,7 @@ Now we walk through each step. Each step will be labeled core or layering for cl
 ---
 
 
-> What is steering? This is an interaction feature of coding-agent. Imagine you ask the Agent to fix a bug, the Agent is reading files and analyzing code. Then you suddenly think of an addendum: also check the test files — you want this instruction to jump the queue, not wait for the Agent to finish the current task.
+> What is steering? This is an interaction feature of coding-agent. Imagine you ask the Agent to fix a bug, the Agent is reading files and analyzing code. Then you suddenly think of an addendum: also check the test files : you want this instruction to jump the queue, not wait for the Agent to finish the current task.
 
 Steering is this queue-jumping mechanism. New instructions typed by the user while the Agent is working are placed into the steering queue. At the start of each iteration of the inner loop, the Loop checks this queue first and injects the urgent messages into the current conversation:
 
@@ -569,14 +569,14 @@ if (pendingMessages.length > 0) {
 }
 ```
 
-### 4.4 [Core · Step B] streamAssistantResponse() — calling the LLM
+### 4.4 [Core · Step B] streamAssistantResponse() : calling the LLM
 
 #### Phase A: context preprocessing (optional)
 
 
 This code injects the urgent messages one by one into the context and the message collector.
 
-The first source of pendingMessages is the first steering check executed when runLoop enters (agent-loop.ts:167). Why check before entering the loop? Because the user may have typed more content while waiting for the LLM's first response — at that point the messages have already been queued externally, but the loop has not started yet; if we do not fetch them ahead of time, that batch of messages is dropped.
+The first source of pendingMessages is the first steering check executed when runLoop enters (agent-loop.ts:167). Why check before entering the loop? Because the user may have typed more content while waiting for the LLM's first response : at that point the messages have already been queued externally, but the loop has not started yet; if we do not fetch them ahead of time, that batch of messages is dropped.
 
 ```
 let messages = context.messages;
@@ -598,9 +598,9 @@ const llmMessages = await config.convertToLlm(messages);
 
 This line stands on the boundary between the Agent core and the LLM. To understand why it exists, you must first know the design of the two-layer message system.
 
-When an Agent maintains its conversation history internally, it needs to record not only what the user said and what AI replied — it also needs to record its own internal state. For example, coding-agent records: that context was compacted (CompactionSummaryMessage), the execution details of a Bash command (BashExecutionMessage), the record of a branch switch (BranchSummaryMessage). These are the Agent's own internal language, and the LLM does not recognize these message types at all — it only recognizes three standard messages: UserMessage, AssistantMessage, ToolResultMessage.
+When an Agent maintains its conversation history internally, it needs to record not only what the user said and what AI replied : it also needs to record its own internal state. For example, coding-agent records: that context was compacted (CompactionSummaryMessage), the execution details of a Bash command (BashExecutionMessage), the record of a branch switch (BranchSummaryMessage). These are the Agent's own internal language, and the LLM does not recognize these message types at all : it only recognizes three standard messages: UserMessage, AssistantMessage, ToolResultMessage.
 
-convertToLlm is the translator standing on this boundary: it translates the Agent's internal language into the protocol the LLM understands. The default implementation is just a. filter() — keep only the three standard messages:
+convertToLlm is the translator standing on this boundary: it translates the Agent's internal language into the protocol the LLM understands. The default implementation is just a. filter() : keep only the three standard messages:
 
 ```
 function defaultConvertToLlm(messages: AgentMessage[]): Message[] {
@@ -662,21 +662,21 @@ const response = await streamFunction(config.model, llmContext, {
 
 Building Context is the main thread of this step. Note that llmContext is a brand new object, rebuilt every iteration of the inner loop. It consists of three parts:
 
-- systemPrompt — directly reuses the system prompt from the Agent context, telling the model who you are, what rules to follow
-- messages — the llmMessages filtered by the previous step convertToLlm, only the three standard messages LLM recognizes
-- tools — tool list (with schema definitions), letting the model know what tools are available this time
+- systemPrompt : directly reuses the system prompt from the Agent context, telling the model who you are, what rules to follow
+- messages : the llmMessages filtered by the previous step convertToLlm, only the three standard messages LLM recognizes
+- tools : tool list (with schema definitions), letting the model know what tools are available this time
 
-Note one detail: llmContext.tools = context.tools is reference assignment — every iteration wraps a new wrapper object, but the tools array itself is the same reference, byte-stable in content. systemPrompt is the same. Only messages grows (each iteration appends a new ToolResultMessage).
+Note one detail: llmContext.tools = context.tools is reference assignment : every iteration wraps a new wrapper object, but the tools array itself is the same reference, byte-stable in content. systemPrompt is the same. Only messages grows (each iteration appends a new ToolResultMessage).
 
 So why rebuild llmContext this wrapper every iteration? Because some Turns do change one of these three: the prepareNextTurn hook (§4.7) may switch the model or modify systemPrompt; the extension system (§5) may dynamically register new tools. The cost of rebuilding the wrapper is negligible (one JS object), but it ensures we do not get hard-to-trace state pollution from shared references.
 
-Does this break the prompt cache? No. Anthropic's prompt cache is content-addressed — it looks at the bytes sent, not at the request's identity. Whether a new or old object is sent does not matter; as long as the bytes of system + tools are unchanged, the cache hits. Pi explicitly tags cache_control: { type: ephemeral } in three places in anthropic-messages.ts:
+Does this break the prompt cache? No. Anthropic's prompt cache is content-addressed : it looks at the bytes sent, not at the request's identity. Whether a new or old object is sent does not matter; as long as the bytes of system + tools are unchanged, the cache hits. Pi explicitly tags cache_control: { type: ephemeral } in three places in anthropic-messages.ts:
 
 | Position | Source line | Effect |
 | --- | --- | --- |
 | End of system prompt | L922/929/938 | Whole system prompt as cacheable prefix |
 | Last tool | L1208 | Whole tools list as cacheable prefix |
-| Last user message | L1157-1178 | rolling cache — each Turn pushes the cache breakpoint to the latest message |
+| Last user message | L1157-1178 | rolling cache : each Turn pushes the cache breakpoint to the latest message |
 
 The third is particularly clever: the cache breakpoint is not fixed at the first message; it rides along with the latest user message. That way, the old prefix keeps hitting, the newly appended content gets written in, and the entire conversation history enjoys the cache benefit. The hit chain roughly is:
 
@@ -686,10 +686,10 @@ Turn 2: 命中 [system + tools] → 命中 [messages §1] → 写入 [messages �
 Turn 3: 命中 [system + tools] → 命中 [messages §1+§2] → 写入 [messages §3]
 ```
 
-#### Phase D: stream the response — the cleverness of in-place replacement
+#### Phase D: stream the response : the cleverness of in-place replacement
 
 
-Another easy-to-misunderstand point: tools are not appended to the end of messages. In the Anthropic API protocol tools is an independent top-level field (positioned before messages); this protocol design itself considers caching — stable tools first, changing messages after; the longer the prefix, the more you save.
+Another easy-to-misunderstand point: tools are not appended to the end of messages. In the Anthropic API protocol tools is an independent top-level field (positioned before messages); this protocol design itself considers caching : stable tools first, changing messages after; the longer the prefix, the more you save.
 
 OpenAI takes a different route (openai-completions.ts:554): prompt_cache_key: sessionId, the OpenAI backend matches prefixes automatically by session. DeepSeek, Qwen, etc., via the cacheControlFormat: anthropic compatibility field, can also reuse Anthropic-style cache_control markers (the applyAnthropicCacheControl at L593).
 
@@ -723,7 +723,7 @@ for await (const event of response) {
 ```
 
 
-Why push an empty shell first and then replace in-place? Note what in-place replacement means — it is not pushing new items into the context.messages array; it is modifying the last message's content blocks in place. The streaming response chunks come in one by one; we do not have the full message yet. We first push an empty AssistantMessage so the message collector already has a slot for the final result. Then each streaming chunk mutates this message in place — as long as the collector iterates over messages after the response completes, it sees the completed message.
+Why push an empty shell first and then replace in-place? Note what in-place replacement means : it is not pushing new items into the context.messages array; it is modifying the last message's content blocks in place. The streaming response chunks come in one by one; we do not have the full message yet. We first push an empty AssistantMessage so the message collector already has a slot for the final result. Then each streaming chunk mutates this message in place : as long as the collector iterates over messages after the response completes, it sees the completed message.
 
 ```
 start    → { role: "assistant", content: [] }                    ← 空壳 push
@@ -750,10 +750,10 @@ if (message.stopReason === "error" || message.stopReason === "aborted") {
 }
 ```
 
-### 4.6 [Core · Step D] executeToolCalls() — execute tools
+### 4.6 [Core · Step D] executeToolCalls() : execute tools
 
 
-error and aborted are hard stops — immediately emit turn_end + agent_end, and return directly. Tools are not even executed, nor is followUp checked. This is a fail fast strategy: since the model call itself failed (network exception or user cancellation), continuing to run is meaningless.
+error and aborted are hard stops : immediately emit turn_end + agent_end, and return directly. Tools are not even executed, nor is followUp checked. This is a fail fast strategy: since the model call itself failed (network exception or user cancellation), continuing to run is meaningless.
 
 ```
 const toolCalls = message.content.filter((c) => c.type === "toolCall");
@@ -771,7 +771,7 @@ return executeToolCallsParallel(...);         // 并行
 ```
 
 
-Veto strategy: as long as any one tool in this batch declares executionMode: sequential, the entire batch must run serially. This is a conservative choice — when a tool needs to operate on the result of the previous tool, it has no choice but to run in order.
+Veto strategy: as long as any one tool in this batch declares executionMode: sequential, the entire batch must run serially. This is a conservative choice : when a tool needs to operate on the result of the previous tool, it has no choice but to run in order.
 
 ```
 串行模式：
@@ -789,7 +789,7 @@ Veto strategy: as long as any one tool in this batch declares executionMode: seq
 ```
 
 
-Note the subtlety of parallel mode: the prepare phase is always sequential (because validation and permission checks cannot be parallel — if B is blocked, C should not execute). Only after all tools have been validated can they execute in parallel.
+Note the subtlety of parallel mode: the prepare phase is always sequential (because validation and permission checks cannot be parallel : if B is blocked, C should not execute). Only after all tools have been validated can they execute in parallel.
 
 ```
 工具执行后：
@@ -803,10 +803,10 @@ Note the subtlety of parallel mode: the prepare phase is always sequential (beca
 terminate mechanism: a tool can set terminate: true in its return result, meaning I think we should stop. If all tools in a batch agree to terminate (the code uses every, not some), the loop stops.
 
 ```
-// ① emit turn_end —— 通知外部"这一轮结束了"（内核）
+// ① emit turn_end : 通知外部"这一轮结束了"（内核）
 await emit({ type: "turn_end", message, toolResults });
 
-// ② prepareNextTurn —— 给外部一个机会"改装"下一轮（叠加）
+// ② prepareNextTurn : 给外部一个机会"改装"下一轮（叠加）
 // 返回值可包含 context / model / thinkingLevel 三者之一的覆盖
 const nextTurnSnapshot = await config.prepareNextTurn?.({...});
 if (nextTurnSnapshot) {
@@ -815,20 +815,20 @@ if (nextTurnSnapshot) {
     // thinkingLevel 也在此处覆盖（详见 agent-loop.ts 中 prepareNextTurn 处理逻辑）
 }
 
-// ③ shouldStopAfterTurn —— 外部判断是否该停了（叠加）
+// ③ shouldStopAfterTurn : 外部判断是否该停了（叠加）
 if (await config.shouldStopAfterTurn?.({...})) {
     await emit({ type: "agent_end", messages: newMessages });
     return;
 }
 
-// ④ 再次检查 steering —— 有没有新的紧急消息？（叠加1）
+// ④ 再次检查 steering : 有没有新的紧急消息？（叠加1）
 pendingMessages = (await config.getSteeringMessages?.()) || [];
 ```
 
 ### 4.7 [Core + Layering · Steps E-F] turn_end + hooks + recheck steering
 
 
-prepareNextTurn — this is an easy-to-miss but powerful extension point. After each turn_end and before the next iteration, the Loop calls this function to give the outside a chance to switch the model or modify the context:
+prepareNextTurn : this is an easy-to-miss but powerful extension point. After each turn_end and before the next iteration, the Loop calls this function to give the outside a chance to switch the model or modify the context:
 
 ```
 场景：按任务复杂度切换模型
@@ -875,19 +875,19 @@ break;  // 两个队列都空了，真正退出
 ### 1. ReAct loop pattern
 
 
-If there are followUp messages, they are pushed into pendingMessages, and continue jumps back to the top of the outer loop. This is the life-extending mechanism — the inner loop is done but the outer loop can keep the Agent working.
+If there are followUp messages, they are pushed into pendingMessages, and continue jumps back to the top of the outer loop. This is the life-extending mechanism : the inner loop is done but the outer loop can keep the Agent working.
 
-Now let us compare the two intervention mechanisms — steering vs followUp — in one table:
+Now let us compare the two intervention mechanisms : steering vs followUp : in one table:
 
 | Dimension | steering | followUp |
 | --- | --- | --- |
 | Injection timing | Before the inner loop starts + at the end of each iteration of the inner loop | After the inner loop fully ends |
-| Semantics | Urgent queue jump — injected during tool execution gaps | Wait in line — wait until the current task is fully done |
+| Semantics | Urgent queue jump : injected during tool execution gaps | Wait in line : wait until the current task is fully done |
 | Typical scenario | User typed new instructions while the Agent is working | System appends also run tests after the Agent finishes |
 
-Life analogy: steering is when you are in a meeting and someone knocks on the door to slip you a note — urgent, look at this first. followUp is when, after the meeting, you check your mailbox — not urgent, but needs handling.
+Life analogy: steering is when you are in a meeting and someone knocks on the door to slip you a note : urgent, look at this first. followUp is when, after the meeting, you check your mailbox : not urgent, but needs handling.
 
-Diagram description: left red right green comparison — steering is checked at the start and end of every inner-loop iteration and queue-jumps; followUp is checked after the inner loop fully ends and extends the run. Bottom lists the timing, source, effect, and typical scenarios for each.
+Diagram description: left red right green comparison : steering is checked at the start and end of every inner-loop iteration and queue-jumps; followUp is checked after the inner loop fully ends and extends the run. Bottom lists the timing, source, effect, and typical scenarios for each.
 ### 2. stopReason-driven mechanism
 
 ### 3. Core + layering architecture approach

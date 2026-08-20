@@ -20,9 +20,9 @@ mermaid_blocks: 0
 code_blocks: 29
 ---
 
-# Chapter 5: Tool System — The Pipeline That Turns "Calling a Function" Into a Controlled Process
+# Chapter 5: Tool System : The Pipeline That Turns "Calling a Function" Into a Controlled Process
 
-> Chapter 3 traced the journey from "the model decides to call the read tool" to "the tool result returns to the model". But at that point we treated it as a black box — we only said "Loop executes the tool" without explaining how.
+> Chapter 3 traced the journey from "the model decides to call the read tool" to "the tool result returns to the model". But at that point we treated it as a black box : we only said "Loop executes the tool" without explaining how.
 
 This chapter opens that black box.
 
@@ -36,7 +36,7 @@ When the model reply contains a directive like this:
 
 From this directive to the file content returning to the model, what happened in between?
 
-Your first reaction might be: find the `read` tool, read the file, stuff the content into a message, done. But reality is not that simple — the model may pass parameters of the wrong type (`path: 12345` instead of `"src/main.ts"`), the model may request executing a dangerous command (`rm -rf /`), and the tool itself may throw an exception (file does not exist).
+Your first reaction might be: find the `read` tool, read the file, stuff the content into a message, done. But reality is not that simple : the model may pass parameters of the wrong type (`path: 12345` instead of `"src/main.ts"`), the model may request executing a dangerous command (`rm -rf /`), and the tool itself may throw an exception (file does not exist).
 
 Pi uses a **five-step pipeline** to solve these problems: parameter preprocessing -> Schema validation -> permission interception -> tool execution -> result post-processing. Each step has a clear responsibility; an error in any step will not "explode" the entire loop.
 
@@ -46,7 +46,7 @@ But before talking about the pipeline, we need to clarify a more fundamental que
 
 ## 1. Three layers of types: why must "one tool" be defined across three layers?
 
-### Layer 1: Tool — a "name card"
+### Layer 1: Tool : a "name card"
 
 Open `packages/ai/src/types.ts` and you will see the lowest-level tool definition:
 
@@ -63,11 +63,11 @@ export interface Tool<TParameters extends TSchema = TSchema> {
 
 Three fields. A tool is just something that has a name, a description, and a parameter Schema.
 
-This interface lives in the `pi-ai` layer — the pure model-adaptation layer. The only thing it cares about is: **how to tell the model about the tool.** `name` and `description` show up in the API request sent to the model; `parameters` tells the model "what arguments you may pass".
+This interface lives in the `pi-ai` layer : the pure model-adaptation layer. The only thing it cares about is: **how to tell the model about the tool.** `name` and `description` show up in the API request sent to the model; `parameters` tells the model "what arguments you may pass".
 
 At this layer, the tool is only **a name card**. It can describe itself, but cannot execute anything.
 
-### Layer 2: AgentTool — "execution capability" added
+### Layer 2: AgentTool : "execution capability" added
 
 When Agent Loop wants to execute a tool call, a name card is not enough. It needs to know **how to execute** this tool, whether the tool **can run in parallel**, and whether the parameter format needs **preprocessing**.
 
@@ -96,14 +96,14 @@ From `Tool` to `AgentTool`, four fields are added. Each has a clear purpose:
 
 - **`label`**: the model sees `name` (e.g., "read"), the UI sees `label` (e.g., "Read file")
 - **`prepareArguments`**: a compatibility layer that deals with quirks of different models' parameter output (covered in detail later)
-- **`execute`**: the function that does the real work — when the model says "read the file", this function reads
+- **`execute`**: the function that does the real work : when the model says "read the file", this function reads
 - **`executionMode`**: marks whether this tool can run in parallel with other tools
 
-### Layer 3: ToolDefinition — product layer adds more
+### Layer 3: ToolDefinition : product layer adds more
 
 At the `pi-coding-agent` layer (product runtime layer), tools need more capabilities: custom rendering (how does the `read` tool display in the terminal? how does the `edit` tool show diffs?), prompt injection (some tools need a usage guide snippet in the system prompt).
 
-So a third layer `ToolDefinition` appears. Its `execute` function has one more parameter than `AgentTool` — `ctx: ExtensionContext` — letting tool execution access the current session state:
+So a third layer `ToolDefinition` appears. Its `execute` function has one more parameter than `AgentTool` : `ctx: ExtensionContext` : letting tool execution access the current session state:
 
 
 ```
@@ -147,7 +147,7 @@ export function wrapToolDefinition(definition, ctxFactory?) {
 
 Why not stuff every field into a single `Tool` interface, with a few optional fields?
 
-It will not work. The reason is **each layer has its own dependency scope**. The `Tool` interface in the `pi-ai` layer only depends on TypeBox's `TSchema`. If we add `renderCall` (returning a terminal UI component) to that interface, `pi-ai` would have to depend on the terminal UI rendering library. But `pi-ai` is the pure model-adaptation layer — its job is just "format tool info into API requests", it should not know what the terminal UI looks like.
+It will not work. The reason is **each layer has its own dependency scope**. The `Tool` interface in the `pi-ai` layer only depends on TypeBox's `TSchema`. If we add `renderCall` (returning a terminal UI component) to that interface, `pi-ai` would have to depend on the terminal UI rendering library. But `pi-ai` is the pure model-adaptation layer : its job is just "format tool info into API requests", it should not know what the terminal UI looks like.
 
 The essence of the three-layer progression is: **each layer only adds capabilities that its own level needs, without crossing the line.** `Tool` handles "I can describe myself", `AgentTool` handles "I can be executed", `ToolDefinition` handles "I can be displayed and extended".
 
@@ -157,7 +157,7 @@ The essence of the three-layer progression is: **each layer only adds capabiliti
 
 Now that the type definitions are clear, look at the actual execution process of a tool call.
 
-**Diagram caption:** A five-step vertical pipeline from `ToolCall` to `ToolResultMessage` — `prepareArguments` -> `validate` -> `beforeToolCall` -> `execute` -> `afterToolCall`. On the right of each step there is a failure branch (dashed arrow), but all failures eventually converge into a message with `isError: true`, and the loop is not broken by an exception.
+**Diagram caption:** A five-step vertical pipeline from `ToolCall` to `ToolResultMessage` : `prepareArguments` -> `validate` -> `beforeToolCall` -> `execute` -> `afterToolCall`. On the right of each step there is a failure branch (dashed arrow), but all failures eventually converge into a message with `isError: true`, and the loop is not broken by an exception.
 
 ### Why cannot we just call the function directly?
 
@@ -173,7 +173,7 @@ These issues mean "directly calling the function" is not enough. You need a few 
 
 ### Pi's answer: the five-step pipeline
 
-Each step has clear responsibility and exit mechanism. The first 3 steps are "preparation" — failure in any step does not execute the tool. Step 4 is "doing the work". Step 5 is "wrapping up". Let us expand step by step.
+Each step has clear responsibility and exit mechanism. The first 3 steps are "preparation" : failure in any step does not execute the tool. Step 4 is "doing the work". Step 5 is "wrapping up". Let us expand step by step.
 
 
 ```
@@ -207,13 +207,13 @@ ToolResultMessage
 ```
 
 
-### Step 1: `prepareArguments` — compatibility shim
+### Step 1: `prepareArguments` : compatibility shim
 
 Different models' APIs have subtle differences when serializing tool parameters. `prepareArguments` is the compatibility layer prepared for these differences.
 
-For example, the `Edit` tool expects `edits` to be an array. If the tool does not define `prepareArguments`, parameters are passed through directly. The code at this step is simple — use it if present, skip if not.
+For example, the `Edit` tool expects `edits` to be an array. If the tool does not define `prepareArguments`, parameters are passed through directly. The code at this step is simple : use it if present, skip if not.
 
-**Why not handle this in Schema validation?** Because they focus on different things. `prepareArguments` is "I know which mistake a particular model makes" — a compatibility layer — handling only known issues of specific models. `validateToolArguments` is "regardless of who calls me I must validate" — a safety layer — guaranteeing parameter types are correct. One is compatibility, the other is correctness; mixing them would make the code hard to maintain.
+**Why not handle this in Schema validation?** Because they focus on different things. `prepareArguments` is "I know which mistake a particular model makes" : a compatibility layer : handling only known issues of specific models. `validateToolArguments` is "regardless of who calls me I must validate" : a safety layer : guaranteeing parameter types are correct. One is compatibility, the other is correctness; mixing them would make the code hard to maintain.
 
 
 ```
@@ -225,13 +225,13 @@ For example, the `Edit` tool expects `edits` to be an array. If the tool does no
 ```
 
 
-### Step 2: `validateToolArguments` — Schema validation
+### Step 2: `validateToolArguments` : Schema validation
 
 After preprocessing, parameters still need to pass a TypeBox runtime type check. For example, `path` is defined as `string`, but the model passes a number:
 
 Validation errors are caught by the `try-catch` of `prepareToolCall`, which generates an error `ToolResultMessage`. **Tools will never receive parameters of the wrong type.**
 
-### Step 3: `beforeToolCall` — pre-hook (can block execution)
+### Step 3: `beforeToolCall` : pre-hook (can block execution)
 
 After parameter validation passes, before execution, the product layer has one more interception opportunity. `beforeToolCall` is a callback function that can check whether a command is dangerous:
 
@@ -242,7 +242,7 @@ After parameter validation passes, before execution, the product layer has one m
 
 **Note**: even when the tool is blocked, the result is still a normal `ToolResultMessage`, just with `isError: true`. The model will see this error message, know the command was rejected, and decide the next step (try another command, or explain to the user why it cannot be executed). **The entire process throws no exception and does not break the loop.**
 
-### Step 4: `tool.execute` — actual execution
+### Step 4: `tool.execute` : actual execution
 
 After the first 3 steps pass, the tool's `execute` function is called. Let us look at its signature again:
 
@@ -253,19 +253,19 @@ After： 验证失败 → 报错 → 不执行工具
 ```
 
 
-Four parameters — `toolCallId` is the ID of this call, `params` is the validated parameters, `signal` is the `AbortSignal` used for cancellation (triggered when the user presses Ctrl+C). What is the fourth, `onUpdate`?
+Four parameters : `toolCallId` is the ID of this call, `params` is the validated parameters, `signal` is the `AbortSignal` used for cancellation (triggered when the user presses Ctrl+C). What is the fourth, `onUpdate`?
 
-**It solves the problem of "long-task progress awareness".** Suppose the Bash tool has to run a 30-second command — if it can only report to the outside at "start execution" and "execution complete", during those 30 seconds the user can only stare at the loading animation. `onUpdate` lets the tool **push messages outward while executing**: the Bash tool pushes the current terminal output every 100ms, the Grep tool pushes every time it finds a batch of matches, the Read tool reports progress in chunks when reading a large file. These pushes are wrapped as `tool_execution_update` events and flow to the UI.
+**It solves the problem of "long-task progress awareness".** Suppose the Bash tool has to run a 30-second command : if it can only report to the outside at "start execution" and "execution complete", during those 30 seconds the user can only stare at the loading animation. `onUpdate` lets the tool **push messages outward while executing**: the Bash tool pushes the current terminal output every 100ms, the Grep tool pushes every time it finds a batch of matches, the Read tool reports progress in chunks when reading a large file. These pushes are wrapped as `tool_execution_update` events and flow to the UI.
 
 In short: **without `onUpdate`, tool execution is a black box; with it, tool execution is "observable".** This is the key mechanism that lets tools report progress to the user in real time.
 
-But there is an edge case that needs handling. The tool's `execute` is an async function; after it `return`s, there may still be unfinished async operations inside — for example the Bash tool's child process is asynchronously printing the last few lines of log after the main command returns. If these delayed callbacks still push data to `onUpdate`, they will pollute a tool call that has already finished, confusing the UI context. Pi uses an `acceptingUpdates` flag to solve this: once `execute` returns (or throws), immediately turn off the flag; all subsequent `onUpdate` calls are silently discarded. This is a defensive engineering detail, not complex, but must exist.
+But there is an edge case that needs handling. The tool's `execute` is an async function; after it `return`s, there may still be unfinished async operations inside : for example the Bash tool's child process is asynchronously printing the last few lines of log after the main command returns. If these delayed callbacks still push data to `onUpdate`, they will pollute a tool call that has already finished, confusing the UI context. Pi uses an `acceptingUpdates` flag to solve this: once `execute` returns (or throws), immediately turn off the flag; all subsequent `onUpdate` calls are silently discarded. This is a defensive engineering detail, not complex, but must exist.
 
-Where do the messages pushed by `onUpdate` flow? This question is important — it is the core topic of the next chapter, the "message system", which we will expand there. For now you only need to remember: tool execution is not a black box, progress is observable.
+Where do the messages pushed by `onUpdate` flow? This question is important : it is the core topic of the next chapter, the "message system", which we will expand there. For now you only need to remember: tool execution is not a black box, progress is observable.
 
-What if `tool.execute()` throws an exception? Don't worry, §4 will explain in detail how this is handled — spoiler: the exception is translated into an `isError: true` message sent to the model.
+What if `tool.execute()` throws an exception? Don't worry, §4 will explain in detail how this is handled : spoiler: the exception is translated into an `isError: true` message sent to the model.
 
-### Step 5: `afterToolCall` — post-hook (can modify the result)
+### Step 5: `afterToolCall` : post-hook (can modify the result)
 
 After the tool finishes execution, the product layer has one more chance to modify the result. `afterToolCall` can do these things:
 
@@ -276,7 +276,7 @@ After the tool finishes execution, the product layer has one more chance to modi
 | Fix error | Turn the tool's error result into a normal result | Return `{ isError: false, content: [...] }` |
 | Early stop | Make Agent stop after the current batch | Return `{ terminate: true }` |
 
-The merge semantics is field-level override — provide it to replace, leave it out to keep the original value.
+The merge semantics is field-level override : provide it to replace, leave it out to keep the original value.
 
 ### Pipeline's end: `ToolResultMessage`
 
@@ -288,7 +288,7 @@ execute: (toolCallId, params, signal, onUpdate) => Promise<AgentToolResult>
 ```
 
 
-This message is appended to the conversation history and sent to the model as context in the next loop iteration. The model sees "the file content is like this", then decides the next step — maybe edit, maybe read another file, maybe answer the user directly.
+This message is appended to the conversation history and sent to the model as context in the next loop iteration. The model sees "the file content is like this", then decides the next step : maybe edit, maybe read another file, maybe answer the user directly.
 
 **All errors eventually become the same thing: an `isError: true` `ToolResultMessage`.** The model sees the error message, knows something went wrong, then decides how to handle it itself. Why is this design the best practice? §4 will elaborate.
 
@@ -296,7 +296,7 @@ This message is appended to the conversation history and sent to the model as co
 
 ## 3. Parallel vs serial: a batch of tools is not "run them together"
 
-**Diagram caption:** The top shows the "one-vote-veto" decision — as long as one tool declares `sequential`, the whole batch runs serially. On the left is the green three-phase design (sequential prepare -> parallel execute -> ordered events), on the right is the black waterfall serial execution. At the bottom is the explanation of "why the prepare phase must be sequential" and "when to use serial".
+**Diagram caption:** The top shows the "one-vote-veto" decision : as long as one tool declares `sequential`, the whole batch runs serially. On the left is the green three-phase design (sequential prepare -> parallel execute -> ordered events), on the right is the black waterfall serial execution. At the bottom is the explanation of "why the prepare phase must be sequential" and "when to use serial".
 
 ### Models often call multiple tools at once
 
@@ -316,7 +316,7 @@ In the inner loop of Agent Loop, a single model reply may contain multiple ToolC
 ```
 
 
-Three ToolCalls, all read-only operations. Intuition tells us we should run them in parallel — use `Promise.all` to run them together, save time.
+Three ToolCalls, all read-only operations. Intuition tells us we should run them in parallel : use `Promise.all` to run them together, save time.
 
 
 ```
@@ -337,7 +337,7 @@ So Pi needs a mechanism to judge "which tools can run in parallel, which must ru
 
 ### Pi's scheduling strategy: one-vote veto
 
-Pi's strategy is simple — **as long as one tool is marked `sequential`, the entire batch runs serially**:
+Pi's strategy is simple : **as long as one tool is marked `sequential`, the entire batch runs serially**:
 
 **Why a one-vote veto instead of only serializing the conflicting tools?** Because "which tools will conflict" is hard to judge precisely. Can two `edit`s running on different files be parallel? What if the files they edit have dependency relationships? Pi chose the conservative strategy: **better to wait longer than to make a mistake**.
 
@@ -352,11 +352,11 @@ ToolCall 2: edit { path: "app.ts", oldText: "v3", newText: "v4" }
 
 ### Three-phase design of parallel execution
 
-When it is decided that parallel execution is OK, Pi does not simply `Promise.all` and call it done — it splits execution into three phases:
+When it is decided that parallel execution is OK, Pi does not simply `Promise.all` and call it done : it splits execution into three phases:
 
 Why design it this way? Because **the prepare phase may have side effects** (`beforeToolCall` may modify shared state) and must run serially. And **the order of result messages the model depends on is the call order** (the model first asks `read`, then `grep`, the messages must be in that order), so `ToolResultMessage` must be ordered. Only `tool.execute()` is parallel.
 
-> One more detail: all 7 built-in tools in v0.80.2 (read/write/edit/bash/grep/find/ls) **do not explicitly declare `executionMode`**, they all default to `"parallel"` (the `ToolExecutionMode` type is in `agent/src/types.ts:41`, runtime checks whether it is `"sequential"` only at `agent-loop.ts:382`, undeclared is treated as parallel). So how does the Edit tool guarantee file safety? The answer is the tool's internal `withFileMutationQueue` (file mutation queue, `file-mutation-queue.ts:32-61`) — Edit calls it in `edit.ts:312`, ensuring serialization of edits to the **same file**. This is a second line of defense the tool itself builds, with no need to rely on the outer `executionMode` declaration. **Extension tools that need serial execution can explicitly declare `executionMode: "sequential"`.**
+> One more detail: all 7 built-in tools in v0.80.2 (read/write/edit/bash/grep/find/ls) **do not explicitly declare `executionMode`**, they all default to `"parallel"` (the `ToolExecutionMode` type is in `agent/src/types.ts:41`, runtime checks whether it is `"sequential"` only at `agent-loop.ts:382`, undeclared is treated as parallel). So how does the Edit tool guarantee file safety? The answer is the tool's internal `withFileMutationQueue` (file mutation queue, `file-mutation-queue.ts:32-61`) : Edit calls it in `edit.ts:312`, ensuring serialization of edits to the **same file**. This is a second line of defense the tool itself builds, with no need to rely on the outer `executionMode` declaration. **Extension tools that need serial execution can explicitly declare `executionMode: "sequential"`.**
 
 
 ```
@@ -379,13 +379,13 @@ return executeToolCallsParallel(...);
 
 In the five-step pipeline of §2 above, every step's error was encoded as an `isError: true` `ToolResultMessage`. It seems errors are already handled.
 
-But you might ask: what if `tool.execute()` internally throws an uncaught exception? When tool developers write code, anything can happen — file does not exist, permission denied, command timed out, JSON parse failed. If these exceptions are not handled, they will penetrate all the way through the pipeline and break Agent Loop.
+But you might ask: what if `tool.execute()` internally throws an uncaught exception? When tool developers write code, anything can happen : file does not exist, permission denied, command timed out, JSON parse failed. If these exceptions are not handled, they will penetrate all the way through the pipeline and break Agent Loop.
 
 This section answers: **when a tool execution errors, how does Pi handle it? Why is this handling the "best practice"?**
 
 ### Unified error exit: 6 kinds of errors, 1 kind of product
 
-Looking back at the entire five-step pipeline, every step of a tool call can fail. But you will notice an amazing pattern: **regardless of which step errors, the final product is always the same thing — an `isError: true` `ToolResultMessage`.**
+Looking back at the entire five-step pipeline, every step of a tool call can fail. But you will notice an amazing pattern: **regardless of which step errors, the final product is always the same thing : an `isError: true` `ToolResultMessage`.**
 
 | Which step errors | How to handle | Final product |
 | --- | --- | --- |
@@ -396,7 +396,7 @@ Looking back at the entire five-step pipeline, every step of a tool call can fai
 | **`tool.execute` throws** | caught by `executePreparedToolCall`'s try-catch | `ToolResultMessage { isError: true, content: exception info }` |
 | `afterToolCall` throws | caught by `finalizeExecutedToolCall`'s try-catch | `ToolResultMessage { isError: true, content: exception info }` |
 
-Notice the right column — **the final form of every error is `ToolResultMessage`**. Not a single error escapes the pipeline as a "thrown exception".
+Notice the right column : **the final form of every error is `ToolResultMessage`**. Not a single error escapes the pipeline as a "thrown exception".
 
 
 ```
@@ -424,15 +424,15 @@ Notice the right column — **the final form of every error is `ToolResultMessag
 
 ### Key code: dual protection of `tool.execute`
 
-The most critical layer is in `executePreparedToolCall()` — it wraps `tool.execute()`, the most error-prone part:
+The most critical layer is in `executePreparedToolCall()` : it wraps `tool.execute()`, the most error-prone part:
 
 This code does three things, each corresponding to a key engineering decision:
 
-**1. Exceptions are caught, not propagated.** Whatever exception `tool.execute()` throws — `ENOENT` for file not found, `EACCES` for permission denied, `TIMEOUT` for command timeout, `SyntaxError` for JSON parse failure — all are stopped here.
+**1. Exceptions are caught, not propagated.** Whatever exception `tool.execute()` throws : `ENOENT` for file not found, `EACCES` for permission denied, `TIMEOUT` for command timeout, `SyntaxError` for JSON parse failure : all are stopped here.
 
-**2. Exceptions are "translated" into normal results.** The catch block calls `createErrorToolResult(error.message)`, turning the exception object into an `AgentToolResult` — looking just like a normal result, except the `content` contains the error description text. From this moment on, it is no longer an "exception" but "a message marked with an error".
+**2. Exceptions are "translated" into normal results.** The catch block calls `createErrorToolResult(error.message)`, turning the exception object into an `AgentToolResult` : looking just like a normal result, except the `content` contains the error description text. From this moment on, it is no longer an "exception" but "a message marked with an error".
 
-**3. Progress events are flushed before encoding the error.** The `await Promise.all(updateEvents)` in the catch block is not optional — it guarantees that all `tool_execution_update` events emitted during tool execution are delivered before the error message is emitted. Otherwise the event sequence would be disordered and the UI would see the weird picture of "the tool first reports an error, then spits out the last line of progress".
+**3. Progress events are flushed before encoding the error.** The `await Promise.all(updateEvents)` in the catch block is not optional : it guarantees that all `tool_execution_update` events emitted during tool execution are delivered before the error message is emitted. Otherwise the event sequence would be disordered and the UI would see the weird picture of "the tool first reports an error, then spits out the last line of progress".
 
 
 ```
@@ -476,7 +476,7 @@ async function executePreparedToolCall(prepared, signal, emit) {
 
 The comparison below lets you see the essence of "exception translated into a message":
 
-The difference between an exception and a message is not in "what the content is" — both describe the same thing — but in **who the receiver is**. The receiver of an exception is the call stack (outer framework), which will break the loop; the receiver of a message is the model, which will digest the error and continue. Pi chooses to translate exceptions into messages, making "tool error" a normal, processable information flow visible to the model.
+The difference between an exception and a message is not in "what the content is" : both describe the same thing : but in **who the receiver is**. The receiver of an exception is the call stack (outer framework), which will break the loop; the receiver of a message is the model, which will digest the error and continue. Pi chooses to translate exceptions into messages, making "tool error" a normal, processable information flow visible to the model.
 
 ### Why is "disguising as a message" the best handling?
 
@@ -493,9 +493,9 @@ Consider these real tool error scenarios:
 | `bash("npm run build")` says "module not found" | The model may `npm install` then build again |
 | `bash("rm -rf /")` is blocked by `beforeToolCall` | The model sees the block reason, switches to a safer approach or explains to the user |
 
-In each scenario, **the correct next step is different, and only the model has enough context to decide which path to take**. The framework does not know that "file does not exist" is because the path was typed wrong or because a different file should be chosen; the model knows — it knows what it was trying to do, knows the project's file structure (the previous read/grep results are all in the conversation history), knows the user's real intent.
+In each scenario, **the correct next step is different, and only the model has enough context to decide which path to take**. The framework does not know that "file does not exist" is because the path was typed wrong or because a different file should be chosen; the model knows : it knows what it was trying to do, knows the project's file structure (the previous read/grep results are all in the conversation history), knows the user's real intent.
 
-If the framework directly throws an exception to break the loop, it gives up all of the model's self-correcting ability — the user can only manually restart after the Agent crashes. But if we encode the error as a message and send it to the model, the model has a chance to **come up with a remediation plan on its own** as in the table above. This is one of the keys that makes Agents "smarter" than traditional scripts: errors do not terminate the flow, they become inputs for the next decision.
+If the framework directly throws an exception to break the loop, it gives up all of the model's self-correcting ability : the user can only manually restart after the Agent crashes. But if we encode the error as a message and send it to the model, the model has a chance to **come up with a remediation plan on its own** as in the table above. This is one of the keys that makes Agents "smarter" than traditional scripts: errors do not terminate the flow, they become inputs for the next decision.
 
 **So Pi's tool error handling philosophy can be summarized in one sentence: the error message is feedback for the model, not a termination signal for the framework.**
 
@@ -520,7 +520,7 @@ Error: ENOENT: no such file or dir       {
 
 ### Key detail: the more specific the error description, the stronger the model's self-correction
 
-By now you may have a misunderstanding — "since the framework encodes exceptions into messages anyway, can I just throw an `Error("failed")` inside my tool?"
+By now you may have a misunderstanding : "since the framework encodes exceptions into messages anyway, can I just throw an `Error("failed")` inside my tool?"
 
 **Absolutely not.** The content of the error message directly determines whether the model can self-correct. Compare the two cases:
 
@@ -530,11 +530,11 @@ When the model sees "Read failed", it can only blindly retry or give up; when it
 
 Looking back at the source code to see how Pi's own tools do it, you will find that it **does not rely on the framework's safety net**, but rather makes the error description specific inside the tool:
 
-**Read tool** (`read.ts:275`) — appends total line count when out of bounds:
+**Read tool** (`read.ts:275`) : appends total line count when out of bounds:
 
-**Edit tool** (`edit.ts:330`) — appends file path and original error:
+**Edit tool** (`edit.ts:330`) : appends file path and original error:
 
-**Bash tool** (`bash.ts:390-407`) — this snippet is textbook "active identification + rewrapping":
+**Bash tool** (`bash.ts:390-407`) : this snippet is textbook "active identification + rewrapping":
 
 
 ```
@@ -548,12 +548,12 @@ Looking back at the source code to see how Pi's own tools do it, you will find t
 ```
 
 
-Notice Bash's strategy — it **actively identifies** known error types (abort, timeout, non-zero exit code), each is packaged by `appendStatus(text,. ..)` with the "already output content" and "specific reason" into a new Error. Only when it encounters an exception that cannot be identified does it `throw err` and pass it through as-is.
+Notice Bash's strategy : it **actively identifies** known error types (abort, timeout, non-zero exit code), each is packaged by `appendStatus(text,. ..)` with the "already output content" and "specific reason" into a new Error. Only when it encounters an exception that cannot be identified does it `throw err` and pass it through as-is.
 
 This is Pi's real design: **two-layer error handling, layered responsibility**.
 
 **Layer 1 (inside the tool, active)**: identify known error types, package them into specific, readable descriptions
- - Read / Edit / Bash all do this — Bash even attaches "already output content" to the error
+ - Read / Edit / Bash all do this : Bash even attaches "already output content" to the error
  - Purpose: provide the model with concrete clues of "why it failed, how to fix it"
 
 **Layer 2 (framework safety net, passive)**: the catch of `executePreparedToolCall`
@@ -569,11 +569,11 @@ if (startLine >= allLines.length) {
 ```
 
 
-**Read tool** (`read.ts:275`) — when out of bounds, appends total file line count:
+**Read tool** (`read.ts:275`) : when out of bounds, appends total file line count:
 
 The fallback catch in `executePreparedToolCall` uses the `error.message` that the tool itself threw:
 
-The `createErrorToolResult` function body is only three lines (`agent-loop.ts:716-721`), it does not do any "unified description" — whatever message the tool wrote, the model sees it. **So the more specifically the tool packages its errors internally, the more useful the error message the model sees.**
+The `createErrorToolResult` function body is only three lines (`agent-loop.ts:716-721`), it does not do any "unified description" : whatever message the tool wrote, the model sees it. **So the more specifically the tool packages its errors internally, the more useful the error message the model sees.**
 
 
 ```
@@ -581,9 +581,9 @@ throw new Error(`Could not edit file: ${path}. ${errorMessage}.`);
 ```
 
 
-**Edit tool** (`edit.ts:330`) — appends file path and original error:
+**Edit tool** (`edit.ts:330`) : appends file path and original error:
 
-**Bash tool** (`bash.ts:390-407`) — this snippet is textbook "active identification + rewrapping":
+**Bash tool** (`bash.ts:390-407`) : this snippet is textbook "active identification + rewrapping":
 
 
 ```
@@ -607,14 +607,14 @@ throw new Error(`Could not edit file: ${path}. ${errorMessage}.`);
 ```
 
 
-Note Bash's strategy — it **actively identifies** known error types (abort, timeout, non-zero exit code), each is packaged by `appendStatus(text,. ..)` with "already output content" and "specific reason" into a new Error. Only when it encounters an exception that cannot be identified does it `throw err` and pass it through as-is.
+Note Bash's strategy : it **actively identifies** known error types (abort, timeout, non-zero exit code), each is packaged by `appendStatus(text,. ..)` with "already output content" and "specific reason" into a new Error. Only when it encounters an exception that cannot be identified does it `throw err` and pass it through as-is.
 
 This is Pi's real design: **two-layer error handling, layered responsibility**.
 
 
 ```
 第一层（工具内部，主动）：识别已知错误类型，包装成具体可读的描述
-└── Read/Edit/Bash 都是这样——Bash 甚至把"已输出的内容"附在错误里
+└── Read/Edit/Bash 都是这样:Bash 甚至把"已输出的内容"附在错误里
 └── 目的：给模型提供"为什么失败、怎么改才对"的具体线索
 
 第二层（框架兜底，被动）：executePreparedToolCall 的 catch
@@ -626,7 +626,7 @@ This is Pi's real design: **two-layer error handling, layered responsibility**.
 
 The fallback catch in `executePreparedToolCall` uses the `error.message` that the tool itself threw:
 
-The `createErrorToolResult` function body is only three lines (`agent-loop.ts:716-721`), it does not do any "unified description" — whatever message the tool wrote, the model sees it. **So the more specifically the tool packages its errors internally, the more useful the error message the model sees.**
+The `createErrorToolResult` function body is only three lines (`agent-loop.ts:716-721`), it does not do any "unified description" : whatever message the tool wrote, the model sees it. **So the more specifically the tool packages its errors internally, the more useful the error message the model sees.**
 
 
 ```
@@ -648,9 +648,9 @@ Borrowing from the Bash tool's writing style, a custom tool's `execute` should l
 **Two key principles**:
 
 1. **Always wrap errors you can identify**: attach clues of "what went wrong, why, what to do". For example, "file does not exist" is 10x stronger than "operation failed"; "file /a.ts does not exist, the directory has [b.ts, c.ts]" is another 10x stronger than "file does not exist".
-2. **Do not hard-code descriptions for unrecognized errors**: just `throw err`, let the framework's fallback catch pass `err.message` through. **Do not write `throw new Error("Operation failed")` and similar vague descriptions** — that equals painting all unknown errors in the same color, and the model cannot distinguish them.
+2. **Do not hard-code descriptions for unrecognized errors**: just `throw err`, let the framework's fallback catch pass `err.message` through. **Do not write `throw new Error("Operation failed")` and similar vague descriptions** : that equals painting all unknown errors in the same color, and the model cannot distinguish them.
 
-**This is why "even unknown errors should become a message"** — it does not mean "uniformly describe unknown errors as 'something went wrong'", but rather "let the framework fallback catch take over, at least guaranteeing that unknown exceptions are also translated into `isError: true` messages sent to the model, rather than penetrating to break the loop". The error description itself should still be as specific as possible; only when it is impossible to identify, let `err.message` be passed through to the model as-is.
+**This is why "even unknown errors should become a message"** : it does not mean "uniformly describe unknown errors as 'something went wrong'", but rather "let the framework fallback catch take over, at least guaranteeing that unknown exceptions are also translated into `isError: true` messages sent to the model, rather than penetrating to break the loop". The error description itself should still be as specific as possible; only when it is impossible to identify, let `err.message` be passed through to the model as-is.
 
 
 ```
@@ -675,7 +675,7 @@ execute: async (id, params, signal, onUpdate) => {
 
 ### One sentence summary
 
-When a tool execution errors, Pi does not throw an exception to break the loop, but encodes the error into an `isError: true` `ToolResultMessage` and sends it to the model. The key here is **two-layer division of labor**: the tool's interior tries to identify known errors, package them into specific descriptions of "why it's wrong, how to fix it" (see the Bash tool's try-catch); the framework fallback layer only takes over when the tool fails to identify, passing `error.message` straight to the model. After the model receives specific error information, it decides the next step on its own — retry, switch path, or explain to the user. This is why Pi's Agent Loop can stay stable in real scenarios where tools frequently fail.
+When a tool execution errors, Pi does not throw an exception to break the loop, but encodes the error into an `isError: true` `ToolResultMessage` and sends it to the model. The key here is **two-layer division of labor**: the tool's interior tries to identify known errors, package them into specific descriptions of "why it's wrong, how to fix it" (see the Bash tool's try-catch); the framework fallback layer only takes over when the tool fails to identify, passing `error.message` straight to the model. After the model receives specific error information, it decides the next step on its own : retry, switch path, or explain to the user. This is why Pi's Agent Loop can stay stable in real scenarios where tools frequently fail.
 
 ---
 
@@ -689,7 +689,7 @@ The Read tool wants to read a file, the most intuitive way:
 
 But what if you want to **mock the file system in tests**? What if you want the tool to **read a remote file via SSH**? What if you want the tool to **execute inside a Docker container**?
 
-`fs.readFileSync` is hard-coded — it only recognizes the local file system. To switch execution environment, you would have to modify the tool code.
+`fs.readFileSync` is hard-coded : it only recognizes the local file system. To switch execution environment, you would have to modify the tool code.
 
 
 ```
@@ -797,7 +797,7 @@ Looking back at the entire tool system, there are four design patterns worth reu
 
 **2. Pipeline + hooks pattern**: the core flow is a pipeline (prepare -> validate -> execute), with one hook before and after the pipeline (before/after), which can intercept or modify. Errors in any step inside the pipeline do not throw exceptions; they are uniformly encoded as normal messages.
 
-**3. Errors-as-messages principle**: every error at every step of tool execution is uniformly encoded as an `isError: true` `ToolResultMessage` and sent to the model. The model decides the next step on its own based on the error information — retry, switch path, or explain to the user. Even unknown exceptions are caught with `String(error)` as a fallback message; never let raw exceptions penetrate to break Agent Loop.
+**3. Errors-as-messages principle**: every error at every step of tool execution is uniformly encoded as an `isError: true` `ToolResultMessage` and sent to the model. The model decides the next step on its own based on the error information : retry, switch path, or explain to the user. Even unknown exceptions are caught with `String(error)` as a fallback message; never let raw exceptions penetrate to break Agent Loop.
 
 **4. Operations abstraction**: tools do not call system APIs directly, but indirectly through a minimal Operations interface. Tests can mock, remote can SSH, without modifying tool code.
 
@@ -827,26 +827,26 @@ ToolResultMessage { content: 文件内容, isError: false }
 ```
 
 
-Tools are not simple function calls, but a controlled pipeline. Parameter validation blocks bad data, hooks intercept dangerous operations, the Operations abstraction lets the same code run both locally and remotely. All tool errors — from parameter validation failures to unknown exceptions thrown by `execute` — are translated into an `isError: true` `ToolResultMessage` sent to the model, letting the model decide the next step; the loop will never crash because of a tool error.
+Tools are not simple function calls, but a controlled pipeline. Parameter validation blocks bad data, hooks intercept dangerous operations, the Operations abstraction lets the same code run both locally and remotely. All tool errors : from parameter validation failures to unknown exceptions thrown by `execute` : are translated into an `isError: true` `ToolResultMessage` sent to the model, letting the model decide the next step; the loop will never crash because of a tool error.
 
 But there is one more question: who is listening to the `tool_execution_start`, `tool_execution_update`, `tool_execution_end` events emitted during tool execution? Why does the Agent core need to know nothing about the UI?
 
-Next chapter, we open the Agent's "memory system" — the message system. No, wait — before that, there is a more fundamental question: what exactly do these messages look like? What are the structures of tool result messages, model reply messages, user input messages? Are the internal messages of the Agent the same as the messages sent to the model?
+Next chapter, we open the Agent's "memory system" : the message system. No, wait : before that, there is a more fundamental question: what exactly do these messages look like? What are the structures of tool result messages, model reply messages, user input messages? Are the internal messages of the Agent the same as the messages sent to the model?
 
 ---
 
 > **Key source index for this chapter**:
 > 
-> `packages/ai/src/types.ts:433-437` — `Tool` (Layer 1)
-> `packages/agent/src/types.ts:371-394` — `AgentTool` (Layer 2)
-> `packages/coding-agent/src/core/extensions/types.ts:435-482` — `ToolDefinition` (Layer 3)
-> `packages/coding-agent/src/core/tools/tool-definition-wrapper.ts:5-18` — `wrapToolDefinition` (wrapper)
-> `packages/agent/src/agent-loop.ts:562-626` — `prepareToolCall` (first 3 steps of pipeline)
-> `packages/agent/src/agent-loop.ts:628-669` — `executePreparedToolCall` (step 4 + framework fallback catch)
-> `packages/agent/src/agent-loop.ts:671-714` — `finalizeExecutedToolCall` (step 5)
-> `packages/agent/src/agent-loop.ts:716-721` — `createErrorToolResult` (error message pass-through)
-> `packages/coding-agent/src/core/tools/bash.ts:390-407` — Bash tool's exemplary active error identification
-> `packages/coding-agent/src/core/tools/read.ts:275` — Read tool appends total line count
-> `packages/coding-agent/src/core/tools/edit.ts:330` — Edit tool appends file path
-> `packages/coding-agent/src/core/tools/read.ts:43-50` — `ReadOperations` (Operations abstraction)
+> `packages/ai/src/types.ts:433-437` : `Tool` (Layer 1)
+> `packages/agent/src/types.ts:371-394` : `AgentTool` (Layer 2)
+> `packages/coding-agent/src/core/extensions/types.ts:435-482` : `ToolDefinition` (Layer 3)
+> `packages/coding-agent/src/core/tools/tool-definition-wrapper.ts:5-18` : `wrapToolDefinition` (wrapper)
+> `packages/agent/src/agent-loop.ts:562-626` : `prepareToolCall` (first 3 steps of pipeline)
+> `packages/agent/src/agent-loop.ts:628-669` : `executePreparedToolCall` (step 4 + framework fallback catch)
+> `packages/agent/src/agent-loop.ts:671-714` : `finalizeExecutedToolCall` (step 5)
+> `packages/agent/src/agent-loop.ts:716-721` : `createErrorToolResult` (error message pass-through)
+> `packages/coding-agent/src/core/tools/bash.ts:390-407` : Bash tool's exemplary active error identification
+> `packages/coding-agent/src/core/tools/read.ts:275` : Read tool appends total line count
+> `packages/coding-agent/src/core/tools/edit.ts:330` : Edit tool appends file path
+> `packages/coding-agent/src/core/tools/read.ts:43-50` : `ReadOperations` (Operations abstraction)
 

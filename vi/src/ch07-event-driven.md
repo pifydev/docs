@@ -1,9 +1,9 @@
 ---
 chapter: 7
 slug: ch07-event-driven
-title_zh: "第7章：事件驱动 —— Agent 的神经系统"
-title_en: "Chapter 7: Event-Driven — Agent's Nervous System"
-title_vi: "Chương 7: Hướng sự kiện — Hệ thần kinh của Agent"
+title_zh: "第7章：事件驱动 : Agent 的神经系统"
+title_en: "Chapter 7: Event-Driven : Agent's Nervous System"
+title_vi: "Chương 7: Hướng sự kiện : Hệ thần kinh của Agent"
 source_url: https://www.dgzhuya.com/modules/ch07-event-driven
 language: vi
 version_pairs:
@@ -23,9 +23,9 @@ code_blocks: 15
 mermaid_blocks: 0
 ---
 
-# Chương 7: Hướng sự kiện — Hệ thần kinh của Agent
+# Chương 7: Hướng sự kiện : Hệ thần kinh của Agent
 
-Trong sáu chương vừa qua, có một thứ cứ lặp đi lặp lại mà ta chưa đào sâu — **sự kiện** (event).
+Trong sáu chương vừa qua, có một thứ cứ lặp đi lặp lại mà ta chưa đào sâu : **sự kiện** (event).
 
 Chương 3 từng nói "Agent Loop mỗi bước đều phát event để UI cập nhật real time". Chương 5 từng nói "khi thực thi tool sẽ phát ra event `tool_execution_start`, `tool_execution_update`, `tool_execution_end`". Ở Chương 6, event khắp nơi đều mang theo `AgentMessage`.
 
@@ -41,15 +41,15 @@ Chương này sẽ mở "hệ thần kinh" của Agent.
 
 ### Một trực giác: bắt đầu từ theo dõi đơn giao hàng
 
-Bạn đặt một đơn giao đồ ăn trên Meituan. Sau khi đặt, App sẽ đẩy cho bạn một chuỗi cập nhật trạng thái: "quán đã nhận đơn" -> "tài xế đã lấy đồ" -> "tài xế cách 500m" -> "đã giao". Mỗi cập nhật trạng thái là một **event** — nó báo bạn biết "có chuyện xảy ra". Bạn không cần cứ nhìn chằm chằm vào vị trí tài xế; chỉ cần khi nhận event thì liếc một cái.
+Bạn đặt một đơn giao đồ ăn trên Meituan. Sau khi đặt, App sẽ đẩy cho bạn một chuỗi cập nhật trạng thái: "quán đã nhận đơn" -> "tài xế đã lấy đồ" -> "tài xế cách 500m" -> "đã giao". Mỗi cập nhật trạng thái là một **event** : nó báo bạn biết "có chuyện xảy ra". Bạn không cần cứ nhìn chằm chằm vào vị trí tài xế; chỉ cần khi nhận event thì liếc một cái.
 
-Event của Pi-Agent cũng đúng ý này: trong quá trình Agent chạy, cứ liên tục sinh ra các snapshot "có chuyện xảy ra" — message bắt đầu, message cập nhật, tool bắt đầu thực thi — rồi đẩy các snapshot này cho tất cả những ai quan tâm.
+Event của Pi-Agent cũng đúng ý này: trong quá trình Agent chạy, cứ liên tục sinh ra các snapshot "có chuyện xảy ra" : message bắt đầu, message cập nhật, tool bắt đầu thực thi : rồi đẩy các snapshot này cho tất cả những ai quan tâm.
 
 ### Không dùng event thì sao?
 
 Giả sử bạn muốn thêm một tính năng "log lời gọi tool" cho Agent: mỗi lần gọi tool thì in một dòng `[LOG] đã gọi read, đối số: main.ts`.
 
-**Không dùng event system**: bạn phải sửa source Agent, thêm `console.log` trước và sau `tool.execute()`. Sau đó Pi cập nhật, bạn merge code upstream thì phát hiện xung đột — phần log bạn thêm đụng với logic mới upstream. Tự giải quyết xung đột, tuần sau Pi cập nhật tiếp, lại xung đột...
+**Không dùng event system**: bạn phải sửa source Agent, thêm `console.log` trước và sau `tool.execute()`. Sau đó Pi cập nhật, bạn merge code upstream thì phát hiện xung đột : phần log bạn thêm đụng với logic mới upstream. Tự giải quyết xung đột, tuần sau Pi cập nhật tiếp, lại xung đột...
 
 **Dùng event system**:
 
@@ -96,7 +96,7 @@ Tầng lõi Agent định nghĩa 10 loại `AgentEvent` (sự kiện do Agent ph
 
 10 sự kiện, 4 lớp lồng nhau
 
-**Chú thích hình:** từ ngoài vào trong 4 lớp lồng nhau — Agent (Trace) -> Turn -> Message -> Tool Execution. Mỗi lớp là cặp "bắt đầu -> cập nhật (×N) -> kết thúc". Chú ý Turn 2 không có ToolCall nên không có lớp 4 lồng. Chú giải phía dưới đánh dấu số event mỗi lớp (2+2+3+3 = 10 loại).
+**Chú thích hình:** từ ngoài vào trong 4 lớp lồng nhau : Agent (Trace) -> Turn -> Message -> Tool Execution. Mỗi lớp là cặp "bắt đầu -> cập nhật (×N) -> kết thúc". Chú ý Turn 2 không có ToolCall nên không có lớp 4 lồng. Chú giải phía dưới đánh dấu số event mỗi lớp (2+2+3+3 = 10 loại).
 
 ```
 export type AgentEvent =
@@ -120,7 +120,7 @@ export type AgentEvent =
 ```
 
 
-10 loại nghe thì nhiều, nhưng quy luật rất rõ — chúng là **vòng đời 4 tầng lồng nhau**, mỗi tầng đều có cặp "bắt đầu -> cập nhật -> kết thúc":
+10 loại nghe thì nhiều, nhưng quy luật rất rõ : chúng là **vòng đời 4 tầng lồng nhau**, mỗi tầng đều có cặp "bắt đầu -> cập nhật -> kết thúc":
 
 ```
 Agent 运行
@@ -162,15 +162,15 @@ export type AgentEventSink = (event: AgentEvent) => Promise<void> | void;
 ```
 
 
-Chú ý giá trị trả về — `Promise<void>`. emit có thể là async.
+Chú ý giá trị trả về : `Promise<void>`. emit có thể là async.
 
-Nếu bạn đã viết `EventEmitter` của Node.js, bạn biết rằng emit là đồng bộ và fire-and-forget (phát đi rồi thôi, không chờ) — phát xong là đi tiếp, mặc kệ ai đang nghe. Nhưng trong Agent Loop của Pi, mỗi lần gọi emit đều mang theo `await`:
+Nếu bạn đã viết `EventEmitter` của Node.js, bạn biết rằng emit là đồng bộ và fire-and-forget (phát đi rồi thôi, không chờ) : phát xong là đi tiếp, mặc kệ ai đang nghe. Nhưng trong Agent Loop của Pi, mỗi lần gọi emit đều mang theo `await`:
 
 ### Mỗi lần phát sự kiện đều có await
 
 Rào chắn đồng bộ so với Fire-and-Forget
 
-**Chú thích hình:** đối chiếu theo chiều ngang — mũi tên trên: EventEmitter kiểu cũ (fire-and-forget), mũi tên dưới: rào chắn `await` của Pi (chờ hết listener). Cả hai mũi tên đều tới được `bước tiếp theo`, nhưng mũi tên dưới chờ tất cả consumer xong trước.
+**Chú thích hình:** đối chiếu theo chiều ngang : mũi tên trên: EventEmitter kiểu cũ (fire-and-forget), mũi tên dưới: rào chắn `await` của Pi (chờ hết listener). Cả hai mũi tên đều tới được `bước tiếp theo`, nhưng mũi tên dưới chờ tất cả consumer xong trước.
 
 ```
 await emit({ type: "agent_start" });
@@ -183,7 +183,7 @@ await emit({ type: "message_end", ... });
 
 Mỗi `await` đều đang nói: **"chờ event này được xử lý xong hoàn toàn, rồi tiếp tục"**.
 
-Cái này khác với pub-sub truyền thống — truyền thống là "tôi hét lên rồi đi luôn". Pi quyết không làm vậy: mỗi lần phát event, nó đứng đợi tất cả mọi người xử lý xong, rồi mới đi tiếp bước kế.
+Cái này khác với pub-sub truyền thống : truyền thống là "tôi hét lên rồi đi luôn". Pi quyết không làm vậy: mỗi lần phát event, nó đứng đợi tất cả mọi người xử lý xong, rồi mới đi tiếp bước kế.
 
 Tại sao? Sẽ giải thích ngay sau.
 
@@ -221,7 +221,7 @@ private async processEvents(event: AgentEvent): Promise<void> {
 
 Mấu chốt ở bước thứ ba: **Agent lần lượt await tất cả listener theo thứ tự đăng ký**.
 
-Bạn có thể hỏi: cái này khác gì "gọi hàm trong một vòng lặp"? Khác ở chỗ **`this.listeners` của Agent là một Set bên ngoài, nó không biết trong đó là ai**. Agent chỉ chịu trách nhiệm "duyệt qua và chờ", còn ai ở trong Set, ai không — hoàn toàn do bên ngoài điều khiển qua `subscribe()`. Bên trong code lõi Agent không có một dòng `updateTerminal()` hay `appendToFile()` nào — nó thậm chí không biết TUI hay file storage tồn tại.
+Bạn có thể hỏi: cái này khác gì "gọi hàm trong một vòng lặp"? Khác ở chỗ **`this.listeners` của Agent là một Set bên ngoài, nó không biết trong đó là ai**. Agent chỉ chịu trách nhiệm "duyệt qua và chờ", còn ai ở trong Set, ai không : hoàn toàn do bên ngoài điều khiển qua `subscribe()`. Bên trong code lõi Agent không có một dòng `updateTerminal()` hay `appendToFile()` nào : nó thậm chí không biết TUI hay file storage tồn tại.
 
 ### Tại sao nhất định phải await?
 
@@ -236,7 +236,7 @@ TUI 监听器:   [开始渲染...]  [还没处理完    [三个事件堆在一�
                               start...]
 
 问题：TUI 还没处理完 message_start，message_update 就来了。
-      UI 可能显示空消息，也可能显示过时的内容——状态不一致。
+      UI 可能显示空消息，也可能显示过时的内容:状态不一致。
 ```
 
 
@@ -253,7 +253,7 @@ TUI 监听器:    [处理完毕，返回]       [处理完毕，返回]         
 ```
 
 
-Tóm tắt một câu: **`await` không phải để "thông báo", mà để "đàm phán đồng bộ"** — đảm bảo tất cả consumer đều theo kịp, Agent mới đi tiếp bước sau. Đó là ý nghĩa của "rào chắn đồng bộ".
+Tóm tắt một câu: **`await` không phải để "thông báo", mà để "đàm phán đồng bộ"** : đảm bảo tất cả consumer đều theo kịp, Agent mới đi tiếp bước sau. Đó là ý nghĩa của "rào chắn đồng bộ".
 
 Giá phải trả là hiệu năng (phải chờ consumer chậm nhất); cái được là tính đúng đắn (state luôn nhất quán).
 
@@ -261,7 +261,7 @@ Giá phải trả là hiệu năng (phải chờ consumer chậm nhất); cái �
 
 Nếu mỗi event đều phải await, thì `tool_execution_update` thì sao? Trong quá trình thực thi tool có thể sinh ra rất nhiều progress output (mỗi dòng output trong một lần thực thi Bash), await mỗi lần có chậm quá không?
 
-Đúng vậy, Pi xử lý đặc biệt cho loại event tần suất cao này — **gom trước, rồi chờ theo lô**:
+Đúng vậy, Pi xử lý đặc biệt cho loại event tần suất cao này : **gom trước, rồi chờ theo lô**:
 
 ```
 const updateEvents: Promise<void>[] = [];   // 收集箱
@@ -278,7 +278,7 @@ await Promise.all(updateEvents);      // 一次性等所有 update 处理完
 ```
 
 
-Cái này không mâu thuẫn. **Quy tắc rào chắn đồng bộ vẫn chặt, nhưng mở một khe hở cho event dạng cập nhật tiến độ**. Cập nhật tiến độ là "tần suất cao, giá trị thấp, có thể gộp" — gửi thêm một cái hay bớt một cái không ảnh hưởng đến trạng thái cuối. Còn event vòng đời (start/end) là "tần suất thấp, giá trị cao" — bỏ lỡ `message_start` thì hết cơ hội.
+Cái này không mâu thuẫn. **Quy tắc rào chắn đồng bộ vẫn chặt, nhưng mở một khe hở cho event dạng cập nhật tiến độ**. Cập nhật tiến độ là "tần suất cao, giá trị thấp, có thể gộp" : gửi thêm một cái hay bớt một cái không ảnh hưởng đến trạng thái cuối. Còn event vòng đời (start/end) là "tần suất thấp, giá trị cao" : bỏ lỡ `message_start` thì hết cơ hội.
 
 Còn một chi tiết thiết kế nữa: cổng `acceptingUpdates`. Hàm `execute` của tool là hàm `async`; callback tiến độ bên trong nó có thể vẫn còn được gọi bất đồng bộ sau khi Promise resolve (timer/delay callback sót lại). Không có cổng này, `partialResult` đến trễ sẽ phát `tool_execution_update` thêm lần nữa sau khi đã phát `tool_execution_end`, khiến listener thấy chuỗi rối tung "tool đã kết thúc rồi mà vẫn cập nhật".
 
@@ -299,13 +299,13 @@ Nếu một listener nào đó ném ngoại lệ, ngoại lệ sẽ lan lên th�
 
 Tại sao không bọc try-catch?
 
-Vì triết lý thiết kế của Pi là: **listener lỗi -> lần chạy dừng -> vấn đề hiện ra ngay**. Nếu bạn âm thầm nuốt ngoại lệ, Agent trông có vẻ chạy "bình thường", nhưng UI đã hỏng rồi — bạn debug sẽ không tìm thấy vấn đề đâu cả.
+Vì triết lý thiết kế của Pi là: **listener lỗi -> lần chạy dừng -> vấn đề hiện ra ngay**. Nếu bạn âm thầm nuốt ngoại lệ, Agent trông có vẻ chạy "bình thường", nhưng UI đã hỏng rồi : bạn debug sẽ không tìm thấy vấn đề đâu cả.
 
-Nó giống như cầu chì trong mạch điện — cầu chì nổ, bạn lập tức biết có chỗ hỏng. Nếu mỗi linh kiện đều có bảo vệ riêng nhưng không bao giờ báo lỗi, cả hệ thống trông "bình thường" nhưng có thể đã hỏng một nửa.
+Nó giống như cầu chì trong mạch điện : cầu chì nổ, bạn lập tức biết có chỗ hỏng. Nếu mỗi linh kiện đều có bảo vệ riêng nhưng không bao giờ báo lỗi, cả hệ thống trông "bình thường" nhưng có thể đã hỏng một nửa.
 
-**Khuyến nghị thực hành**: nếu bạn viết listener UI/extension của riêng mình dựa trên Pi, **nhớ tự try-catch bên trong listener** — Agent sẽ không giúp bạn chặn hộ.
+**Khuyến nghị thực hành**: nếu bạn viết listener UI/extension của riêng mình dựa trên Pi, **nhớ tự try-catch bên trong listener** : Agent sẽ không giúp bạn chặn hộ.
 
-Nhưng có một ngoại lệ: **hệ thống extension**. Framework tự bọc try-catch cô lập cho callback của extension bên thứ ba, một extension sập sẽ không kéo theo cả session. Nguyên tắc là — với listener tầng trong đáng tin (code do mình viết), cứ để ngoại lệ phơi bày; với listener tầng ngoài không đáng tin (extension bên thứ ba), framework cô lập giúp.
+Nhưng có một ngoại lệ: **hệ thống extension**. Framework tự bọc try-catch cô lập cho callback của extension bên thứ ba, một extension sập sẽ không kéo theo cả session. Nguyên tắc là : với listener tầng trong đáng tin (code do mình viết), cứ để ngoại lệ phơi bày; với listener tầng ngoài không đáng tin (extension bên thứ ba), framework cô lập giúp.
 ---
 
 ## 5. Bạn có thể làm gì với hệ thống sự kiện?
@@ -337,7 +337,7 @@ Thông qua event `tool_call` của hệ thống extension, extension có thể t
 
 ### Kịch bản 3: tiền xử lý context
 
-Extension có thể sửa danh sách message trước khi gọi LLM — inject thời gian hiện tại, trạng thái Git, hoặc tóm tắt lượt trước. Đây là cách hook `transformContext` được nhắc ở Chương 6 được hiện thực.
+Extension có thể sửa danh sách message trước khi gọi LLM : inject thời gian hiện tại, trạng thái Git, hoặc tóm tắt lượt trước. Đây là cách hook `transformContext` được nhắc ở Chương 6 được hiện thực.
 
 ### Kịch bản 4: chuyển tiếp stream về frontend Web
 
@@ -355,7 +355,7 @@ session.subscribe((event) => {
 });
 ```
 
-Agent chạy trên server, người dùng truy cập qua trình duyệt. Subscribe stream event, đẩy qua SSE về trình duyệt — đây là lõi của tích hợp Web.
+Agent chạy trên server, người dùng truy cập qua trình duyệt. Subscribe stream event, đẩy qua SSE về trình duyệt : đây là lõi của tích hợp Web.
 
 ### Tóm tắt nhỏ
 
@@ -365,11 +365,11 @@ Các kịch bản này có một đặc điểm chung: **thêm bất kỳ tính 
 
 ## 6. Case study: hành trình hoàn chỉnh của một text_delta
 
-Nối những gì đã học lại, ta truy vết một event `text_delta` — từ ký tự đầu tiên LLM trả về cho đến màn hình terminal của bạn.
+Nối những gì đã học lại, ta truy vết một event `text_delta` : từ ký tự đầu tiên LLM trả về cho đến màn hình terminal của bạn.
 
 Hành trình xuyên tầng hoàn chỉnh của text_delta
 
-**Chú thích hình:** luồng dữ liệu 5 tầng — LLM SSE -> EventStream.push của tầng AI -> Agent Loop chuyển thành `message_update` -> rào chắn đồng bộ `Agent.processEvents` -> listener TUI ghi terminal. Mỗi tầng chỉ quan tâm phép chuyển đổi của riêng mình.
+**Chú thích hình:** luồng dữ liệu 5 tầng : LLM SSE -> EventStream.push của tầng AI -> Agent Loop chuyển thành `message_update` -> rào chắn đồng bộ `Agent.processEvents` -> listener TUI ghi terminal. Mỗi tầng chỉ quan tâm phép chuyển đổi của riêng mình.
 
 Giả sử LLM đang sinh ra hai chữ "hello". Một chữ 'h', từ lúc sinh ra đến lúc hiển thị, trải qua 5 bước:
 
@@ -400,17 +400,17 @@ Giả sử LLM đang sinh ra hai chữ "hello". Một chữ 'h', từ lúc sinh 
 ```
 
 
-Trên toàn chuỗi này, mỗi tầng chỉ quan tâm việc của mình: tầng AI chỉ lo parse SSE và dựng message; Agent Loop chỉ lo emit event và xử lý tool; Agent chỉ lo cập nhật state và await listener; Session chỉ lo phân phối và lưu trữ; TUI chỉ lo render. **Không tầng nào trực tiếp gọi phương thức nội bộ của tầng khác — giao thức liên lạc duy nhất giữa chúng là "event"**.
+Trên toàn chuỗi này, mỗi tầng chỉ quan tâm việc của mình: tầng AI chỉ lo parse SSE và dựng message; Agent Loop chỉ lo emit event và xử lý tool; Agent chỉ lo cập nhật state và await listener; Session chỉ lo phân phối và lưu trữ; TUI chỉ lo render. **Không tầng nào trực tiếp gọi phương thức nội bộ của tầng khác : giao thức liên lạc duy nhất giữa chúng là "event"**.
 
-Có một phép biến đổi dữ liệu then chốt đáng chú ý: **các event delta đa dạng của tầng AI (`text_delta`, `thinking_delta`, `toolcall_delta`) được ánh xạ đồng loạt thành `message_update` của tầng Agent**. Event thô của tầng AI được gắn vào `message_update` qua trường `assistantMessageEvent` và truyền nguyên xi. Agent Loop không quan tâm kiểu delta cụ thể — nó chỉ biết "message đã cập nhật". Nhưng consumer có thể quan tâm, nên event thô được giữ lại chứ không bị bỏ.
+Có một phép biến đổi dữ liệu then chốt đáng chú ý: **các event delta đa dạng của tầng AI (`text_delta`, `thinking_delta`, `toolcall_delta`) được ánh xạ đồng loạt thành `message_update` của tầng Agent**. Event thô của tầng AI được gắn vào `message_update` qua trường `assistantMessageEvent` và truyền nguyên xi. Agent Loop không quan tâm kiểu delta cụ thể : nó chỉ biết "message đã cập nhật". Nhưng consumer có thể quan tâm, nên event thô được giữ lại chứ không bị bỏ.
 
 ---
 
 ## 7. Tầng Session mở rộng gì
 
-Sáu mục trước nói về hệ thống event của lõi Agent — 10 loại. Nhưng Pi không chỉ có tầng Agent; ở trên còn có một `AgentSession` (tầng phiên sản phẩm).
+Sáu mục trước nói về hệ thống event của lõi Agent : 10 loại. Nhưng Pi không chỉ có tầng Agent; ở trên còn có một `AgentSession` (tầng phiên sản phẩm).
 
-`AgentSession` phải xử lý nhiều thứ hơn lõi Agent rất nhiều: nén context, thử lại tự động, quản lý trạng thái hàng đợi... Những khái niệm này không tồn tại trong lõi Agent. Cũng như bạn không tìm thấy thông báo "Bluetooth đã kết nối" trong kernel Linux — kernel chỉ lo lập lịch tiến trình và quản lý bộ nhớ; Bluetooth là việc của tầng trên.
+`AgentSession` phải xử lý nhiều thứ hơn lõi Agent rất nhiều: nén context, thử lại tự động, quản lý trạng thái hàng đợi... Những khái niệm này không tồn tại trong lõi Agent. Cũng như bạn không tìm thấy thông báo "Bluetooth đã kết nối" trong kernel Linux : kernel chỉ lo lập lịch tiến trình và quản lý bộ nhớ; Bluetooth là việc của tầng trên.
 
 ### Kernel 10 + Session 7
 
@@ -452,19 +452,19 @@ Lõi Agent chỉ định nghĩa 10 loại event trên 4 tầng vòng đời. T�
 
 ## 9. Trạm tiếp theo
 
-Chương này ta thấy hệ thống event đã tách rời hoàn toàn Agent với thế giới bên ngoài — UI, log, lưu trữ, extension — tất cả đều làm việc qua subscribe event.
+Chương này ta thấy hệ thống event đã tách rời hoàn toàn Agent với thế giới bên ngoài : UI, log, lưu trữ, extension : tất cả đều làm việc qua subscribe event.
 
-Nhưng có một cơ chế liên quan mật thiết đến event mà ta mới chỉ nhắc một câu: **`transformContext`**. Chương 6 bàn hệ thống message đã từng nói nó chạy trước `convertToLlm`, chịu trách nhiệm cắt bớt message cũ và inject context bên ngoài. Khi hội thoại ngày càng dài, message ngày càng nhiều, cuối cùng sẽ vượt quá context window của model. Lúc đó `transformContext` cần làm thêm một việc quyết liệt hơn — **nén lịch sử hội thoại**.
+Nhưng có một cơ chế liên quan mật thiết đến event mà ta mới chỉ nhắc một câu: **`transformContext`**. Chương 6 bàn hệ thống message đã từng nói nó chạy trước `convertToLlm`, chịu trách nhiệm cắt bớt message cũ và inject context bên ngoài. Khi hội thoại ngày càng dài, message ngày càng nhiều, cuối cùng sẽ vượt quá context window của model. Lúc đó `transformContext` cần làm thêm một việc quyết liệt hơn : **nén lịch sử hội thoại**.
 
-Hai chương tới ta mở toàn cảnh context engineering của Pi. Chương 8 trước tiên nói bức tranh toàn cảnh — từ cắt output của tool ở phía đầu vào, lắp ráp system prompt, đến Compaction và tóm tắt nhánh ở phía lịch sử, để bạn thấy rõ tuyến phòng thủ Pi bố trí ở nhiều khâu; Chương 9 đào sâu vào thuật toán nén cốt lõi nhất (Compaction), xem Pi làm sao khi context window sắp đầy, nén 50 lượt hội thoại thành một đoạn tóm tắt có cấu trúc, để Agent tiếp tục "nhớ" được trước đó đã xảy ra chuyện gì.
+Hai chương tới ta mở toàn cảnh context engineering của Pi. Chương 8 trước tiên nói bức tranh toàn cảnh : từ cắt output của tool ở phía đầu vào, lắp ráp system prompt, đến Compaction và tóm tắt nhánh ở phía lịch sử, để bạn thấy rõ tuyến phòng thủ Pi bố trí ở nhiều khâu; Chương 9 đào sâu vào thuật toán nén cốt lõi nhất (Compaction), xem Pi làm sao khi context window sắp đầy, nén 50 lượt hội thoại thành một đoạn tóm tắt có cấu trúc, để Agent tiếp tục "nhớ" được trước đó đã xảy ra chuyện gì.
 
 ---
 
 > **Chỉ mục source then chốt của chương này**:
 >
-> `packages/agent/src/types.ts:413-428` — định nghĩa 10 loại `AgentEvent`
-> `packages/agent/src/agent-loop.ts:25` — kiểu `AgentEventSink` (chữ ký emit)
-> `packages/agent/src/agent.ts:509-556` — `processEvents` (hiện thực rào chắn đồng bộ)
-> `packages/agent/src/agent.ts:168,231-233` — `subscribe` và `listeners`
-> `packages/agent/src/agent-loop.ts:628-669` — `executePreparedToolCall` (xử lý đặc biệt update)
-> `packages/coding-agent/src/core/agent-session.ts:126-150` — `AgentSessionEvent` (17 loại event)
+> `packages/agent/src/types.ts:413-428` : định nghĩa 10 loại `AgentEvent`
+> `packages/agent/src/agent-loop.ts:25` : kiểu `AgentEventSink` (chữ ký emit)
+> `packages/agent/src/agent.ts:509-556` : `processEvents` (hiện thực rào chắn đồng bộ)
+> `packages/agent/src/agent.ts:168,231-233` : `subscribe` và `listeners`
+> `packages/agent/src/agent-loop.ts:628-669` : `executePreparedToolCall` (xử lý đặc biệt update)
+> `packages/coding-agent/src/core/agent-session.ts:126-150` : `AgentSessionEvent` (17 loại event)
