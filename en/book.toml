@@ -8,10 +8,14 @@ src = "src"
 [preprocessor.mermaid]
 command = "mdbook-mermaid"
 
+[preprocessor.strip-frontmatter]
+command = "python \"../scripts/lib/strip-frontmatter.py\""
+
 [output.html]
 default-theme = "light"
 preferred-dark-theme = "navy"
 git-repository-url = "https://github.com/OWNER/pi-docs"
+additional-css = ["theme/custom.css"]
 edit-url-template = "https://github.com/OWNER/pi-docs/edit/main/en/src/{path}"
 additional-js = ["mermaid.min.js", "mermaid-init.js"]
 
@@ -23,4 +27,3 @@ level = 1
 editable = false
 copyable = true
 copy-js = true
-
