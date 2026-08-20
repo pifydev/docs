@@ -33,3 +33,6 @@ scripts/worksheets/
 
 # ch03-prose-source.txt is a dump of zh prose (regeneratable)
 scripts/worksheets/ch03-prose-source.txt
+
+# Astro
+.astro/
