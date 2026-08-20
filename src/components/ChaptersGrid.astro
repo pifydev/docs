@@ -1,0 +1,69 @@
+---
+const { lang } = Astro.props;
+
+const chapters = [
+  { num: 1, slug: "ch01-overview", title_en: "Introduction: Why Pi-Agent Is Worth Your Time", title_vi: "Mở đầu: Tại sao Pi-Agent đáng để bạn dành thời gian", title_zh: "开篇: 为什么 Pi-Agent 值得你花时间" },
+  { num: 2, slug: "ch02-three-layer-arch", title_en: "Three-Layer Architecture", title_vi: "Kiến trúc ba lớp", title_zh: "三层架构" },
+  { num: 3, slug: "ch03-agent-loop", title_en: "Agent Loop", title_vi: "Agent Loop", title_zh: "Agent Loop" },
+  { num: 4, slug: "ch04-model-invocation", title_en: "Model Invocation", title_vi: "Gọi mô hình", title_zh: "模型调用" },
+  { num: 5, slug: "ch05-tool-system", title_en: "Tool System", title_vi: "Hệ thống công cụ", title_zh: "工具系统" },
+  { num: 6, slug: "ch06-messages", title_en: "Message System", title_vi: "Hệ thống tin nhắn", title_zh: "消息系统" },
+  { num: 7, slug: "ch07-event-driven", title_en: "Event-Driven Architecture", title_vi: "Kiến trúc hướng sự kiện", title_zh: "事件驱动架构" },
+  { num: 8, slug: "ch08-context-engineering", title_en: "Context Engineering", title_vi: "Kỹ thuật ngữ cảnh", title_zh: "上下文工程" },
+  { num: 9, slug: "ch09-compaction", title_en: "Context Compaction", title_vi: "Nén ngữ cảnh", title_zh: "上下文压缩" },
+  { num: 10, slug: "ch10-session", title_en: "Session Management", title_vi: "Quản lý phiên", title_zh: "会话管理" },
+];
+
+const titleKey = lang === "vi" ? "title_vi" : lang === "zh" ? "title_zh" : "title_en";
+---
+
+<div class="chapters-grid">
+  {chapters.map((ch) => (
+    <a class="chapter-card" href={`/${lang}/${ch.slug}`}>
+      <span class="chapter-num">Chapter {ch.num}</span>
+      <span class="chapter-title">{ch[titleKey]}</span>
+      <span class="chapter-arrow">→</span>
+    </a>
+  ))}
+</div>
+
+<style>
+  .chapters-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 0.75rem;
+    margin: 1.5rem 0 2rem;
+  }
+  .chapter-card {
+    display: flex;
+    flex-direction: column;
+    padding: 1rem 1.25rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.5rem;
+    background: var(--sl-color-bg-nav);
+    text-decoration: none;
+    color: var(--sl-color-text);
+    transition: border-color 0.2s, transform 0.2s;
+  }
+  .chapter-card:hover {
+    border-color: var(--sl-color-accent);
+    transform: translateY(-2px);
+  }
+  .chapter-num {
+    font-size: 0.8rem;
+    color: var(--sl-color-accent);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .chapter-title {
+    font-size: 1.05rem;
+    font-weight: 500;
+    margin-top: 0.25rem;
+  }
+  .chapter-arrow {
+    color: var(--sl-color-gray-3);
+    margin-top: 0.5rem;
+    text-align: right;
+  }
+</style>
