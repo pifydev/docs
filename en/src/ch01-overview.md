@@ -46,8 +46,8 @@ terms_used:
   - MCP
   - SDK
   - YOLO mode
-mermaid_blocks: 0
-code_blocks: 7
+mermaid_blocks: 1
+code_blocks: 8
 ---
 
 
@@ -112,6 +112,29 @@ Breaking it apart:
 │              pi-ai                       │  ← multi-provider LLM abstraction
 │  Unified API · Context hand-off · Streaming · Token tracking  │
 └──────────────────────────────────────────┘
+```
+
+```mermaid
+%% Pi-Agent four-package architecture
+graph TB
+    subgraph TOP["Top layer — full CLI product + SDK"]
+        PCA["pi-coding-agent<br/>system prompt · built-in tools · session mgmt · extensions"]
+    end
+    subgraph MID["Middle layer — Agent engine + orthogonal UI"]
+        PAC["pi-agent-core<br/>AgentLoop · tool system · events"]
+        TUI["pi-tui<br/>differential render · component system"]
+    end
+    BOT["pi-ai<br/>unified API · context hand-off · streaming · token tracking"]
+    PCA --> PAC
+    PCA --> BOT
+    PCA --> TUI
+    PAC --> BOT
+    classDef top fill:#fff4d6,stroke:#d4a017,color:#000
+    classDef mid fill:#e6f3ff,stroke:#1976d2,color:#000
+    classDef bot fill:#e8f5e9,stroke:#388e3c,color:#000
+    class PCA top
+    class PAC,TUI mid
+    class BOT bot
 ```
 
 In these four layers, `pi-ai` / `pi-agent-core` / `pi-coding-agent` form a **three-layer stack** (each layer is usable on its own), and `pi-tui` is an **orthogonal UI library** that is fully decoupled from the Agent system — you can use `pi-ai` alone to call models, or use `pi-agent-core` to run an Agent Loop inside your own application without ever touching the CLI. This is Pi's core value as an SDK; we cover it in detail in section 5.

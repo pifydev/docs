@@ -46,8 +46,8 @@ terms_used:
   - MCP
   - SDK
   - YOLO mode
-mermaid_blocks: 0
-code_blocks: 7
+mermaid_blocks: 1
+code_blocks: 8
 ---
 
 
@@ -112,6 +112,29 @@ Tách ra từng phần:
 │              pi-ai                       │  ← Lớp trừu tượng LLM đa nhà cung cấp
 │  Unified API · Context hand-off · Streaming · Theo dõi Token  │
 └──────────────────────────────────────────┘
+```
+
+```mermaid
+%% Pi-Agent four-package architecture
+graph TB
+    subgraph TOP["Top layer — full CLI product + SDK"]
+        PCA["pi-coding-agent<br/>system prompt · built-in tools · session mgmt · extensions"]
+    end
+    subgraph MID["Middle layer — Agent engine + orthogonal UI"]
+        PAC["pi-agent-core<br/>AgentLoop · tool system · events"]
+        TUI["pi-tui<br/>differential render · component system"]
+    end
+    BOT["pi-ai<br/>unified API · context hand-off · streaming · token tracking"]
+    PCA --> PAC
+    PCA --> BOT
+    PCA --> TUI
+    PAC --> BOT
+    classDef top fill:#fff4d6,stroke:#d4a017,color:#000
+    classDef mid fill:#e6f3ff,stroke:#1976d2,color:#000
+    classDef bot fill:#e8f5e9,stroke:#388e3c,color:#000
+    class PCA top
+    class PAC,TUI mid
+    class BOT bot
 ```
 
 Trong bốn lớp này, `pi-ai` / `pi-agent-core` / `pi-coding-agent` tạo thành một **stack ba lớp** (mỗi lớp dùng độc lập được), và `pi-tui` là một **thư viện UI trực giao (orthogonal)** tách rời hoàn toàn khỏi hệ thống Agent — bạn có thể chỉ dùng `pi-ai` để gọi model, hoặc dùng `pi-agent-core` để chạy một Agent Loop trong ứng dụng của riêng bạn mà không cần đụng vào CLI. Đây là giá trị cốt lõi của Pi với tư cách SDK; chúng tôi sẽ trình bày chi tiết trong mục 5.

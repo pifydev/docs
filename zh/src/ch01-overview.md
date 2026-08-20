@@ -55,8 +55,8 @@ terms_used:
   - ~/.pi/agent/settings.json
   - models.json
   - ANTHROPIC_API_KEY
-code_blocks: 7
-mermaid_blocks: 0
+code_blocks: 8
+mermaid_blocks: 1
 ---
 
 # 第1章：开篇 —— 为什么 Pi-Agent 值得你花时间
@@ -120,6 +120,29 @@ mermaid_blocks: 0
 │              pi-ai                       │  ← 多供应商 LLM 抽象
 │  统一 API · 上下文交接 · 流式 · Token 追踪│
 └──────────────────────────────────────────┘
+```
+
+```mermaid
+%% Pi-Agent four-package architecture
+graph TB
+    subgraph TOP["Top layer — full CLI product + SDK"]
+        PCA["pi-coding-agent<br/>system prompt · built-in tools · session mgmt · extensions"]
+    end
+    subgraph MID["Middle layer — Agent engine + orthogonal UI"]
+        PAC["pi-agent-core<br/>AgentLoop · tool system · events"]
+        TUI["pi-tui<br/>differential render · component system"]
+    end
+    BOT["pi-ai<br/>unified API · context hand-off · streaming · token tracking"]
+    PCA --> PAC
+    PCA --> BOT
+    PCA --> TUI
+    PAC --> BOT
+    classDef top fill:#fff4d6,stroke:#d4a017,color:#000
+    classDef mid fill:#e6f3ff,stroke:#1976d2,color:#000
+    classDef bot fill:#e8f5e9,stroke:#388e3c,color:#000
+    class PCA top
+    class PAC,TUI mid
+    class BOT bot
 ```
 
 这四层里，`pi-ai / pi-agent-core / pi-coding-agent` 构成一条**三层堆栈**（每层可独立使用），`pi-tui` 是一个**正交的 UI 库**，与 Agent 体系完全解耦——你可以只用 `pi-ai` 调模型，也可以用 `pi-agent-core` 在你自己的应用里跑 Agent Loop，完全不需要碰 CLI。这是 Pi 作为 SDK 的核心价值，我们在第五节细讲。
