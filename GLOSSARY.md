@@ -1,6 +1,6 @@
 # Glossary
 
-Preserved English technical terms used across all translations of the Pi Agent Book. **Do not translate** any term in this glossary — use it verbatim in Chinese, English, and Vietnamese chapters.
+English technical terms we keep across all translations of the Pify Agent Book. **Do not translate** any term on this page. Use each one verbatim in the Chinese, English, and Vietnamese chapters.
 
 When you encounter a term not yet listed here, append a row with: `term | category | short explanation | source`.
 
@@ -267,7 +267,7 @@ When you encounter a term not yet listed here, append a row with: `term | catego
 
 | English term | Vietnamese (giải thích) | Source / Bối cảnh |
 |---|---|---|
-| JSONL | JSONL | Newline-delimited JSON — session file format |
+| JSONL | JSONL | Newline-delimited JSON : session file format |
 | llama.cpp | llama.cpp | Local GGUF model router (server) |
 | GGUF | GGUF | GPT-Generated Unified Format (model file format) |
 | createBashTool | createBashTool | API factory cho custom bash tools |
@@ -283,7 +283,7 @@ When you encounter a term not yet listed here, append a row with: `term | catego
 | Follow-up Mode | Follow-up Mode | Alt+Enter queue và inject sau khi Agent xong |
 | `--mode json` | `--mode json` | JSON event stream stdout (cho integration) |
 | `--mode rpc` | `--mode rpc` | RPC mode (JSON-RPC over stdio) |
-| `--mode print` | `--mode print` | Print mode (`-p` flag) — non-interactive one-shot |
+| `--mode print` | `--mode print` | Print mode (`-p` flag) : non-interactive one-shot |
 | `--ignore-scripts` | `--ignore-scripts` | npm install flag vô hiệu lifecycle scripts |
 | `-e / --extension` | `-e / --extension` | Quick-test extension từ local path |
 | `pi -c` | `pi -c` | Continue most-recent session |
@@ -309,7 +309,7 @@ When you encounter a term not yet listed here, append a row with: `term | catego
 | English term | Vietnamese (giải thích) | Source / Bối cảnh |
 |---|---|---|
 | `AGENTS.md` | `AGENTS.md` | File context instructions trong từng project directory (hoặc parent) |
-| `CLAUDE.md` | `CLAUDE.md` | Alias cho AGENTS.md — Pi đọc cả hai names |
+| `CLAUDE.md` | `CLAUDE.md` | Alias cho AGENTS.md : Pi đọc cả hai names |
 | `AGENTS.override.md` | `AGENTS.override.md` | Override file ở một directory cụ thể (thay thế AGENTS.md/CLAUDE.md ở đó) |
 | `~/.pi/agent/AGENTS.md` | `~/.pi/agent/AGENTS.md` | Global context instructions cho mọi session |
 | Parent-directory walk | Parent-directory walk | Pi đọc AGENTS.md/CLAUDE.md từ CWD đi lên tới root |
@@ -326,7 +326,7 @@ When you encounter a term not yet listed here, append a row with: `term | catego
 | Subscription Provider | Subscription Provider | OAuth login: Claude Pro/Max, ChatGPT Plus/Pro Codex, GitHub Copilot, xAI, OpenRouter, Radius |
 | ChatGPT Plus/Pro (Codex) | ChatGPT Plus/Pro (Codex) | Subscription với Codex CLI được OpenAI endorse |
 | Claude Pro/Max | Claude Pro/Max | Subscription auth active, third-party harness dùng Extra Usage |
-| GitHub Copilot | GitHub Copilot | Subscription OAuth — có thể cần enable model trong VS Code |
+| GitHub Copilot | GitHub Copilot | Subscription OAuth : có thể cần enable model trong VS Code |
 | xAI Subscription | xAI Subscription | Grok/X plan qua `/login xai` → "Use a subscription" |
 | OpenRouter | OpenRouter | Mint user-controlled API key từ OpenRouter credits (no expiry auto) |
 | Radius | Radius | Dynamic `pi-messages` gateway, OAuth tokens lưu trong auth.json |
@@ -402,11 +402,11 @@ When you encounter a term not yet listed here, append a row with: `term | catego
 | `marked` | `marked` | Markdown parser dùng trong pi-tui |
 | `get-east-asian-width` | `get-east-asian-width` | East-Asian width detection cho terminal alignment |
 | OSC 8 Hyperlink | OSC 8 Hyperlink | Terminal escape sequence cho clickable links (click mở default handler) |
-| Kitty Keyboard Protocol | Kitty Keyboard Protocol | Báo cáo `super` modifier riêng — cần thiết cho Ctrl+Super+K |
+| Kitty Keyboard Protocol | Kitty Keyboard Protocol | Báo cáo `super` modifier riêng : cần thiết cho Ctrl+Super+K |
 | Bracketed Paste Mode | Bracketed Paste Mode | Terminal mode wrap pasted text giúp Pi phân biệt paste vs typed input |
 | CSI 2026 Synchronized Output | CSI 2026 Synchronized Output | Suppress flicker bằng synchronized-output escape sequence |
 | OSC 133 Semantic Prompt | OSC 133 Semantic Prompt | Markers cho input/output regions (semantic prompt) |
-| Fullscreen Mode | Fullscreen Mode | `--tui-mode fullscreen` — alternate screen với scrollable transcript dock |
+| Fullscreen Mode | Fullscreen Mode | `--tui-mode fullscreen` : alternate screen với scrollable transcript dock |
 
 ---
 
@@ -448,6 +448,6 @@ When you encounter a term not yet listed here, append a row with: `term | catego
 
 ## Maintenance
 
-Glossary is a living document. When you spot a term that appears in dgzhuya.com, official pi.dev docs, or earendil-works/pi source but is not listed here, add a row. Keep entries short and factual; the "Vietnamese" column is for short explanations only — do not invent new translations for the term itself.
+Glossary is a living document. When you spot a term that appears in dgzhuya.com, official pi.dev docs, or earendil-works/pi source but is not listed here, add a row. Keep entries short and factual; the "Vietnamese" column is for short explanations only. Do not invent new translations for the term itself.
 
 When multiple sub-sections cover adjacent vocabulary (e.g. `AgentMessage` appears in both messages and agent-core API tables), prefer keeping it in the most-specific section and cross-reference the other by short phrase ("Also see: Core Pi Terms"). Do not duplicate verbatim.

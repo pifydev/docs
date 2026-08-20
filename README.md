@@ -8,7 +8,7 @@
 </p>
 
 
-Multilingual translations of the [Pi Agent Book](https://www.dgzhuya.com/) — source-code reading notes for the [Pi Agent SDK](https://github.com/earendil-works/pi). Companion to the official [pi.dev](https://pi.dev) docs.
+Multilingual translations of the [Pify Agent Book](https://www.dgzhuya.com/). Source-code reading notes for the [Pi Agent SDK](https://github.com/earendil-works/pi), with Chinese as the canonical source. Companion to the official [pi.dev](https://pi.dev) docs.
 
 ## Available Languages
 
@@ -20,21 +20,21 @@ Multilingual translations of the [Pi Agent Book](https://www.dgzhuya.com/) — s
 
 ## Tech Stack
 
-- [mdBook](https://rust-lang.github.io/mdBook/) — generates static HTML sites from Markdown
-- [mdbook-mermaid](https://github.com/badboy/mdbook-mermaid) — renders Mermaid diagrams to SVG
-- Python 3 — scripts/lib/strip-frontmatter.py mdBook preprocessor (strips leading YAML frontmatter at build time)
-- GitHub Actions — CI/CD build & deploy to GitHub Pages
-- PowerShell 7+ — validation scripts (cross-platform via `pwsh`)
+- [mdBook](https://rust-lang.github.io/mdBook/) : generates static HTML sites from Markdown
+- [mdbook-mermaid](https://github.com/badboy/mdbook-mermaid) : renders Mermaid diagrams to SVG
+- Python 3 : scripts/lib/strip-frontmatter.py mdBook preprocessor (strips leading YAML frontmatter at build time)
+- GitHub Actions : CI/CD build & deploy to GitHub Pages
+- PowerShell 7+ : validation scripts (cross-platform via `pwsh`)
 
 ## Repository Layout
 
 ```text
 pi-docs/
-- zh/, en/, vi/ — parallel mdBook projects (one per language)
-- scripts/ — PowerShell validation + fetch scripts
-- GLOSSARY.md — preserved technical terms (English-only)
-- docs/superpowers/specs/ — design specs
-- docs/superpowers/plans/ — implementation plans
+- zh/, en/, vi/ : parallel mdBook projects (one per language)
+- scripts/ : PowerShell validation + fetch scripts
+- GLOSSARY.md : preserved technical terms (English-only)
+- docs/superpowers/specs/ : design specs
+- docs/superpowers/plans/ : implementation plans
 ```
 
 ## Local Development
@@ -55,7 +55,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT : see [LICENSE](LICENSE).
 
 ## References
 

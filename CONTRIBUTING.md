@@ -1,6 +1,6 @@
 # Contributing to Pi Docs
 
-Thank you for your interest in Pi Docs — a community translation of the [Pi Agent Book](https://www.dgzhuya.com/) source-code reading notes. This guide explains how to contribute, the style rules we follow, and the local workflow.
+Pi Docs is a community translation of the [Pify Agent Book](https://www.dgzhuya.com/) source-code reading notes. This guide covers how to contribute, the style rules, and the local workflow.
 
 ## Code of Conduct
 
@@ -42,7 +42,7 @@ These rules are enforced manually in review and partially automated by `validate
 7. **Tables**: translate headers and cells; preserve column count.
 8. **Frontmatter values** (`title_en`, `title_vi`): translate fully into the target language.
 9. **No emojis** in prose, headings, or code comments.
-10. **No fluff**: avoid cheerful filler like "Thanks!" or "Hope this helps!" — technical prose only.
+10. **No fluff**: avoid cheerful filler like "Thanks!" or "Hope this helps!" : technical prose only.
 11. **Concise language**: define jargon before use; prefer concrete examples over abstract summaries.
 12. **Structure**: when explaining a non-trivial concept, follow `problem -> example -> solution -> why`.
 
@@ -84,19 +84,19 @@ code_blocks: 7
 
 Field reference (all required unless noted):
 
-- `chapter` (int, 1-10) — chapter number.
-- `slug` (string, matches `^ch[0-9]{2}-[a-z0-9-]+$`) — unique identifier.
-- `title_zh`, `title_en`, `title_vi` — translated chapter titles.
-- `source_url` (URL) — original Chinese source on dgzhuya.com.
-- `language` (`zh` | `en` | `vi`) — language of this file.
-- `version_pairs` — sibling file paths in all three languages.
-- `original_chars`, `code_lines`, `reading_minutes` (optional) — source metrics.
-- `translator`, `reviewed_by` (optional) — git handles.
-- `last_updated` (date) — last edit date.
-- `status` (`draft` | `translated` | `reviewed` | `published`) — workflow state.
-- `official_refs` (optional list) — official pi.dev URLs used to verify content.
-- `terms_used` (optional list) — glossary terms that appear in this chapter.
-- `mermaid_blocks`, `code_blocks` (int) — counts for sync validation.
+- `chapter` (int, 1-10) : chapter number.
+- `slug` (string, matches `^ch[0-9]{2}-[a-z0-9-]+$`) : unique identifier.
+- `title_zh`, `title_en`, `title_vi` : translated chapter titles.
+- `source_url` (URL) : original Chinese source on dgzhuya.com.
+- `language` (`zh` | `en` | `vi`) : language of this file.
+- `version_pairs` : sibling file paths in all three languages.
+- `original_chars`, `code_lines`, `reading_minutes` (optional) : source metrics.
+- `translator`, `reviewed_by` (optional) : git handles.
+- `last_updated` (date) : last edit date.
+- `status` (`draft` | `translated` | `reviewed` | `published`) : workflow state.
+- `official_refs` (optional list) : official pi.dev URLs used to verify content.
+- `terms_used` (optional list) : glossary terms that appear in this chapter.
+- `mermaid_blocks`, `code_blocks` (int) : counts for sync validation.
 
 See `docs/superpowers/specs/2026-08-20-pi-docs-translation-design.md` section 4 for full schema details.
 
@@ -104,16 +104,16 @@ See `docs/superpowers/specs/2026-08-20-pi-docs-translation-design.md` section 4 
 
 `GLOSSARY.md` at the repository root holds preserved English technical terms that must not be translated. Categories include:
 
-- **Core Pi terms** — Pi Agent, Agent Loop, Tool System, TUI, Skills, Extensions, etc.
-- **Official API identifiers** — `SessionManager`, `firstKeptEntryId`, `contextWindow`.
-- **Telemetry attributes** — `pi.ai.request`, `pi.harness.run`.
-- **Paths and settings** — `~/.pi/agent/settings.json`, `SYSTEM.md`.
-- **Environment variables** — `PI_OFFLINE`, `PI_CODING_AGENT`, `ANTHROPIC_API_KEY`.
-- **Slash commands** — `/login`, `/resume`, `/compact`.
-- **Settings keys** — `defaultProvider`, `defaultThinkingLevel`.
-- **Concepts and formats** — JSONL, GGUF, llama.cpp, MCP.
+- **Core Pi terms** : Pi Agent, Agent Loop, Tool System, TUI, Skills, Extensions, etc.
+- **Official API identifiers** : `SessionManager`, `firstKeptEntryId`, `contextWindow`.
+- **Telemetry attributes** : `pi.ai.request`, `pi.harness.run`.
+- **Paths and settings** : `~/.pi/agent/settings.json`, `SYSTEM.md`.
+- **Environment variables** : `PI_OFFLINE`, `PI_CODING_AGENT`, `ANTHROPIC_API_KEY`.
+- **Slash commands** : `/login`, `/resume`, `/compact`.
+- **Settings keys** : `defaultProvider`, `defaultThinkingLevel`.
+- **Concepts and formats** : JSONL, GGUF, llama.cpp, MCP.
 
-When you encounter a term not yet in `GLOSSARY.md`, add a row with: term | category | short explanation. Do not translate the term itself — use it verbatim in all translations.
+When you encounter a term not yet in `GLOSSARY.md`, add a row with: term | category | short explanation. Do not translate the term itself : use it verbatim in all translations.
 
 ## Mermaid Diagrams
 
@@ -147,11 +147,11 @@ cd en && mdbook serve --open
 
 Available scripts in `scripts/`:
 
-- `pwsh scripts/validate-frontmatter.ps1` — check frontmatter schema on every chapter file.
-- `pwsh scripts/sync-check.ps1` — confirm structural parity between `zh/`, `en/`, `vi/`.
-- `pwsh scripts/validate-mermaid.ps1` — render every Mermaid block to SVG via mermaid-cli.
-- `pwsh scripts/build-all.ps1` — run `mdbook build` in each language folder.
-- `pwsh scripts/fetch-zh.ps1` — fetch the canonical Chinese chapter from dgzhuya.com.
+- `pwsh scripts/validate-frontmatter.ps1` : check frontmatter schema on every chapter file.
+- `pwsh scripts/sync-check.ps1` : confirm structural parity between `zh/`, `en/`, `vi/`.
+- `pwsh scripts/validate-mermaid.ps1` : render every Mermaid block to SVG via mermaid-cli.
+- `pwsh scripts/build-all.ps1` : run `mdbook build` in each language folder.
+- `pwsh scripts/fetch-zh.ps1` : fetch the canonical Chinese chapter from dgzhuya.com.
 
 ## Reporting Issues
 

@@ -9,7 +9,7 @@
 
 # Pify Agent Book (English)
 
-Source-code reading notes for the [Pi Agent SDK](https://github.com/earendil-works/pi), translated from the [Pi Agent Book](https://www.dgzhuya.com/). The Chinese original is canonical; this English translation mirrors its structure and chapter order.
+Source-code reading notes for the [Pi Agent SDK](https://github.com/earendil-works/pi). This is the English translation of the [Pify Agent Book](https://www.dgzhuya.com/), with Chinese as the canonical source. The English version follows the original's structure and chapter order.
 
 ## How to read
 
