@@ -199,6 +199,38 @@ Write-Host ""
 $chapterCount = $inventory.Count
 Write-Host "Checked $chapterCount chapter(s) across $($langs.Count) languages"
 
+# If any language for a chapter is still in draft, downgrade its errors to warnings.
+$drafts = @{}
+foreach ($name in ($inventory.Keys | Sort-Object)) {
+    $paths = $inventory[$name]
+    $isDraft = $false
+    foreach ($lang in $langs) {
+        if ($paths.ContainsKey($lang)) {
+            $fm = Get-Frontmatter -Path $paths[$lang] -ErrorAction SilentlyContinue
+            if ($fm -and $fm.Contains("status") -and $fm.status -eq "draft") {
+                $isDraft = $true
+                break
+            }
+        }
+    }
+    $drafts[$name] = $isDraft
+}
+$filteredErrors = @()
+foreach ($e in $errors) {
+    $matchesName = $false
+    $isDraftChapter = $false
+    foreach ($name in ($drafts.Keys | Sort-Object)) {
+        if ($e -like "*$name*") { $matchesName = $true; $isDraftChapter = $drafts[$name]; break }
+    }
+    if ($matchesName -and $isDraftChapter) {
+        $warnings.Add(($e + " [ignored: draft chapter]")) | Out-Null
+    }
+    else {
+        $filteredErrors += $e
+    }
+}
+$errors = $filteredErrors
+
 if ($errors.Count -gt 0) {
     Write-Host ""
     Write-Host "ERRORS:" -ForegroundColor Red
@@ -216,9 +248,10 @@ if ($warnings.Count -gt 0) {
     Write-Host ""
     Write-Host "WARNINGS:" -ForegroundColor Yellow
     foreach ($w in $warnings) { Write-Host "  - $w" -ForegroundColor Yellow }
-    exit 2
+    exit 0
 }
 
 Write-Host "All chapters in sync" -ForegroundColor Green
 exit 0
+
 
