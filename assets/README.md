@@ -1,4 +1,4 @@
-# Pi Docs : Brand Assets
+# Pi Docs: Brand Assets
 
 This directory holds the official **Pify** brand pack used across the docs site
 (favicon, sidebar logo, hero, GitHub social preview, README banner).
@@ -25,12 +25,12 @@ machine). All assets here were copied from that source.
 
 ## Where each is used
 
-- `favicon.svg` / `favicon.png` : browser tab icon (per mdBook `theme/favicon.{svg,png}`)
-- `pify-logo-light-bg.svg` : hero on each language `index.md`, README banner
-- `pify-logo-dark-bg.svg` : reserved for dark-only contexts (not currently wired)
-- `pify-light-512.png` / `pify-dark-512.png` : sidebar logo via `theme/custom.css`
+- `favicon.svg` / `favicon.png`: browser tab icon (per mdBook `theme/favicon.{svg,png}`)
+- `pify-logo-light-bg.svg`: hero on each language `index.md`, README banner
+- `pify-logo-dark-bg.svg`: reserved for dark-only contexts (not currently wired)
+- `pify-light-512.png` / `pify-dark-512.png`: sidebar logo via `theme/custom.css`
   (light variant by default, dark variant in `navy` / `coal` / `ayu` / `rust` themes)
-- `social-preview.png` (in `.github/`) : GitHub social preview card (1280×640)
+- `social-preview.png` (in `.github/`): GitHub social preview card (1280×640)
 
 ## Design tokens
 

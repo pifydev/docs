@@ -1,9 +1,9 @@
 ---
 chapter: 3
 slug: ch03-agent-loop
-title_zh: "第3章：Agent Loop : 让模型转动起来的引擎"
-title_en: "Chapter 3: Agent Loop : The Engine That Spins the Model"
-title_vi: "Chương 3: Agent Loop : Động cơ quay mô hình"
+title_zh: "第3章：Agent Loop: 让模型转动起来的引擎"
+title_en: "Chapter 3: Agent Loop: The Engine That Spins the Model"
+title_vi: "Chương 3: Agent Loop: Động cơ quay mô hình"
 source_url: https://www.dgzhuya.com/modules/ch03-agent-loop
 language: vi
 version_pairs:
@@ -23,9 +23,9 @@ code_blocks: 37
 mermaid_blocks: 0
 ---
 
-# Chương 3: Agent Loop : Động cơ quay mô hình
+# Chương 3: Agent Loop: Động cơ quay mô hình
 
-> Chương trước đã xem kiến trúc phân lớp của Pi. Kiến trúc chỉ là "bộ xương" : sức sống thật sự của một Agent đến từ "vòng lặp" (loop). Chương này, ta bắt đầu từ những câu hỏi cơ bản nhất: **tại sao cần vòng lặp? nó quay như thế nào? khi nào dừng?** Rồi ta truy vết hành trình đầy đủ của một message người dùng để thấy từng nhịp đập của Agent Loop.
+> Chương trước đã xem kiến trúc phân lớp của Pi. Kiến trúc chỉ là "bộ xương": sức sống thật sự của một Agent đến từ "vòng lặp" (loop). Chương này, ta bắt đầu từ những câu hỏi cơ bản nhất: **tại sao cần vòng lặp? nó quay như thế nào? khi nào dừng?** Rồi ta truy vết hành trình đầy đủ của một message người dùng để thấy từng nhịp đập của Agent Loop.
 
 ---
 
@@ -33,7 +33,7 @@ mermaid_blocks: 0
 
 Trước khi bàn về Agent Loop, ta lùi một bước xem bản thân việc "dùng LLM" có bao nhiêu kiểu. Điều này rất quan trọng để hiểu "tại sao cần vòng lặp".
 
-### Kiểu 1: gọi trực tiếp : "model, trả lời đi"
+### Kiểu 1: gọi trực tiếp: "model, trả lời đi"
 
 Cách dùng nguyên thủy và trực quan nhất. Bạn dựng prompt, gọi API một lần, lấy kết quả, xong.
 
@@ -58,9 +58,9 @@ console.log(response.content);
 
 **Công việc cốt lõi là "dựng prompt" (build the prompt).** Prompt tốt thì kết quả tốt. Một lần gọi, một lần output, không qua lại.
 
-Tình huống áp dụng: dịch, tóm tắt, hỏi đáp, hoàn thiện code : bất cứ thứ gì "một câu hỏi một câu trả lời" xử lý được.
+Tình huống áp dụng: dịch, tóm tắt, hỏi đáp, hoàn thiện code: bất cứ thứ gì "một câu hỏi một câu trả lời" xử lý được.
 
-### Kiểu 2: Workflow : "model, làm bước một trước; tôi kiểm tra, rồi làm bước hai"
+### Kiểu 2: Workflow: "model, làm bước một trước; tôi kiểm tra, rồi làm bước hai"
 
 Khi task phức tạp lên, bạn thấy khó có kết quả tốt trong một lần. Vậy là bạn chia task lớn thành nhiều bước, mỗi bước gọi model một lần, giữa các bước **code của bạn** điều khiển luồng.
 
@@ -71,11 +71,11 @@ Khi task phức tạp lên, bạn thấy khó có kết quả tốt trong một 
 ```
 
 
-Mỗi bước model chỉ làm phần việc của mình, **quyền quyết định nằm trong tay bạn** : bạn biết khi nào nên sang bước tiếp; model chỉ là một mắt xích trên dây chuyền.
+Mỗi bước model chỉ làm phần việc của mình, **quyền quyết định nằm trong tay bạn**: bạn biết khi nào nên sang bước tiếp; model chỉ là một mắt xích trên dây chuyền.
 
-Tình huống áp dụng: pipeline tạo tài liệu, tự động review code, RAG (Retrieval-Augmented Generation : sinh tăng cường truy xuất).
+Tình huống áp dụng: pipeline tạo tài liệu, tự động review code, RAG (Retrieval-Augmented Generation: sinh tăng cường truy xuất).
 
-### Kiểu 3: Agent Loop : "model, tự quyết đi"
+### Kiểu 3: Agent Loop: "model, tự quyết đi"
 
 Ở chế độ Agent, bạn giao quyền quyết định cho model.
 
@@ -91,7 +91,7 @@ Khác biệt cốt lõi: luồng giữa các bước không còn do bạn viết
 1. Đưa input người dùng và kết quả thực thi tool cho model
 2. Nếu output của model có chứa yêu cầu gọi tool, thì thực thi nó; nếu không, coi như task xong
 
-Còn gọi tool nào, gọi mấy lần : những thứ đó do nội dung output model quyết. Khi nào dừng : đây là quy tắc do con người định nghĩa: khi một lần output của model không còn chứa lệnh gọi tool, ta coi như vòng lặp kết thúc.
+Còn gọi tool nào, gọi mấy lần: những thứ đó do nội dung output model quyết. Khi nào dừng: đây là quy tắc do con người định nghĩa: khi một lần output của model không còn chứa lệnh gọi tool, ta coi như vòng lặp kết thúc.
 
 Bảng so sánh làm rõ ba kiểu:
 
@@ -128,7 +128,7 @@ Trace là toàn bộ quá trình từ lúc người dùng nhấn Enter, cho đ�
 
 Định nghĩa của Turn rất chính xác: một lần gọi model + tất cả tool execution được kích hoạt bởi lần gọi đó.
 
-Mỗi Turn được bọc bởi một cặp sự kiện turn_start và turn_end. Điểm mấu chốt: một Turn chỉ có đúng một lần gọi model. Model trả về toolUse, thực thi cụm tool đó, phát turn_end, Turn này kết thúc. Lấy kết quả tool feed lại để gọi model lần nữa : đó là Turn tiếp theo.
+Mỗi Turn được bọc bởi một cặp sự kiện turn_start và turn_end. Điểm mấu chốt: một Turn chỉ có đúng một lần gọi model. Model trả về toolUse, thực thi cụm tool đó, phát turn_end, Turn này kết thúc. Lấy kết quả tool feed lại để gọi model lần nữa: đó là Turn tiếp theo.
 
 Đọc code sẽ thấy rõ hơn. Cấu trúc mỗi vòng của inner loop (sẽ nói kỹ sau):
 
@@ -149,7 +149,7 @@ while (hasMoreToolCalls || ...) {
 
 Một vòng inner loop = một Turn = một turn_start → một lần gọi model → thực thi tool → một turn_end.
 
-Nếu model trong một Turn gọi một lúc 3 tool (read + grep + find), thì cả 3 tool đó đều chạy trong cùng Turn : vì chúng đều là sản phẩm của cùng một lần gọi model. Nhưng khoảnh khắc kết quả được feed lại và model được gọi tiếp, ta đã ở Turn tiếp theo rồi.
+Nếu model trong một Turn gọi một lúc 3 tool (read + grep + find), thì cả 3 tool đó đều chạy trong cùng Turn: vì chúng đều là sản phẩm của cùng một lần gọi model. Nhưng khoảnh khắc kết quả được feed lại và model được gọi tiếp, ta đã ở Turn tiếp theo rồi.
 
 ### Vậy quan hệ giữa Trace và Turn là
 
@@ -232,13 +232,13 @@ UserMessage { role: "user", content: "帮我读一下 src/main.ts" }
     └── agent_end（一个 Trace 结束，共 2 个 Turn）
 ```
 
-### Vòng lặp quay ra sao: stopReason : đèn tín hiệu duy nhất
+### Vòng lặp quay ra sao: stopReason: đèn tín hiệu duy nhất
 
 
 
 Ga và phanh của vòng lặp gói gọn trong một field: stopReason. Mỗi AssistantMessage model trả về đều mang theo nó.
 
-Nhưng trước hết phải làm rõ một điểm then chốt: model không bao giờ nói tôi xong rồi. Model chỉ là bộ dự đoán token : cho context, đoán token tiếp theo, lặp lại. Nó không biết task đã xong hay chưa. Dù field stopReason được gắn trên giá trị trả về của model, giá trị của nó đến từ hai nơi khác nhau:
+Nhưng trước hết phải làm rõ một điểm then chốt: model không bao giờ nói tôi xong rồi. Model chỉ là bộ dự đoán token: cho context, đoán token tiếp theo, lặp lại. Nó không biết task đã xong hay chưa. Dù field stopReason được gắn trên giá trị trả về của model, giá trị của nó đến từ hai nơi khác nhau:
 
 Ba giá trị model API thật sự trả về:
 
@@ -255,9 +255,9 @@ Hai giá trị do tầng streaming của framework tiêm vào (bản thân model
 | error | Exception trong lúc gọi (mạng rớt, API lỗi, v.v.) | Khối catch của tầng streaming: output.stopReason = error |
 | aborted | Người dùng chủ động hủy (AbortSignal kích hoạt) | Khối catch của tầng streaming: output.stopReason = aborted |
 
-> Bằng chứng code (packages/ai/src/): khi lệnh gọi API bên trong streamSimple ném exception, khối catch thực thi output.stopReason = options?.signal?.aborted ? aborted : error. Đây không phải model nói, mà là framework chữa cháy thay.
+> Bằng chứng code (packages/ai/src/): khi lệnh gọi API bên trong streamSimple ném exception, khối catch thực thi output.stopReason = options?.signal?.aborted ? aborted: error. Đây không phải model nói, mà là framework chữa cháy thay.
 
-Thực ra vòng lặp chỉ nhìn một thứ : output của model có chứa tool call hay không. Đằng sau là một quy ước kỹ thuật do con người định:
+Thực ra vòng lặp chỉ nhìn một thứ: output của model có chứa tool call hay không. Đằng sau là một quy ước kỹ thuật do con người định:
 
 > Nếu một lần output của model không có tool call, thì vòng này không cần làm thêm gì nữa; vòng lặp có thể dừng.
 
@@ -305,11 +305,11 @@ if (toolCalls.length > 0) {
 ### Vòng lặp tối thiểu: mẫu số chung nhỏ nhất của mọi Agent
 
 
-Sao không để code khéo léo hơn trong việc đoán task đã xong chưa? Vì đây chính là khác biệt cốt lõi giữa Agent và Workflow. Trong Workflow bạn biết flow có mấy bước, có thể dùng code đánh giá tiến độ. Nhưng ở chế độ Agent, bạn không biết model cần đọc bao nhiêu file, sửa bao nhiêu chỗ : tín hiệu duy nhất có thể tin cậy là: output có tool call hay không. Đây vừa là giới hạn, vừa là sự thanh nhã : không cần logic đánh giá độ hoàn thành task nào cả; code chỉ làm lớp phán đoán đơn giản nhất.
+Sao không để code khéo léo hơn trong việc đoán task đã xong chưa? Vì đây chính là khác biệt cốt lõi giữa Agent và Workflow. Trong Workflow bạn biết flow có mấy bước, có thể dùng code đánh giá tiến độ. Nhưng ở chế độ Agent, bạn không biết model cần đọc bao nhiêu file, sửa bao nhiêu chỗ: tín hiệu duy nhất có thể tin cậy là: output có tool call hay không. Đây vừa là giới hạn, vừa là sự thanh nhã: không cần logic đánh giá độ hoàn thành task nào cả; code chỉ làm lớp phán đoán đơn giản nhất.
 
 ### Mọi đường thoát của vòng lặp
 
-Mô tả hình: năm giá trị stopReason được xử lý theo ba nhánh : toolUse giữ vòng lặp quay tiếp; stop/length chuẩn bị dừng bình thường (vẫn kiểm tra followUp); error/aborted dừng cứng (không kiểm tra followUp). Lưu ý hai nguồn của stopReason: ba từ model API, hai là fallback do tầng streaming của framework tiêm.
+Mô tả hình: năm giá trị stopReason được xử lý theo ba nhánh: toolUse giữ vòng lặp quay tiếp; stop/length chuẩn bị dừng bình thường (vẫn kiểm tra followUp); error/aborted dừng cứng (không kiểm tra followUp). Lưu ý hai nguồn của stopReason: ba từ model API, hai là fallback do tầng streaming của framework tiêm.
 
 | Đường thoát | Điều kiện kích hoạt | Lý do |
 | --- | --- | --- |
@@ -351,10 +351,10 @@ async function simpleLoop(messages, model, tools) {
 ### coding-agent phủ lên trên những gì
 
 
-Hơn chục dòng code. Một vòng while: gọi model, thực thi tool, gọi model lại, cho đến khi model không còn yêu cầu tool nữa. Đây là cài đặt tối thiểu của logic đã nói ở mục 3 : Agent nào cũng cần lõi này.
+Hơn chục dòng code. Một vòng while: gọi model, thực thi tool, gọi model lại, cho đến khi model không còn yêu cầu tool nữa. Đây là cài đặt tối thiểu của logic đã nói ở mục 3: Agent nào cũng cần lõi này.
 
 
-coding-agent của Pi là một trợ lý lập trình tương tác : người dùng nói chuyện với nó trong terminal; có khi phải đọc nhiều file, sửa code, chạy test. Bối cảnh sản phẩm này có thêm nhu cầu thật so với vòng lặp tối thiểu:
+coding-agent của Pi là một trợ lý lập trình tương tác: người dùng nói chuyện với nó trong terminal; có khi phải đọc nhiều file, sửa code, chạy test. Bối cảnh sản phẩm này có thêm nhu cầu thật so với vòng lặp tối thiểu:
 
 | Nhu cầu thật | Thiết kế phủ lên | Vị trí source |
 | --- | --- | --- |
@@ -363,13 +363,13 @@ coding-agent của Pi là một trợ lý lập trình tương tác : người d
 | Task phức tạp khác nhau muốn model hạng khác nhau | hook prepareNextTurn: có thể đổi model/context ở cuối mỗi Turn | Sau turn_end |
 | Cửa sổ context sắp đầy, cần kích hoạt nén | hook shouldStopAfterTurn: phán đoán bên ngoài có nên dừng không | Sau prepareNextTurn |
 
-Nhận thức then chốt: những thiết kế phủ lên này đều là lựa chọn chức năng của coding-agent, không phải quy luật phổ quát của Agent. Nếu bạn đang làm một Agent đơn giản kiểu hỏi đáp có tool, cả bảng trên đều thừa : bạn chỉ cần vòng lặp tối thiểu.
+Nhận thức then chốt: những thiết kế phủ lên này đều là lựa chọn chức năng của coding-agent, không phải quy luật phổ quát của Agent. Nếu bạn đang làm một Agent đơn giản kiểu hỏi đáp có tool, cả bảng trên đều thừa: bạn chỉ cần vòng lặp tối thiểu.
 
-Nhưng hiểu coding-agent phủ các thiết kế này như thế nào rất có giá trị : bối cảnh sản phẩm của bạn rất có thể cần cơ chế tương tự. Tiếp theo, dùng source đầy đủ của coding-agent làm ví dụ, ta đi qua từng thiết kế này từng bước. Bám theo message đọc giúp tôi src/main.ts, đi hết hành trình từ đầu vào đến kết thúc.
+Nhưng hiểu coding-agent phủ các thiết kế này như thế nào rất có giá trị: bối cảnh sản phẩm của bạn rất có thể cần cơ chế tương tự. Tiếp theo, dùng source đầy đủ của coding-agent làm ví dụ, ta đi qua từng thiết kế này từng bước. Bám theo message đọc giúp tôi src/main.ts, đi hết hành trình từ đầu vào đến kết thúc.
 
 ### 4.1 Đầu vào: runAgentLoop() nhận gì
 
-> Mục 3 đã trình bày toàn cảnh flow; ở đây ta bung chi tiết code : cùng một quá trình, nhìn sâu hơn.
+> Mục 3 đã trình bày toàn cảnh flow; ở đây ta bung chi tiết code: cùng một quá trình, nhìn sâu hơn.
 
 Sau khi bạn nhấn Enter, chuỗi gọi là: Agent.prompt() → runPromptMessages() → runAgentLoop(). Dừng ở đầu vào:
 
@@ -388,7 +388,7 @@ async function runAgentLoop(
 
 Ba tham số quan trọng nhất trong sáu:
 
-prompts : message của bạn đã được đóng gói thành định dạng chuẩn:
+prompts: message của bạn đã được đóng gói thành định dạng chuẩn:
 
 
 ```
@@ -400,7 +400,7 @@ prompts : message của bạn đã được đóng gói thành định dạng ch
 ```
 
 
-context : snapshot của context hội thoại. Lưu ý là bản sao (do createContextSnapshot() ở agent.ts:414-420 tạo); mọi sửa đổi context trong khi Loop chạy không ảnh hưởng trạng thái gốc của lớp Agent:
+context: snapshot của context hội thoại. Lưu ý là bản sao (do createContextSnapshot() ở agent.ts:414-420 tạo); mọi sửa đổi context trong khi Loop chạy không ảnh hưởng trạng thái gốc của lớp Agent:
 
 
 ```
@@ -415,7 +415,7 @@ context : snapshot của context hội thoại. Lưu ý là bản sao (do create
 ```
 
 
-config : cấu hình hành vi của Loop. Có một nhóm hook quan trọng (đều là hàm, không phải dữ liệu):
+config: cấu hình hành vi của Loop. Có một nhóm hook quan trọng (đều là hàm, không phải dữ liệu):
 
 
 ```
@@ -433,7 +433,7 @@ config : cấu hình hành vi của Loop. Có một nhóm hook quan trọng (đ�
 ```
 
 
-Các hook này đều là hàm chứ không phải dữ liệu : Loop gọi chúng khi chạy để kéo trạng thái mới nhất về. Điều này khiến Loop hoàn toàn tách rời khỏi nguồn message bên ngoài.
+Các hook này đều là hàm chứ không phải dữ liệu: Loop gọi chúng khi chạy để kéo trạng thái mới nhất về. Điều này khiến Loop hoàn toàn tách rời khỏi nguồn message bên ngoài.
 
 Hàm đầu vào chỉ làm ba bước chuẩn bị:
 
@@ -473,7 +473,7 @@ Dữ liệu thay đổi:
 ---
 
 
-Giờ ta vào runLoop() : đoạn code cốt lõi nhất của cả hệ thống. Đừng nản vì độ dài; ta xem lõi trước, rồi đến lớp phủ.
+Giờ ta vào runLoop(): đoạn code cốt lõi nhất của cả hệ thống. Đừng nản vì độ dài; ta xem lõi trước, rồi đến lớp phủ.
 
 
 Nếu chỉ giữ lại logic vòng lặp tối thiểu, runLoop trông thế này:
@@ -492,12 +492,12 @@ while (hasMoreToolCalls) {
 #### Lớp phủ: coding-agent thêm hai vỏ ngoài
 
 
-Đây là vòng lặp tối thiểu : gọi model, thực thi tool, turn_end, lặp lại. Điều kiện thoát hasMoreToolCalls của inner loop được dẫn dắt bởi độ dài mảng toolCalls > 0 && !terminate (đã nói ở mục 3). Đây là lõi mà mọi Agent đều cần.
+Đây là vòng lặp tối thiểu: gọi model, thực thi tool, turn_end, lặp lại. Điều kiện thoát hasMoreToolCalls của inner loop được dẫn dắt bởi độ dài mảng toolCalls > 0 && !terminate (đã nói ở mục 3). Đây là lõi mà mọi Agent đều cần.
 
 
 Nhưng coding-agent, với vai trò trợ lý lập trình tương tác, cần thêm hai thứ bên ngoài lõi:
 
-Lớp phủ 1: steering message injection (kiểm tra ở đầu inner loop + ở cuối mỗi vòng). Người dùng gõ thêm chỉ dẫn trong khi Agent đang làm : những message này không thể đợi task hiện tại chạy xong; chúng phải được chèn gấp ở đầu vòng tiếp theo. Nên điều kiện inner loop có thêm || pendingMessages.length > 0.
+Lớp phủ 1: steering message injection (kiểm tra ở đầu inner loop + ở cuối mỗi vòng). Người dùng gõ thêm chỉ dẫn trong khi Agent đang làm: những message này không thể đợi task hiện tại chạy xong; chúng phải được chèn gấp ở đầu vòng tiếp theo. Nên điều kiện inner loop có thêm || pendingMessages.length > 0.
 
 Lớp phủ 2: outer followUp loop (bọc toàn bộ inner loop). Sau khi Agent dừng tự nhiên, hệ thống có thể muốn nối tiếp task (ví dụ tiện thể chạy test). Outer loop cho phép các task nối tiếp này tiếp tục chạy trong cùng một Trace, không cần khởi động Loop mới.
 
@@ -553,7 +553,7 @@ Giờ ta đi qua từng bước. Mỗi bước sẽ được gắn nhãn lõi ho
 ---
 
 
-> Steering là gì? Đây là một tính năng tương tác của coding-agent. Hãy tưởng tượng bạn nhờ Agent sửa bug, Agent đang đọc file, phân tích code. Lúc đó bạn chợt nghĩ ra một bổ sung: tiện kiểm tra luôn file test : bạn muốn chỉ dẫn này chen ngang, không phải đợi Agent làm xong task hiện tại rồi mới tính.
+> Steering là gì? Đây là một tính năng tương tác của coding-agent. Hãy tưởng tượng bạn nhờ Agent sửa bug, Agent đang đọc file, phân tích code. Lúc đó bạn chợt nghĩ ra một bổ sung: tiện kiểm tra luôn file test: bạn muốn chỉ dẫn này chen ngang, không phải đợi Agent làm xong task hiện tại rồi mới tính.
 
 Steering chính là cơ chế chen ngang này. Chỉ dẫn mới người dùng gõ trong khi Agent đang làm sẽ được đưa vào hàng đợi steering. Ở đầu mỗi vòng inner loop, Loop kiểm tra hàng đợi này trước và chèn các message khẩn vào cuộc hội thoại hiện tại:
 
@@ -569,14 +569,14 @@ if (pendingMessages.length > 0) {
 }
 ```
 
-### 4.4 [Lõi · Bước B] streamAssistantResponse() : gọi LLM
+### 4.4 [Lõi · Bước B] streamAssistantResponse(): gọi LLM
 
 #### Pha A: tiền xử lý context (tùy chọn)
 
 
 Đoạn code này chèn các message khẩn lần lượt vào context và bộ thu thập message.
 
-Nguồn đầu tiên của pendingMessages là lần kiểm tra steering đầu tiên khi runLoop vào (agent-loop.ts:167). Sao phải kiểm tra trước khi vào vòng lặp? Vì người dùng có thể đã gõ thêm nội dung trong khi đợi phản hồi LLM đầu tiên : lúc đó message đã được hàng đợi bên ngoài nhận vào, nhưng vòng lặp chưa bắt đầu; nếu ta không lấy trước, cụm message đó sẽ bị bỏ mất.
+Nguồn đầu tiên của pendingMessages là lần kiểm tra steering đầu tiên khi runLoop vào (agent-loop.ts:167). Sao phải kiểm tra trước khi vào vòng lặp? Vì người dùng có thể đã gõ thêm nội dung trong khi đợi phản hồi LLM đầu tiên: lúc đó message đã được hàng đợi bên ngoài nhận vào, nhưng vòng lặp chưa bắt đầu; nếu ta không lấy trước, cụm message đó sẽ bị bỏ mất.
 
 ```
 let messages = context.messages;
@@ -598,9 +598,9 @@ const llmMessages = await config.convertToLlm(messages);
 
 Dòng này đứng trên ranh giới giữa lõi Agent và LLM. Để hiểu vì sao nó tồn tại, phải biết trước thiết kế hai tầng message.
 
-Khi Agent duy trì lịch sử hội thoại bên trong, nó cần ghi lại không chỉ người dùng nói gì, AI trả lời gì : mà còn trạng thái nội bộ của chính nó. Ví dụ, coding-agent ghi: context đã được nén (CompactionSummaryMessage), chi tiết thực thi lệnh Bash (BashExecutionMessage), record chuyển nhánh (BranchSummaryMessage). Đây là ngôn ngữ nội bộ của Agent, và LLM hoàn toàn không nhận dạng các kiểu message này : nó chỉ nhận ba kiểu chuẩn: UserMessage, AssistantMessage, ToolResultMessage.
+Khi Agent duy trì lịch sử hội thoại bên trong, nó cần ghi lại không chỉ người dùng nói gì, AI trả lời gì: mà còn trạng thái nội bộ của chính nó. Ví dụ, coding-agent ghi: context đã được nén (CompactionSummaryMessage), chi tiết thực thi lệnh Bash (BashExecutionMessage), record chuyển nhánh (BranchSummaryMessage). Đây là ngôn ngữ nội bộ của Agent, và LLM hoàn toàn không nhận dạng các kiểu message này: nó chỉ nhận ba kiểu chuẩn: UserMessage, AssistantMessage, ToolResultMessage.
 
-convertToLlm là người phiên dịch đứng ở ranh giới này: dịch ngôn ngữ nội bộ của Agent sang giao thức LLM hiểu được. Cài đặt mặc định chỉ là một. filter() : giữ lại ba kiểu chuẩn:
+convertToLlm là người phiên dịch đứng ở ranh giới này: dịch ngôn ngữ nội bộ của Agent sang giao thức LLM hiểu được. Cài đặt mặc định chỉ là một. filter(): giữ lại ba kiểu chuẩn:
 
 ```
 function defaultConvertToLlm(messages: AgentMessage[]): Message[] {
@@ -649,7 +649,7 @@ const llmContext: Context = {
 
 const streamFunction = streamFn || streamSimple;
 const resolvedApiKey =
-    (config.getApiKey ? await config.getApiKey(config.model.provider) : undefined)
+    (config.getApiKey ? await config.getApiKey(config.model.provider): undefined)
     || config.apiKey;
 
 const response = await streamFunction(config.model, llmContext, {
@@ -662,21 +662,21 @@ const response = await streamFunction(config.model, llmContext, {
 
 Dựng Context là luồng chính của bước này. Lưu ý llmContext là một đối tượng hoàn toàn mới, được dựng lại mỗi vòng của inner loop. Nó gồm ba phần:
 
-- systemPrompt : dùng lại trực tiếp system prompt từ context của Agent, bảo model mày là ai, phải theo rule nào
-- messages : chính là llmMessages đã được lọc bởi convertToLlm ở bước trước, chỉ gồm ba kiểu chuẩn LLM nhận
-- tools : danh sách tool (kèm định nghĩa schema), để model biết lần này có những tool nào
+- systemPrompt: dùng lại trực tiếp system prompt từ context của Agent, bảo model mày là ai, phải theo rule nào
+- messages: chính là llmMessages đã được lọc bởi convertToLlm ở bước trước, chỉ gồm ba kiểu chuẩn LLM nhận
+- tools: danh sách tool (kèm định nghĩa schema), để model biết lần này có những tool nào
 
-Lưu ý một chi tiết: llmContext.tools = context.tools là gán tham chiếu : mỗi vòng có bọc một wrapper object mới, nhưng bản thân mảng tools là cùng một tham chiếu, nội dung ổn định ở cấp byte. systemPrompt cũng vậy. Chỉ có messages thật sự dài ra (mỗi vòng thêm một ToolResultMessage mới).
+Lưu ý một chi tiết: llmContext.tools = context.tools là gán tham chiếu: mỗi vòng có bọc một wrapper object mới, nhưng bản thân mảng tools là cùng một tham chiếu, nội dung ổn định ở cấp byte. systemPrompt cũng vậy. Chỉ có messages thật sự dài ra (mỗi vòng thêm một ToolResultMessage mới).
 
 Vậy sao vẫn dựng lại wrapper llmContext mỗi vòng? Vì có những Turn thật sự thay đổi một trong ba thứ đó: hook prepareNextTurn (§4.7) có thể đổi model hoặc sửa systemPrompt; hệ thống extension (§5) có thể đăng ký tool mới lúc chạy. Chi phí dựng lại wrapper không đáng kể (một object JS), nhưng đảm bảo không bị ô nhiễm trạng thái khó truy vết do tham chiếu chung.
 
-Vậy có vỡ prompt cache không? Không. prompt cache của Anthropic là content-addressed (đánh địa chỉ theo nội dung) : nó nhìn vào byte gửi đi, không phải identity của request. Gửi object mới hay cũ không quan trọng; miễn là byte của system + tools không đổi, cache sẽ hit. Pi gắn cache_control: { type: ephemeral } rõ ràng ở ba vị trí trong anthropic-messages.ts:
+Vậy có vỡ prompt cache không? Không. prompt cache của Anthropic là content-addressed (đánh địa chỉ theo nội dung): nó nhìn vào byte gửi đi, không phải identity của request. Gửi object mới hay cũ không quan trọng; miễn là byte của system + tools không đổi, cache sẽ hit. Pi gắn cache_control: { type: ephemeral } rõ ràng ở ba vị trí trong anthropic-messages.ts:
 
 | Vị trí | Dòng source | Tác dụng |
 | --- | --- | --- |
 | Cuối system prompt | L922/929/938 | Cả system prompt làm prefix có thể cache |
 | Tool cuối cùng | L1208 | Cả danh sách tools làm prefix có thể cache |
-| User message cuối | L1157-1178 | rolling cache : mỗi Turn đẩy breakpoint cache lên message mới nhất |
+| User message cuối | L1157-1178 | rolling cache: mỗi Turn đẩy breakpoint cache lên message mới nhất |
 
 Cái thứ ba đặc biệt tinh tế: cache breakpoint không cố định ở message đầu tiên; nó chạy theo user message mới nhất. Như vậy, prefix cũ tiếp tục hit, nội dung mới thêm vào cũng được ghi vào, cả lịch sử hội thoại đều hưởng lợi từ cache. Chuỗi hit đại khái là:
 
@@ -686,10 +686,10 @@ Turn 2: 命中 [system + tools] → 命中 [messages §1] → 写入 [messages �
 Turn 3: 命中 [system + tools] → 命中 [messages §1+§2] → 写入 [messages §3]
 ```
 
-#### Pha D: xử lý streaming response : cái hay của việc thay tại chỗ
+#### Pha D: xử lý streaming response: cái hay của việc thay tại chỗ
 
 
-Thêm một điểm dễ hiểu sai: tools không bị nhét vào cuối messages. Trong giao thức API của Anthropic, tools là một field top-level độc lập (đặt trước messages); bản thân thiết kế giao thức đã tính đến cache : tools ổn định phía trước, messages biến động phía sau; prefix càng dài, tiết kiệm càng nhiều.
+Thêm một điểm dễ hiểu sai: tools không bị nhét vào cuối messages. Trong giao thức API của Anthropic, tools là một field top-level độc lập (đặt trước messages); bản thân thiết kế giao thức đã tính đến cache: tools ổn định phía trước, messages biến động phía sau; prefix càng dài, tiết kiệm càng nhiều.
 
 OpenAI đi hướng khác (openai-completions.ts:554): prompt_cache_key: sessionId, backend OpenAI tự khớp prefix theo session. DeepSeek, Qwen, v.v., thông qua field tương thích cacheControlFormat: anthropic, cũng có thể dùng lại marker kiểu Anthropic cache_control (applyAnthropicCacheControl ở L593).
 
@@ -704,9 +704,9 @@ for await (const event of response) {
             emit({ type: "message_start", ... });
             break;
 
-        case "text_delta":       // 文本增量
-        case "toolcall_delta":   // 工具调用增量
-        case "thinking_delta":   // 思考增量
+        case "text_delta": // 文本增量
+        case "toolcall_delta": // 工具调用增量
+        case "thinking_delta": // 思考增量
             partialMessage = event.partial;            // 更新后的部分消息
             context.messages[last] = partialMessage;    // ★ 原地替换！
             emit({ type: "message_update", ... });      // UI 收到增量更新
@@ -723,7 +723,7 @@ for await (const event of response) {
 ```
 
 
-Sao push vỏ rỗng trước rồi thay tại chỗ? Lưu ý ý nghĩa của thay tại chỗ : không phải đẩy mục mới vào mảng context.messages; mà là sửa các khối nội dung của message cuối cùng tại chỗ. Chunk streaming response lần lượt đến; ta chưa có toàn bộ message. Ta push trước một AssistantMessage rỗng để bộ thu thập đã có sẵn chỗ cho kết quả cuối cùng. Sau đó mỗi chunk streaming sẽ mutate message này tại chỗ : miễn là sau khi response xong, bộ thu thập duyệt messages, nó sẽ thấy message đã hoàn chỉnh.
+Sao push vỏ rỗng trước rồi thay tại chỗ? Lưu ý ý nghĩa của thay tại chỗ: không phải đẩy mục mới vào mảng context.messages; mà là sửa các khối nội dung của message cuối cùng tại chỗ. Chunk streaming response lần lượt đến; ta chưa có toàn bộ message. Ta push trước một AssistantMessage rỗng để bộ thu thập đã có sẵn chỗ cho kết quả cuối cùng. Sau đó mỗi chunk streaming sẽ mutate message này tại chỗ: miễn là sau khi response xong, bộ thu thập duyệt messages, nó sẽ thấy message đã hoàn chỉnh.
 
 ```
 start    → { role: "assistant", content: [] }                    ← 空壳 push
@@ -750,10 +750,10 @@ if (message.stopReason === "error" || message.stopReason === "aborted") {
 }
 ```
 
-### 4.6 [Lõi · Bước D] executeToolCalls() : thực thi tool
+### 4.6 [Lõi · Bước D] executeToolCalls(): thực thi tool
 
 
-error và aborted là dừng cứng : lập tức phát turn_end + agent_end, return thẳng. Không thực thi tool, cũng không kiểm tra followUp. Đây là chiến lược fail fast (thất bại nhanh): vì bản thân lệnh gọi model đã thất bại (lỗi mạng hoặc người dùng hủy), chạy tiếp là vô nghĩa.
+error và aborted là dừng cứng: lập tức phát turn_end + agent_end, return thẳng. Không thực thi tool, cũng không kiểm tra followUp. Đây là chiến lược fail fast (thất bại nhanh): vì bản thân lệnh gọi model đã thất bại (lỗi mạng hoặc người dùng hủy), chạy tiếp là vô nghĩa.
 
 ```
 const toolCalls = message.content.filter((c) => c.type === "toolCall");
@@ -771,7 +771,7 @@ return executeToolCallsParallel(...);         // 并行
 ```
 
 
-Chiến lược phủ quyết: miễn là bất kỳ một tool nào trong cụm khai báo executionMode: sequential, toàn bộ cụm phải chạy nối tiếp. Đây là lựa chọn bảo thủ : khi một tool cần thao tác trên kết quả của tool trước, không còn cách nào khác ngoài chạy tuần tự.
+Chiến lược phủ quyết: miễn là bất kỳ một tool nào trong cụm khai báo executionMode: sequential, toàn bộ cụm phải chạy nối tiếp. Đây là lựa chọn bảo thủ: khi một tool cần thao tác trên kết quả của tool trước, không còn cách nào khác ngoài chạy tuần tự.
 
 ```
 串行模式：
@@ -789,7 +789,7 @@ Chiến lược phủ quyết: miễn là bất kỳ một tool nào trong cụm
 ```
 
 
-Lưu ý sự tinh tế của chế độ song song: pha chuẩn bị luôn tuần tự (vì validate và kiểm tra quyền không thể chạy song song : nếu B bị chặn thì C không nên chạy). Chỉ sau khi mọi tool đã validate xong thì mới thật sự chạy song song.
+Lưu ý sự tinh tế của chế độ song song: pha chuẩn bị luôn tuần tự (vì validate và kiểm tra quyền không thể chạy song song: nếu B bị chặn thì C không nên chạy). Chỉ sau khi mọi tool đã validate xong thì mới thật sự chạy song song.
 
 ```
 工具执行后：
@@ -803,10 +803,10 @@ Lưu ý sự tinh tế của chế độ song song: pha chuẩn bị luôn tuầ
 Cơ chế terminate: tool có thể đặt terminate: true trong kết quả trả về, nghĩa là tôi nghĩ nên dừng. Nếu tất cả tool trong cụm đều đồng ý terminate (code dùng every, không phải some), vòng lặp dừng.
 
 ```
-// ① emit turn_end : 通知外部"这一轮结束了"（内核）
+// ① emit turn_end: 通知外部"这一轮结束了"（内核）
 await emit({ type: "turn_end", message, toolResults });
 
-// ② prepareNextTurn : 给外部一个机会"改装"下一轮（叠加）
+// ② prepareNextTurn: 给外部一个机会"改装"下一轮（叠加）
 // 返回值可包含 context / model / thinkingLevel 三者之一的覆盖
 const nextTurnSnapshot = await config.prepareNextTurn?.({...});
 if (nextTurnSnapshot) {
@@ -815,20 +815,20 @@ if (nextTurnSnapshot) {
     // thinkingLevel 也在此处覆盖（详见 agent-loop.ts 中 prepareNextTurn 处理逻辑）
 }
 
-// ③ shouldStopAfterTurn : 外部判断是否该停了（叠加）
+// ③ shouldStopAfterTurn: 外部判断是否该停了（叠加）
 if (await config.shouldStopAfterTurn?.({...})) {
     await emit({ type: "agent_end", messages: newMessages });
     return;
 }
 
-// ④ 再次检查 steering : 有没有新的紧急消息？（叠加1）
+// ④ 再次检查 steering: 有没有新的紧急消息？（叠加1）
 pendingMessages = (await config.getSteeringMessages?.()) || [];
 ```
 
 ### 4.7 [Lõi + Lớp phủ · Bước E~F] turn_end + hook + kiểm tra lại steering
 
 
-prepareNextTurn : đây là extension point dễ bị bỏ qua nhưng rất mạnh. Sau mỗi turn_end và trước vòng tiếp theo, Loop gọi hàm này để cho bên ngoài cơ hội đổi model hoặc sửa context:
+prepareNextTurn: đây là extension point dễ bị bỏ qua nhưng rất mạnh. Sau mỗi turn_end và trước vòng tiếp theo, Loop gọi hàm này để cho bên ngoài cơ hội đổi model hoặc sửa context:
 
 ```
 场景：按任务复杂度切换模型
@@ -875,19 +875,19 @@ break;  // 两个队列都空了，真正退出
 ### 1. Mô hình vòng lặp ReAct
 
 
-Nếu có message followUp, chúng được đẩy vào pendingMessages, và continue nhảy về đầu outer loop. Đây là cơ chế kéo dài thở : inner loop xong rồi nhưng outer loop vẫn có thể giữ Agent làm tiếp.
+Nếu có message followUp, chúng được đẩy vào pendingMessages, và continue nhảy về đầu outer loop. Đây là cơ chế kéo dài thở: inner loop xong rồi nhưng outer loop vẫn có thể giữ Agent làm tiếp.
 
-Giờ so sánh hai cơ chế can thiệp : steering vs followUp : trong một bảng:
+Giờ so sánh hai cơ chế can thiệp: steering vs followUp: trong một bảng:
 
 | Chiều | steering | followUp |
 | --- | --- | --- |
 | Thời điểm chèn | Trước khi inner loop bắt đầu + ở cuối mỗi vòng của inner loop | Sau khi inner loop kết thúc hoàn toàn |
-| Ngữ nghĩa | Chen ngang khẩn : chèn vào khoảng trống khi tool đang thực thi | Xếp hàng chờ gọi : đợi task hiện tại làm xong hẳn |
+| Ngữ nghĩa | Chen ngang khẩn: chèn vào khoảng trống khi tool đang thực thi | Xếp hàng chờ gọi: đợi task hiện tại làm xong hẳn |
 | Tình huống điển hình | Người dùng gõ thêm chỉ dẫn trong khi Agent đang làm | Hệ thống nối tiếp tiện chạy test luôn sau khi Agent xong |
 
-Ví đời thường: steering là bạn đang họp, có người gõ cửa đưa một tờ giấy : khẩn, xem cái này trước. followUp là tan họp bạn lật hộp thư : không gấp, nhưng cần xử lý.
+Ví đời thường: steering là bạn đang họp, có người gõ cửa đưa một tờ giấy: khẩn, xem cái này trước. followUp là tan họp bạn lật hộp thư: không gấp, nhưng cần xử lý.
 
-Mô tả hình: đối chiếu trái đỏ phải xanh : steering kiểm tra ở đầu và cuối mỗi vòng inner loop và chen ngang; followUp kiểm tra sau khi inner loop kết thúc hoàn toàn và kéo dài lần chạy. Phía dưới liệt kê thời điểm, nguồn, tác động và tình huống điển hình của mỗi cái.
+Mô tả hình: đối chiếu trái đỏ phải xanh: steering kiểm tra ở đầu và cuối mỗi vòng inner loop và chen ngang; followUp kiểm tra sau khi inner loop kết thúc hoàn toàn và kéo dài lần chạy. Phía dưới liệt kê thời điểm, nguồn, tác động và tình huống điển hình của mỗi cái.
 ### 2. Cơ chế dẫn dắt bởi stopReason
 
 ### 3. Tư duy kiến trúc lõi + lớp phủ

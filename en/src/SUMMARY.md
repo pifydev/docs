@@ -4,10 +4,10 @@
 
 # Chapters
 
-- [Chapter 1: Introduction : Why Pi-Agent Is Worth Your Time](./ch01-overview.md)
+- [Chapter 1: Introduction: Why Pi-Agent Is Worth Your Time](./ch01-overview.md)
 - [Chapter 2: Three-Layer Architecture](./ch02-three-layer-arch.md)
 - [Chapter 3: Agent Loop](./ch03-agent-loop.md)
-- [Chapter 4: Model Invocation : One Line, Many Providers](./ch04-model-invocation.md)
+- [Chapter 4: Model Invocation: One Line, Many Providers](./ch04-model-invocation.md)
 - [Chapter 5: Tool System](./ch05-tool-system.md)
 - [Chapter 6: Message System](./ch06-messages.md)
 - [Chapter 7: Event-Driven Architecture](./ch07-event-driven.md)

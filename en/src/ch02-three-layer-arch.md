@@ -1,9 +1,9 @@
 ---
 chapter: 2
 slug: ch02-three-layer-arch
-title_zh: "第2章：三层架构 : Pi-Agent 项目的骨骼"
-title_en: "Chapter 2: Three-Layer Architecture : Pi-Agent Project Skeleton"
-title_vi: "Chương 2: Kiến trúc ba lớp : Bộ xương của Pi-Agent"
+title_zh: "第2章：三层架构: Pi-Agent 项目的骨骼"
+title_en: "Chapter 2: Three-Layer Architecture: Pi-Agent Project Skeleton"
+title_vi: "Chương 2: Kiến trúc ba lớp: Bộ xương của Pi-Agent"
 source_url: https://www.dgzhuya.com/modules/ch02-three-layer-arch
 language: en
 version_pairs:
@@ -62,9 +62,9 @@ code_blocks: 16
 mermaid_blocks: 0
 ---
 
-# Chapter 2: Three-Layer Architecture : Pi-Agent Project Skeleton
+# Chapter 2: Three-Layer Architecture: Pi-Agent Project Skeleton
 
-> In this chapter, we step back and look at Pi''s overall architecture : where the code lives, how the packages depend on each other, and how types flow between layers. Once you have this full picture, drilling into any single module later will not get you lost.
+> In this chapter, we step back and look at Pi''s overall architecture: where the code lives, how the packages depend on each other, and how types flow between layers. Once you have this full picture, drilling into any single module later will not get you lost.
 
 ---
 
@@ -89,7 +89,7 @@ Five packages, lined up neatly.
 > Note 1: A `pi-web-ui` package used to exist (a browser-side Lit component library), but it was removed as a workspace in commit `b141e1fa` on 2026-05-20; the current repository no longer contains it.
 > Note 2: `pi-orchestrator` is an experimental orchestration package added in v0.80.x. It depends on `pi-coding-agent` and handles multi-agent coordination, RPC inter-process communication, and Supervisor monitoring. It belongs to the **outer orchestration layer**, not the "core three-piece set" learning path, and is described separately at the end of this module.
 
-If you have worked on Node.js projects before, you have probably used a monorepo (multiple packages managed in one repository). Pi uses the standard npm workspaces approach : the root `package.json` declares `"workspaces": ["packages/*"]`, and npm automatically treats each subdirectory under `packages/` as an independent package.
+If you have worked on Node.js projects before, you have probably used a monorepo (multiple packages managed in one repository). Pi uses the standard npm workspaces approach: the root `package.json` declares `"workspaces": ["packages/*"]`, and npm automatically treats each subdirectory under `packages/` as an independent package.
 
 But that is not the point. The point is: **why five packages (four extending the core three-piece set, plus one outer orchestration layer)? What is the relationship between them? Can they be merged?**
 
@@ -111,7 +111,7 @@ Its `package.json` carries a one-line description:
 
 Concretely, it does three things:
 
-1. **Define unified types**: whether you use OpenAI, Anthropic, Google, or AWS Bedrock, the message format is the same : `UserMessage`, `AssistantMessage`, `ToolResultMessage`, and the model definition is `Model<TApi>`.
+1. **Define unified types**: whether you use OpenAI, Anthropic, Google, or AWS Bedrock, the message format is the same: `UserMessage`, `AssistantMessage`, `ToolResultMessage`, and the model definition is `Model<TApi>`.
 2. **Unify streaming calls**: every provider''s call route is collapsed into a single `streamSimple()` function that returns an `AssistantMessageEventStream` (a stream you can read token by token).
 3. **Adapt 30+ providers**: it supports more than 30 providers, from OpenAI, Claude, and Gemini to DeepSeek, Groq, Xiaomi, etc., with one adapter file per provider.
 
@@ -174,7 +174,7 @@ Its `package.json` description is:
 
 > "Coding agent CLI with read, bash, edit, write tools and session management"
 
-This layer is the "thickest" : over a hundred source files, more than the previous two layers combined. Because it knows everything concrete:
+This layer is the "thickest": over a hundred source files, more than the previous two layers combined. Because it knows everything concrete:
 
 - How the 7 coding tools (read, bash, edit, write, grep, find, ls) are implemented
 - How the Extension system loads and runs
@@ -207,7 +207,7 @@ A tiny entry, but a complete startup chain behind it:
 
 The last package is the UI layer:
 
-- **pi-tui**: a terminal UI library responsible for rendering Markdown, syntax highlighting, and differential display in the terminal. Its `dependencies` contain **no AI-related packages** : the runtime only has `marked` (Markdown rendering) plus `get-east-asian-width` (East-Asian character-width calculation); `chalk` and `@xterm/headless` are devDependencies and are not bundled at runtime.
+- **pi-tui**: a terminal UI library responsible for rendering Markdown, syntax highlighting, and differential display in the terminal. Its `dependencies` contain **no AI-related packages**: the runtime only has `marked` (Markdown rendering) plus `get-east-asian-width` (East-Asian character-width calculation); `chalk` and `@xterm/headless` are devDependencies and are not bundled at runtime.
 
 This package has nothing to do with "how an Agent works". It only renders what the Agent is doing so the user can see it. We will not go deep into this layer later in the book.
 
@@ -217,10 +217,10 @@ This package has nothing to do with "how an Agent works". It only renders what t
 
 Its core consists of a handful of files:
 
-- `supervisor.ts` : the supervisor that manages child Agents'' lifecycles
-- `rpc-process.ts` : RPC-based inter-process communication
-- `radius.ts` : scope/boundary control for orchestration
-- `serve.ts` / `storage.ts` : service exposure and state persistence
+- `supervisor.ts`: the supervisor that manages child Agents'' lifecycles
+- `rpc-process.ts`: RPC-based inter-process communication
+- `radius.ts`: scope/boundary control for orchestration
+- `serve.ts` / `storage.ts`: service exposure and state persistence
 
 Note its positioning: it **depends on `pi-coding-agent`** and sits above coding-agent. It implements none of the Agent core logic itself (the loop, state, and compaction still come from agent-core). It just "weaves" multiple coding-agent instances together so they can divide work, communicate, and be supervised.
 
@@ -258,7 +258,7 @@ But wait :
 
 ## 4. Open package.json, things are not so simple
 
-> **Reading path hint**: Sections 4–5 are **advanced architecture understanding**, going into dependency relationships and type-flow details. Section 4 corrects the common misconception of "strict layering" and clarifies the dependency direction : **a must-read if you plan to build on top of the SDK**. Section 5 expands on the three-layer type progression; it leans more on TypeScript system details and you can forget field names without hurting later learning. **If you only want to get up and running quickly, you can skip these two sections and jump to Section 6 to see "how the layering promise holds".**
+> **Reading path hint**: Sections 4–5 are **advanced architecture understanding**, going into dependency relationships and type-flow details. Section 4 corrects the common misconception of "strict layering" and clarifies the dependency direction: **a must-read if you plan to build on top of the SDK**. Section 5 expands on the three-layer type progression; it leans more on TypeScript system details and you can forget field names without hurting later learning. **If you only want to get up and running quickly, you can skip these two sections and jump to Section 6 to see "how the layering promise holds".**
 
 If your mental model says "upper layers may only depend on the adjacent lower layer", then opening `packages/coding-agent/package.json` and looking at the `dependencies` field, you will see one unexpected detail:
 
@@ -285,7 +285,7 @@ The reason pi-coding-agent reaches for pi-ai is type-level:
 
 In short, pi-coding-agent does **use** pi-agent-core at runtime (to run the Agent loop) but only **re-exports types from** pi-ai (so extensions get a one-stop import surface).
 
-You can verify this by opening `packages/agent/src/types.ts` : almost every base type pi-agent-core needs comes from pi-ai:
+You can verify this by opening `packages/agent/src/types.ts`: almost every base type pi-agent-core needs comes from pi-ai:
 
 ```
 // packages/agent/src/types.ts:1-14
@@ -305,7 +305,7 @@ import type {
 } from "@earendil-works/pi-ai";
 ```
 
-pi-agent-core''s type definitions import a large number of base types from pi-ai: `Message`, `Model`, `ImageContent`, `Tool`... These are the "atomic concepts" of the entire system : like chemical elements, every layer needs the definition of its "atoms".
+pi-agent-core''s type definitions import a large number of base types from pi-ai: `Message`, `Model`, `ImageContent`, `Tool`... These are the "atomic concepts" of the entire system: like chemical elements, every layer needs the definition of its "atoms".
 
 ### So what is the actual layering rule?
 
@@ -321,7 +321,7 @@ That is:
 
 The asymmetry is allowed because "depending on a lower layer" at runtime is only the most obvious case; the dependency-direction rule cares about "the lower layer cannot know the upper layer".
 
-> Counter-example: if pi-ai''s `index.ts` contained `import { AgentState } from "@earendil-works/pi-agent-core"`, that would be a layering violation. But pi-ai never carries any such import : verified by `grep -r "@earendil-works/pi-agent-core\|@earendil-works/pi-coding-agent" packages/ai/src/`, which returns no matches.
+> Counter-example: if pi-ai''s `index.ts` contained `import { AgentState } from "@earendil-works/pi-agent-core"`, that would be a layering violation. But pi-ai never carries any such import: verified by `grep -r "@earendil-works/pi-agent-core\|@earendil-works/pi-coding-agent" packages/ai/src/`, which returns no matches.
 
 So the layering rule is not "adjacent-only". It is "**strictly one-direction: lower does not know upper**".
 
@@ -340,7 +340,7 @@ pi-ai（底层）
        pi-orchestrator（实验性外围编排层，可选）
 ```
 
-All the arrows point up. **The bottom layer never knows about the upper layer** : there is no import in pi-ai''s code that points to pi-agent-core or pi-coding-agent; orchestrator does not penetrate back into coding-agent either. That is the real rule of layering: **it does not restrict the depth of references, but ensures the dependency direction is strictly one-way upward.**
+All the arrows point up. **The bottom layer never knows about the upper layer**: there is no import in pi-ai''s code that points to pi-agent-core or pi-coding-agent; orchestrator does not penetrate back into coding-agent either. That is the real rule of layering: **it does not restrict the depth of references, but ensures the dependency direction is strictly one-way upward.**
 
 ---
 
@@ -350,7 +350,7 @@ Now that the dependency rule is clear, we can use the type system to make the pr
 
 ### Layer 1: pi-ai defines the atoms
 
-In pi-ai, a `Tool` is the smallest possible tool unit : only enough fields to describe what the tool is:
+In pi-ai, a `Tool` is the smallest possible tool unit: only enough fields to describe what the tool is:
 
 ```
 // packages/ai/src/types.ts（节选）
@@ -398,7 +398,7 @@ interface AgentTool<TParameters extends TSchema = TSchema, TDetails = any> exten
 }
 ```
 
-`AgentTool` is a "molecule" : it still has the `name`, `description`, and `parameters`, but it adds the ability to **run**. The Agent loop iterates over `AgentTool[]`, calls each tool''s `execute`, and feeds the result back into the model.
+`AgentTool` is a "molecule": it still has the `name`, `description`, and `parameters`, but it adds the ability to **run**. The Agent loop iterates over `AgentTool[]`, calls each tool''s `execute`, and feeds the result back into the model.
 
 ### Layer 3: pi-coding-agent builds molecules into materials
 
@@ -509,7 +509,7 @@ import { Agent, agentLoop } from "@earendil-works/pi-agent-core";
 import { streamSimple } from "@earendil-works/pi-ai";
 ```
 
-Better, but you re-implement CLI argument parsing and session management every time. And your tools become tightly coupled to your specific Agent scenario : they cannot be reused by other Agents.
+Better, but you re-implement CLI argument parsing and session management every time. And your tools become tightly coupled to your specific Agent scenario: they cannot be reused by other Agents.
 
 ### Scenario C: only one layer (only pi-ai)
 
@@ -523,9 +523,9 @@ for await (const event of stream) {
 }
 ```
 
-This is also perfectly fine. pi-ai is itself an independent package : calling the LLM, streaming the result, no Agent framework needed.
+This is also perfectly fine. pi-ai is itself an independent package: calling the LLM, streaming the result, no Agent framework needed.
 
-But then you would have to write the loop, manage message state, and handle tool calls yourself. That is exactly why pi-agent-core exists : **it does the hardest part of an Agent (loop, state, events, compaction) for you, and you only have to tell it which tools to use.**
+But then you would have to write the loop, manage message state, and handle tool calls yourself. That is exactly why pi-agent-core exists: **it does the hardest part of an Agent (loop, state, events, compaction) for you, and you only have to tell it which tools to use.**
 
 ### Layering is not dogma; dependency-direction control is
 
@@ -577,7 +577,7 @@ From Pi''s layering design, I extract three reusable methods for your own Agent 
 
 ### Method 3: the "independently usable" test
 
-**What it is**: after each layer is designed, do a simple test : remove the upper layer, can this layer still work?
+**What it is**: after each layer is designed, do a simple test: remove the upper layer, can this layer still work?
 
 Pi''s three layers all pass this test:
 
@@ -600,7 +600,7 @@ In this chapter we took an outside look at Pi''s overall architecture. You now k
 
 But we have not yet answered a more fundamental question: how does the Agent run? How does the LLM keep thinking, calling tools, reading results, thinking again? What does the famous "Agent Loop" look like?
 
-In the next chapter we drill into the Agent''s heart : **the Agent Loop**. We will first understand why a loop is needed (instead of finishing in one call), then trace a single user message''s full journey from pressing Enter until the Agent says "I am done".
+In the next chapter we drill into the Agent''s heart: **the Agent Loop**. We will first understand why a loop is needed (instead of finishing in one call), then trace a single user message''s full journey from pressing Enter until the Agent says "I am done".
 
 ---
 

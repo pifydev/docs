@@ -1,9 +1,9 @@
 ---
 chapter: 6
 slug: ch06-messages
-title_zh: "第6章：消息系统 : Agent 的记忆如何组织与传递"
-title_en: "Chapter 6: Message System : How Agent Memory Is Organized and Passed"
-title_vi: "Chương 6: Hệ thống Message : Bộ nhớ của Agent được tổ chức và truyền đi ra sao"
+title_zh: "第6章：消息系统: Agent 的记忆如何组织与传递"
+title_en: "Chapter 6: Message System: How Agent Memory Is Organized and Passed"
+title_vi: "Chương 6: Hệ thống Message: Bộ nhớ của Agent được tổ chức và truyền đi ra sao"
 source_url: https://www.dgzhuya.com/modules/ch06-messages
 language: en
 version_pairs:
@@ -23,15 +23,15 @@ code_blocks: 17
 mermaid_blocks: 0
 ---
 
-# Chapter 6: Message System : How Agent Memory Is Organized and Passed
+# Chapter 6: Message System: How Agent Memory Is Organized and Passed
 
-Last chapter we learned the tool system : the model says "read the file", Agent Loop executes the `read` tool through a five-step pipeline, and finally produces a `ToolResultMessage`. But have you noticed: we have been saying "message" all along, yet we never opened it up to see what it looks like.
+Last chapter we learned the tool system: the model says "read the file", Agent Loop executes the `read` tool through a five-step pipeline, and finally produces a `ToolResultMessage`. But have you noticed: we have been saying "message" all along, yet we never opened it up to see what it looks like.
 
-`UserMessage`, `AssistantMessage`, `ToolResultMessage` : these three names appear again and again in the first five chapters. Chapter 3 says "messages flow in the Loop", Chapter 4 says "messages are sent to the model", Chapter 5 says "a tool result is a message".
+`UserMessage`, `AssistantMessage`, `ToolResultMessage`: these three names appear again and again in the first five chapters. Chapter 3 says "messages flow in the Loop", Chapter 4 says "messages are sent to the model", Chapter 5 says "a tool result is a message".
 
 But what exactly is a message? What does its data structure look like? Are the messages inside the Agent the same as those sent to the model?
 
-This chapter answers these questions. You will see the most core design of Pi's message system : **two layers of messages**: rich formats used freely inside the Agent, translated back to strict standard format at the LLM boundary.
+This chapter answers these questions. You will see the most core design of Pi's message system: **two layers of messages**: rich formats used freely inside the Agent, translated back to strict standard format at the LLM boundary.
 
 ---
 
@@ -41,7 +41,7 @@ Let us start with a concrete scenario.
 
 You typed a Bash command `!ls -la` in Pi's terminal and hit Enter. The command ran and output a bunch of file listings.
 
-This command's information, inside Pi, will become a **BashExecutionMessage** : it has a `command` field recording the original command, an `output` field recording the output content, an `exitCode` field recording the exit code. These structured fields let the UI use dedicated renderers to beautifully display the terminal output.
+This command's information, inside Pi, will become a **BashExecutionMessage**: it has a `command` field recording the original command, an `output` field recording the output content, an `exitCode` field recording the exit code. These structured fields let the UI use dedicated renderers to beautifully display the terminal output.
 
 But the question is: when Agent Loop is ready to call the LLM, the LLM's API does not understand any `BashExecutionMessage` at all. It only understands three message formats: `user` (what the user said), `assistant` (AI's reply), `toolResult` (what the tool returned). BashExecutionMessage does not belong to any of these three.
 
@@ -68,7 +68,7 @@ Message 联合类型（LLM 标准格式）
 
 ### The specific data structure of each kind
 
-**UserMessage** : the simplest kind, user input:
+**UserMessage**: the simplest kind, user input:
 
 ```
 {
@@ -81,7 +81,7 @@ Message 联合类型（LLM 标准格式）
 
 content can be a plain string, or an array of content blocks. This means user messages can send both text and images.
 
-**AssistantMessage** : LLM's reply, with the most fields:
+**AssistantMessage**: LLM's reply, with the most fields:
 
 ```
 {
@@ -98,7 +98,7 @@ content can be a plain string, or an array of content blocks. This means user me
 ```
 
 
-What is worth paying attention to here is the content field : it is not a string, but a **content block array** that can contain three kinds of things:
+What is worth paying attention to here is the content field: it is not a string, but a **content block array** that can contain three kinds of things:
 
 ```
 AssistantMessage 的 content 内容块
@@ -114,11 +114,11 @@ AssistantMessage 的 content 内容块
 ```
 
 
-**An assistant message may contain both text and a tool call.** For example, the LLM may say "let me look at this file for you" while emitting a Read tool call : these two pieces of content are placed in the same `AssistantMessage.content` array. The "model reply contains a ToolCall" mentioned in Chapter 3 is exactly this structure.
+**An assistant message may contain both text and a tool call.** For example, the LLM may say "let me look at this file for you" while emitting a Read tool call: these two pieces of content are placed in the same `AssistantMessage.content` array. The "model reply contains a ToolCall" mentioned in Chapter 3 is exactly this structure.
 
 > **Advanced detail**: the content blocks also contain some `*Signature` fields (`textSignature`, `thinkingSignature`, etc.), which are opaque signature IDs required by certain providers (OpenAI, Google) that must be passed back verbatim in the next request. Encrypted content edited by safety filters also lives here. You don't need to dig deep for daily understanding; know that it is "the context-continuity mechanism between providers".
 
-**ToolResultMessage** : the result of tool execution (the end product of Chapter 5's five-step pipeline):
+**ToolResultMessage**: the result of tool execution (the end product of Chapter 5's five-step pipeline):
 
 ```
 {
@@ -133,7 +133,7 @@ AssistantMessage 的 content 内容块
 ```
 
 
-`ToolResultMessage` is associated with the `ToolCall` inside `AssistantMessage` via the `toolCallId` field. Chapter 3 mentioned "the tool result must accurately link back to the call request" : that linkage is done through this field. The `details` field carries structured information for UI rendering; the LLM usually does not need to look at this field.
+`ToolResultMessage` is associated with the `ToolCall` inside `AssistantMessage` via the `toolCallId` field. Chapter 3 mentioned "the tool result must accurately link back to the call request": that linkage is done through this field. The `details` field carries structured information for UI rendering; the LLM usually does not need to look at this field.
 
 ### A complete dialog example
 
@@ -167,7 +167,7 @@ messages 数组：
 ```
 
 
-This is the world the LLM understands : what the user said, what the AI replied, what the tool returned, just these three.
+This is the world the LLM understands: what the user said, what the AI replied, what the tool returned, just these three.
 
 ---
 
@@ -175,20 +175,20 @@ This is the world the LLM understands : what the user said, what the AI replied,
 
 Good, now back to the opening scenario. You executed `!ls -la`, and Pi needs to record the information of this execution internally.
 
-There is a more general problem hiding here: **besides the "LLM dialog", the Agent internally has a lot of functional data to manage** : Bash command execution records, summaries after context compression, Git branch switch records, user-uploaded attachment metadata...
+There is a more general problem hiding here: **besides the "LLM dialog", the Agent internally has a lot of functional data to manage**: Bash command execution records, summaries after context compression, Git branch switch records, user-uploaded attachment metadata...
 
 These functional data have **two independent readers**, and their needs conflict:
 
-- **The UI side** needs structured fields : to render Bash execution beautifully, it needs to grab `command`, `output`, `exitCode`, `cancelled`, `truncated` separately, then display in the terminal (commands with syntax highlighting, output with monospace font, exit codes with color)
-- **The LLM side** only needs a piece of flat text : "user executed `ls -la`, output was `file1.txt
+- **The UI side** needs structured fields: to render Bash execution beautifully, it needs to grab `command`, `output`, `exitCode`, `cancelled`, `truncated` separately, then display in the terminal (commands with syntax highlighting, output with monospace font, exit codes with color)
+- **The LLM side** only needs a piece of flat text: "user executed `ls -la`, output was `file1.txt
 file2.txt
 ...`", this piece of text stuffed into `UserMessage.content` is enough
 
-Where is the conflict? **If we pre-flatten the fields for the LLM and store them inside `UserMessage`, the UI can never get the structured data back** : you have already stirred it all into a pot. Conversely, if we only store structured custom messages without going into the LLM context, the LLM will lose memory : in the next round it won't know what the user just executed.
+Where is the conflict? **If we pre-flatten the fields for the LLM and store them inside `UserMessage`, the UI can never get the structured data back**: you have already stirred it all into a pot. Conversely, if we only store structured custom messages without going into the LLM context, the LLM will lose memory: in the next round it won't know what the user just executed.
 
-Pi's design **compromises neither side**: **store in structured form inside `context.messages`** (satisfying UI/persistence), **do one translation at the boundary of calling the LLM** (satisfying the LLM). This way the UI always has complete structured data available, and the LLM can also see the flat version it needs. The translation happens at the last moment, is lossy, is one-way : the structured fields lost in translation, the UI has long since used, so it does not matter.
+Pi's design **compromises neither side**: **store in structured form inside `context.messages`** (satisfying UI/persistence), **do one translation at the boundary of calling the LLM** (satisfying the LLM). This way the UI always has complete structured data available, and the LLM can also see the flat version it needs. The translation happens at the last moment, is lossy, is one-way: the structured fields lost in translation, the UI has long since used, so it does not matter.
 
-**Pi's solution is: allow applications to define custom message types.** `pi-agent-core` reserves an extension point (called `CustomAgentMessages`, the next section will expand on its implementation) in the `AgentMessage` union type. Applications inject their own message types via TypeScript's declaration merging. Each application only registers what it needs : the core package has zero dependencies, and the application layer gets full type safety.
+**Pi's solution is: allow applications to define custom message types.** `pi-agent-core` reserves an extension point (called `CustomAgentMessages`, the next section will expand on its implementation) in the `AgentMessage` union type. Applications inject their own message types via TypeScript's declaration merging. Each application only registers what it needs: the core package has zero dependencies, and the application layer gets full type safety.
 
 Taking Pi's bundled coding-agent as example, it defines 4 kinds of custom messages in [packages/coding-agent/src/core/messages.ts](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/src/core/messages.ts):
 
@@ -219,25 +219,25 @@ Each kind has its own structured fields. Taking `BashExecutionMessage` as exampl
 ```
 
 
-All structured fields are preserved. But here we need to stop and emphasize : **custom messages are an "intermediate format for translation to LLM", they themselves bring three independent capabilities**:
+All structured fields are preserved. But here we need to stop and emphasize: **custom messages are an "intermediate format for translation to LLM", they themselves bring three independent capabilities**:
 
-**1. UI-dedicated rendering.** The UI dispatches based on the `role` field : `bashExecution` renders with terminal styling, `compactionSummary` renders with a summary card. Command, output, exit code each get their own line, no interference. Without custom messages, the UI can only get a piece of flat text, and all rendering flair has to fall back to "all in big blocks of text".
+**1. UI-dedicated rendering.** The UI dispatches based on the `role` field: `bashExecution` renders with terminal styling, `compactionSummary` renders with a summary card. Command, output, exit code each get their own line, no interference. Without custom messages, the UI can only get a piece of flat text, and all rendering flair has to fall back to "all in big blocks of text".
 
-**2. Persistence recovery.** The session file stores complete structured data. When you restart the Agent next time, the UI can precisely restore last time's render state : exit code still has color, commands still highlighted, truncation indicator still there. If only the translated flat text is stored, this information would be permanently lost after restart.
+**2. Persistence recovery.** The session file stores complete structured data. When you restart the Agent next time, the UI can precisely restore last time's render state: exit code still has color, commands still highlighted, truncation indicator still there. If only the translated flat text is stored, this information would be permanently lost after restart.
 
-**3. Fine-grained visibility control.** Because custom messages have their own `role`, special handling can be done in `convertToLlm` translation : for example adding an `excludeFromContext = true` field, and the LLM will not see this message at all, but the UI renders it normally. **Standard messages cannot do this** : once they enter the `messages` array, `convertToLlm` will definitely translate them and send them to the LLM, with no room for "visible to UI but invisible to LLM".
+**3. Fine-grained visibility control.** Because custom messages have their own `role`, special handling can be done in `convertToLlm` translation: for example adding an `excludeFromContext = true` field, and the LLM will not see this message at all, but the UI renders it normally. **Standard messages cannot do this**: once they enter the `messages` array, `convertToLlm` will definitely translate them and send them to the LLM, with no room for "visible to UI but invisible to LLM".
 
-So when §5 later talks about `convertToLlm` translation and §7 about `excludeFromContext` filtering, please remember: **these two things are not "troubles" brought by custom messages, but quite the opposite : they are capabilities granted by custom messages**. Translation is to let the LLM see the flat version, filtering is to let some messages be invisible to the LLM. Without custom messages, neither of these two things can be done.
+So when §5 later talks about `convertToLlm` translation and §7 about `excludeFromContext` filtering, please remember: **these two things are not "troubles" brought by custom messages, but quite the opposite: they are capabilities granted by custom messages**. Translation is to let the LLM see the flat version, filtering is to let some messages be invisible to the LLM. Without custom messages, neither of these two things can be done.
 
-But there is a fundamental question: **the Message union type is closed : only `UserMessage`, `AssistantMessage`, `ToolResultMessage`**. These 4 kinds of custom messages do not belong to the Message type. So how are they accepted and processed by the Agent system?
+But there is a fundamental question: **the Message union type is closed: only `UserMessage`, `AssistantMessage`, `ToolResultMessage`**. These 4 kinds of custom messages do not belong to the Message type. So how are they accepted and processed by the Agent system?
 
 ---
 
-## 4. Layer two: `AgentMessage` : rich inside, strict outside, the double-layer design
+## 4. Layer two: `AgentMessage`: rich inside, strict outside, the double-layer design
 
-This is the core design of Pi's message system: **do not use one format to rule them all, but use two layers : rich inside, strict outside**.
+This is the core design of Pi's message system: **do not use one format to rule them all, but use two layers: rich inside, strict outside**.
 
-**Diagram caption:** at the top the `AgentMessage` union type splits into two : left branch `Message` (3 standard), right branch `CustomAgentMessages` (4 extensions). The red dashed line in the middle is the `convertToLlm()` translation boundary. At the bottom, the LLM only sees 3 standard messages; custom messages are either filtered or translated into `UserMessage`.
+**Diagram caption:** at the top the `AgentMessage` union type splits into two: left branch `Message` (3 standard), right branch `CustomAgentMessages` (4 extensions). The red dashed line in the middle is the `convertToLlm()` translation boundary. At the bottom, the LLM only sees 3 standard messages; custom messages are either filtered or translated into `UserMessage`.
 
 ### The `AgentMessage` union type
 
@@ -270,7 +270,7 @@ AgentMessage（Agent 内部使用的消息格式）
 ```
 
 
-The `context.messages` array inside the Agent holds `AgentMessage[]` : it can mix and store standard and custom messages. Whether a message is standard or custom, you can tell by looking at the `role` field.
+The `context.messages` array inside the Agent holds `AgentMessage[]`: it can mix and store standard and custom messages. Whether a message is standard or custom, you can tell by looking at the `role` field.
 
 ### `CustomAgentMessages`: the empty-by-default extension point
 
@@ -304,13 +304,13 @@ declare module "@earendil-works/pi-agent-core" {
 
 The effect of this code is: **the compiler automatically adds these 4 types into the `AgentMessage` union type**. From then on in the coding-agent project, `AgentMessage` becomes a union of 7 kinds of messages (3 standard + 4 custom), and TypeScript will do full type checking for you.
 
-**Why not use inheritance or generics?** Because inheritance requires modifying the base class : you cannot modify the `pi-agent-core` package. Generics require passing parameters everywhere : every function signature that uses `AgentMessage` would need a generic parameter. The benefit of declaration merging is: **the core package has zero awareness of extensions (zero dependencies), yet the extension package gets full type safety**.
+**Why not use inheritance or generics?** Because inheritance requires modifying the base class: you cannot modify the `pi-agent-core` package. Generics require passing parameters everywhere: every function signature that uses `AgentMessage` would need a generic parameter. The benefit of declaration merging is: **the core package has zero awareness of extensions (zero dependencies), yet the extension package gets full type safety**.
 
 Different applications can have different custom messages. For example the Web UI registers its own message types (`user-with-attachments`, `artifact`). **Each application only sees the message types it needs.**
 
 ---
 
-## 5. Translation boundary: `convertToLlm` : every custom message eventually becomes User
+## 5. Translation boundary: `convertToLlm`: every custom message eventually becomes User
 
 Now we know the Agent internally uses 7 kinds of message types to express freely. But every time the LLM is called, the LLM only accepts 3 standard formats. What to do?
 
@@ -357,13 +357,13 @@ The core logic of coding-agent's `convertToLlm` is a `switch` statement that dis
 
 Key insight: **all custom messages get converted to `user`-role messages**.
 
-Why all become `user`? Because LLM APIs have strict requirements on role ordering : the dialog format must alternate `user -> assistant -> user ->. ..`, two consecutive `assistant`s are not allowed. Custom messages are "system-injected information" (Bash execution results, compaction summaries, branch summaries), and putting them in the `user` role is safest.
+Why all become `user`? Because LLM APIs have strict requirements on role ordering: the dialog format must alternate `user -> assistant -> user ->. ..`, two consecutive `assistant`s are not allowed. Custom messages are "system-injected information" (Bash execution results, compaction summaries, branch summaries), and putting them in the `user` role is safest.
 
 ### Specific example: BashExecutionMessage translation
 
 Back to the opening scenario. A `BashExecutionMessage` from creation to being seen by the LLM, the data structure changes like this:
 
-**Before** : `BashExecutionMessage` (internal Agent format):
+**Before**: `BashExecutionMessage` (internal Agent format):
 
 ```
 {
@@ -378,7 +378,7 @@ Back to the opening scenario. A `BashExecutionMessage` from creation to being se
 ```
 
 
-**After** : `UserMessage` (format the LLM sees):
+**After**: `UserMessage` (format the LLM sees):
 
 ```
 {
@@ -398,7 +398,7 @@ Change summary:
 - `command`, `output`, `exitCode` and other structured fields -> formatted into a piece of text
 - Lost information: `cancelled`, `truncated` and other boolean flags are merged into the text description, no longer independent fields
 
-Other custom messages (`CompactionSummary`, `BranchSummary`) follow exactly the same translation pattern : wrap the summary text with `<summary>` tags, prefix with an explanatory sentence, and turn it into the `UserMessage.content`.
+Other custom messages (`CompactionSummary`, `BranchSummary`) follow exactly the same translation pattern: wrap the summary text with `<summary>` tags, prefix with an explanatory sentence, and turn it into the `UserMessage.content`.
 
 ---
 
@@ -406,21 +406,21 @@ Other custom messages (`CompactionSummary`, `BranchSummary`) follow exactly the 
 
 Message processing pipeline
 
-**Diagram caption:** horizontal data flow : `AgentMessage[7]` -> `transformContext` (same-layer transformation, type unchanged) -> `convertToLlm` (cross-layer translation) -> `Message[3]` sent to the LLM. The lower side marks the `excludeFromContext` filtering branch.
+**Diagram caption:** horizontal data flow: `AgentMessage[7]` -> `transformContext` (same-layer transformation, type unchanged) -> `convertToLlm` (cross-layer translation) -> `Message[3]` sent to the LLM. The lower side marks the `excludeFromContext` filtering branch.
 
 Back to the pipeline diagram, there is one design detail worth asking about: **why two steps, rather than one shot?**
 
 The answer is **separation of concerns**:
 
-- **`transformContext` handles AgentMessage-level operations**: trimming messages that are too old, injecting external context, triggering compaction algorithms. Before and after, it is `AgentMessage[]` : the type is unchanged.
-- **`convertToLlm` handles cross-type translation**: it translates `AgentMessage` into `Message`. Before processing it is `AgentMessage[]`, after processing it is `Message[]` : the type changes.
+- **`transformContext` handles AgentMessage-level operations**: trimming messages that are too old, injecting external context, triggering compaction algorithms. Before and after, it is `AgentMessage[]`: the type is unchanged.
+- **`convertToLlm` handles cross-type translation**: it translates `AgentMessage` into `Message`. Before processing it is `AgentMessage[]`, after processing it is `Message[]`: the type changes.
 
 The benefit of separation: **you can replace just one, without affecting the other**.
 
-- When you **change the context management strategy** (e.g. from "delete the oldest message" to "compress into a summary"), only `transformContext` needs to change : it handles the "how to trim" policy. `convertToLlm` does not need to change.
-- When you **change the application type** (e.g. adapting coding-agent into a Web customer-service Agent, where custom messages change from `BashExecution`/`CompactionSummary` to business messages like `TicketEvent`/`OrderNote`), only `convertToLlm` needs to change : it handles "how to translate custom messages into `UserMessage`". `transformContext` does not need to change.
+- When you **change the context management strategy** (e.g. from "delete the oldest message" to "compress into a summary"), only `transformContext` needs to change: it handles the "how to trim" policy. `convertToLlm` does not need to change.
+- When you **change the application type** (e.g. adapting coding-agent into a Web customer-service Agent, where custom messages change from `BashExecution`/`CompactionSummary` to business messages like `TicketEvent`/`OrderNote`), only `convertToLlm` needs to change: it handles "how to translate custom messages into `UserMessage`". `transformContext` does not need to change.
 
-There is one easily-confused point to emphasize: **when you switch the LLM provider (e.g. from Claude to GPT), `convertToLlm` does not need to change**. Why? Because the output of `convertToLlm` is the unified `Message[]` (3 standard messages), and it has already done the "custom message -> standard message" job. Further down, **translating `Message` into each provider's private format** is the job of the `pi-ai` layer (covered in Chapter 4) : that layer has its own translators (`anthropic-messages`, `openai-completions`, etc.), completely independent from `convertToLlm`. In other words: **Pi places "message type translation" and "provider protocol translation" into two different abstraction layers, with no interference**.
+There is one easily-confused point to emphasize: **when you switch the LLM provider (e.g. from Claude to GPT), `convertToLlm` does not need to change**. Why? Because the output of `convertToLlm` is the unified `Message[]` (3 standard messages), and it has already done the "custom message -> standard message" job. Further down, **translating `Message` into each provider's private format** is the job of the `pi-ai` layer (covered in Chapter 4): that layer has its own translators (`anthropic-messages`, `openai-completions`, etc.), completely independent from `convertToLlm`. In other words: **Pi places "message type translation" and "provider protocol translation" into two different abstraction layers, with no interference**.
 
 ---
 
@@ -432,7 +432,7 @@ Up to now, all custom messages eventually became `UserMessage` and were seen by 
 
 Pi's Bash tool has a feature: when you execute a command with the `!!` prefix (e.g. `!!secret_cmd`), the execution result of that command is invisible to the LLM.
 
-The implementation is simple : `BashExecutionMessage` has an `excludeFromContext` field. In `convertToLlm`, this field is checked:
+The implementation is simple: `BashExecutionMessage` has an `excludeFromContext` field. In `convertToLlm`, this field is checked:
 
 ```
 case "bashExecution":
@@ -445,7 +445,7 @@ case "bashExecution":
 
 Note: messages with `excludeFromContext = true` **still exist inside `context.messages`**. The UI can still see them, render them. Only at the moment of calling the LLM, this message is "invisible".
 
-This is the "UI can see, LLM cannot" mechanism : one boolean field, filter at the translation boundary, the data itself does not need to be deleted.
+This is the "UI can see, LLM cannot" mechanism: one boolean field, filter at the translation boundary, the data itself does not need to be deleted.
 
 ### Three message visibility levels
 
@@ -511,12 +511,12 @@ Connecting the whole chapter, the complete path of a message from birth to being
 
 ### One main line: data structures must serve two readers at the same time
 
-Looking back at the whole chapter, all of Pi's message system design revolves around a simple idea : **when designing data structures, consider both what the model uses and what the functional layer uses, then customize as needed and use a sound architecture to combine the two**.
+Looking back at the whole chapter, all of Pi's message system design revolves around a simple idea: **when designing data structures, consider both what the model uses and what the functional layer uses, then customize as needed and use a sound architecture to combine the two**.
 
 Specifically for the message system, the needs of these two "readers" are split:
 
-- **The model's side** only needs three standard messages (`User`/`Assistant`/`ToolResult`) : this is forced by the LLM API protocol, it cannot be changed
-- **The functional side** (UI, persistence, visibility control) needs rich structured fields : the more fields, the more capabilities
+- **The model's side** only needs three standard messages (`User`/`Assistant`/`ToolResult`): this is forced by the LLM API protocol, it cannot be changed
+- **The functional side** (UI, persistence, visibility control) needs rich structured fields: the more fields, the more capabilities
 
 If we design only for the model, structured fields are all lost and the functional layer degrades; if we design only for the functional layer, the model cannot understand it, the dialog is broken. Pi's approach is **two layers each managing its own**:
 
@@ -525,17 +525,17 @@ If we design only for the model, structured fields are all lost and the function
 | **`AgentMessage` (inner)** | Functional layer | 7 messages (3 standard + 4 custom), rich fields | Use union types + declaration merging so the core package has zero dependencies and the application layer is fully type-safe |
 | **`Message` (outer)** | Model | 3 standard messages, lean fields | Do one `convertToLlm` translation at the LLM-call boundary, **lossy, one-way, at the last moment** |
 
-All the concrete designs in this chapter : the three-layer type progression (`Tool` -> `AgentTool` -> `ToolDefinition`), the declaration-merging extension point, the `transformContext` / `convertToLlm` two-stage pipeline, the `excludeFromContext` visibility control : are all concrete implementations of this main line. **The main line is "two readers, two-layer architecture", and implementation means can vary widely.**
+All the concrete designs in this chapter: the three-layer type progression (`Tool` -> `AgentTool` -> `ToolDefinition`), the declaration-merging extension point, the `transformContext` / `convertToLlm` two-stage pipeline, the `excludeFromContext` visibility control: are all concrete implementations of this main line. **The main line is "two readers, two-layer architecture", and implementation means can vary widely.**
 
 ### Apply this main line to your own project
 
-Next time you design a system that interfaces with an external protocol (not only Agent : any scenario where you have "an external protocol constraint and internal rich needs"), you can apply this three-step approach:
+Next time you design a system that interfaces with an external protocol (not only Agent: any scenario where you have "an external protocol constraint and internal rich needs"), you can apply this three-step approach:
 
 **Step 1: identify what each of the "two readers" wants.** What does the protocol specify (cannot change)? What does the functional layer need (can customize)? Write them down and clarify each one's needs.
 
-**Step 2: let the inner structure be the "source", let the outer translation be the "flow".** Storage and the functional layer use the original, structured data (no field loss, no flattening); at the protocol boundary do one lossy translation. **Do not pre-flatten the data for protocol convenience** : once flattened, the UI and persistence can never recover the structure.
+**Step 2: let the inner structure be the "source", let the outer translation be the "flow".** Storage and the functional layer use the original, structured data (no field loss, no flattening); at the protocol boundary do one lossy translation. **Do not pre-flatten the data for protocol convenience**: once flattened, the UI and persistence can never recover the structure.
 
-**Step 3: use the type system extension point to make a "core + application" layering.** The core package defines the protocol interface (closed) and leaves an empty extension slot; the application package injects its concrete types via declaration merging. This way the core package has zero dependencies, and the application package is fully type-safe : no inheritance needed, no generic-parameter pollution.
+**Step 3: use the type system extension point to make a "core + application" layering.** The core package defines the protocol interface (closed) and leaves an empty extension slot; the application package injects its concrete types via declaration merging. This way the core package has zero dependencies, and the application package is fully type-safe: no inheritance needed, no generic-parameter pollution.
 
 > The "Tool -> AgentTool -> ToolDefinition" three-layer progression (Chapter 5) covered in this chapter uses the same idea: each layer only adds the capability its own level needs, never oversteps. Identifying the "layering point" and drawing clear responsibility boundaries for each layer is the core of this design method.
 
@@ -543,21 +543,21 @@ Next time you design a system that interfaces with an external protocol (not onl
 
 ## 10. Next stop
 
-The first six chapters end here : you have built a complete understanding of Pi-Agent's core mechanisms.
+The first six chapters end here: you have built a complete understanding of Pi-Agent's core mechanisms.
 
 > **Suggestion**: before entering the advanced chapters, it is recommended to review the core mechanisms of the first six chapters (message system, tool invocation, extension mechanisms, Agent Loop, etc.) and confirm that you have strung the knowledge points of each chapter together.
 
 From Chapter 7 on, we enter the advanced chapters. Looking back at the first five chapters, there is one thing that keeps appearing but we never explored in depth: **events**. Chapter 3 says "Agent Loop emits events at every step to let the UI update in real time", Chapter 5 says "tool execution emits `tool_execution_start`, `tool_execution_update`, `tool_execution_end` events". How do these events get transmitted from inside the Agent to the outside? How does the UI subscribe to these events? Why does the Agent "synchronously wait" for listeners to finish processing after emitting an event?
 
-In the next chapter, we open the Agent's "nervous system" : event-driven architecture.
+In the next chapter, we open the Agent's "nervous system": event-driven architecture.
 
 ---
 
 > **Key source index for this chapter**:
 >
-> `packages/ai/src/types.ts:322-408` : Message union type + three message interfaces
-> `packages/agent/src/types.ts:305-314` : `CustomAgentMessages` + `AgentMessage`
-> `packages/coding-agent/src/core/messages.ts:70-77` : coding-agent declaration merging
-> `packages/agent/src/agent-loop.ts:275-308` : translation pipeline (`transformContext` -> `convertToLlm`)
-> `packages/coding-agent/src/core/messages.ts:82-195` : custom translation rules
-> `packages/coding-agent/src/core/messages.ts:38-39` : `excludeFromContext` field
+> `packages/ai/src/types.ts:322-408`: Message union type + three message interfaces
+> `packages/agent/src/types.ts:305-314`: `CustomAgentMessages` + `AgentMessage`
+> `packages/coding-agent/src/core/messages.ts:70-77`: coding-agent declaration merging
+> `packages/agent/src/agent-loop.ts:275-308`: translation pipeline (`transformContext` -> `convertToLlm`)
+> `packages/coding-agent/src/core/messages.ts:82-195`: custom translation rules
+> `packages/coding-agent/src/core/messages.ts:38-39`: `excludeFromContext` field

@@ -5,8 +5,8 @@ Usage:
   python scripts/build-translated.py scripts/worksheets/ch03-agent-loop.json
 
 Reads:
-  - worksheets/<chapter>.json  : segments + frontmatter
-  - translations/<chapter>.json : {"<index>": {"en": "...", "vi": "..."}, ...}
+  - worksheets/<chapter>.json : segments + frontmatter
+  - translations/<chapter>.json: {"<index>": {"en": "...", "vi": "..."}, ...}
 
 Writes:
   - en/src/<chapter>.md
