@@ -1,0 +1,46 @@
+/* Starlight theme overrides for Pify Agent Book */
+
+:root {
+  --sl-content-width: 50rem;
+  --sl-font-mono: "JetBrains Mono", "Cascadia Code", Consolas, monospace;
+  --sl-color-accent-low: #1a1a2e;
+  --sl-color-accent: #4a4a8a;
+  --sl-color-accent-high: #6a6aaa;
+}
+
+[data-theme="dark"] {
+  --sl-color-accent-low: #2a2a4e;
+  --sl-color-accent: #8a8aca;
+  --sl-color-accent-high: #aaaaea;
+}
+
+.mermaid {
+  text-align: center;
+  margin: 1.5rem 0;
+  background: var(--sl-color-bg);
+}
+
+pre {
+  padding: 0.75rem 1rem;
+  line-height: 1.45;
+}
+
+blockquote {
+  border-left: 4px solid var(--sl-color-accent);
+  background: var(--sl-color-gray-6);
+  padding: 0.75rem 1rem;
+  margin: 1rem 0;
+}
+
+table {
+  margin: 1rem 0;
+}
+
+table th {
+  background: var(--sl-color-gray-6);
+}
+
+/* Hide the small site-title logo (mdbook menu bar pattern no longer applies) */
+.site-title img {
+  display: none;
+}
