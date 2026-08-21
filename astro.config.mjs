@@ -184,6 +184,7 @@ export default defineConfig({
       lastUpdated: true,
       components: {
         Header: './src/components/Header.astro',
+        Footer: './src/components/Footer.astro',
       },
       social: [
         { icon: "github", label: "GitHub", href: "https://github.com/pifydev/docs" },
