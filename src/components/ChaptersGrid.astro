@@ -4,16 +4,16 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 const basePrefix = base ? base + "/" : "/";
 
 const chapters = [
-  { num: 1, slug: "ch01-overview", title_en: "Introduction: Why Pi-Agent Is Worth Your Time", title_vi: "Mở đầu: Tại sao Pi-Agent đáng để bạn dành thời gian", title_zh: "开篇: 为什么 Pi-Agent 值得你花时间" },
-  { num: 2, slug: "ch02-three-layer-arch", title_en: "Three-Layer Architecture", title_vi: "Kiến trúc ba lớp", title_zh: "三层架构" },
-  { num: 3, slug: "ch03-agent-loop", title_en: "Agent Loop", title_vi: "Agent Loop", title_zh: "Agent Loop" },
-  { num: 4, slug: "ch04-model-invocation", title_en: "Model Invocation", title_vi: "Gọi mô hình", title_zh: "模型调用" },
-  { num: 5, slug: "ch05-tool-system", title_en: "Tool System", title_vi: "Hệ thống công cụ", title_zh: "工具系统" },
-  { num: 6, slug: "ch06-messages", title_en: "Message System", title_vi: "Hệ thống tin nhắn", title_zh: "消息系统" },
-  { num: 7, slug: "ch07-event-driven", title_en: "Event-Driven Architecture", title_vi: "Kiến trúc hướng sự kiện", title_zh: "事件驱动架构" },
-  { num: 8, slug: "ch08-context-engineering", title_en: "Context Engineering", title_vi: "Kỹ thuật ngữ cảnh", title_zh: "上下文工程" },
-  { num: 9, slug: "ch09-compaction", title_en: "Context Compaction", title_vi: "Nén ngữ cảnh", title_zh: "上下文压缩" },
-  { num: 10, slug: "ch10-session", title_en: "Session Management", title_vi: "Quản lý phiên", title_zh: "会话管理" },
+  { num: 1, slug: "ch01-overview", title_en: "Introduction: Why Pi-Agent Is Worth Your Time", title_vi: "M\u1edf \u0111\u1ea7u: T\u1ea1i sao Pi-Agent \u0111\ufffdng \u0111\u1ec3 b\u1ea1n d\u00e0nh th\u1eddi gian", title_zh: "\u5f00\u7bc7: \u4e3a\u4ec0\u4e48 Pi-Agent \u503c\u5f97\u4f60\u82b1\u65f6\u95f4", icon: "\u{1F3AF}", accent: 1 },
+  { num: 2, slug: "ch02-three-layer-arch", title_en: "Three-Layer Architecture", title_vi: "Ki\u1ebfn tr\ufffdc ba l\u1edbp", title_zh: "\u4e09\u5c42\u67b6\u6784", icon: "\u{1F9ED}", accent: 2 },
+  { num: 3, slug: "ch03-agent-loop", title_en: "Agent Loop", title_vi: "Agent Loop", title_zh: "Agent Loop", icon: "\u{1F504}", accent: 3 },
+  { num: 4, slug: "ch04-model-invocation", title_en: "Model Invocation", title_vi: "G\u1ecdi m\ufffd h\ufffdnh", title_zh: "\u6a21\u578b\u8c03\u7528", icon: "\u{1F4AC}", accent: 4 },
+  { num: 5, slug: "ch05-tool-system", title_en: "Tool System", title_vi: "H\u1ec7 th\u1ed1ng c\ufffdnh c\u1ee5", title_zh: "\u5de5\u5177\u7cfb\u7edf", icon: "\u{1F527}", accent: 5 },
+  { num: 6, slug: "ch06-messages", title_en: "Message System", title_vi: "H\u1ec7 th\u1ed1ng tin nh\u1eafn", title_zh: "\u6d88\u606f\u7cfb\u7edf", icon: "\u{1F4E8}", accent: 6 },
+  { num: 7, slug: "ch07-event-driven", title_en: "Event-Driven Architecture", title_vi: "Ki\u1ebfn tr\ufffdc h\u01b0\u1edbng s\u1ef1 ki\u1ec7n", title_zh: "\u4e8b\u4ef6\u9a71\u52a8\u67b6\u6784", icon: "\u{1F4E1}", accent: 7 },
+  { num: 8, slug: "ch08-context-engineering", title_en: "Context Engineering", title_vi: "K\u1ef9 thu\u1eadt ng\u1eef c\u1ea3nh", title_zh: "\u4e0a\u4e0b\u6587\u5de5\u7a0b", icon: "\u{1F9F0}", accent: 8 },
+  { num: 9, slug: "ch09-compaction", title_en: "Context Compaction", title_vi: "N\ufffdn ng\u1eef c\u1ea3nh", title_zh: "\u4e0a\u4e0b\u6587\u538b\u7f29", icon: "\u{1F5DC}\uFE0F", accent: 9 },
+  { num: 10, slug: "ch10-session", title_en: "Session Management", title_vi: "Qu\u1ea3n l\ufffd phi\u00ean", title_zh: "\u4f1a\u8bdd\u7ba1\u7406", icon: "\u{1F4DC}", accent: 10 },
 ];
 
 const titleKey = lang === "vi" ? "title_vi" : lang === "zh" ? "title_zh" : "title_en";
@@ -21,10 +21,13 @@ const titleKey = lang === "vi" ? "title_vi" : lang === "zh" ? "title_zh" : "titl
 
 <div class="chapters-grid">
   {chapters.map((ch) => (
-    <a class="chapter-card" href={basePrefix + lang + "/" + ch.slug}>
-      <span class="chapter-num">Chapter {ch.num}</span>
-      <span class="chapter-title">{ch[titleKey]}</span>
-      <span class="chapter-arrow">→</span>
+    <a class={`chapter-card accent-${ch.accent}`} href={basePrefix + lang + "/" + ch.slug}>
+      <div class="chapter-icon" aria-hidden="true">{ch.icon}</div>
+      <div class="chapter-body">
+        <span class="chapter-num">Chapter {ch.num}</span>
+        <span class="chapter-title">{ch[titleKey]}</span>
+      </div>
+      <span class="chapter-arrow" aria-hidden="true">→</span>
     </a>
   ))}
 </div>
@@ -32,40 +35,117 @@ const titleKey = lang === "vi" ? "title_vi" : lang === "zh" ? "title_zh" : "titl
 <style>
   .chapters-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 0.75rem;
-    margin: 1.5rem 0 2rem;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 1rem;
+    margin: 1.5rem 0 2.5rem;
   }
+
   .chapter-card {
+    position: relative;
     display: flex;
-    flex-direction: column;
-    padding: 1rem 1.25rem;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 1.15rem;
     border: 1px solid var(--sl-color-gray-5);
-    border-radius: 0.5rem;
+    border-radius: 0.75rem;
     background: var(--sl-color-bg-nav);
     text-decoration: none;
     color: var(--sl-color-text);
-    transition: border-color 0.2s, transform 0.2s;
+    transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+    overflow: hidden;
+    isolation: isolate;
   }
+
+  .chapter-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--card-accent) 8%, transparent) 0%,
+      transparent 60%
+    );
+    opacity: 0;
+    transition: opacity 0.25s;
+  }
+
   .chapter-card:hover {
-    border-color: var(--sl-color-accent);
-    transform: translateY(-2px);
+    border-color: var(--card-accent);
+    transform: translateY(-3px);
+    box-shadow: 0 12px 28px -16px color-mix(in srgb, var(--card-accent) 60%, transparent);
   }
+
+  .chapter-card:hover::before {
+    opacity: 1;
+  }
+
+  .chapter-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.6rem;
+    height: 2.6rem;
+    font-size: 1.4rem;
+    background: color-mix(in srgb, var(--card-accent) 14%, transparent);
+    border-radius: 0.6rem;
+    flex-shrink: 0;
+  }
+
+  .chapter-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+    flex: 1;
+  }
+
   .chapter-num {
-    font-size: 0.8rem;
-    color: var(--sl-color-accent);
+    font-size: 0.72rem;
+    color: var(--card-accent);
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.06em;
   }
+
   .chapter-title {
-    font-size: 1.05rem;
-    font-weight: 500;
-    margin-top: 0.25rem;
+    font-size: 0.98rem;
+    font-weight: 600;
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
   }
+
   .chapter-arrow {
     color: var(--sl-color-gray-3);
-    margin-top: 0.5rem;
-    text-align: right;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+    transition: color 0.2s, transform 0.2s;
+  }
+
+  .chapter-card:hover .chapter-arrow {
+    color: var(--card-accent);
+    transform: translateX(3px);
+  }
+
+  /* Per-card accent colors */
+  .accent-1 { --card-accent: #6366f1; }
+  .accent-2 { --card-accent: #8b5cf6; }
+  .accent-3 { --card-accent: #ec4899; }
+  .accent-4 { --card-accent: #f43f5e; }
+  .accent-5 { --card-accent: #f97316; }
+  .accent-6 { --card-accent: #eab308; }
+  .accent-7 { --card-accent: #22c55e; }
+  .accent-8 { --card-accent: #14b8a6; }
+  .accent-9 { --card-accent: #06b6d4; }
+  .accent-10 { --card-accent: #3b82f6; }
+
+  @media (max-width: 480px) {
+    .chapters-grid {
+      grid-template-columns: 1fr;
+    }
   }
 </style>

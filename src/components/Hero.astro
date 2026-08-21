@@ -3,39 +3,237 @@ import { Image } from "astro:assets";
 import logoLight from "../assets/logo-light-bg.svg";
 
 const { lang } = Astro.props;
+
 const titles = {
   zh: "Pify Agent Book",
   en: "Pify Agent Book",
   vi: "Sách Pify Agent",
 };
+
 const tagline = {
   zh: "Pi Agent SDK 源码阅读笔记",
   en: "Source-code reading notes for the Pi Agent SDK",
   vi: "Ghi chú đọc mã nguồn cho Pi Agent SDK",
 };
+
+const features = {
+  zh: [
+    { icon: "\u{1F4D6}", label: "10 章系统解读" },
+    { icon: "\u{1F310}", label: "三语对照阅读" },
+    { icon: "\u{1F9E9}", label: "Mermaid 架构图" },
+    { icon: "\u{1F527}", label: "可运行示例" },
+  ],
+  en: [
+    { icon: "\u{1F4D6}", label: "10 chapters, end-to-end" },
+    { icon: "\u{1F310}", label: "Three languages side-by-side" },
+    { icon: "\u{1F9E9}", label: "Mermaid architecture diagrams" },
+    { icon: "\u{1F527}", label: "Runnable code samples" },
+  ],
+  vi: [
+    { icon: "\u{1F4D6}", label: "10 chương, đầy đủ" },
+    { icon: "\u{1F310}", label: "Ba ngôn ngữ song song" },
+    { icon: "\u{1F9E9}", label: "Sơ đồ Mermaid" },
+    { icon: "\u{1F527}", label: "Code mẫu chạy được" },
+  ],
+};
+
+const ctaStart = {
+  zh: "开始阅读",
+  en: "Start reading",
+  vi: "Bắt đầu đọc",
+};
 ---
 
-<div class="hero">
-  <Image src={logoLight} alt="Pify" class="hero-logo" width="120" height="120" />
-  <h1>{titles[lang]}</h1>
-  <p class="hero-tagline">{tagline[lang]}</p>
-</div>
+<section class="hero">
+  <div class="hero-grid" aria-hidden="true"></div>
+  <div class="hero-inner">
+    <Image
+      src={logoLight}
+      alt="Pify"
+      class="hero-logo"
+      width="96"
+      height="96"
+    />
+    <span class="hero-eyebrow">v1.0 · Source-code notes</span>
+    <h1 class="hero-title">
+      <span class="hero-title-text">{titles[lang]}</span>
+    </h1>
+    <p class="hero-tagline">{tagline[lang]}</p>
+
+    <div class="hero-features">
+      {features[lang].map((f) => (
+        <span class="hero-feature">
+          <span class="hero-feature-icon">{f.icon}</span>
+          <span>{f.label}</span>
+        </span>
+      ))}
+    </div>
+
+    <a class="hero-cta" href={`${import.meta.env.BASE_URL}/${lang}/ch01-overview`}>
+      <span>{ctaStart[lang]}</span>
+      <span class="hero-cta-arrow" aria-hidden="true">→</span>
+    </a>
+  </div>
+</section>
 
 <style>
   .hero {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    padding: 4rem 1.5rem 3rem;
+  }
+
+  /* Subtle dot-grid background */
+  .hero-grid {
+    position: absolute;
+    inset: 0;
+    z-index: -2;
+    background-image: radial-gradient(
+      circle at 1px 1px,
+      color-mix(in srgb, var(--sl-color-gray-5) 80%, transparent) 1px,
+      transparent 0
+    );
+    background-size: 22px 22px;
+    mask-image: radial-gradient(
+      ellipse 80% 60% at 50% 0%,
+      black 40%,
+      transparent 100%
+    );
+  }
+
+  /* Brand gradient glow behind the title */
+  .hero::before {
+    content: "";
+    position: absolute;
+    top: -10%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(80%, 720px);
+    height: 60%;
+    background: radial-gradient(
+      ellipse at center,
+      color-mix(in srgb, var(--pify-brand-2) 22%, transparent) 0%,
+      transparent 60%
+    );
+    z-index: -1;
+    pointer-events: none;
+  }
+
+  .hero-inner {
+    max-width: 720px;
+    margin: 0 auto;
     text-align: center;
-    padding: 2rem 1rem 1rem;
   }
+
   .hero-logo {
-    width: 120px;
-    height: 120px;
+    width: 80px;
+    height: 80px;
+    border-radius: 18px;
+    box-shadow: 0 12px 30px -10px color-mix(in srgb, var(--pify-brand-2) 50%, transparent);
   }
-  .hero h1 {
-    margin: 0.75rem 0 0.25rem;
-    font-size: 2.25rem;
+
+  .hero-eyebrow {
+    display: inline-block;
+    margin-top: 1rem;
+    padding: 0.3rem 0.8rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--pify-brand-2);
+    background: color-mix(in srgb, var(--pify-brand-2) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--pify-brand-2) 30%, transparent);
+    border-radius: 999px;
   }
+
+  .hero-title {
+    margin: 1.1rem 0 0.5rem;
+    font-size: clamp(2.25rem, 4vw + 1rem, 3.5rem);
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: -0.03em;
+  }
+
+  .hero-title-text {
+    background: var(--pify-gradient);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
   .hero-tagline {
+    margin: 0 auto;
+    max-width: 32rem;
     color: var(--sl-color-gray-2);
-    font-size: 1.05rem;
+    font-size: 1.15rem;
+    line-height: 1.5;
+  }
+
+  .hero-features {
+    margin: 1.75rem auto 1.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+    max-width: 38rem;
+  }
+
+  .hero-feature {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.85rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--sl-color-text);
+    background: var(--sl-color-bg-nav);
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 999px;
+    transition: border-color 0.2s, transform 0.2s;
+  }
+
+  .hero-feature:hover {
+    border-color: var(--pify-brand-2);
+    transform: translateY(-1px);
+  }
+
+  .hero-feature-icon {
+    font-size: 0.95rem;
+  }
+
+  .hero-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.4rem;
+    font-size: 1rem;
+    font-weight: 600;
+    color: white;
+    background: var(--pify-gradient);
+    border-radius: 999px;
+    text-decoration: none;
+    box-shadow: 0 8px 24px -8px color-mix(in srgb, var(--pify-brand-2) 60%, transparent);
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+
+  .hero-cta:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 32px -10px color-mix(in srgb, var(--pify-brand-2) 70%, transparent);
+    text-decoration: none;
+  }
+
+  .hero-cta-arrow {
+    transition: transform 0.2s;
+  }
+
+  .hero-cta:hover .hero-cta-arrow {
+    transform: translateX(3px);
+  }
+
+  @media (max-width: 640px) {
+    .hero {
+      padding: 2.5rem 1rem 2rem;
+    }
   }
 </style>
