@@ -98,14 +98,14 @@ Noi chung chung "Session Tree la mot cay chi them vao" kho ai hieu noi. Ta dung 
 Tuong tuong ban mo Pi Agent va thuc hien 8 thao tac:
 
 ```
-步骤 1: 切换到 Claude 4.6 模型（你想用更聪明的模型）
-步骤 2: 你问 "auth.ts 里 salt 验证为什么失败？"
-步骤 3: Agent 决定调 read 工具读 auth.ts
-步骤 4: read 工具返回 auth.ts 的内容
-步骤 5: Agent 分析后回复 "问题在 23 行，salt 没编码"
-步骤 6: 你不太满意这个回答，回退到步骤 2 重来
-步骤 7: 你换思路问 "先看 hash 函数的实现"
-步骤 8: Agent 调 grep + read 给出新的分析
+bước 1: chuyển sang Claude 4.6 model(Bạn muốn sử dụng một mô hình thông minh hơn)
+bước 2: bạn hỏi "auth.ts bên trong salt Tại sao xác minh không thành công？"
+bước 3: Agent quyết định điều chỉnh read Công cụ để đọc auth.ts
+bước 4: read công cụ trả về auth.ts nội dung
+bước 5: Agent trả lời sau khi phân tích "Vấn đề là 23 được rồi, salt Không mã hóa"
+bước 6: Bạn không hài lòng với câu trả lời này, Quay lại bước 2 Bắt đầu lại
+bước 7: Hỏi theo cách khác "Nhìn đầu tiên hash Thực hiện chức năng"
+bước 8: Agent điều chỉnh grep + read Đưa ra phân tích mới
 ```
 
 
@@ -117,8 +117,8 @@ Khi phien bat dau, dong dau tien cua file la Session Header (khong phai node cay
 
 ```
 e1: ModelChangeEntry
-    parentId: null（根节点）
-    payload: { model: "claude-sonnet-4-6" }
+ parentId: null(nút gốc)
+ payload: { model: "claude-sonnet-4-6" }
 ```
 
 
@@ -127,7 +127,7 @@ Cay bay gio chi co mot node:
 ```
 e1 (model_change)
 ↑
-leafId 在这
+leafId ở đây
 ```
 
 
@@ -137,10 +137,10 @@ Ban go "tai sao xac minh salt trong auth.ts that bai?": sinh ra e2 (UserMessage)
 
 ```
 e2: MessageEntry
-    parentId: e1
-    message:
-      role: "user"
-      content: [{ type: "text", text: "auth.ts 里 salt 验证为什么失败？" }]
+ parentId: e1
+ message:
+ role: "user"
+ content: [{ type: "text", text: "auth.ts bên trong salt Tại sao xác minh không thành công？" }]
 ```
 
 
@@ -149,8 +149,8 @@ Chu y `parentId: e1`: no tro ve "node truoc do", khong tro ve session header. Ca
 ```
 e1 (model_change)
  └── e2 (user message)
-       ↑
-     leafId
+ ↑
+ leafId
 ```
 
 
@@ -160,15 +160,15 @@ Agent quyet dinh doc file truoc: sinh ra e3 (AssistantMessage co ToolCall):
 
 ```
 e3: MessageEntry
-    parentId: e2
-    message:
-      role: "assistant"
-      content: [
-        { type: "text", text: "让我读一下 auth.ts" },
-        { type: "toolCall", id: "call_001", name: "read",
-          arguments: { path: "src/auth.ts" } }
-      ]
-      stopReason: "toolUse"
+ parentId: e2
+ message:
+ role: "assistant"
+ content: [
+ { type: "text", text: "để tôi đọc nó auth.ts" },
+ { type: "toolCall", id: "call_001", name: "read",
+ arguments: { path: "src/auth.ts" } }
+ ]
+ stopReason: "toolUse"
 ```
 
 
@@ -177,9 +177,9 @@ AssistantMessage nay **dong thoi chua text va tool call**: chung duoc dat trong 
 ```
 e1 (model_change)
  └── e2 (user)
-      └── e3 (assistant + ToolCall)
-            ↑
-          leafId
+ └── e3 (assistant + ToolCall)
+ ↑
+ leafId
 ```
 
 
@@ -189,12 +189,12 @@ Sau khi tool thuc thi xong, mot node message ToolResult duoc sinh ra:
 
 ```
 e4: MessageEntry
-    parentId: e3
-    message:
-      role: "toolResult"
-      toolCallId: "call_001"     ← 关联到 e3 里的 ToolCall
-      content: [{ type: "text", text: "export function verifySalt(s) { ... }" }]
-      isError: false
+ parentId: e3
+ message:
+ role: "toolResult"
+ toolCallId: "call_001" ← liên quan đến e3 bên trong ToolCall
+ content: [{ type: "text", text: "export function verifySalt(s) { ... }" }]
+ isError: false
 ```
 
 
@@ -203,10 +203,10 @@ Chu y truong `toolCallId`: truong nay lien ket ToolResult nay voi ToolCall da ki
 ```
 e1 (model_change)
  └── e2 (user)
-      └── e3 (assistant + ToolCall)
-           └── e4 (toolResult)
-                 ↑
-               leafId
+ └── e3 (assistant + ToolCall)
+ └── e4 (toolResult)
+ ↑
+ leafId
 ```
 
 
@@ -216,11 +216,11 @@ Agent thay noi dung file va tra loi phan tich:
 
 ```
 e5: MessageEntry
-    parentId: e4
-    message:
-      role: "assistant"
-      content: [{ type: "text", text: "问题在 23 行，salt 没编码" }]
-      stopReason: "stop"
+ parentId: e4
+ message:
+ role: "assistant"
+ content: [{ type: "text", text: "Vấn đề là 23 được rồi, salt Không mã hóa" }]
+ stopReason: "stop"
 ```
 
 
@@ -228,12 +228,12 @@ Den gio, 5 thao tac da sinh ra 5 node, tat ca deu nam tren mot duong thang: day 
 
 ```
 e1 (model_change)
- └── e2 (user: "salt 验证为什么失败?")
-      └── e3 (assistant: read auth.ts)
-           └── e4 (toolResult: auth.ts 内容)
-                └── e5 (assistant: "问题在 23 行")
-                      ↑
-                    leafId
+ └── e2 (user: "salt Tại sao xác minh không thành công?")
+ └── e3 (assistant: read auth.ts)
+ └── e4 (toolResult: auth.ts nội dung)
+ └── e5 (assistant: "Vấn đề là 23 được rồi")
+ ↑
+ leafId
 ```
 
 
@@ -245,7 +245,7 @@ Ban khong hai long voi phan tich "van de o dong 23", muon thay doi cach tiep can
 
 ```
 branch(branchFromId: "e2"): void {
-    this.leafId = "e2";   // 只改这一行
+ this.leafId = "e2"; // Chỉ cần thay đổi dòng này
 }
 ```
 
@@ -254,12 +254,12 @@ Thao tac chi mot dong: `leafId = "e2"`. Cay sau khi lui trong nhu the nay:
 
 ```
 e1 (model_change)
- └── e2 (user: "salt 验证为什么失败?")
-      ├── e3 (assistant: read auth.ts)        ← 旧分支还在
-      │    └── e4 (toolResult)                     数据完整保留
-      │         └── e5 (assistant: "问题在 23 行")
-      │
-      ↑ leafId 现在指回 e2
+ └── e2 (user: "salt Tại sao xác minh không thành công?")
+ ├── e3 (assistant: read auth.ts) ← Nhánh cũ vẫn còn đó
+ │ └── e4 (toolResult) Giữ nguyên dữ liệu
+ │ └── e5 (assistant: "Vấn đề là 23 được rồi")
+ │
+ ↑ leafId Quay lại ngay bây giờ e2
 ```
 
 
@@ -273,10 +273,10 @@ Tu diem reo e2, ban doi cau hoi, sinh node moi:
 
 ```
 e6: MessageEntry
-    parentId: e2   ← 跟 e3 共享同一个父！
-    message:
-      role: "user"
-      content: [{ type: "text", text: "先看 hash 函数的实现" }]
+ parentId: e2 ← theo dõi e3 có chung cha mẹ！
+ message:
+ role: "user"
+ content: [{ type: "text", text: "Nhìn đầu tiên hash Thực hiện chức năng" }]
 ```
 
 
@@ -284,14 +284,14 @@ Chu y: `parentId` cua e6 cung la `e2`, giong e3. Day la ban chat cua phan nhanh:
 
 ```
 e1 (model_change)
- └── e2 (user: "salt 验证为什么失败?")
-      ├── e3 (assistant: read auth.ts)
-      │    └── e4 (toolResult)
-      │         └── e5 (assistant: "问题在 23 行")
-      │
-      └── e6 (user: "先看 hash 函数")    ← 新分支起点
-            ↑
-          leafId
+ └── e2 (user: "salt Tại sao xác minh không thành công?")
+ ├── e3 (assistant: read auth.ts)
+ │ └── e4 (toolResult)
+ │ └── e5 (assistant: "Vấn đề là 23 được rồi")
+ │
+ └── e6 (user: "Nhìn đầu tiên hash chức năng") ← điểm bắt đầu chi nhánh mới
+ ↑
+ leafId
 ```
 
 
@@ -301,17 +301,17 @@ Agent tren nhanh moi goi tool grep + read, sinh ra 3 node moi (assistant + toolR
 
 ```
 e1 (model_change)
- └── e2 (user: "salt 验证为什么失败?")
-      ├── e3 (assistant: read auth.ts)
-      │    └── e4 (toolResult)
-      │         └── e5 (assistant: "问题在 23 行")
-      │
-      └── e6 (user: "先看 hash 函数")
-           └── e7 (assistant: grep hash)
-                └── e8 (toolResult: grep 结果)
-                     └── e9 (assistant: 新分析)
-                           ↑
-                         leafId
+ └── e2 (user: "salt Tại sao xác minh không thành công?")
+ ├── e3 (assistant: read auth.ts)
+ │ └── e4 (toolResult)
+ │ └── e5 (assistant: "Vấn đề là 23 được rồi")
+ │
+ └── e6 (user: "Nhìn đầu tiên hash chức năng")
+ └── e7 (assistant: grep hash)
+ └── e8 (toolResult: grep kết quả)
+ └── e9 (assistant: phân tích mới)
+ ↑
+ leafId
 ```
 
 
@@ -335,21 +335,21 @@ AssistantMessage o buoc 3, trong file. jsonl, la mot dong nhu the nay:
 
 ```
 {
-  "type": "message",
-  "id": "e3",
-  "parentId": "e2",
-  "timestamp": "2026-07-03T10:23:45.000Z",
-  "message": {
-    "role": "assistant",
-    "content": [
-      { "type": "text", "text": "让我读一下 auth.ts" },
-      { "type": "toolCall", "id": "call_001", "name": "read",
-        "arguments": { "path": "src/auth.ts" } }
-    ],
-    "model": "claude-sonnet-4-6",
-    "stopReason": "toolUse",
-    "usage": { "input": 1250, "output": 80 }
-  }
+ "type": "message",
+ "id": "e3",
+ "parentId": "e2",
+ "timestamp": "2026-07-03T10:23:45.000Z",
+ "message": {
+ "role": "assistant",
+ "content": [
+ { "type": "text", "text": "để tôi đọc nó auth.ts" },
+ { "type": "toolCall", "id": "call_001", "name": "read",
+ "arguments": { "path": "src/auth.ts" } }
+ ],
+ "model": "claude-sonnet-4-6",
+ "stopReason": "toolUse",
+ "usage": { "input": 1250, "output": 80 }
+ }
 }
 ```
 
@@ -434,9 +434,9 @@ Thao tác append chỉ có ba bước:
 
 
 ```
-1. 创建新 Entry（含自己的 id、parentId 指向当前 leafId、payload）
-2. 存入 byId 映射表（id → entry）
-3. leafId = 新 entry 的 id
+1. tạo mới Entry(bao gồm cả của riêng mình id, parentId Trỏ tới hiện tại leafId, payload)
+2. Gửi tiền byId bảng ánh xạ(id → entry)
+3. leafId = mới entry của id
 ```
 
 
@@ -445,9 +445,9 @@ Quay lại bước 3 (sinh ra node e3):
 
 ```
 appendEntry({ type: "message", id: "e3", parentId: "e2", message: ... });
-// 内部:
-//   byId.set("e3", newEntry);
-//   this.leafId = "e3";
+// nội bộ:
+// byId.set("e3", newEntry);
+// this.leafId = "e3";
 ```
 
 
@@ -461,10 +461,10 @@ Chi phí? Thêm một lần `Map.has()` cho mỗi lần append. Không đáng k�
 
 ```
 branch(branchFromId: "e2"): void {
-    if (!this.byId.has(branchFromId)) {
-        throw new Error(`Entry ${branchFromId} not found`);
-    }
-    this.leafId = "e2";   // 核心就是这一行
+ if (!this.byId.has(branchFromId)) {
+ throw new Error(`Entry ${branchFromId} not found`);
+ }
+ this.leafId = "e2"; // Cốt lõi là dòng này
 }
 ```
 
@@ -485,9 +485,9 @@ Nếu bạn chỉ muốn thử lại sạch sẽ mà không giữ gợi ý lịc
 
 ```
 branchWithSummary(fromId: "e5"): Promise<void> {
-    // 1. 把 e3-e5 这段被抛弃的分支喂给 LLM 生成一份结构化摘要
-    // 2. 创建一个新的 BranchSummaryEntry，其 parentId 指向 e2（与 e3-e5 同父）
-    // 3. 摘要内容是结构化的（Goal / Progress / Decisions 等，跟压缩摘要格式一样）
+ // 1. đặt e3-e5 Nguồn cấp dữ liệu chi nhánh bị bỏ rơi này LLM Tạo một bản tóm tắt có cấu trúc
+ // 2. tạo một cái mới BranchSummaryEntry, nó parentId chỉ vào e2(với e3-e5 Cùng một người cha)
+ // 3. Nội dung tóm tắt được cấu trúc(Goal / Progress / Decisions Đợi đã, Giống như định dạng tóm tắt nén)
 }
 ```
 
@@ -498,13 +498,13 @@ Sau khi treo lên, cây trở thành:
 ```
 e2 (user)
  ├── e3 (assistant: read auth.ts)
- │    └── e4 (toolResult)
- │         └── e5 (assistant: "问题在 23 行")
+ │ └── e4 (toolResult)
+ │ └── e5 (assistant: "Vấn đề là 23 được rồi")
  │
- ├── e_BranchSummary (BranchSummaryEntry: "之前试过 read auth.ts，发现 salt 编码问题但未解决根因")
+ ├── e_BranchSummary (BranchSummaryEntry: "Đã thử trước đây read auth.ts, khám phá salt Sự cố mã hóa nhưng không giải quyết được nguyên nhân gốc rễ")
  │
- └── e6 (user: "先看 hash 函数")
-      ...
+ └── e6 (user: "Nhìn đầu tiên hash chức năng")
+ ...
 ```
 
 
@@ -533,12 +533,12 @@ Quay lại ví dụ của ta, `leafId` hiện tại là e9. `buildSessionContext
 
 ```
 const path: SessionEntry[] = [];
-let current = byId.get(leafId);   // e9
+let current = byId.get(leafId); // e9
 while (current) {
-    path.push(current);   // 先按 leaf → root 顺序收集
-    current = current.parentId ? byId.get(current.parentId): undefined;
+ path.push(current); // Nhấn đầu tiên leaf → root bộ sưu tập tuần tự
+ current = current.parentId ? byId.get(current.parentId): undefined;
 }
-path.reverse();           // 反转为 root → leaf 顺序
+path.reverse(); // Đảo ngược thành root → leaf đặt hàng
 ```
 
 
@@ -558,12 +558,12 @@ Mỗi entry trên đường đi được xử lý tuỳ theo loại:
 
 
 ```
-e1 (model_change)   → 更新状态变量 model = "claude-sonnet-4-6"，不进 messages
-e2 (user message)   → 推入 messages 数组
-e6 (user message)   → 推入 messages 数组
-e7 (assistant + ToolCall) → 推入 messages 数组
-e8 (toolResult)     → 推入 messages 数组
-e9 (assistant)      → 推入 messages 数组
+e1 (model_change) → Cập nhật các biến trạng thái model = "claude-sonnet-4-6", Không vào messages
+e2 (user message) → đẩy vào messages mảng
+e6 (user message) → đẩy vào messages mảng
+e7 (assistant + ToolCall) → đẩy vào messages mảng
+e8 (toolResult) → đẩy vào messages mảng
+e9 (assistant) → đẩy vào messages mảng
 ```
 
 
@@ -572,11 +572,11 @@ Cuối cùng, mảng `messages` được dựng lên trông như sau:
 
 ```
 [
-  { role: "user", content: "auth.ts 里 salt 验证为什么失败?" },        // e2
-  { role: "user", content: "先看 hash 函数的实现" },                    // e6
-  { role: "assistant", content: [{ text: ... }, { toolCall: grep ...}] }, // e7
-  { role: "toolResult", toolCallId: "call_002", content: ... },        // e8
-  { role: "assistant", content: [{ text: "新分析..." }] }              // e9
+ { role: "user", content: "auth.ts bên trong salt Tại sao xác minh không thành công?" }, // e2
+ { role: "user", content: "Nhìn đầu tiên hash Thực hiện chức năng" }, // e6
+ { role: "assistant", content: [{ text: ... }, { toolCall: grep ...}] }, // e7
+ { role: "toolResult", toolCallId: "call_002", content: ... }, // e8
+ { role: "assistant", content: [{ text: "phân tích mới..." }] } // e9
 ]
 ```
 
@@ -589,8 +589,8 @@ Có một điểm tinh tế: **e2 và e6 đều là user message: hai user liên
 
 
 ```
-e1 (model_change: "claude-sonnet-4-6")  → model 变量 = "claude-sonnet-4-6"
-e2-e9（没有 model_change）              → model 变量保持不变
+e1 (model_change: "claude-sonnet-4-6") → model biến = "claude-sonnet-4-6"
+e2-e9(Không model_change) → model các biến không thay đổi
 ```
 
 
@@ -605,11 +605,11 @@ Nếu trên đường đi có nhiều `model_change` (ví dụ chuyển sang 4.6
 
 
 ```
-e1 (user)              ← 这之前是早期对话（已被压缩）
-e2 (assistant)         ← 被压缩
-e3 (assistant)         ← 被压缩
-e4 (compaction)        ← 压缩节点，记录了 firstKeptEntryId = "e3"
-e5 (user)              ← 压缩后保留的近期消息
+e1 (user) ← Điều này xảy ra trước những cuộc trò chuyện ban đầu(đã được nén)
+e2 (assistant) ← nén
+e3 (assistant) ← nén
+e4 (compaction) ← Nút nén, ghi lại firstKeptEntryId = "e3"
+e5 (user) ← Tin nhắn gần đây được giữ lại sau khi nén
 e6 (assistant)
 ```
 
@@ -625,10 +625,10 @@ Mảng `messages` kết quả:
 
 ```
 [
-  CompactionSummaryMessage (从 e4 生成),   // 替换了 e1、e2
-  { role: "assistant", ... },              // e3（保留区第一个）
-  { role: "user", ... },                    // e5
-  { role: "assistant", ... },              // e6
+ CompactionSummaryMessage (từ e4 tạo ra), // thay thế e1, e2
+ { role: "assistant", ... }, // e3(Cái đầu tiên trong khu vực dành riêng)
+ { role: "user", ... }, // e5
+ { role: "assistant", ... }, // e6
 ]
 ```
 
@@ -647,11 +647,11 @@ Chú ý `firstKeptEntryId` là trường do chính `CompactionEntry` ghi lại: 
 ```
 {"type":"session","version":3,"id":"UUIDv7","cwd":"/project","timestamp":"2026-07-03T10:00:00Z"}
 {"type":"model_change","id":"e1","parentId":null,"provider":"anthropic","modelId":"claude-sonnet-4-6","timestamp":"2026-07-03T10:00:05Z"}
-{"type":"message","id":"e2","parentId":"e1","message":{"role":"user","content":[{"type":"text","text":"auth.ts 里 salt 验证为什么失败?"}]},"timestamp":"2026-07-03T10:23:00Z"}
-{"type":"message","id":"e3","parentId":"e2","message":{"role":"assistant","content":[{"type":"text","text":"让我读一下 auth.ts"},{"type":"toolCall","id":"call_001","name":"read","arguments":{"path":"src/auth.ts"}}],"stopReason":"toolUse"},"timestamp":"2026-07-03T10:23:30Z"}
+{"type":"message","id":"e2","parentId":"e1","message":{"role":"user","content":[{"type":"text","text":"auth.ts bên trong salt Tại sao xác minh không thành công?"}]},"timestamp":"2026-07-03T10:23:00Z"}
+{"type":"message","id":"e3","parentId":"e2","message":{"role":"assistant","content":[{"type":"text","text":"để tôi đọc nó auth.ts"},{"type":"toolCall","id":"call_001","name":"read","arguments":{"path":"src/auth.ts"}}],"stopReason":"toolUse"},"timestamp":"2026-07-03T10:23:30Z"}
 {"type":"message","id":"e4","parentId":"e3","message":{"role":"toolResult","toolCallId":"call_001","content":[{"type":"text","text":"export function verifySalt(s) { ... }"}],"isError":false},"timestamp":"2026-07-03T10:23:31Z"}
-{"type":"message","id":"e5","parentId":"e4","message":{"role":"assistant","content":[{"type":"text","text":"问题在 23 行，salt 没编码"}],"stopReason":"stop"},"timestamp":"2026-07-03T10:24:00Z"}
-{"type":"message","id":"e6","parentId":"e2","message":{"role":"user","content":[{"type":"text","text":"先看 hash 函数的实现"}]},"timestamp":"2026-07-03T10:30:00Z"}
+{"type":"message","id":"e5","parentId":"e4","message":{"role":"assistant","content":[{"type":"text","text":"Vấn đề là 23 được rồi, salt Không mã hóa"}],"stopReason":"stop"},"timestamp":"2026-07-03T10:24:00Z"}
+{"type":"message","id":"e6","parentId":"e2","message":{"role":"user","content":[{"type":"text","text":"Nhìn đầu tiên hash Thực hiện chức năng"}]},"timestamp":"2026-07-03T10:30:00Z"}
 {"type":"message","id":"e7","parentId":"e6",...}
 ```
 

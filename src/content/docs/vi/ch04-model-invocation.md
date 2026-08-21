@@ -53,7 +53,7 @@ Message này được lưu trong Pi như thế này (format thống nhất):
 
 
 ```
-{ role: "user", content: "帮我读一下 main.ts", timestamp: 1748697600000 }
+{ role: "user", content: "đọc nó cho tôi main.ts", timestamp: 1748697600000 }
 ```
 
 
@@ -63,7 +63,7 @@ Nhưng để gửi cùng một message này cho các model khác nhau, nó phả
 
 
 ```
-{ role: "user", content: [{ type: "text", text: "帮我读一下 main.ts" }] }
+{ role: "user", content: [{ type: "text", text: "đọc nó cho tôi main.ts" }] }
 ```
 
 
@@ -71,9 +71,9 @@ Nhưng để gửi cùng một message này cho các model khác nhau, nó phả
 
 
 ```
-{ role: "user", content: "帮我读一下 main.ts" }
-// 但如果消息里包含工具结果，OpenAI 要求单独的 { role: "tool" } 消息，
-// 而 Anthropic 把工具结果合并到 user 消息里
+{ role: "user", content: "đọc nó cho tôi main.ts" }
+// Nhưng nếu thông báo chứa kết quả công cụ, OpenAI yêu cầu riêng { role: "tool" } tin tức, 
+// Và Anthropic Hợp nhất các kết quả công cụ vào user trong tin nhắn
 ```
 
 
@@ -81,7 +81,7 @@ Nhưng để gửi cùng một message này cho các model khác nhau, nó phả
 
 
 ```
-{ role: "user", parts: [{ text: "帮我读一下 main.ts" }] }
+{ role: "user", parts: [{ text: "đọc nó cho tôi main.ts" }] }
 ```
 
 
@@ -89,8 +89,8 @@ Nhưng để gửi cùng một message này cho các model khác nhau, nó phả
 
 
 ```
-{ role: "user", content: [{ text: "帮我读一下 main.ts" }] }
-// 注意：Bedrock 的 text 没有 type 字段，和 Anthropic 不一样
+{ role: "user", content: [{ text: "đọc nó cho tôi main.ts" }] }
+// Lưu ý: Bedrock của text Không type trường, và Anthropic khác nhau
 ```
 
 
@@ -123,9 +123,9 @@ Có thể bạn sẽ nghĩ đến một đáp án trực quan: bọc tất cả 
 
 
 ```
-第一层 · 统一入口    →  "接收请求，查出该找谁处理"
-第二层 · 事件协议    →  "约定输出格式:不管谁处理，交回来的都是这个样子"
-第三层 · 翻译器      →  "真正干活的人:每个翻译器精通一种 Provider 的方言"
+tầng một · lối vào thống nhất → "nhận được yêu cầu, Tìm ra người để liên lạc"
+tầng hai · giao thức sự kiện → "Định dạng đầu ra được thống nhất:Bất kể ai xử lý nó, Mọi thứ tôi đưa lại trông như thế này"
+tầng ba · người phiên dịch → "những người thực sự làm việc:Mỗi dịch giả thành thạo một Provider phương ngữ"
 ```
 
 
@@ -151,8 +151,8 @@ Hàm entry tên là `stream()`, code cực kỳ đơn giản:
 ```
 // compat.ts
 export function stream(model, context, options?) {
-  const provider = resolveApiProvider(model.api);  // 查表：这个model该找谁？
-  return provider.stream(model, context, options);  // 把工作派给翻译器
+ const provider = resolveApiProvider(model.api); // Tra cứu bảng: cái nàymodelTìm ai？
+ return provider.stream(model, context, options); // Giao việc cho người phiên dịch
 }
 ```
 
@@ -164,11 +164,11 @@ Chỉ hai bước: **tra bảng, phân công.** `model.api` là một chuỗi (v
 
 ```
 const BUILTIN_APIS = [
-  ["anthropic-messages",       anthropicMessagesApi()],      // Claude 的翻译器
-  ["openai-completions",       openAICompletionsApi()],      // GPT 的翻译器
-  ["google-generative-ai",     googleGenerativeAIApi()],     // Gemini 的翻译器
-  ["bedrock-converse-stream",   bedrockConverseStreamApi()], // Bedrock 的翻译器
-  // ... 还有 5 个
+ ["anthropic-messages", anthropicMessagesApi()], // Claude người phiên dịch
+ ["openai-completions", openAICompletionsApi()], // GPT người phiên dịch
+ ["google-generative-ai", googleGenerativeAIApi()], // Gemini người phiên dịch
+ ["bedrock-converse-stream", bedrockConverseStreamApi()], // Bedrock người phiên dịch
+ // ... Ngoài ra 5 một
 ];
 ```
 
@@ -183,16 +183,16 @@ Pi quy định: bất kể model nền tảng nào, translator phải xuất ra 
 
 
 ```
-AssistantMessageEvent（12 种）
+AssistantMessageEvent(12 loài)
 │
-├── start                              ← 流开始了
+├── start ← Dòng chảy bắt đầu
 │
-├── text_start → text_delta → ... → text_end       ← 模型在输出文字
-├── thinking_start → thinking_delta → ... → thinking_end  ← 模型在思考
-├── toolcall_start → toolcall_delta → ... → toolcall_end  ← 模型要调工具
+├── text_start → text_delta → ... → text_end ← Mô hình đang xuất văn bản
+├── thinking_start → thinking_delta → ... → thinking_end ← tư duy kiểu mẫu
+├── toolcall_start → toolcall_delta → ... → toolcall_end ← Công cụ gọi model
 │
-├── done   (reason: stop / length / toolUse)   ← 正常结束
-└── error  (reason: error / aborted)           ← 出错了
+├── done (reason: stop / length / toolUse) ← Kết thúc bình thường
+└── error (reason: error / aborted) ← đã xảy ra sự cố
 ```
 
 
@@ -214,24 +214,24 @@ Bước 2 (dịch yêu cầu) và bước 4 (dịch phản hồi) là nơi khố
 
 
 ```
-翻译器(model, context, options)
+người phiên dịch(model, context, options)
 │
-├── 1. 创建客户端
-│      用 API Key 初始化连接。就像翻译员确认自己带了字典。
+├── 1. Tạo khách hàng
+│ sử dụng API Key Khởi tạo kết nối. Giống như người dịch xác nhận rằng anh ta đã mang từ điển. 
 │
-├── 2. 构建请求参数
-│      把统一格式的消息、工具定义、系统提示，翻译成 Provider 的私有格式。
-│      比如 Google 要 content → parts，这一步就做这个转换。
+├── 2. Xây dựng các tham số yêu cầu
+│ tin nhắn có định dạng thống nhất, Định nghĩa công cụ, Lời nhắc hệ thống, dịch sang Provider định dạng riêng tư. 
+│ Ví dụ Google muốn content → parts, Thực hiện chuyển đổi này ở bước này. 
 │
-├── 3. 发送请求
-│      通过 SDK 或直接 HTTP 发给模型。等模型开始响应。
+├── 3. Gửi yêu cầu
+│ Vượt qua SDK hoặc trực tiếp HTTP Gửi tới model. Đợi mô hình bắt đầu phản hồi. 
 │
-├── 4. 处理响应流
-│      模型流式返回内容。翻译器把 Provider 的私有事件格式，
-│      翻译成第二层要求的 12 种统一事件。
+├── 4. Xử lý luồng phản hồi
+│ Truyền phát mô hình trả về nội dung. Người phiên dịch Provider định dạng sự kiện riêng tư, 
+│ Chuyển sang yêu cầu cấp độ thứ hai 12 sự kiện thống nhất. 
 │
-└── 5. 发送终止事件
-       成功 → push done；失败 → push error。流必须终止。
+└── 5. Gửi sự kiện chấm dứt
+ sự thành công → push done; thất bại → push error. Luồng phải được chấm dứt. 
 ```
 
 
@@ -239,13 +239,13 @@ Lấy Anthropic làm ví dụ, quy tắc dịch ở bước 4 (dịch tên sự 
 
 
 ```
-Anthropic 私有事件                     →  Pi 统一事件
-─────────────────                    ────────────
-content_block_start (type: "text")    →  text_start
-content_block_delta (text_delta)      →  text_delta
-content_block_start (type: "tool_use") →  toolcall_start
-content_block_delta (input_json)      →  toolcall_delta
-message_delta (stop_reason)           →  done（映射终止原因）
+Anthropic sự kiện riêng tư → Pi sự kiện thống nhất
+───────────────── ────────────
+content_block_start (type: "text") → text_start
+content_block_delta (text_delta) → text_delta
+content_block_start (type: "tool_use") → toolcall_start
+content_block_delta (input_json) → toolcall_delta
+message_delta (stop_reason) → done(Lý do chấm dứt ánh xạ)
 ```
 
 
@@ -258,10 +258,10 @@ Chú ý cách ánh xạ stop-reason: Anthropic's `"end_turn"` -> Pi's `"stop"`, 
 
 ```
 export type StreamFunction<TApi extends Api, TOptions> = (
-  model: Model<TApi>,       // 用哪个模型
-  context: Context,         // 对话上下文（系统提示 + 消息 + 工具）
-  options?: TOptions,       // 可选配置（思考级别、缓存等）
-) => AssistantMessageEventStream;  // ← 必须返回统一事件流
+ model: Model<TApi>, // Nên sử dụng mô hình nào
+ context: Context, // bối cảnh hội thoại(Lời nhắc hệ thống + tin tức + Công cụ)
+ options?: TOptions, // Cấu hình tùy chọn(mức độ tư duy, Bộ nhớ đệm, v.v.)
+) => AssistantMessageEventStream; // ← Phải trả về luồng sự kiện hợp nhất
 ```
 
 
@@ -295,26 +295,26 @@ Code điển hình của Agent Loop dùng `streamSimple()`:
 
 ```
 const stream = streamSimple(model, context, { reasoning: "high" });
-//                                          ↑ 告诉它"用高级别思考"
-//                                            streamSimple 会自动翻译成各 Provider 的具体参数
+// ↑ kể nó đi"Suy nghĩ ở cấp độ cao hơn"
+// streamSimple sẽ được tự động dịch sang từng Provider Các thông số cụ thể của
 
 for await (const event of stream) {
-  // 事件会按顺序到达：
-  // start → thinking_start/delta/end → text_start/delta/end → done
-  switch (event.type) {
-    case "text_delta":
-      // 文字增量，显示到终端
-      break;
-    case "toolcall_end":
-      // 模型要调工具，拿到完整的工具调用信息
-      break;
-    case "done":
-      // 本轮模型调用结束，看 stopReason 决定是否继续循环
-      break;
-    case "error":
-      // 出错了（网络超时、API错误等），errorReason 是 "error" 或 "aborted"
-      break;
-  }
+ // Sự kiện sẽ đến theo thứ tự: 
+ // start → thinking_start/delta/end → text_start/delta/end → done
+ switch (event.type) {
+ case "text_delta":
+ // tăng văn bản, hiển thị tới thiết bị đầu cuối
+ break;
+ case "toolcall_end":
+ // Công cụ gọi model, Nhận thông tin cuộc gọi công cụ đầy đủ
+ break;
+ case "done":
+ // Vòng gọi mô hình này kết thúc, nhìn stopReason Quyết định có tiếp tục lặp hay không
+ break;
+ case "error":
+ // đã xảy ra sự cố(Hết thời gian chờ mạng, APILỗi vv.), errorReason Có "error" hoặc "aborted"
+ break;
+ }
 }
 ```
 
@@ -342,9 +342,9 @@ Bước này là nhiều việc nhất: bạn cần đọc tài liệu API của
 
 ```
 registerApiProvider({
-  api: "your-model-api",           // 给你的翻译器起个名字
-  stream: yourStreamFunction,       // 你写的翻译器
-  streamSimple: yourSimpleFunction, // 便捷版本
+ api: "your-model-api", // Đặt tên cho người dịch của bạn
+ stream: yourStreamFunction, // Người dịch do bạn viết
+ streamSimple: yourSimpleFunction, // Phiên bản tiện lợi
 });
 ```
 
@@ -356,11 +356,11 @@ Bước này chỉ là thêm một bản ghi vào "danh bạ". Sau khi hệ th�
 
 ```
 const yourModel: Model = {
-  id: "your-model-id",
-  api: "your-model-api",     // ← 指向第 2 步注册的名字
-  provider: "your-provider",
-  baseUrl: "https://api.your-model.com",
-  // ... 其他元数据（上下文窗口大小、是否支持思考等）
+ id: "your-model-id",
+ api: "your-model-api", // ← Chỉ vào 2 tên đăng ký
+ provider: "your-provider",
+ baseUrl: "https://api.your-model.com",
+ // ... Siêu dữ liệu khác(kích thước cửa sổ ngữ cảnh, Liệu nó có hỗ trợ suy nghĩ, v.v.)
 };
 ```
 
@@ -385,11 +385,11 @@ Chương 3 đã nói: phản hồi của model là streaming: "nhổ ra" từng 
 
 
 ```
-Anthropic 的解析链路（翻译器自己做脏活）：
-  原始 HTTP 响应 → 逐行读取 → 分离 event 和 data → JSON 解析(含容错) → 内部事件
+Anthropic liên kết phân tích cú pháp(Người dịch tự mình làm công việc bẩn thỉu): 
+ nguyên bản HTTP phản ứng → Đọc từng dòng → sự chia ly event và data → JSON phân tích cú pháp(Chứa khả năng chịu lỗi) → sự kiện nội bộ
 
-OpenAI 的解析链路（SDK 帮你做了脏活）：
-  client.chat.completions.create() → 直接返回 AsyncIterable<Chunk> → 就是结构化数据
+OpenAI liên kết phân tích cú pháp(SDK Việc bẩn thỉu có giúp ích gì cho bạn không): 
+ client.chat.completions.create() → Trả lại trực tiếp AsyncIterable<Chunk> → Đó là dữ liệu có cấu trúc
 ```
 
 
@@ -401,13 +401,13 @@ Các Provider khác nhau có khái niệm và tham số hoàn toàn khác nhau c
 
 
 ```
-// Anthropic：给一个 token 预算，让模型在这个预算内思考
+// Anthropic: cho một cái token ngân sách, Hãy để mô hình suy nghĩ trong phạm vi ngân sách này
 params.thinking = { type: "enabled", budget_tokens: 16384 };
 
-// OpenAI：给一个努力程度（low/medium/high）
+// OpenAI: Đưa ra một mức độ nỗ lực(low/medium/high)
 params.reasoning_effort = "high";
 
-// Google：用 thinkingConfig 配置
+// Google: sử dụng thinkingConfig Cấu hình
 config.thinkingConfig = { includeThoughts: true, thinkingLevel: "high" };
 ```
 
@@ -422,9 +422,9 @@ Pi định nghĩa một enum cấp độ suy nghĩ thống nhất:
 
 
 ```
-  off    minimal    low    medium    high    xhigh
-  │        │         │       │        │        │
- 不思考  1024 tk   2048 tk  8192 tk  16384 tk  模型最大值
+ off minimal low medium high xhigh
+ │ │ │ │ │ │
+ không suy nghĩ 1024 tk 2048 tk 8192 tk 16384 tk mô hình tối đa
 ```
 
 
@@ -483,13 +483,13 @@ Xử lý lỗi của tất cả translator đều theo cùng một pattern:
 
 ```
 try {
-  // ... 正常流程：构建请求、发送、解析响应
-  stream.push({ type: "done", reason: output.stopReason, message: output });
+ // ... quá trình bình thường: Yêu cầu xây dựng, gửi, Phân tích phản hồi
+ stream.push({ type: "done", reason: output.stopReason, message: output });
 } catch (error) {
-  // 错误不抛出，而是编码到流中
-  output.stopReason = options?.signal?.aborted ? "aborted": "error";
-  output.errorMessage = error.message;
-  stream.push({ type: "error", reason: output.stopReason, error: output });
+ // Lỗi không được ném, Thay vào đó, nó được mã hóa thành luồng
+ output.stopReason = options?.signal?.aborted ? "aborted": "error";
+ output.errorMessage = error.message;
+ stream.push({ type: "error", reason: output.stopReason, error: output });
 }
 ```
 
@@ -508,20 +508,20 @@ Tóm gọn một câu: **Agent Loop nói "dùng model này xử lý đoạn hộ
 
 
 ```
-Agent Loop：streamSimple(model, context, { reasoning: "high" })
-    │
-    │  ① streamSimple 处理思考级别翻译（查表 → clamp → 调整maxTokens）
-    │
-    │  ② 调用 stream() → 前台查表 → 找到翻译器
-    │
-    │  ③ 翻译器工作：
-    │     · 统一格式 → Provider 私有格式（请求翻译）
-    │     · 发给模型
-    │     · Provider 私有响应 → 12种统一事件（响应翻译）
-    │
-    │  ④ 返回 AssistantMessageEventStream
-    │
-    └── Agent Loop：for await (event of stream) { ... }  ← 消费统一事件
+Agent Loop: streamSimple(model, context, { reasoning: "high" })
+ │
+ │ ① streamSimple Xử lý dịch cấp độ tư duy(Tra cứu bảng → clamp → điều chỉnhmaxTokens)
+ │
+ │ ② gọi stream() → Kiểm tra bàn ở quầy lễ tân → tìm người phiên dịch
+ │
+ │ ③ công việc phiên dịch: 
+ │ · định dạng thống nhất → Provider định dạng riêng tư(Yêu cầu dịch)
+ │ · Gửi tới model
+ │ · Provider phản hồi riêng tư → 12sự kiện thống nhất(dịch đáp ứng)
+ │
+ │ ④ Trở lại AssistantMessageEventStream
+ │
+ └── Agent Loop: for await (event of stream) { ... } ← sự kiện thống nhất tiêu thụ
 ```
 
 

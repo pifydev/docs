@@ -98,14 +98,14 @@ Abstractly saying "Session Tree is an append-only tree" is hard for anyone to gr
 Imagine you open Pi Agent and perform 8 operations:
 
 ```
-步骤 1: 切换到 Claude 4.6 模型（你想用更聪明的模型）
-步骤 2: 你问 "auth.ts 里 salt 验证为什么失败？"
-步骤 3: Agent 决定调 read 工具读 auth.ts
-步骤 4: read 工具返回 auth.ts 的内容
-步骤 5: Agent 分析后回复 "问题在 23 行，salt 没编码"
-步骤 6: 你不太满意这个回答，回退到步骤 2 重来
-步骤 7: 你换思路问 "先看 hash 函数的实现"
-步骤 8: Agent 调 grep + read 给出新的分析
+steps 1: switch to Claude 4.6 model(You want to use a smarter model)
+steps 2: you ask "auth.ts inside salt Why verification failed？"
+steps 3: Agent decide to tune read Tools for reading auth.ts
+steps 4: read tool returns auth.ts content
+steps 5: Agent reply after analysis "The problem is 23 OK, salt No coding"
+steps 6: You are not satisfied with this answer, Go back to step 2 Start over
+steps 7: Ask in a different way "Look first hash Function implementation"
+steps 8: Agent tune grep + read Give new analysis
 ```
 
 
@@ -117,8 +117,8 @@ When the session starts, the file's first line is the Session Header (not a tree
 
 ```
 e1: ModelChangeEntry
-    parentId: null（根节点）
-    payload: { model: "claude-sonnet-4-6" }
+ parentId: null(root node)
+ payload: { model: "claude-sonnet-4-6" }
 ```
 
 
@@ -127,7 +127,7 @@ The tree now has only one node:
 ```
 e1 (model_change)
 ↑
-leafId 在这
+leafId here
 ```
 
 
@@ -137,10 +137,10 @@ You type "why does salt validation fail in auth.ts?": produces e2 (UserMessage),
 
 ```
 e2: MessageEntry
-    parentId: e1
-    message:
-      role: "user"
-      content: [{ type: "text", text: "auth.ts 里 salt 验证为什么失败？" }]
+ parentId: e1
+ message:
+ role: "user"
+ content: [{ type: "text", text: "auth.ts inside salt Why verification failed？" }]
 ```
 
 
@@ -149,8 +149,8 @@ Note `parentId: e1`: it points to "the previous node", not to the session header
 ```
 e1 (model_change)
  └── e2 (user message)
-       ↑
-     leafId
+ ↑
+ leafId
 ```
 
 
@@ -160,15 +160,15 @@ Agent decides to read the file first: produces e3 (AssistantMessage with a ToolC
 
 ```
 e3: MessageEntry
-    parentId: e2
-    message:
-      role: "assistant"
-      content: [
-        { type: "text", text: "让我读一下 auth.ts" },
-        { type: "toolCall", id: "call_001", name: "read",
-          arguments: { path: "src/auth.ts" } }
-      ]
-      stopReason: "toolUse"
+ parentId: e2
+ message:
+ role: "assistant"
+ content: [
+ { type: "text", text: "let me read it auth.ts" },
+ { type: "toolCall", id: "call_001", name: "read",
+ arguments: { path: "src/auth.ts" } }
+ ]
+ stopReason: "toolUse"
 ```
 
 
@@ -177,9 +177,9 @@ This AssistantMessage **simultaneously contains text and a tool call**: they are
 ```
 e1 (model_change)
  └── e2 (user)
-      └── e3 (assistant + ToolCall)
-            ↑
-          leafId
+ └── e3 (assistant + ToolCall)
+ ↑
+ leafId
 ```
 
 
@@ -189,12 +189,12 @@ After the tool executes, a ToolResult message node is produced:
 
 ```
 e4: MessageEntry
-    parentId: e3
-    message:
-      role: "toolResult"
-      toolCallId: "call_001"     ← 关联到 e3 里的 ToolCall
-      content: [{ type: "text", text: "export function verifySalt(s) { ... }" }]
-      isError: false
+ parentId: e3
+ message:
+ role: "toolResult"
+ toolCallId: "call_001" ← related to e3 inside ToolCall
+ content: [{ type: "text", text: "export function verifySalt(s) { ... }" }]
+ isError: false
 ```
 
 
@@ -203,10 +203,10 @@ Note the `toolCallId` field: it links this ToolResult to the ToolCall that trigg
 ```
 e1 (model_change)
  └── e2 (user)
-      └── e3 (assistant + ToolCall)
-           └── e4 (toolResult)
-                 ↑
-               leafId
+ └── e3 (assistant + ToolCall)
+ └── e4 (toolResult)
+ ↑
+ leafId
 ```
 
 
@@ -216,11 +216,11 @@ Agent sees the file content and replies with analysis:
 
 ```
 e5: MessageEntry
-    parentId: e4
-    message:
-      role: "assistant"
-      content: [{ type: "text", text: "问题在 23 行，salt 没编码" }]
-      stopReason: "stop"
+ parentId: e4
+ message:
+ role: "assistant"
+ content: [{ type: "text", text: "The problem is 23 OK, salt No coding" }]
+ stopReason: "stop"
 ```
 
 
@@ -228,12 +228,12 @@ Up to now, 5 operations have produced 5 nodes, all on one straight line: this is
 
 ```
 e1 (model_change)
- └── e2 (user: "salt 验证为什么失败?")
-      └── e3 (assistant: read auth.ts)
-           └── e4 (toolResult: auth.ts 内容)
-                └── e5 (assistant: "问题在 23 行")
-                      ↑
-                    leafId
+ └── e2 (user: "salt Why verification failed?")
+ └── e3 (assistant: read auth.ts)
+ └── e4 (toolResult: auth.ts content)
+ └── e5 (assistant: "The problem is 23 OK")
+ ↑
+ leafId
 ```
 
 
@@ -245,7 +245,7 @@ You're not satisfied with the "problem is on line 23" analysis, you want to chan
 
 ```
 branch(branchFromId: "e2"): void {
-    this.leafId = "e2";   // 只改这一行
+ this.leafId = "e2"; // Just change this line
 }
 ```
 
@@ -254,12 +254,12 @@ The operation is just one line: `leafId = "e2"`. The tree after rewind looks lik
 
 ```
 e1 (model_change)
- └── e2 (user: "salt 验证为什么失败?")
-      ├── e3 (assistant: read auth.ts)        ← 旧分支还在
-      │    └── e4 (toolResult)                     数据完整保留
-      │         └── e5 (assistant: "问题在 23 行")
-      │
-      ↑ leafId 现在指回 e2
+ └── e2 (user: "salt Why verification failed?")
+ ├── e3 (assistant: read auth.ts) ← The old branch is still there
+ │ └── e4 (toolResult) Keep data intact
+ │ └── e5 (assistant: "The problem is 23 OK")
+ │
+ ↑ leafId Point back now e2
 ```
 
 
@@ -273,10 +273,10 @@ From the e2 fork point, you change the question, producing a new node:
 
 ```
 e6: MessageEntry
-    parentId: e2   ← 跟 e3 共享同一个父！
-    message:
-      role: "user"
-      content: [{ type: "text", text: "先看 hash 函数的实现" }]
+ parentId: e2 ← follow e3 share the same parent！
+ message:
+ role: "user"
+ content: [{ type: "text", text: "Look first hash Function implementation" }]
 ```
 
 
@@ -284,14 +284,14 @@ Note: e6's `parentId` is also `e2`, same as e3. This is the essence of branching
 
 ```
 e1 (model_change)
- └── e2 (user: "salt 验证为什么失败?")
-      ├── e3 (assistant: read auth.ts)
-      │    └── e4 (toolResult)
-      │         └── e5 (assistant: "问题在 23 行")
-      │
-      └── e6 (user: "先看 hash 函数")    ← 新分支起点
-            ↑
-          leafId
+ └── e2 (user: "salt Why verification failed?")
+ ├── e3 (assistant: read auth.ts)
+ │ └── e4 (toolResult)
+ │ └── e5 (assistant: "The problem is 23 OK")
+ │
+ └── e6 (user: "Look first hash function") ← new branch starting point
+ ↑
+ leafId
 ```
 
 
@@ -301,17 +301,17 @@ Agent on the new branch calls grep + read tools, producing 3 new nodes (assistan
 
 ```
 e1 (model_change)
- └── e2 (user: "salt 验证为什么失败?")
-      ├── e3 (assistant: read auth.ts)
-      │    └── e4 (toolResult)
-      │         └── e5 (assistant: "问题在 23 行")
-      │
-      └── e6 (user: "先看 hash 函数")
-           └── e7 (assistant: grep hash)
-                └── e8 (toolResult: grep 结果)
-                     └── e9 (assistant: 新分析)
-                           ↑
-                         leafId
+ └── e2 (user: "salt Why verification failed?")
+ ├── e3 (assistant: read auth.ts)
+ │ └── e4 (toolResult)
+ │ └── e5 (assistant: "The problem is 23 OK")
+ │
+ └── e6 (user: "Look first hash function")
+ └── e7 (assistant: grep hash)
+ └── e8 (toolResult: grep result)
+ └── e9 (assistant: new analysis)
+ ↑
+ leafId
 ```
 
 
@@ -335,21 +335,21 @@ The AssistantMessage from step 3, in the. jsonl file, is one line like this:
 
 ```
 {
-  "type": "message",
-  "id": "e3",
-  "parentId": "e2",
-  "timestamp": "2026-07-03T10:23:45.000Z",
-  "message": {
-    "role": "assistant",
-    "content": [
-      { "type": "text", "text": "让我读一下 auth.ts" },
-      { "type": "toolCall", "id": "call_001", "name": "read",
-        "arguments": { "path": "src/auth.ts" } }
-    ],
-    "model": "claude-sonnet-4-6",
-    "stopReason": "toolUse",
-    "usage": { "input": 1250, "output": 80 }
-  }
+ "type": "message",
+ "id": "e3",
+ "parentId": "e2",
+ "timestamp": "2026-07-03T10:23:45.000Z",
+ "message": {
+ "role": "assistant",
+ "content": [
+ { "type": "text", "text": "let me read it auth.ts" },
+ { "type": "toolCall", "id": "call_001", "name": "read",
+ "arguments": { "path": "src/auth.ts" } }
+ ],
+ "model": "claude-sonnet-4-6",
+ "stopReason": "toolUse",
+ "usage": { "input": 1250, "output": 80 }
+ }
 }
 ```
 
@@ -434,9 +434,9 @@ The append operation has only three steps:
 
 
 ```
-1. 创建新 Entry（含自己的 id、parentId 指向当前 leafId、payload）
-2. 存入 byId 映射表（id → entry）
-3. leafId = 新 entry 的 id
+1. create new Entry(including one's own id, parentId Point to current leafId, payload)
+2. Deposit byId mapping table(id → entry)
+3. leafId = new entry of id
 ```
 
 
@@ -445,9 +445,9 @@ Back to step 3 (producing node e3):
 
 ```
 appendEntry({ type: "message", id: "e3", parentId: "e2", message: ... });
-// 内部:
-//   byId.set("e3", newEntry);
-//   this.leafId = "e3";
+// internal:
+// byId.set("e3", newEntry);
+// this.leafId = "e3";
 ```
 
 
@@ -461,10 +461,10 @@ Cost? One extra `Map.has()` per append. Negligible. The benefit is that all old 
 
 ```
 branch(branchFromId: "e2"): void {
-    if (!this.byId.has(branchFromId)) {
-        throw new Error(`Entry ${branchFromId} not found`);
-    }
-    this.leafId = "e2";   // 核心就是这一行
+ if (!this.byId.has(branchFromId)) {
+ throw new Error(`Entry ${branchFromId} not found`);
+ }
+ this.leafId = "e2"; // The core is this line
 }
 ```
 
@@ -485,9 +485,9 @@ If you want a clean retry without keeping any history hint, `branch()` is enough
 
 ```
 branchWithSummary(fromId: "e5"): Promise<void> {
-    // 1. 把 e3-e5 这段被抛弃的分支喂给 LLM 生成一份结构化摘要
-    // 2. 创建一个新的 BranchSummaryEntry，其 parentId 指向 e2（与 e3-e5 同父）
-    // 3. 摘要内容是结构化的（Goal / Progress / Decisions 等，跟压缩摘要格式一样）
+ // 1. put e3-e5 This abandoned branch feeds LLM Generate a structured summary
+ // 2. create a new BranchSummaryEntry, its parentId point to e2(with e3-e5 Same father)
+ // 3. The summary content is structured(Goal / Progress / Decisions Wait, Same as compressed summary format)
 }
 ```
 
@@ -498,13 +498,13 @@ After hanging it on, the tree becomes:
 ```
 e2 (user)
  ├── e3 (assistant: read auth.ts)
- │    └── e4 (toolResult)
- │         └── e5 (assistant: "问题在 23 行")
+ │ └── e4 (toolResult)
+ │ └── e5 (assistant: "The problem is 23 OK")
  │
- ├── e_BranchSummary (BranchSummaryEntry: "之前试过 read auth.ts，发现 salt 编码问题但未解决根因")
+ ├── e_BranchSummary (BranchSummaryEntry: "Tried before read auth.ts, discover salt Encoding issues but not solving the root cause")
  │
- └── e6 (user: "先看 hash 函数")
-      ...
+ └── e6 (user: "Look first hash function")
+ ...
 ```
 
 
@@ -533,12 +533,12 @@ Back to our example, the current `leafId` is e9. `buildSessionContext` first wal
 
 ```
 const path: SessionEntry[] = [];
-let current = byId.get(leafId);   // e9
+let current = byId.get(leafId); // e9
 while (current) {
-    path.push(current);   // 先按 leaf → root 顺序收集
-    current = current.parentId ? byId.get(current.parentId): undefined;
+ path.push(current); // Press first leaf → root sequential collection
+ current = current.parentId ? byId.get(current.parentId): undefined;
 }
-path.reverse();           // 反转为 root → leaf 顺序
+path.reverse(); // Invert to root → leaf order
 ```
 
 
@@ -558,12 +558,12 @@ Each entry along the path is handled according to its type:
 
 
 ```
-e1 (model_change)   → 更新状态变量 model = "claude-sonnet-4-6"，不进 messages
-e2 (user message)   → 推入 messages 数组
-e6 (user message)   → 推入 messages 数组
-e7 (assistant + ToolCall) → 推入 messages 数组
-e8 (toolResult)     → 推入 messages 数组
-e9 (assistant)      → 推入 messages 数组
+e1 (model_change) → Update state variables model = "claude-sonnet-4-6", Not entering messages
+e2 (user message) → push in messages array
+e6 (user message) → push in messages array
+e7 (assistant + ToolCall) → push in messages array
+e8 (toolResult) → push in messages array
+e9 (assistant) → push in messages array
 ```
 
 
@@ -572,11 +572,11 @@ Finally, the resulting `messages` array looks like:
 
 ```
 [
-  { role: "user", content: "auth.ts 里 salt 验证为什么失败?" },        // e2
-  { role: "user", content: "先看 hash 函数的实现" },                    // e6
-  { role: "assistant", content: [{ text: ... }, { toolCall: grep ...}] }, // e7
-  { role: "toolResult", toolCallId: "call_002", content: ... },        // e8
-  { role: "assistant", content: [{ text: "新分析..." }] }              // e9
+ { role: "user", content: "auth.ts inside salt Why verification failed?" }, // e2
+ { role: "user", content: "Look first hash Function implementation" }, // e6
+ { role: "assistant", content: [{ text: ... }, { toolCall: grep ...}] }, // e7
+ { role: "toolResult", toolCallId: "call_002", content: ... }, // e8
+ { role: "assistant", content: [{ text: "new analysis..." }] } // e9
 ]
 ```
 
@@ -589,8 +589,8 @@ Notice one subtle thing: **e2 and e6 are both user messages: two user messages i
 
 
 ```
-e1 (model_change: "claude-sonnet-4-6")  → model 变量 = "claude-sonnet-4-6"
-e2-e9（没有 model_change）              → model 变量保持不变
+e1 (model_change: "claude-sonnet-4-6") → model variable = "claude-sonnet-4-6"
+e2-e9(No model_change) → model variables remain unchanged
 ```
 
 
@@ -605,11 +605,11 @@ If the path contains multiple `model_change` entries (say first switched to 4.6,
 
 
 ```
-e1 (user)              ← 这之前是早期对话（已被压缩）
-e2 (assistant)         ← 被压缩
-e3 (assistant)         ← 被压缩
-e4 (compaction)        ← 压缩节点，记录了 firstKeptEntryId = "e3"
-e5 (user)              ← 压缩后保留的近期消息
+e1 (user) ← This was preceded by early conversations(has been compressed)
+e2 (assistant) ← compressed
+e3 (assistant) ← compressed
+e4 (compaction) ← Compress node, recorded firstKeptEntryId = "e3"
+e5 (user) ← Recent messages retained after compression
 e6 (assistant)
 ```
 
@@ -625,10 +625,10 @@ The resulting `messages` array:
 
 ```
 [
-  CompactionSummaryMessage (从 e4 生成),   // 替换了 e1、e2
-  { role: "assistant", ... },              // e3（保留区第一个）
-  { role: "user", ... },                    // e5
-  { role: "assistant", ... },              // e6
+ CompactionSummaryMessage (from e4 generate), // replaced e1, e2
+ { role: "assistant", ... }, // e3(The first one in the reserved area)
+ { role: "user", ... }, // e5
+ { role: "assistant", ... }, // e6
 ]
 ```
 
@@ -647,11 +647,11 @@ Notice that `firstKeptEntryId` is a field recorded on the `CompactionEntry` itse
 ```
 {"type":"session","version":3,"id":"UUIDv7","cwd":"/project","timestamp":"2026-07-03T10:00:00Z"}
 {"type":"model_change","id":"e1","parentId":null,"provider":"anthropic","modelId":"claude-sonnet-4-6","timestamp":"2026-07-03T10:00:05Z"}
-{"type":"message","id":"e2","parentId":"e1","message":{"role":"user","content":[{"type":"text","text":"auth.ts 里 salt 验证为什么失败?"}]},"timestamp":"2026-07-03T10:23:00Z"}
-{"type":"message","id":"e3","parentId":"e2","message":{"role":"assistant","content":[{"type":"text","text":"让我读一下 auth.ts"},{"type":"toolCall","id":"call_001","name":"read","arguments":{"path":"src/auth.ts"}}],"stopReason":"toolUse"},"timestamp":"2026-07-03T10:23:30Z"}
+{"type":"message","id":"e2","parentId":"e1","message":{"role":"user","content":[{"type":"text","text":"auth.ts inside salt Why verification failed?"}]},"timestamp":"2026-07-03T10:23:00Z"}
+{"type":"message","id":"e3","parentId":"e2","message":{"role":"assistant","content":[{"type":"text","text":"let me read it auth.ts"},{"type":"toolCall","id":"call_001","name":"read","arguments":{"path":"src/auth.ts"}}],"stopReason":"toolUse"},"timestamp":"2026-07-03T10:23:30Z"}
 {"type":"message","id":"e4","parentId":"e3","message":{"role":"toolResult","toolCallId":"call_001","content":[{"type":"text","text":"export function verifySalt(s) { ... }"}],"isError":false},"timestamp":"2026-07-03T10:23:31Z"}
-{"type":"message","id":"e5","parentId":"e4","message":{"role":"assistant","content":[{"type":"text","text":"问题在 23 行，salt 没编码"}],"stopReason":"stop"},"timestamp":"2026-07-03T10:24:00Z"}
-{"type":"message","id":"e6","parentId":"e2","message":{"role":"user","content":[{"type":"text","text":"先看 hash 函数的实现"}]},"timestamp":"2026-07-03T10:30:00Z"}
+{"type":"message","id":"e5","parentId":"e4","message":{"role":"assistant","content":[{"type":"text","text":"The problem is 23 OK, salt No coding"}],"stopReason":"stop"},"timestamp":"2026-07-03T10:24:00Z"}
+{"type":"message","id":"e6","parentId":"e2","message":{"role":"user","content":[{"type":"text","text":"Look first hash Function implementation"}]},"timestamp":"2026-07-03T10:30:00Z"}
 {"type":"message","id":"e7","parentId":"e6",...}
 ```
 

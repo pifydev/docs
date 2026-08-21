@@ -59,11 +59,11 @@ Trước khi hiểu message biến đổi thế nào, hãy làm rõ "mục tiêu
 Nó chỉ có ba thành viên:
 
 ```
-Message 联合类型（LLM 标准格式）
+Message loại công đoàn(LLM định dạng chuẩn)
 │
-├── UserMessage        ← 用户说的话 / 发的图片
-├── AssistantMessage   ← LLM 的回复（含思考、工具调用）
-└── ToolResultMessage  ← 工具执行后的结果
+├── UserMessage ← Người dùng nói gì / Hình ảnh được đăng
+├── AssistantMessage ← LLM trả lời(Chứa đựng suy nghĩ, Cuộc gọi công cụ)
+└── ToolResultMessage ← Kết quả sau khi thực hiện tool
 ```
 
 
@@ -73,9 +73,9 @@ Message 联合类型（LLM 标准格式）
 
 ```
 {
-    role: "user",
-    content: string | (TextContent | ImageContent)[],  // 纯文本或内容块数组
-    timestamp: number                                    // Unix 毫秒时间戳
+ role: "user",
+ content: string | (TextContent | ImageContent)[], // Mảng văn bản hoặc khối nội dung thuần túy
+ timestamp: number // Unix dấu thời gian mili giây
 }
 ```
 
@@ -86,15 +86,15 @@ content có thể là một chuỗi thuần, hoặc một mảng content block. 
 
 ```
 {
-    role: "assistant",
-    content: (TextContent | ThinkingContent | ToolCall)[],  // 三种内容块
-    api: Api,                   // 使用的 API 类型（如 "anthropic-messages"）
-    provider: ProviderId,       // 提供商（如 "anthropic"）
-    model: string,              // 模型名（如 "claude-sonnet-4-6"）
-    usage: Usage,               // token 用量统计
-    stopReason: StopReason,     // 停止原因（第3章讲过的5种值）
-    errorMessage?: string,      // 错误信息
-    timestamp: number
+ role: "assistant",
+ content: (TextContent | ThinkingContent | ToolCall)[], // Ba loại khối nội dung
+ api: Api, // đã sử dụng API loại(Chẳng hạn như "anthropic-messages")
+ provider: ProviderId, // nhà cung cấp(Chẳng hạn như "anthropic")
+ model: string, // Tên mẫu(Chẳng hạn như "claude-sonnet-4-6")
+ usage: Usage, // token Thống kê sử dụng
+ stopReason: StopReason, // Lý do dừng lại(Chương  nói5Loại giá trị)
+ errorMessage?: string, // thông báo lỗi
+ timestamp: number
 }
 ```
 
@@ -102,16 +102,16 @@ content có thể là một chuỗi thuần, hoặc một mảng content block. 
 Chỗ đáng chú ý nhất là trường content: nó không phải chuỗi, mà là **mảng content block** có thể chứa ba thứ:
 
 ```
-AssistantMessage 的 content 内容块
+AssistantMessage của content khối nội dung
 │
-├── TextContent       ← 普通文本
-│     { type: "text", text: "..." }
+├── TextContent ← văn bản bình thường
+│ { type: "text", text: "..." }
 │
-├── ThinkingContent   ← 思考过程（第3章讲过，模型"在想"但不直接告诉用户的部分）
-│     { type: "thinking", thinking: "..." }
+├── ThinkingContent ← quá trình suy nghĩ(Chương  nói, model"suy nghĩ"Nhưng đừng nói trực tiếp với người dùng)
+│ { type: "thinking", thinking: "..." }
 │
-└── ToolCall          ← 工具调用（第5章讲过，触发五步管道的入口）
-      { type: "toolCall", id: "...", name: "read", arguments: { path: "..." } }
+└── ToolCall ← Cuộc gọi công cụ(Chương  nói, Kích hoạt lối vào quy trình năm bước)
+ { type: "toolCall", id: "...", name: "read", arguments: { path: "..." } }
 ```
 
 
@@ -123,13 +123,13 @@ AssistantMessage 的 content 内容块
 
 ```
 {
-    role: "toolResult",
-    toolCallId: string,                             // 对应哪个 ToolCall
-    toolName: string,                               // 工具名
-    content: (TextContent | ImageContent)[],        // 结果内容
-    details?: TDetails,                             // 结构化详情（给 UI 看的）
-    isError: boolean,                               // 是否执行失败（第5章的"永不抛出"产物）
-    timestamp: number
+ role: "toolResult",
+ toolCallId: string, // Tương ứng với cái nào ToolCall
+ toolName: string, // Tên công cụ
+ content: (TextContent | ImageContent)[], // Nội dung kết quả
+ details?: TDetails, // Chi tiết có cấu trúc(cho UI Để xem)
+ isError: boolean, // Liệu việc thực thi có thất bại hay không(Chương "không bao giờ ném")
+ timestamp: number
 }
 ```
 
@@ -141,30 +141,30 @@ AssistantMessage 的 content 内容块
 Ghép ba loại message lại, một đoạn hội thoại điển hình trông thế này:
 
 ```
-messages 数组：
+messages mảng: 
 │
 ├── [0] UserMessage
-│       role: "user"
-│       content: "帮我看看 auth.ts"
+│ role: "user"
+│ content: "giúp tôi xem auth.ts"
 │
 ├── [1] AssistantMessage
-│       role: "assistant"
-│       content: [
-│           { type: "text", text: "让我帮你看看这个文件" },
-│           { type: "toolCall", id: "tc_001", name: "read", arguments: { path: "auth.ts" } }
-│       ]
-│       stopReason: "toolUse"     ← 第3章讲过：调了工具，循环继续
+│ role: "assistant"
+│ content: [
+│ { type: "text", text: "Hãy để tôi giúp bạn xem tập tin này" },
+│ { type: "toolCall", id: "tc_001", name: "read", arguments: { path: "auth.ts" } }
+│ ]
+│ stopReason: "toolUse" ← Chương  nói: Đã gọi tool, Chu kỳ tiếp tục
 │
 ├── [2] ToolResultMessage
-│       role: "toolResult"
-│       toolCallId: "tc_001"      ← 和上面的 id 对应
-│       content: [{ type: "text", text: "import { auth } from '...' ..." }]
-│       isError: false            ← 第5章讲过：正常结果
+│ role: "toolResult"
+│ toolCallId: "tc_001" ← trở lên id tương ứng
+│ content: [{ type: "text", text: "import { auth } from '...' ..." }]
+│ isError: false ← Chương  nói: kết quả bình thường
 │
 └── [3] AssistantMessage
-        role: "assistant"
-        content: [{ type: "text", text: "auth.ts 是一个认证模块..." }]
-        stopReason: "stop"        ← 没调工具，循环结束
+ role: "assistant"
+ content: [{ type: "text", text: "auth.ts là một mô-đun xác thực..." }]
+ stopReason: "stop" ← Không có công cụ điều chỉnh, kết thúc vòng lặp
 ```
 
 
@@ -194,12 +194,12 @@ Thiết kế của Pi **không thỏa hiệp bên nào**: **lưu dạng có cấ
 Lấy coding-agent đi kèm Pi làm ví dụ, nó định nghĩa 4 loại custom message trong [packages/coding-agent/src/core/messages.ts](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/src/core/messages.ts):
 
 ```
-coding-agent 的自定义消息类型
+coding-agent loại tin nhắn tùy chỉnh
 │
-├── BashExecutionMessage       ← Bash 命令执行记录
-├── CustomMessage              ← 扩展注入的通用消息
-├── BranchSummaryMessage       ← 分支切换时的摘要
-└── CompactionSummaryMessage   ← 上下文压缩后的摘要
+├── BashExecutionMessage ← Bash Bản ghi thực hiện lệnh
+├── CustomMessage ← Thông báo chung về việc chèn tiện ích mở rộng
+├── BranchSummaryMessage ← Tổng hợp khi chuyển chi nhánh
+└── CompactionSummaryMessage ← Tóm tắt nén theo ngữ cảnh
 ```
 
 
@@ -207,15 +207,15 @@ Mỗi loại có trường có cấu trúc riêng. Lấy `BashExecutionMessage` 
 
 ```
 {
-    role: "bashExecution",
-    command: string,          // 命令原文："ls -la"
-    output: string,           // 输出内容："file1.txt\nfile2.txt\n..."
-    exitCode: number | undefined,  // 退出码：0
-    cancelled: boolean,       // 是否被取消
-    truncated: boolean,       // 输出是否被截断
-    fullOutputPath?: string,  // 截断时的完整输出文件路径
-    timestamp: number,
-    excludeFromContext?: boolean  // 是否排除在 LLM 上下文之外
+ role: "bashExecution",
+ command: string, // Văn bản lệnh gốc: "ls -la"
+ output: string, // Nội dung đầu ra: "file1.txt\nfile2.txt\n..."
+ exitCode: number | undefined, // mã thoát: 0
+ cancelled: boolean, // Cho dù nó đã bị hủy bỏ
+ truncated: boolean, // Liệu đầu ra có bị cắt ngắn hay không
+ fullOutputPath?: string, // Đường dẫn tệp đầu ra đầy đủ khi bị cắt bớt
+ timestamp: number,
+ excludeFromContext?: boolean // có nên loại trừ không LLM ngoài ngữ cảnh
 }
 ```
 
@@ -254,20 +254,20 @@ Dịch ra tiếng thường: **`AgentMessage` = message chuẩn LLM + custom mes
 Nhìn qua hình ảnh là rõ nhất:
 
 ```
-AgentMessage（Agent 内部使用的消息格式）
+AgentMessage(Agent Định dạng tin nhắn được sử dụng nội bộ)
 │
-├── Message（可直接发送给 LLM 的标准消息）
-│   │
-│   ├── UserMessage          ← role: "user"
-│   ├── AssistantMessage     ← role: "assistant"
-│   └── ToolResultMessage    ← role: "toolResult"
+├── Message(Có thể gửi trực tiếp tới LLM tin nhắn chuẩn)
+│ │
+│ ├── UserMessage ← role: "user"
+│ ├── AssistantMessage ← role: "assistant"
+│ └── ToolResultMessage ← role: "toolResult"
 │
-└── CustomAgentMessages（仅 Agent 内部使用的扩展消息）
-    │
-    ├── BashExecutionMessage      ← role: "bashExecution"
-    ├── CustomMessage             ← role: "custom"
-    ├── BranchSummaryMessage      ← role: "branchSummary"
-    └── CompactionSummaryMessage  ← role: "compactionSummary"
+└── CustomAgentMessages(chỉ Agent Tin nhắn mở rộng để sử dụng nội bộ)
+ │
+ ├── BashExecutionMessage ← role: "bashExecution"
+ ├── CustomMessage ← role: "custom"
+ ├── BranchSummaryMessage ← role: "branchSummary"
+ └── CompactionSummaryMessage ← role: "compactionSummary"
 ```
 
 
@@ -279,8 +279,8 @@ Then chốt là interface `CustomAgentMessages`:
 
 ```
 export interface CustomAgentMessages {
-    // Empty by default - apps extend via declaration merging
-    // 默认为空 - 应用通过声明合并扩展
+ // Empty by default - apps extend via declaration merging
+ // Mặc định là trống - Áp dụng tiện ích mở rộng thông qua việc hợp nhất khai báo
 }
 ```
 
@@ -293,12 +293,12 @@ Tầng ứng dụng "nhét" bằng cách nào? Dựa vào **declaration merging*
 
 ```
 declare module "@earendil-works/pi-agent-core" {
-    interface CustomAgentMessages {
-        bashExecution: BashExecutionMessage;
-        custom: CustomMessage;
-        branchSummary: BranchSummaryMessage;
-        compactionSummary: CompactionSummaryMessage;
-    }
+ interface CustomAgentMessages {
+ bashExecution: BashExecutionMessage;
+ custom: CustomMessage;
+ branchSummary: BranchSummaryMessage;
+ compactionSummary: CompactionSummaryMessage;
+ }
 }
 ```
 
@@ -322,21 +322,21 @@ Giờ ta biết Agent bên trong dùng 7 loại message để tự do diễn đ�
 Trong hàm `streamAssistantResponse` (bước "gọi model" đã nhắc ở Chương 3), thời điểm dịch rất chính xác:
 
 ```
-每次 LLM 调用前的消息处理管道：
+mọi lúc LLM Đường dẫn xử lý tin nhắn trước khi gọi: 
 
-context.messages: AgentMessage[]        ← Agent 内部的消息（最多 7 种类型）
-        │
-        ▼
-[1] transformContext (可选)             ← AgentMessage[] → AgentMessage[]
-        │                                  裁剪旧消息、注入外部上下文
-        ▼
-[2] convertToLlm (必须)                 ← AgentMessage[] → Message[]
-        │                                  自定义消息翻译成标准格式
-        ▼
-llmContext.messages: Message[]          ← LLM 看到的消息（只有 3 种类型）
-        │
-        ▼
-streamFunction(model, llmContext, ...)  ← 调用 LLM（第4章讲过）
+context.messages: AgentMessage[] ← Agent thông tin nội bộ(nhất 7 loại)
+ │
+ ▼
+[1] transformContext (Tùy chọn) ← AgentMessage[] → AgentMessage[]
+ │ Cắt bớt tin nhắn cũ, Chèn bối cảnh bên ngoài
+ ▼
+[2] convertToLlm (phải) ← AgentMessage[] → Message[]
+ │ Dịch tin nhắn tùy chỉnh sang định dạng chuẩn
+ ▼
+llmContext.messages: Message[] ← LLM tin tức đã xem(chỉ 3 loại)
+ │
+ ▼
+streamFunction(model, llmContext, ...) ← gọi LLM(Chương  nói)
 ```
 
 
@@ -368,13 +368,13 @@ Quay lại tình huống mở đầu. Một `BashExecutionMessage` từ lúc t�
 
 ```
 {
-    role: "bashExecution",
-    command: "ls -la",
-    output: "total 32\ndrwxr-xr-x  5 user  staff  160 May 30 10:00 .\n...",
-    exitCode: 0,
-    cancelled: false,
-    truncated: false,
-    timestamp: 1748568000000
+ role: "bashExecution",
+ command: "ls -la",
+ output: "total 32\ndrwxr-xr-x 5 user staff 160 May 30 10:00 .\n...",
+ exitCode: 0,
+ cancelled: false,
+ truncated: false,
+ timestamp: 1748568000000
 }
 ```
 
@@ -383,12 +383,12 @@ Quay lại tình huống mở đầu. Một `BashExecutionMessage` từ lúc t�
 
 ```
 {
-    role: "user",
-    content: [{
-        type: "text",
-        text: "Ran `ls -la`\n```\ntotal 32\ndrwxr-xr-x  5 user  staff  160 May 30 10:00 .\n...\n```"
-    }],
-    timestamp: 1748568000000
+ role: "user",
+ content: [{
+ type: "text",
+ text: "Ran `ls -la`\n```\ntotal 32\ndrwxr-xr-x 5 user staff 160 May 30 10:00 .\n...\n```"
+ }],
+ timestamp: 1748568000000
 }
 ```
 
@@ -437,10 +437,10 @@ Cách làm rất đơn giản: `BashExecutionMessage` có một trường `exclu
 
 ```
 case "bashExecution":
-    if (m.excludeFromContext) {
-        return undefined;   // 直接返回 undefined，后续被 filter 掉
-    }
-    // ... 否则正常转换
+ if (m.excludeFromContext) {
+ return undefined; // Trả lại trực tiếp undefined, Sau đó filter thả
+ }
+ // ... Ngược lại, chuyển đổi bình thường
 ```
 
 
@@ -465,42 +465,42 @@ Tổng hợp những phân tích ở trên, hệ thống message của Pi thực
 Nối hết cả chương lại, đường đi hoàn chỉnh của một message từ khi ra đời đến khi LLM thấy:
 
 ```
-用户在终端输入 !ls -la
-        │
-        ▼
-[1] 创建消息
-    BashExecutionMessage { role: "bashExecution", command: "ls -la", output: "...", ... }
-        │
-        ▼
-[2] 存入 context.messages: AgentMessage[]
-    [...原有消息, 新的 BashExecutionMessage]
-        │
-        ▼
-[3] Agent Loop 准备调用 LLM（第3章讲过的内层循环）
-        │
-        ▼
-[4] transformContext（可选）
-    输入/输出都是 AgentMessage[]
-    裁剪、注入、压缩（第8章详讲 transformContext、第9章详讲 Compaction）
-        │
-        ▼
-[5] convertToLlm（必须）
-    AgentMessage[] → Message[]
-    BashExecutionMessage → UserMessage
-    excludeFromContext → 过滤掉
-        │
-        ▼
-[6] LLM 收到
-    llmContext.messages = [
-        ...之前的消息,
-        { role: "user", content: "Ran `ls -la`\n```\n...\n```" }
-    ]
-        │
-        ▼
-[7] LLM 回复
-    → 产生新的 AssistantMessage
-    → 可能触发工具调用 → ToolResultMessage（第5章的五步管道）
-    → 回到 [2]，继续循环
+Người dùng nhập vào thiết bị đầu cuối !ls -la
+ │
+ ▼
+[1] Tạo tin nhắn
+ BashExecutionMessage { role: "bashExecution", command: "ls -la", output: "...", ... }
+ │
+ ▼
+[2] Gửi tiền context.messages: AgentMessage[]
+ [...Tin gốc, mới BashExecutionMessage]
+ │
+ ▼
+[3] Agent Loop sẵn sàng gọi LLM(Vòng lặp bên trong được thảo luận ở Chương )
+ │
+ ▼
+[4] transformContext(Tùy chọn)
+ đầu vào/Đầu ra là AgentMessage[]
+ Cắt, tiêm, nén(chi tiết ở Chương  transformContext, chi tiết ở Chương  Compaction)
+ │
+ ▼
+[5] convertToLlm(phải)
+ AgentMessage[] → Message[]
+ BashExecutionMessage → UserMessage
+ excludeFromContext → lọc ra
+ │
+ ▼
+[6] LLM đã nhận được
+ llmContext.messages = [
+ ...tin tức trước đó,
+ { role: "user", content: "Ran `ls -la`\n```\n...\n```" }
+ ]
+ │
+ ▼
+[7] LLM trả lời
+ → tạo mới AssistantMessage
+ → Có thể kích hoạt các cuộc gọi công cụ → ToolResultMessage(quy trình năm bước ở Chương )
+ → quay trở lại [2], Tiếp tục chu kỳ
 ```
 
 

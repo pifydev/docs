@@ -55,9 +55,9 @@ Mở `packages/ai/src/types.ts`, bạn sẽ thấy định nghĩa tool ở lớp
 ```
 // packages/ai/src/types.ts:433-437
 export interface Tool<TParameters extends TSchema = TSchema> {
-    name: string;            // 工具名，如 "read"、"bash"
-    description: string;     // 给 LLM 看的工具描述
-    parameters: TParameters; // 参数的 JSON Schema（用 TypeBox 定义）
+ name: string; // Tên công cụ, Chẳng hạn như "read", "bash"
+ description: string; // cho LLM Xem mô tả công cụ
+ parameters: TParameters; // tham số JSON Schema(sử dụng TypeBox độ nét)
 }
 ```
 
@@ -78,17 +78,17 @@ Vì vậy tầng `pi-agent-core` mở rộng `AgentTool` trên nền `Tool`:
 ```
 // packages/agent/src/types.ts:371-394
 export interface AgentTool<TParameters, TDetails>
-    extends Tool<TParameters>          // 继承 Tool 的三个字段
+ extends Tool<TParameters> // sự kế thừa Tool Ba lĩnh vực của
 {
-    label: string;                     // 给人看的标签（不同于给 LLM 的 description）
-    prepareArguments?: (args: unknown) => Static<TParameters>;  // 兼容性垫片
-    execute: (                         // 执行函数
-        toolCallId: string,
-        params: Static<TParameters>,
-        signal?: AbortSignal,
-        onUpdate?: AgentToolUpdateCallback<TDetails>,
-    ) => Promise<AgentToolResult<TDetails>>;
-    executionMode?: "sequential" | "parallel";  // 执行模式
+ label: string; // Tag cho mọi người xem(khác với việc cho LLM của description)
+ prepareArguments?: (args: unknown) => Static<TParameters>; // Miếng đệm tương thích
+ execute: (// Thực thi chức năng
+ toolCallId: string,
+ params: Static<TParameters>,
+ signal?: AbortSignal,
+ onUpdate?: AgentToolUpdateCallback<TDetails>,
+) => Promise<AgentToolResult<TDetails>>;
+ executionMode?: "sequential" | "parallel"; // chế độ thực hiện
 }
 ```
 
@@ -110,8 +110,8 @@ Vì vậy lớp thứ ba `ToolDefinition` xuất hiện. Hàm `execute` của n�
 ```
 AgentTool.execute: (toolCallId, params, signal, onUpdate) => ...
 ToolDefinition.execute: (toolCallId, params, signal, onUpdate, ctx) => ...
-                                                                   ^^^
-                                                    多了 ExtensionContext（会话上下文）
+ ^^^
+ Thêm ExtensionContext(bối cảnh phiên)
 ```
 
 
@@ -129,17 +129,17 @@ Chú ý dòng cuối. Hàm `execute` của `AgentTool` chỉ có 4 tham số, nh
 ```
 // packages/coding-agent/src/core/tools/tool-definition-wrapper.ts
 export function wrapToolDefinition(definition, ctxFactory?) {
-    return {
-        name: definition.name,
-        label: definition.label,
-        description: definition.description,
-        parameters: definition.parameters,
-        prepareArguments: definition.prepareArguments,
-        executionMode: definition.executionMode,
-        // 关键：重写 execute，通过闭包注入 ExtensionContext
-        execute: (toolCallId, params, signal, onUpdate) =>
-            definition.execute(toolCallId, params, signal, onUpdate, ctxFactory?.()),
-    };
+ return {
+ name: definition.name,
+ label: definition.label,
+ description: definition.description,
+ parameters: definition.parameters,
+ prepareArguments: definition.prepareArguments,
+ executionMode: definition.executionMode,
+ // chìa khóa: viết lại execute, Tiêm thông qua đóng cửa ExtensionContext
+ execute: (toolCallId, params, signal, onUpdate) =>
+ definition.execute(toolCallId, params, signal, onUpdate, ctxFactory?.()),
+ };
 }
 ```
 
@@ -178,32 +178,32 @@ Mỗi bước có trách nhiệm và cơ chế thoát rõ ràng. 3 bước đầ
 
 
 ```
-LLM 输出 ToolCall
-    │
-    ▼
+LLM đầu ra ToolCall
+ │
+ ▼
 ┌──────────────────────────────────────────────────┐
-│ 第 1 步：prepareArguments（参数预处理）           │
-│   处理 LLM 的参数怪癖                            │
-│   如：把字符串化的数组解析回真正的数组             │
+│ Không. 1 bước: prepareArguments(Tiền xử lý tham số) │
+│ Quy trình LLM Các tham số đặc trưng của │
+│ Chẳng hạn như: Phân tích mảng chuỗi trở lại mảng thực │
 ├──────────────────────────────────────────────────┤
-│ 第 2 步：validateToolArguments（Schema 验证）     │
-│   用 TypeBox Schema 做运行时类型检查              │
-│   如：path 是 string，不是 number                │
+│ Không. 2 bước: validateToolArguments(Schema Xác minh) │
+│ sử dụng TypeBox Schema Thực hiện kiểm tra loại thời gian chạy │
+│ Chẳng hạn như: path Có string, Không number │
 ├──────────────────────────────────────────────────┤
-│ 第 3 步：beforeToolCall（前置钩子）              │
-│   产品层的权限拦截，可以阻止执行                   │
-│   返回 { block: true, reason: "危险命令"}         │
+│ Không. 3 bước: beforeToolCall(Móc trước) │
+│ Chặn quyền của lớp sản phẩm, Có thể ngăn chặn việc thực thi │
+│ Trở lại { block: true, reason: "Lệnh nguy hiểm"} │
 ├──────────────────────────────────────────────────┤
-│ 第 4 步：tool.execute（实际执行）                 │
-│   调用工具的 execute 函数                         │
-│   支持 onUpdate 流式进度回调                      │
+│ Không. 4 bước: tool.execute(thực hiện thực tế) │
+│ công cụ gọi điện execute chức năng │
+│ hỗ trợ onUpdate Truyền phát lại tiến trình gọi lại │
 ├──────────────────────────────────────────────────┤
-│ 第 5 步：afterToolCall（后置钩子）               │
-│   产品层的结果后处理，可以修改返回值               │
-│   可以替换 content、details、isError              │
+│ Không. 5 bước: afterToolCall(móc phía sau) │
+│ Xử lý hậu kỳ kết quả lớp sản phẩm, Giá trị trả về có thể được sửa đổi │
+│ có thể được thay thế content, details, isError │
 └──────────────────────────────────────────────────┘
-    │
-    ▼
+ │
+ ▼
 ToolResultMessage
 ```
 
@@ -218,10 +218,10 @@ Ví dụ, tool `Edit` kỳ vọng `edits` là array. Nếu tool không định n
 
 
 ```
-// 模型实际传来的（某些模型把 JSON 数组序列化成了字符串）
+// Mô hình này thực sự xuất phát từ(Một số mô hình JSON Mảng được tuần tự hóa thành chuỗi)
 { edits: "[{\"oldText\":\"hello\",\"newText\":\"world\"}]" }
 
-// 经过 prepareArguments 处理后
+// đã vượt qua prepareArguments Sau khi xử lý
 { edits: [{ oldText: "hello", newText: "world" }] }
 ```
 
@@ -249,8 +249,8 @@ Sau khi 3 bước trước qua được, hàm `execute` của tool được gọ
 
 
 ```
-Before：{ path: 12345 }
-After： 验证失败 → 报错 → 不执行工具
+Before: { path: 12345 }
+After: Xác thực không thành công → Báo cáo lỗi → Không thực thi công cụ
 ```
 
 
@@ -306,13 +306,13 @@ Trong vòng lặp trong của Agent Loop, một phản hồi của model có th�
 
 ```
 {
-    role: "toolResult",
-    toolCallId: "call_abc123",      // 关联到原始 ToolCall
-    toolName: "read",
-    content: [{ type: "text", text: "1│ import { Agent }..." }],
-    details: { language: "typescript" },  // 给 UI 的元数据
-    isError: false,                  // 是否为错误结果
-    timestamp: 1700000000000,
+ role: "toolResult",
+ toolCallId: "call_abc123", // liên quan đến bản gốc ToolCall
+ toolName: "read",
+ content: [{ type: "text", text: "1│ import { Agent }..." }],
+ details: { language: "typescript" }, // cho UI siêu dữ liệu
+ isError: false, // Đây có phải là kết quả lỗi không?
+ timestamp: 1700000000000,
 }
 ```
 
@@ -322,10 +322,10 @@ Ba ToolCall, đều là thao tác chỉ đọc. Trực giác mách bảo ta nên
 
 ```
 assistantMessage.content = [
-    { type: "text", text: "我来查一下文件" },
-    { type: "toolCall", id: "call_1", name: "read", arguments: {path: "a.ts"} },
-    { type: "toolCall", id: "call_2", name: "grep", arguments: {pattern: "TODO"} },
-    { type: "toolCall", id: "call_3", name: "find", arguments: {pattern: "*.test.ts"} },
+ { type: "text", text: "Hãy để tôi kiểm tra tập tin" },
+ { type: "toolCall", id: "call_1", name: "read", arguments: {path: "a.ts"} },
+ { type: "toolCall", id: "call_2", name: "grep", arguments: {pattern: "TODO"} },
+ { type: "toolCall", id: "call_3", name: "find", arguments: {pattern: "*.test.ts"} },
 ]
 ```
 
@@ -346,8 +346,8 @@ Chiến lược của Pi rất đơn giản: **chỉ cần một tool được �
 ```
 ToolCall 1: edit { path: "app.ts", oldText: "v1", newText: "v2" }
 ToolCall 2: edit { path: "app.ts", oldText: "v3", newText: "v4" }
-                     ^^^^^^^^
-                     同一个文件！并行执行 → ToolCall 1 的修改被 ToolCall 2 覆盖
+ ^^^^^^^^
+ cùng một tập tin！Thực thi song song → ToolCall 1 Việc sửa đổi đã ToolCall 2 Bìa
 ```
 
 
@@ -361,14 +361,14 @@ Tại sao thiết kế thế này? Vì **pha chuẩn bị có thể có tác d�
 
 
 ```
-// 检查是否有串行工具
+// Kiểm tra xem các công cụ nối tiếp có sẵn không
 const hasSequentialToolCall = toolCalls.some(
-    (tc) => tools?.find((t) => t.name === tc.name)?.executionMode === "sequential",
+ (tc) => tools?.find((t) => t.name === tc.name)?.executionMode === "sequential",
 );
 
-// 有串行工具 → 整批串行；没有 → 并行
+// Có công cụ nối tiếp → toàn bộ loạt nối tiếp; Không → Song song
 if (config.toolExecution === "sequential" || hasSequentialToolCall) {
-    return executeToolCallsSequential(...);
+ return executeToolCallsSequential(...);
 }
 return executeToolCallsParallel(...);
 ```
@@ -401,25 +401,25 @@ Chú ý cột bên phải: **hình thức cuối cùng của mọi lỗi đều 
 
 
 ```
-阶段 1 - 准备（顺序执行）：
-  ToolCall 1: emit_start → prepareArguments → validate → beforeToolCall
-  ToolCall 2: emit_start → prepareArguments → validate → beforeToolCall
-  ToolCall 3: emit_start → prepareArguments → validate → beforeToolCall
-  // 准备阶段必须顺序，因为 beforeToolCall 可能有副作用（如修改全局状态）
+sân khấu 1 - chuẩn bị(thực hiện tuần tự): 
+ ToolCall 1: emit_start → prepareArguments → validate → beforeToolCall
+ ToolCall 2: emit_start → prepareArguments → validate → beforeToolCall
+ ToolCall 3: emit_start → prepareArguments → validate → beforeToolCall
+ // Giai đoạn chuẩn bị phải theo trình tự, bởi vì beforeToolCall có thể có tác dụng phụ(Chẳng hạn như sửa đổi trạng thái toàn cầu)
 
-阶段 2 - 执行（并行）：
-  ToolCall 1: execute ────────────────┐
-  ToolCall 2: execute ───────────────┤ Promise.all
-  ToolCall 3: execute ───────────────┘
-  // 只有 tool.execute() 并行
+sân khấu 2 - thi hành(Song song): 
+ ToolCall 1: execute ────────────────┐
+ ToolCall 2: execute ───────────────┤ Promise.all
+ ToolCall 3: execute ───────────────┘
+ // chỉ tool.execute() Song song
 
-阶段 3 - 事件发送（有序）：
-  ToolCall 2: emit_end    ← 先完成的先发 tool_execution_end
-  ToolCall 1: emit_end
-  ToolCall 3: emit_end
-  ToolCall 1: emit_result ← 但 ToolResultMessage 按调用顺序发
-  ToolCall 2: emit_result
-  ToolCall 3: emit_result
+sân khấu 3 - Gửi sự kiện(có trật tự): 
+ ToolCall 2: emit_end ← Đầu tiên về đích đầu tiên tool_execution_end
+ ToolCall 1: emit_end
+ ToolCall 3: emit_end
+ ToolCall 1: emit_result ← Nhưng ToolResultMessage Gửi theo thứ tự gọi
+ ToolCall 2: emit_result
+ ToolCall 3: emit_result
 ```
 
 
@@ -439,36 +439,36 @@ Tầng then chốt nhất nằm ở `executePreparedToolCall()`: nó bao bọc `
 ```
 // packages/agent/src/agent-loop.ts:628-669
 async function executePreparedToolCall(prepared, signal, emit) {
-    const updateEvents: Promise<void>[] = [];
-    let acceptingUpdates = true;          // 工具 Promise settle 后关闭
+ const updateEvents: Promise<void>[] = [];
+ let acceptingUpdates = true; // Công cụ Promise settle Đóng sau
 
-    try {
-        const result = await prepared.tool.execute(
-            prepared.toolCall.id,
-            prepared.args,
-            signal,
-            (partialResult) => {
-                if (!acceptingUpdates) return;     // settle 后的孤儿回调直接忽略
-                updateEvents.push(/* ... 发 tool_execution_update ... */);
-            },
-        );
-        acceptingUpdates = false;
-        await Promise.all(updateEvents);
-        return { result, isError: false };
+ try {
+ const result = await prepared.tool.execute(
+ prepared.toolCall.id,
+ prepared.args,
+ signal,
+ (partialResult) => {
+ if (!acceptingUpdates) return; // settle Cuộc gọi lại mồ côi sau
+ updateEvents.push(/* ... gửi tool_execution_update ... */);
+ },
+);
+ acceptingUpdates = false;
+ await Promise.all(updateEvents);
+ return { result, isError: false };
 
-    } catch (error) {
-        acceptingUpdates = false;
-        // 关键：先等所有进度事件发完，再把异常编码成消息
-        await Promise.all(updateEvents);
-        return {
-            result: createErrorToolResult(
-                error instanceof Error ? error.message: String(error)
-            ),
-            isError: true,
-        };
-    } finally {
-        acceptingUpdates = false;          // 兜底：无论如何都关闭闸门
-    }
+ } catch (error) {
+ acceptingUpdates = false;
+ // chìa khóa: Đợi tất cả các sự kiện tiến trình được gửi trước, Sau đó mã hóa ngoại lệ thành tin nhắn
+ await Promise.all(updateEvents);
+ return {
+ result: createErrorToolResult(
+ error instanceof Error ? error.message: String(error)
+),
+ isError: true,
+ };
+ } finally {
+ acceptingUpdates = false; // Hãy ghi nhớ mọi thứ: Đóng cửa xả lũ bằng mọi giá
+ }
 }
 ```
 
@@ -502,20 +502,20 @@ Nếu framework ném thẳng exception làm đứt vòng lặp, nó từ bỏ m�
 
 
 ```
-工具抛出的原始异常（catch 之前）：        编码后的 ToolResultMessage（catch 之后）：
-Error: ENOENT: no such file or dir       {
-  → 一路穿透管道                            role: "toolResult",
-  → 打断 Agent Loop                         toolCallId: "call_abc",
-  → 事件序列不完整，UI 卡死                  toolName: "read",
-                                            content: [{
-                                              type: "text",
-                                              text: "ENOENT: no such file or dir"
-                                            }],
-                                            isError: true   ← 唯一标记
-                                          }
-                                          → 追加到对话历史
-                                          → 下一轮发给模型
-                                          → 模型看到后自己决定怎么办
+Ngoại lệ ban đầu do công cụ đưa ra(catch trước đây): được mã hóa ToolResultMessage(catch sau): 
+Error: ENOENT: no such file or dir {
+ → tất cả các cách thông qua đường ống role: "toolResult",
+ → làm gián đoạn Agent Loop toolCallId: "call_abc",
+ → Chuỗi sự kiện không đầy đủ, UI bị mắc kẹt toolName: "read",
+ content: [{
+ type: "text",
+ text: "ENOENT: no such file or dir"
+ }],
+ isError: true ← thẻ duy nhất
+ }
+ → Thêm vào lịch sử cuộc trò chuyện
+ → Mô hình sẽ được gửi vào vòng tiếp theo
+ → Quyết định những việc cần làm sau khi xem mô hình
 ```
 
 
@@ -539,13 +539,13 @@ Nhìn lại source code xem các tool của Pi làm thế nào, bạn sẽ thấ
 
 
 ```
-模糊错误（不可取）：                      具体 error.message（推荐）：
-{                                        {
-  content: [{ text: "Read failed" }]       content: [{
-  isError: true                              text: "Offset 200 is beyond end of file (100 lines total)"
-}                                          }]
-                                           isError: true
-                                         }
+Lỗi mơ hồ(Không nên): cụ thể error.message(Được đề xuất): 
+{ {
+ content: [{ text: "Read failed" }] content: [{
+ isError: true text: "Offset 200 is beyond end of file (100 lines total)"
+} }]
+ isError: true
+ }
 ```
 
 
@@ -565,7 +565,7 @@ Chú ý chiến lược của Bash: nó **chủ động nhận diện** các lo�
 
 ```
 if (startLine >= allLines.length) {
-    throw new Error(`Offset ${offset} is beyond end of file (${allLines.length} lines total)`);
+ throw new Error(`Offset ${offset} is beyond end of file (${allLines.length} lines total)`);
 }
 ```
 
@@ -589,21 +589,21 @@ throw new Error(`Could not edit file: ${path}. ${errorMessage}.`);
 
 ```
 } catch (err) {
-    const snapshot = await finishOutput();              // 先把已经输出的内容固定下来
-    const { text } = formatOutput(snapshot, "");
-    if (err instanceof Error && err.message === "aborted") {
-        throw new Error(appendStatus(text, "Command aborted"));
-        //                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        //                  重新包装：附上"中止前的输出" + "中止状态"
-    }
-    if (err instanceof Error && err.message.startsWith("timeout:")) {
-        const timeoutSecs = err.message.split(":")[1];
-        throw new Error(appendStatus(text, `Command timed out after ${timeoutSecs} seconds`));
-    }
-    if (exitCode !== 0 && exitCode !== null) {
-        throw new Error(appendStatus(outputText, `Command exited with code ${exitCode}`));
-    }
-    throw err;    // ← 关键：识别不了的异常，原样抛出，交给框架兜底
+ const snapshot = await finishOutput(); // Đầu tiên sửa nội dung đầu ra
+ const { text } = formatOutput(snapshot, "");
+ if (err instanceof Error && err.message === "aborted") {
+ throw new Error(appendStatus(text, "Command aborted"));
+ // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ // đóng gói lại: Đã đính kèm"Đầu ra trước khi hủy bỏ" + "trạng thái hủy bỏ"
+ }
+ if (err instanceof Error && err.message.startsWith("timeout:")) {
+ const timeoutSecs = err.message.split(":")[1];
+ throw new Error(appendStatus(text, `Command timed out after ${timeoutSecs} seconds`));
+ }
+ if (exitCode !== 0 && exitCode !== null) {
+ throw new Error(appendStatus(outputText, `Command exited with code ${exitCode}`));
+ }
+ throw err; // ← chìa khóa: Ngoại lệ không được công nhận, Ném như cũ, Để nó vào khuôn khổ
 }
 ```
 
@@ -614,14 +614,14 @@ Chú ý chiến lược của Bash: nó **chủ động nhận diện** các lo�
 
 
 ```
-第一层（工具内部，主动）：识别已知错误类型，包装成具体可读的描述
-└── Read/Edit/Bash 都是这样:Bash 甚至把"已输出的内容"附在错误里
-└── 目的：给模型提供"为什么失败、怎么改才对"的具体线索
+tầng một(Bên trong công cụ, Hãy chủ động): Xác định các loại lỗi đã biết, Đóng gói thành một mô tả cụ thể có thể đọc được
+└── Read/Edit/Bash Tất cả đều như thế này:Bash thậm chí đặt"Những gì đã được xuất ra"Kèm theo lỗi
+└── mục đích: Cung cấp cho mô hình"tại sao thất bại, Làm thế nào để thay đổi nó?"manh mối cụ thể
 
-第二层（框架兜底，被动）：executePreparedToolCall 的 catch
-└── 只在工具没识别出来时生效
-└── 不创造新的错误描述，只把 error.message 原样透传给模型
-└── 目的：保证任何异常都不会穿透到 Agent Loop
+tầng hai(Bìa khung, Bị động): executePreparedToolCall của catch
+└── Chỉ có hiệu lực khi công cụ không được nhận dạng
+└── Không tạo mô tả lỗi mới, Chỉ cần đặt error.message Được chuyển vào mô hình một cách minh bạch như hiện tại
+└── mục đích: Đảm bảo rằng mọi trường hợp ngoại lệ sẽ không xâm nhập Agent Loop
 ```
 
 
@@ -632,12 +632,12 @@ Thân hàm `createErrorToolResult` chỉ có ba dòng (`agent-loop.ts:716-721`),
 
 ```
 } catch (error) {
-    return {
-        result: createErrorToolResult(error instanceof Error ? error.message: String(error)),
-        //                                                   ^^^^^^^^^^^^^^^^
-        //                              工具内部包装好的具体描述，框架不动它，只搬运
-        isError: true,
-    };
+ return {
+ result: createErrorToolResult(error instanceof Error ? error.message: String(error)),
+ // ^^^^^^^^^^^^^^^^
+ // Mô tả chi tiết về bao bì bên trong của dụng cụ, Khung không di chuyển nó, chỉ vận chuyển
+ isError: true,
+ };
 }
 ```
 
@@ -656,20 +656,20 @@ Mượn cách viết của tool Bash, `execute` của custom tool nên có dạn
 
 ```
 execute: async (id, params, signal, onUpdate) => {
-    try {
-        // ... 业务逻辑
-        return { content: [...], details: {...} };
-    } catch (err) {
-        // 第 1 步：识别已知错误类型，重新包装成具体描述
-        if (err instanceof MyKnownErrorA) {
-            throw new Error(`具体的描述A：${err.message}。建议的修复方法...`);
-        }
-        if (err instanceof MyKnownErrorB) {
-            throw new Error(`具体的描述B：${err.message}。可能的原因...`);
-        }
-        // 第 2 步：实在识别不了的异常，原样抛出，让框架兜底
-        throw err;
-    }
+ try {
+ // ... logic kinh doanh
+ return { content: [...], details: {...} };
+ } catch (err) {
+ // Không. 1 bước: Xác định các loại lỗi đã biết, Đóng gói lại thành mô tả cụ thể
+ if (err instanceof MyKnownErrorA) {
+ throw new Error(`mô tả cụ thểA: ${err.message}. Đề xuất sửa lỗi...`);
+ }
+ if (err instanceof MyKnownErrorB) {
+ throw new Error(`mô tả cụ thểB: ${err.message}. lý do có thể...`);
+ }
+ // Không. 2 bước: Những điều bất thường thực sự không thể nhận ra, Ném như cũ, Hãy để khuôn khổ tiếp quản
+ throw err;
+ }
 }
 ```
 
@@ -711,9 +711,9 @@ Bên trong hàm `execute` của tool Read, mọi thao tác file đều được 
 
 ```
 export interface ReadOperations {
-    readFile: (absolutePath: string) => Promise<Buffer>;
-    access: (absolutePath: string) => Promise<void>;
-    detectImageMimeType?: (absolutePath: string) => Promise<string | null>;
+ readFile: (absolutePath: string) => Promise<Buffer>;
+ access: (absolutePath: string) => Promise<void>;
+ detectImageMimeType?: (absolutePath: string) => Promise<string | null>;
 }
 ```
 
@@ -723,10 +723,10 @@ Bên trong hàm `execute` của tool Read, mọi thao tác file đều được 
 
 ```
 execute: async (toolCallId, params, signal, onUpdate, ctx) => {
-    const ops = options?.operations ?? defaultReadOperations;
-    await ops.access(absolutePath);        // 通过接口检查权限
-    const buffer = await ops.readFile(absolutePath);  // 通过接口读文件
-    // ...
+ const ops = options?.operations ? defaultReadOperations;
+ await ops.access(absolutePath); // Kiểm tra quyền thông qua giao diện
+ const buffer = await ops.readFile(absolutePath); // Đọc tập tin thông qua giao diện
+ // ...
 }
 ```
 
@@ -735,13 +735,13 @@ execute: async (toolCallId, params, signal, onUpdate, ctx) => {
 
 
 ```
-直接调 fs（硬编码）：               通过 Operations 接口（可替换）：
-┌──────────────────────┐            ┌──────────────────────┐
-│ Read 工具             │            │ Read 工具             │
-│ fs.readFile(path)    │            │ ops.readFile(path)   │
-│ 只能读本地文件        │            │ 本地 / SSH / Mock     │
-│ 测试必须创建真实文件   │            │ 注入什么就调什么      │
-└──────────────────────┘            └──────────────────────┘
+Điều chỉnh trực tiếp fs(được mã hóa cứng): Vượt qua Operations giao diện(Có thể thay thế): 
+┌──────────────────────┐ ┌──────────────────────┐
+│ Read Công cụ │ │ Read Công cụ │
+│ fs.readFile(path) │ │ ops.readFile(path) │
+│ Chỉ có thể đọc các tập tin cục bộ │ │ địa phương / SSH / Mock │
+│ Kiểm thử phải tạo file thật │ │ Điều chỉnh bất cứ thứ gì bạn tiêm. │
+└──────────────────────┘ └──────────────────────┘
 ```
 
 
@@ -749,23 +749,23 @@ Operations được closure capture **lúc tạo tool**. Mọi lần thực thi 
 
 
 ```
-// 本地执行（默认）
-const tool = createReadToolDefinition(cwd);  // 用 defaultReadOperations
+// thực thi cục bộ(Mặc định)
+const tool = createReadToolDefinition(cwd); // sử dụng defaultReadOperations
 
-// 单元测试（Mock）
+// Kiểm tra đơn vị(Mock)
 const tool = createReadToolDefinition(cwd, {
-    operations: {
-        readFile: () => Buffer.from("mock file content"),  // 不需要创建真实文件
-        access: () => {},  // 不抛异常就是文件存在
-    }
+ operations: {
+ readFile: () => Buffer.from("mock file content"), // Không cần tạo tập tin thực
+ access: () => {}, // Nếu không có ngoại lệ nào được đưa ra thì tệp đó tồn tại.
+ }
 });
 
-// 远程执行（SSH，假设）
+// thực thi từ xa(SSH, giả thuyết)
 const tool = createReadToolDefinition(cwd, {
-    operations: {
-        readFile: (path) => sshExec(`cat ${path}`),
-        access: (path) => sshExec(`test -r ${path}`),
-    }
+ operations: {
+ readFile: (path) => sshExec(`cat ${path}`),
+ access: (path) => sshExec(`test -r ${path}`),
+ }
 });
 ```
 
@@ -812,19 +812,19 @@ Giờ bạn đã có câu trả lời đầy đủ:
 
 
 ```
-模型输出 ToolCall { name: "read", arguments: { path: "src/main.ts" } }
-    │
-    ├── 第 1 步：prepareArguments 处理模型怪癖
-    ├── 第 2 步：validateToolArguments 做 Schema 验证
-    ├── 第 3 步：beforeToolCall 检查权限
-    ├── 第 4 步：tool.execute 通过 Operations 接口读文件
-    │              └── ops.readFile() → 不直接调 fs
-    └── 第 5 步：afterToolCall 做结果后处理
-    │
-    ▼
-ToolResultMessage { content: 文件内容, isError: false }
-    │
-    ▼ 追加到对话历史，下一轮发给模型
+Đầu ra mô hình ToolCall { name: "read", arguments: { path: "src/main.ts" } }
+ │
+ ├── Không. 1 bước: prepareArguments Xử lý các vấn đề của mô hình
+ ├── Không. 2 bước: validateToolArguments làm Schema Xác minh
+ ├── Không. 3 bước: beforeToolCall Kiểm tra quyền
+ ├── Không. 4 bước: tool.execute Vượt qua Operations Giao diện đọc file
+ │ └── ops.readFile() → Không điều chỉnh trực tiếp fs
+ └── Không. 5 bước: afterToolCall Xử lý hậu kỳ kết quả
+ │
+ ▼
+ToolResultMessage { content: Nội dung tập tin, isError: false }
+ │
+ ▼ Thêm vào lịch sử cuộc trò chuyện, Mô hình sẽ được gửi vào vòng tiếp theo
 ```
 
 

@@ -76,12 +76,12 @@ Giả sử bạn vừa clone kho chứa (repository) của Pi và gõ `ls` trong
 ```
 repo/
 ├── packages/
-│   ├── ai/              ← @earendil-works/pi-ai
-│   ├── agent/           ← @earendil-works/pi-agent-core
-│   ├── coding-agent/    ← @earendil-works/pi-coding-agent
-│   ├── orchestrator/    ← @earendil-works/pi-orchestrator（实验性，多 Agent 编排）
-│   └── tui/             ← @earendil-works/pi-tui
-├── package.json         ← 根配置，npm workspaces
+│ ├── ai/ ← @earendil-works/pi-ai
+│ ├── agent/ ← @earendil-works/pi-agent-core
+│ ├── coding-agent/ ← @earendil-works/pi-coding-agent
+│ ├── orchestrator/ ← @earendil-works/pi-orchestrator(thực nghiệm, nhiều Agent Sắp xếp)
+│ └── tui/ ← @earendil-works/pi-tui
+├── package.json ← cấu hình gốc, npm workspaces
 └── tsconfig.json
 ```
 
@@ -119,22 +119,22 @@ Cụ thể, nó làm ba việc:
 Chỉ cần nhìn những gì `index.ts` của nó export là rõ:
 
 ```
-// packages/ai/src/index.ts（v0.80.x 节选）
-// 顶部注释明确写：Core only, side-effect free: no generated catalogs,
+// packages/ai/src/index.ts(v0.80.x đoạn trích)
+// Bình luận hàng đầu nói rõ ràng: Core only, side-effect free: no generated catalogs,
 // no provider factories, no api-registry, no OAuth implementations, no compat.
-// 全局 API 注册表、stream/complete 函数等已迁至 ./compat.ts（packages/ai/src/compat.ts）
+// tình hình chung API Đăng ký, stream/complete Các chức năng, v.v. đã được chuyển đến ./compat.ts(packages/ai/src/compat.ts)
 export type { Static, TSchema } from "typebox";
 export { Type } from "typebox";
-export * from "./api/lazy.ts"            // 各 Provider API 的懒加载入口
-export * from "./auth/context.ts"        // 认证上下文
+export * from "./api/lazy.ts" // mỗi Provider API Mục tải chậm
+export * from "./auth/context.ts" // Bối cảnh xác thực
 export * from "./auth/credential-store.ts"
 export * from "./auth/helpers.ts"
 export * from "./auth/types.ts"
 export * from "./images-models.ts"
-export * from "./models.ts"              // 模型定义（KnownProvider 35 个）
-export * from "./types.ts"               // 统一类型
-export * from "./utils/event-stream.ts"  // 事件流基类
-// 流式调用入口（stream / streamSimple）实际位于 ./compat.ts
+export * from "./models.ts" // Định nghĩa mô hình(KnownProvider 35 một)
+export * from "./types.ts" // loại thống nhất
+export * from "./utils/event-stream.ts" // lớp cơ sở luồng sự kiện
+// Lối vào cuộc gọi trực tuyến(stream / streamSimple)thực sự nằm ở ./compat.ts
 ```
 
 Không có "agent" (đại diện), không có "tool" (công cụ), không có "loop" (vòng lặp). Nó chỉ làm đúng một việc: **san phẳng sự khác biệt giữa các API LLM và phơi bày một giao diện thống nhất duy nhất**.
@@ -157,12 +157,12 @@ Từ khoá là **"general-purpose"** (đa dụng). Package này không biết n�
 Hãy nhìn những gì `index.ts` export:
 
 ```
-// packages/agent/src/index.ts（节选）
-export * from "./agent.js"               // Agent 类
-export * from "./agent-loop.js"          // 循环函数
-export * from "./harness/session/..."    // 会话管理
-export * from "./harness/compaction/..." // 上下文压缩
-export * from "./types.js"              // 类型定义
+// packages/agent/src/index.ts(đoạn trích)
+export * from "./agent.js" // Agent lớp học
+export * from "./agent-loop.js" // chức năng vòng lặp
+export * from "./harness/session/..." // Quản lý phiên
+export * from "./harness/compaction/..." // Nén ngữ cảnh
+export * from "./types.js" // định nghĩa kiểu
 ```
 
 Không có "read" (đọc file), không có "bash" (chạy lệnh), không có "edit" (sửa code). Nó không quan tâm Agent làm gì cụ thể, chỉ quan tâm "làm sao để chạy một Agent".
@@ -195,13 +195,13 @@ main(process.argv.slice(2));
 Một điểm vào tí xíu, nhưng đằng sau là cả một chuỗi khởi động:
 
 ```
-你输入: pi "帮我改个 bug"
+bạn vào: pi "Giúp tôi thay đổi nó bug"
 │
-├── cli.ts          ← 解析命令行参数
-│   └── main.ts     ← 创建会话、选择运行模式（交互/打印/RPC）
-│       └── AgentSession    ← 组装工具、加载扩展
-│           └── Agent       ← 管理状态、跑循环
-│               └── agentLoop()  ← 核心循环开始
+├── cli.ts ← Phân tích các tham số dòng lệnh
+│ └── main.ts ← Tạo phiên, Chọn chế độ vận hành(sự tương tác/In/RPC)
+│ └── AgentSession ← Dụng cụ lắp ráp, Tải tiện ích mở rộng
+│ └── Agent ← Tình trạng quản lý, Chạy vòng lặp
+│ └── agentLoop() ← vòng lặp cốt lõi bắt đầu
 ```
 
 ### 2.4 pi-tui: phụ trách "hiển thị"
@@ -235,19 +235,19 @@ Sau khi đọc phần trên, có lẽ bạn đã có một bức tranh trong đ�
 
 ```
 ┌─────────────────────────────────────────────┐
-│  pi-coding-agent：我知道怎么写代码            │  ← 最懂业务
-│  （工具、扩展、CLI、会话持久化）               │
+│ pi-coding-agent: Tôi biết cách viết mã │ ← Biết rõ nhất về kinh doanh
+│ (Công cụ, Mở rộng, CLI, Sự kiên trì của phiên) │
 ├─────────────────────────────────────────────┤
-│  pi-agent-core：我知道怎么跑 Agent            │  ← 只懂框架
-│  （循环、状态、事件、压缩）                    │
+│ pi-agent-core: tôi biết cách chạy Agent │ ← Chỉ hiểu khuôn khổ
+│ (vòng lặp, Trạng thái, sự kiện, nén) │
 ├─────────────────────────────────────────────┤
-│  pi-ai：我知道怎么调模型                      │  ← 只懂模型
-│  （统一 API、流式调用、30+ 提供商适配）        │
+│ pi-ai: Tôi biết cách gọi model │ ← Chỉ hiểu mô hình
+│ (thống nhất API, Truyền trực tuyến cuộc gọi, 30+ Sự thích ứng của nhà cung cấp) │
 └─────────────────────────────────────────────┘
 
-旁边还有一个独立的 UI 包：
+Ngoài ra còn có một cái riêng bên cạnh UI gói: 
 ┌──────────┐
-│  pi-tui  │  ← 只管显示
+│ pi-tui │ ← Chỉ hiển thị
 └──────────┘
 ```
 
@@ -266,10 +266,10 @@ Nếu trực giác phân lớp của bạn là "tầng trên chỉ được phé
 ```
 // packages/coding-agent/package.json
 "dependencies": {
-    "@earendil-works/pi-agent-core": "^0.80.2",   // ← 依赖中间层，合理
-    "@earendil-works/pi-ai": "^0.80.2",            // ← 也直接依赖底层？
-    "@earendil-works/pi-tui": "^0.80.2",
-    // ... 其他依赖
+ "@earendil-works/pi-agent-core": "^0.80.2", // ← Phụ thuộc vào lớp giữa, hợp lý
+ "@earendil-works/pi-ai": "^0.80.2", // ← Cũng phụ thuộc trực tiếp vào cơ sở？
+ "@earendil-works/pi-tui": "^0.80.2",
+ // ... Các phụ thuộc khác
 }
 ```
 
@@ -291,18 +291,18 @@ Bạn có thể kiểm chứng bằng cách mở `packages/agent/src/types.ts`: 
 ```
 // packages/agent/src/types.ts:1-14
 import type {
-    Api,
-    AssistantMessage,
-    AssistantMessageEvent,
-    AssistantMessageEventStream,
-    Context,
-    ImageContent,
-    Message,
-    Model,
-    SimpleStreamOptions,
-    TextContent,
-    Tool,
-    ToolResultMessage,
+ Api,
+ AssistantMessage,
+ AssistantMessageEvent,
+ AssistantMessageEventStream,
+ Context,
+ ImageContent,
+ Message,
+ Model,
+ SimpleStreamOptions,
+ TextContent,
+ Tool,
+ ToolResultMessage,
 } from "@earendil-works/pi-ai";
 ```
 
@@ -329,16 +329,16 @@ Vậy quy tắc phân lớp không phải "chỉ tầng kề". Nó là "**nghiê
 Minh hoạ hướng phụ thuộc:
 
 ```
-pi-ai（底层）
-  ↑         ↑
-  │         │
-  │    pi-agent-core（中间层）
-  │         ↑
-  │         │
-  └─── pi-coding-agent（顶层）
-            ↑
-            │
-       pi-orchestrator（实验性外围编排层，可选）
+pi-ai(Tầng trệt)
+ ↑ ↑
+ │ │
+ │ pi-agent-core(lớp giữa)
+ │ ↑
+ │ │
+ └─── pi-coding-agent(cấp cao nhất)
+ ↑
+ │
+ pi-orchestrator(Lớp điều phối ngoại vi thử nghiệm, Tùy chọn)
 ```
 
 Tất cả mũi tên đều chỉ lên. **Tầng dưới không bao giờ biết về sự tồn tại của tầng trên**: không có import nào trong code pi-ai trỏ tới pi-agent-core hay pi-coding-agent; orchestrator cũng không xâm nhập ngược vào bên trong coding-agent. Đó mới là quy tắc thực sự của phân lớp: **không giới hạn chiều sâu tham chiếu, mà đảm bảo hướng phụ thuộc nghiêm ngặt đi lên.**
@@ -354,24 +354,24 @@ Bây giờ quy tắc phụ thuộc đã rõ, ta có thể dùng hệ thống ki�
 Trong pi-ai, một `Tool` là đơn vị tool nhỏ nhất có thể: chỉ đủ trường để mô tả tool đó là gì:
 
 ```
-// packages/ai/src/types.ts（节选）
-// 最基础的消息类型:所有 LLM 都认的格式
+// packages/ai/src/types.ts(đoạn trích)
+// Loại tin nhắn cơ bản nhất:tất cả LLM Một định dạng mà mọi người đều nhận ra
 type Message = UserMessage | AssistantMessage | ToolResultMessage
 
-// 模型定义:描述一个 LLM 的全部信息
+// Định nghĩa mô hình:mô tả một LLM Tất cả thông tin của
 interface Model<TApi> {
-    id: string           // 如 "claude-sonnet-4-6"
-    name: string
-    api: TApi            // 如 "anthropic-messages"
-    contextWindow: number // 如 200000
-    // ... 更多字段
+ id: string // Chẳng hạn như "claude-sonnet-4-6"
+ name: string
+ api: TApi // Chẳng hạn như "anthropic-messages"
+ contextWindow: number // Chẳng hạn như 200000
+ // ... Thêm trường
 }
 
-// 工具定义:描述一个工具的 schema
+// Định nghĩa công cụ:Mô tả một công cụ schema
 interface Tool<TSchema> {
-    name: string
-    description: string
-    parameters: TSchema
+ name: string
+ description: string
+ parameters: TSchema
 }
 ```
 
@@ -382,20 +382,20 @@ Chỉ vậy thôi. Không có `execute`, không có UI hint, không có `approva
 Trong pi-agent-core, `AgentTool` được xây dựng trên `Tool`, với một hàm thực thi được thêm vào:
 
 ```
-// packages/agent/src/types.ts（节选）
+// packages/agent/src/types.ts(đoạn trích)
 import type {
-    Message, Model, Tool, ImageContent, ...
+ Message, Model, Tool, ImageContent, ...
 } from "@earendil-works/pi-ai";
 
-// 扩展消息：除了标准 LLM 消息，还可以有自定义消息
+// tin nhắn mở rộng: Ngoài tiêu chuẩn LLM tin tức, Bạn cũng có thể có tin nhắn tùy chỉnh
 type AgentMessage = Message | CustomAgentMessages[keyof CustomAgentMessages]
 
-// 扩展工具：除了 schema，还有参数预处理、执行函数和执行模式（types.ts:371-394）
+// Công cụ mở rộng: Ngoại trừ schema, Ngoài ra còn có tiền xử lý tham số, Chức năng thực thi và chế độ thực thi(types.ts:371-394)
 interface AgentTool<TParameters extends TSchema = TSchema, TDetails = any> extends Tool<TParameters> {
-    label: string                                    // 显示名称
-    prepareArguments?: (args: unknown) => Static<TParameters>   // 参数预处理
-    execute: (toolCallId: string, params, signal?: AbortSignal, onUpdate?: AgentToolUpdateCallback<TDetails>) => Promise<AgentToolResult<TDetails>>
-    executionMode?: ToolExecutionMode                 // "sequential" | "parallel"
+ label: string // tên hiển thị
+ prepareArguments?: (args: unknown) => Static<TParameters> // Tiền xử lý tham số
+ execute: (toolCallId: string, params, signal?: AbortSignal, onUpdate?: AgentToolUpdateCallback<TDetails>) => Promise<AgentToolResult<TDetails>>
+ executionMode?: ToolExecutionMode // "sequential" | "parallel"
 }
 ```
 
@@ -406,36 +406,36 @@ interface AgentTool<TParameters extends TSchema = TSchema, TDetails = any> exten
 Trong pi-coding-agent, `ToolDefinition` cuối cùng bao bọc `AgentTool` với mọi thứ liên quan tới UI / phân quyền:
 
 ```
-// packages/coding-agent/src/core/extensions/types.ts:435-482（节选）
-// 工具定义（产品视角）:完整接口有 10+ 个字段，下面列出关键字段
-// 注意：ToolDefinition 在 TypeScript 层面是独立 interface 重新声明，
-// 与 AgentTool 是"结构兼容"而非用 extends 继承（详见 types.ts:435）
+// packages/coding-agent/src/core/extensions/types.ts:435-482(đoạn trích)
+// Định nghĩa công cụ(Quan điểm sản phẩm):Giao diện hoàn chỉnh là 10+ lĩnh vực, Các trường chính được liệt kê dưới đây
+// Lưu ý: ToolDefinition trong TypeScript cấp độ độc lập interface trình bày lại, 
+// với AgentTool Có"Tương thích về mặt kiến trúc"thay vì sử dụng extends sự kế thừa(Xem chi tiết types.ts:435)
 interface ToolDefinition<TParams extends TSchema, TDetails = unknown, TState = any> {
-    name: string
-    label: string                         // UI 展示名
-    description: string
-    promptSnippet?: string                // 自动拼到 system prompt 的工具片段
-    promptGuidelines?: string[]           // 工具使用守则
-    parameters: TParams
-    renderShell?: "default" | "self"      // 渲染模式
-    prepareArguments?: (args: unknown) => Static<TParams>   // 参数预处理钩子
-    executionMode?: ToolExecutionMode     // 并行/串行
-    execute: (toolCallId, params, signal, onUpdate, ctx: ExtensionContext) => Promise<AgentToolResult<TDetails>>  // 签名扩展：比 AgentTool.execute 多 ctx 参数
-    renderCall?: ...                      // 自定义调用渲染
-    // ... 还有渲染器、UI 组件等业务属性
+ name: string
+ label: string // UI tên hiển thị
+ description: string
+ promptSnippet?: string // Tự động đánh vần system prompt mảnh công cụ
+ promptGuidelines?: string[] // Hướng dẫn sử dụng công cụ
+ parameters: TParams
+ renderShell?: "default" | "self" // Chế độ kết xuất
+ prepareArguments?: (args: unknown) => Static<TParams> // Móc tiền xử lý tham số
+ executionMode?: ToolExecutionMode // Song song/nối tiếp
+ execute: (toolCallId, params, signal, onUpdate, ctx: ExtensionContext) => Promise<AgentToolResult<TDetails>> // Phần mở rộng chữ ký: hơn AgentTool.execute nhiều ctx thông số
+ renderCall?: ... // Kết xuất cuộc gọi tùy chỉnh
+ // ... Và trình kết xuất, UI Các thành phần và thuộc tính kinh doanh khác
 }
 
-// 扩展定义（运行时聚合体，types.ts:1585-1595）
+// định nghĩa mở rộng(tổng hợp thời gian chạy, types.ts:1585-1595)
 interface Extension {
-    path: string                                       // 扩展路径
-    resolvedPath: string                               // 解析后的绝对路径
-    sourceInfo: SourceInfo                             // 来源信息
-    handlers: Map<string, HandlerFn[]>                 // 各类处理器
-    tools: Map<string, RegisteredTool>                 // 注册的工具（Map，非 Record）
-    messageRenderers: Map<string, MessageRenderer>     // 消息渲染器
-    commands: Map<string, RegisteredCommand>           // 注册的命令（Map，非 Record）
-    flags: Map<string, ExtensionFlag>                  // 扩展标志
-    shortcuts: Map<KeyId, ExtensionShortcut>           // 快捷键绑定
+ path: string // Đường dẫn mở rộng
+ resolvedPath: string // Đường dẫn tuyệt đối đã được giải quyết
+ sourceInfo: SourceInfo // Thông tin nguồn
+ handlers: Map<string, HandlerFn[]> // Các loại bộ xử lý
+ tools: Map<string, RegisteredTool> // Công cụ đã đăng ký(Map, Không Record)
+ messageRenderers: Map<string, MessageRenderer> // trình kết xuất tin nhắn
+ commands: Map<string, RegisteredCommand> // Lệnh đã đăng ký(Map, Không Record)
+ flags: Map<string, ExtensionFlag> // cờ mở rộng
+ shortcuts: Map<KeyId, ExtensionShortcut> // Ràng buộc phím tắt
 }
 ```
 
@@ -446,31 +446,31 @@ interface Extension {
 Để sự tiến hoá cụ thể hơn, đây là chuỗi mở rộng kiểu dữ liệu theo từng lớp:
 
 ```
-Before（pi-ai 层）：Tool 只知道"长什么样"
+Before(pi-ai lớp): Tool chỉ biết"nó trông như thế nào"
 ────────────────────────────────────────────
 interface Tool<TSchema> {
-    name: string
-    description: string
-    parameters: TSchema
+ name: string
+ description: string
+ parameters: TSchema
 }
 
-         ↓ agent-core 扩展
+ ↓ agent-core Mở rộng
 
-After（pi-agent-core 层）：AgentTool 知道"怎么执行"
+After(pi-agent-core lớp): AgentTool biết"Cách thực hiện"
 ────────────────────────────────────────────
 interface AgentTool<TSchema> extends Tool<TSchema> {
-    label: string                              ← 新增
-    execute: (...) => Promise<AgentToolResult> ← 新增
-    executionMode?: "sequential" | "parallel"  ← 新增
+ label: string ← Mới
+ execute: (...) => Promise<AgentToolResult> ← Mới
+ executionMode?: "sequential" | "parallel" ← Mới
 }
 
-         ↓ coding-agent 扩展
+ ↓ coding-agent Mở rộng
 
-After（pi-coding-agent 层）：ToolDefinition 加上"怎么显示"
+After(pi-coding-agent lớp): ToolDefinition cộng thêm"Cách hiển thị"
 ────────────────────────────────────────────
 interface ToolDefinition {
-    // 继承 AgentTool 的全部字段
-    // + 渲染器、权限控制等业务属性
+ // sự kế thừa AgentTool Tất cả các lĩnh vực của
+ // + Trình kết xuất, Các thuộc tính kinh doanh như kiểm soát quyền
 }
 ```
 
@@ -485,18 +485,18 @@ Hãy thực sự đi qua ba kịch bản để xem.
 ### Kịch bản A: không phân lớp, tất cả gom vào một file
 
 ```
-// 假设：不分层的 Agent
+// giả thuyết: không xếp lớp Agent
 import OpenAI from "openai";
 
 const client = new OpenAI();
 const messages = [];
 
 while (true) {
-    const response = await client.chat.completions.create({
-        model: "gpt-4o",
-        messages,
-    });
-    // 解析工具调用、执行、追加到 messages ...
+ const response = await client.chat.completions.create({
+ model: "gpt-4o",
+ messages,
+ });
+ // Cuộc gọi công cụ phân tích cú pháp, thi hành, nối thêm vào messages ...
 }
 ```
 
@@ -505,7 +505,7 @@ Chạy được cho dự án rất nhỏ, nhưng ngay khi Agent vượt quá ~10
 ### Kịch bản B: chỉ hai lớp (bỏ lớp coding-agent)
 
 ```
-// 只用底层 + 中间层
+// Chỉ sử dụng lớp dưới cùng + lớp giữa
 import { Agent, agentLoop } from "@earendil-works/pi-agent-core";
 import { streamSimple } from "@earendil-works/pi-ai";
 ```
@@ -515,12 +515,12 @@ Tốt hơn, nhưng bạn phải tự viết lại phần phân tích tham số C
 ### Kịch bản C: chỉ một lớp (chỉ pi-ai)
 
 ```
-// 只用底层
+// Chỉ sử dụng lớp dưới cùng
 import { streamSimple } from "@earendil-works/pi-ai";
 
 const stream = streamSimple(model, context);
 for await (const event of stream) {
-    console.log(event);
+ console.log(event);
 }
 ```
 

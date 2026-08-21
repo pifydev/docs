@@ -47,15 +47,15 @@ Cách giải trực giác nhất là xóa message cũ: quăng 30 lượt đầu,
 Cách giải của Pi là **Compaction (nén)**: biến message cũ thành một đoạn tóm tắt có cấu trúc, dùng tóm tắt thay thế message thô. Như vậy vừa giải phóng không gian, vừa giữ thông tin then chốt.
 
 ```
-压缩前（185,000 token）：
-┌── 第1-30轮（135,000 token）──┬── 第31-50轮（50,000 token）──┐
-│  原始消息（大量工具结果）      │  原始消息（最近的上下文）      │
+trước khi nén(185,000 token): 
+┌── Lượt 1-30(135,000 token)──┬── Lượt 31-50(50,000 token)──┐
+│ tin nhắn gốc(Rất nhiều kết quả công cụ) │ tin nhắn gốc(bối cảnh gần đây) │
 └──────────────────────────┴──────────────────────────┘
 
-压缩后（约 60,000 token）：
-┌── 摘要（约 10,000 token）──┬── 第31-50轮（50,000 token）──┐
-│  结构化总结（目标、进度、     │  原始消息（完整保留）          │
-│  决策、文件跟踪……）          │                              │
+Sau khi nén(khoảng 60,000 token): 
+┌── Tóm tắt(khoảng 10,000 token)──┬── Lượt 31-50(50,000 token)──┐
+│ tóm tắt có cấu trúc(mục tiêu, Tiến độ, │ tin nhắn gốc(giữ nguyên vẹn) │
+│ ra quyết định, Theo dõi tập tin……) │ │
 └────────────────────────┴──────────────────────────┘
 ```
 
@@ -67,23 +67,23 @@ Agent vẫn "nhớ" 30 lượt đầu đã làm gì: chỉ là ký ức đổi t
 Trước khi đọc mọi chi tiết phía sau, hãy khắc một mốc thời gian cốt lõi vào đầu: **nén không được kích hoạt trong lúc hội thoại đang diễn ra, nó xảy ra giữa hai lượt hội thoại**:
 
 ```
-用户问 → Agent 回答 → (Agent 这一轮结束，发 agent_end 事件)
-                              │
-                              ▼
-                     检查 token：超阈值了吗？
-                              │
-                   ┌──────────┴──────────┐
-                   ▼                     ▼
-                没超 → 等下一轮       超了 → 立刻压缩
-                                       ├─ 找切割点
-                                       ├─ 生成摘要
-                                       └─ 把 CompactionEntry 写进 Session Tree
-                                              │
-                                              ▼
-                              下一轮用户开始问时：
-                              buildSessionContext() 从 Session Tree 重建上下文
-                              → CompactionSummaryMessage 替代旧消息
-                              → LLM 看到的是"摘要 + 近期消息"
+Người dùng đã hỏi → Agent câu trả lời → (Agent Vòng này kết thúc, gửi agent_end sự kiện)
+ │
+ ▼
+ Kiểm tra token: Có vượt quá ngưỡng không?？
+ │
+ ┌──────────┴──────────┐
+ ▼ ▼
+ Chưa kết thúc → Đợi vòng tiếp theo Đã vượt quá → Nén ngay lập tức
+ ├─ Tìm điểm cắt
+ ├─ Tạo bản tóm tắt
+ └─ đặt CompactionEntry viết vào Session Tree
+ │
+ ▼
+ Khi lượt người dùng tiếp theo bắt đầu đặt câu hỏi: 
+ buildSessionContext() từ Session Tree Xây dựng lại bối cảnh
+ → CompactionSummaryMessage Thay thế tin nhắn cũ
+ → LLM Những gì tôi thấy là"Tóm tắt + tin tức gần đây"
 ```
 
 
@@ -91,8 +91,8 @@ Trước khi đọc mọi chi tiết phía sau, hãy khắc một mốc thời g
 
 ```
 function shouldCompact(contextTokens, contextWindow, settings): boolean {
-    if (!settings.enabled) return false;
-    return contextTokens > contextWindow - settings.reserveTokens;
+ if (!settings.enabled) return false;
+ return contextTokens > contextWindow - settings.reserveTokens;
 }
 ```
 
@@ -116,12 +116,12 @@ Khi `contextTokens > 200.000 - 16.384 = 183.616`, nén được kích hoạt.
 Câu hỏi then chốt: làm sao biết hiện tại có bao nhiêu token? Tính chính xác cần dùng tokenizer, nhưng model khác nhau có tokenizer khác nhau, và chi phí tính toán lớn. Pi dùng cách thô sơ:
 
 ```
-// 实际签名（compaction.ts:256-296）：estimateTokens(message: AgentMessage): number
-// 对每个 message 取其文本字符数 chars，然后 return Math.ceil(chars / 4)
+// chữ ký thực tế(compaction.ts:256-296): estimateTokens(message: AgentMessage): number
+// cho mỗi message Lấy số lượng ký tự văn bản chars, sau đó return Math.ceil(chars / 4)
 function estimateTokens(message: AgentMessage): number {
-    let chars = 0;
-    // ...按 message.role 分别累加 text/thinking/toolCall/command/output/summary 的字符数
-    return Math.ceil(chars / 4);  // chars / 4
+ let chars = 0;
+ // ...nhấn message.role Tích lũy riêng text/thinking/toolCall/command/output/summary số lượng ký tự
+ return Math.ceil(chars / 4); // chars / 4
 }
 ```
 
@@ -156,14 +156,14 @@ Lich su hoi thoai LLM co rang buoc cau truc chat. Vi du message `ToolResult` pha
 Vay diem cat phai la **diem cat hop le**: khong pha vi vi cap message.
 
 ```
-entry: 0     1     2      3       4     5      6       7      8
-       ┌─────┬─────┬──────┬───────┬─────┬──────┬───────┬──────┬─────┐
-       │ hdr │ usr │ ass  │ tool  │ usr │ ass  │ tool  │ ass  │tool │
-       └─────┴─────┴──────┴───────┴─────┴──────┴───────┴──────┴─────┘
+entry: 0 1 2 3 4 5 6 7 8
+ ┌─────┬─────┬──────┬───────┬─────┬──────┬───────┬──────┬─────┐
+ │ hdr │ usr │ ass │ tool │ usr │ ass │ tool │ ass │tool │
+ └─────┴─────┴──────┴───────┴─────┴──────┴───────┴──────┴─────┘
 
-有效切割点 = [1(usr), 2(ass), 4(usr), 5(ass), 7(ass)]
-                                                       ↑
-                                          注意：3(tool)、6(tool)、8(tool) 全部被排除
+Điểm cắt hiệu quả = [1(usr), 2(ass), 4(usr), 5(ass), 7(ass)]
+ ↑
+ Lưu ý: 3(tool), 6(tool), 8(tool) Tất cả đều bị loại trừ
 ```
 
 
@@ -178,14 +178,14 @@ De hieu diem cat, nam mot chia khoa: **diem cat khong phai la "message cuoi cung
 Diem cat la `user`, nghia la gi? Ban than user vao vung giu, **assistant va toolResult di theo sau no cung vao vung giu**: ca Turn mo dau bang user nay deu duoc giu. Bi nen la nhung message **truoc** user do.
 
 ```
-例子：切点选 entry 4 (usr)
-entry: 0     1     2      3       4     5      6       7      8
-       hdr   usr   ass   tool    [usr]  ass   tool    ass   tool
-       └──────── 压缩区 ────────┘  └────── 保留区 ──────────────┘
-                                   ↑
-                              切点 = 保留区第一条
-                              user + 后面的 ass + tool 全部保留
-                              → 这个 Turn 完整！
+Ví dụ: Bấm để chọn entry 4 (usr)
+entry: 0 1 2 3 4 5 6 7 8
+ hdr usr ass tool [usr] ass tool ass tool
+ └──────── vùng nén ────────┘ └────── khu vực dành riêng ──────────────┘
+ ↑
+ điểm cắt = Khu vực dành riêng 1
+ user + đằng sau ass + tool giữ tất cả
+ → cái này Turn hoàn thành！
 ```
 
 
@@ -198,9 +198,9 @@ Sau khi xac dinh diem cat hop le, cat tu dau? Chien luoc cua Pi la **cong don ng
 Tai sao lui tu sau? Vi **context gan nhat la quan trong nhat**. Model can biet "vua lam gi", "vua doc file nao", "user vua noi gi". Di nguoc cho den khi cong du token (20.000), dam bao giu du context gan day.
 
 ```
-从最新消息往回走，累积 token 数。
-当累积量 >= keepRecentTokens（20,000）时，停止。
-在停止位置之后找最近的有效切割点:那里就是切刀。
+Quay lại từ tin tức mới nhất, tích lũy token con số. 
+Khi số tiền tích lũy >= keepRecentTokens(20,000)thời gian, dừng lại. 
+Tìm điểm cắt hợp lệ gần nhất sau vị trí dừng:Máy cắt ở ngay đó. 
 ```
 
 
@@ -210,17 +210,17 @@ Tai sao lui tu sau? Vi **context gan nhat la quan trong nhat**. Model can biet "
 
 ```
 function findCutPoint(entries, keepRecentTokens) {
-    const cutPoints = findValidCutPoints(entries);  // 排除 toolResult
+ const cutPoints = findValidCutPoints(entries); // loại trừ toolResult
 
-    let accumulated = 0;
-    for (let i = entries.length - 1; i >= 0; i--) {
-        accumulated += estimateTokens(entries[i]);
-        if (accumulated >= keepRecentTokens) {
-            // 找到第一个 >= i 的有效切割点
-            return 第一个 >= i 的 cutPoint;
-        }
-    }
-    return 最早的 cutPoint;  // 全部需要压缩
+ let accumulated = 0;
+ for (let i = entries.length - 1; i >= 0; i--) {
+ accumulated += estimateTokens(entries[i]);
+ if (accumulated >= keepRecentTokens) {
+ // Tìm cái đầu tiên >= i điểm cắt hiệu quả
+ return cái đầu tiên >= i của cutPoint;
+ }
+ }
+ return sớm nhất cutPoint; // Tất cả cần phải được nén
 }
 ```
 
@@ -228,8 +228,8 @@ function findCutPoint(entries, keepRecentTokens) {
 Ket qua cat chia message thanh hai nhom:
 
 ```
-切割点之前的消息 → messagesToSummarize（被压缩）
-切割点之后的消息 → kept（保留）
+Thông báo trước điểm cắt → messagesToSummarize(nén)
+Tin nhắn sau điểm cắt → kept(Dự trữ)
 ```
 
 
@@ -244,12 +244,12 @@ Vai chuc luot hoi thoai bi nen khong bi nem di truc tiep; chung tro thanh mot **
 Pi khong yeu cau LLM "cu viet tom tat di": no yeu cau LLM dien mot bang dinh dang co dinh, 6 section:
 
 ```
-## Goal                    ← 用户最初要做什么
-## Constraints & Preferences  ← 有什么约束
-## Progress                ← 做了什么（Done / In Progress / Blocked）
-## Key Decisions           ← 关键决策
-## Next Steps              ← 下一步做什么
-## Critical Context        ← 不能忘记的关键信息
+## Goal ← Ban đầu người dùng muốn làm gì?
+## Constraints & Preferences ← Những hạn chế là gì?
+## Progress ← cái gì đã làm(Done / In Progress / Blocked)
+## Key Decisions ← quyết định quan trọng
+## Next Steps ← phải làm gì tiếp theo
+## Critical Context ← Những thông tin quan trọng không thể quên
 ```
 
 
@@ -260,23 +260,23 @@ Tai sao dung dinh dang co cau truc? Vi text tu do de bo sot thong tin: LLM co th
 Qua trinh sinh tom tat: truoc het serialize message thanh text, roi goi LLM sinh tom tat.
 
 ```
-原始消息（AgentMessage[]）
-    │
-    ▼ 序列化
-"[User]: 帮我修 auth.ts
+tin nhắn gốc(AgentMessage[])
+ │
+ ▼ tuần tự hóa
+"[User]: giúp tôi sửa nó auth.ts
  [Assistant tool calls]: read(path=\"auth.ts\")
  [Tool result]: export function authenticate() {...}
- [Assistant]: 找到问题了，缺少 salt..."
-    │
-    ▼ LLM 调用（用摘要 prompt）
-    │
-结构化摘要
-    ## Goal
-    Fix authentication bug in auth.ts
-    ## Progress
-    ### Done
-    - [x] Read auth.ts, identified missing salt
-    ...
+ [Assistant]: Đã tìm thấy vấn đề, mất tích salt..."
+ │
+ ▼ LLM gọi(Sử dụng tóm tắt prompt)
+ │
+tóm tắt có cấu trúc
+ ## Goal
+ Fix authentication bug in auth.ts
+ ## Progress
+ ### Done
+ - [x] Read auth.ts, identified missing salt
+ ...
 ```
 
 
@@ -285,13 +285,13 @@ Qua trinh sinh tom tat: truoc het serialize message thanh text, roi goi LLM sinh
 Neu mot hoi thoai dai bi nen nhieu lan (lan mot nen luot 1-30, lan hai nen luot 31-50), lan nen thu hai nhan tom tat lan truoc lam `previousSummary`:
 
 ```
-第一次压缩：
-  输入：第1-30轮原始消息
-  输出：摘要 A
+Lần nén đầu tiên: 
+ đầu vào: tin nhắn gốc -
+ đầu ra: Tóm tắt A
 
-第二次压缩：
-  输入：摘要 A + 第31-50轮原始消息
-  输出：摘要 B（在 A 的基础上合并新信息）
+Nén thứ hai: 
+ đầu vào: Tóm tắt A + tin nhắn gốc -
+ đầu ra: Tóm tắt B(trong A Tích hợp thông tin mới trên cơ sở)
 ```
 
 
@@ -354,10 +354,10 @@ Day la mot **su doi can**:
 Pi chon cach sau: **truoc het dam bao nen co hieu luc**, roi dung tom tat turnPrefix de bu dap cho mat mat tinh tron ven cua Turn.
 
 ```
-entry: 1     2      3      4      5     6      7     8
-       usr   ass   tool   ass   tool   ass   tool   ass
-                                          ↑
-                                    向后累积到这里 token 预算用完
+entry: 1 2 3 4 5 6 7 8
+ usr ass tool ass tool ass tool ass
+ ↑
+ Tích lũy ngược về đây token Đã hết ngân sách
 ```
 
 
@@ -373,16 +373,16 @@ Chu y phan cong giua tom tat chinh va tom tat turnPrefix:
 Hai tom tat gop lai sau do duoc luu trong cung CompactionEntry; lan buildSessionContext sau cung inject chung cung nhau. Nhung LLM thay la mien tron ven "truoc khi nen da xay ra gi + tien to cua nua Turn".
 
 ```
-entry: 1     2      3      4      5      6       7      8     9
-       ┌─────┬──────┬──────┬──────┬──────┬───────┬──────┬─────┬──────┐
-       │ usr │ ass  │ tool │ ass  │ tool │ tool  │ ass  │tool │ ass │
-       └─────┴──────┴──────┴──────┴──────┴───────┴──────┴─────┴──────┘
-         ↑     └────────── turnPrefixMessages ──────────┘  └─ kept ─┘
-       turnStart=1            (entries 2-6)              entries 7-9
+entry: 1 2 3 4 5 6 7 8 9
+ ┌─────┬──────┬──────┬──────┬──────┬───────┬──────┬─────┬──────┐
+ │ usr │ ass │ tool │ ass │ tool │ tool │ ass │tool │ ass │
+ └─────┴──────┴──────┴──────┴──────┴───────┴──────┴─────┴──────┘
+ ↑ └────────── turnPrefixMessages ──────────┘ └─ kept ─┘
+ turnStart=1 (entries 2-6) entries 7-9
 
-       切点在 entry 7（assistant），但 entry 1（user）是它的 Turn 起点
-       → entry 1 在主摘要里压缩
-       → entry 2-6 是"被切断的 Turn 前缀"，单独生成 turnPrefix 摘要
+ Điểm cắt là entry 7(assistant), Nhưng entry 1(user)là của nó Turn điểm bắt đầu
+ → entry 1 Nén trong bản tóm tắt chính
+ → entry 2-6 Có"cắt đứt Turn tiền tố", Tạo riêng biệt turnPrefix Tóm tắt
 ```
 
 
@@ -408,15 +408,15 @@ Nho lai he thong message o Chuong 6: `CompactionSummaryMessage` la kieu message 
 
 ```
 {
-    type: "compaction",
-    summary: "## Goal\nFix auth.ts...\n## Progress\n...",   // 摘要文本
-    tokensBefore: 185000,              // 压缩前 token 数（用于诊断和审计）
-    firstKeptEntryId: "e30",           // 保留的起始 entry id（重建上下文时从这开始）
-    details: {                         // 文件操作跟踪（来自 extractFileOperations）
-        readFiles: ["src/auth.ts", "src/utils/hash.ts"],
-        modifiedFiles: ["src/auth.ts"],
-    },
-    // ... 含 id/parentId/timestamp 等 SessionEntryBase 字段
+ type: "compaction",
+ summary: "## Goal\nFix auth.ts...\n## Progress\n...", // văn bản tóm tắt
+ tokensBefore: 185000, // trước khi nén token con số(để chẩn đoán và kiểm tra)
+ firstKeptEntryId: "e30", // bắt đầu dành riêng entry id(Bắt đầu ở đây khi xây dựng lại bối cảnh)
+ details: { // Theo dõi hoạt động tập tin(từ extractFileOperations)
+ readFiles: ["src/auth.ts", "src/utils/hash.ts"],
+ modifiedFiles: ["src/auth.ts"],
+ },
+ // ... Chứa id/parentId/timestamp Đợi đã SessionEntryBase trường
 }
 ```
 
@@ -435,17 +435,17 @@ Qua trinh nen phat ra hai su kien (cac su kien mo rong tang Session da noi o Chu
 UI co the subscribe cac su kien nay de hien thi goi y tien trinh nhu "dang nen context...".
 
 ```
-重建后的上下文：
-├── CompactionSummaryMessage（role: "compactionSummary"）
-│     content = 摘要文本
-│     （第6章讲过：convertToLlm 把它翻译成 UserMessage）
+Bối cảnh được xây dựng lại: 
+├── CompactionSummaryMessage(role: "compactionSummary")
+│ content = văn bản tóm tắt
+│ (Chương  nói: convertToLlm dịch nó sang UserMessage)
 │
-├── 保留的原始消息（entry 30 之后的消息）
-│     ├── UserMessage: "继续修复"
-│     ├── AssistantMessage: ...
-│     └── ...
+├── Tin nhắn gốc được giữ lại(entry 30 tin tức sau)
+│ ├── UserMessage: "Tiếp tục sửa chữa"
+│ ├── AssistantMessage: ...
+│ └── ...
 │
-└── （新的消息会在运行中追加）
+└── (Tin nhắn mới sẽ được thêm vào nhanh chóng)
 ```
 
 
@@ -473,18 +473,18 @@ Ket qua cua mot lan nen CHINH LA mot `CompactionSummaryMessage` duoc inject o ra
 Het chuoi lien ket hoan chinh. Cac muc con lai noi ve tinh hoa thiet ke: tom tat y tuong thiet ke cua cac co che nay.
 
 ```
-Agent 运行结束（agent_end 事件）
-    │
-    ▼
-检查 shouldCompact()？
-    │
-    ├── 不需要 → 结束
-    │
-    └── 需要 → 执行压缩
-         ├── findCutPoint → 找切割点
-         ├── 序列化 + LLM 调用 → 生成摘要
-         ├── 追加 CompactionEntry 到 Session Tree
-         └── 下次运行时 buildSessionContext 使用压缩后的上下文
+Agent Kết thúc hoạt động(agent_end sự kiện)
+ │
+ ▼
+Kiểm tra shouldCompact()？
+ │
+ ├── không cần → kết thúc
+ │
+ └── cần → Thực hiện nén
+ ├── findCutPoint → Tìm điểm cắt
+ ├── tuần tự hóa + LLM gọi → Tạo bản tóm tắt
+ ├── Nối thêm CompactionEntry Đến Session Tree
+ └── lần sau nó chạy buildSessionContext Sử dụng ngữ cảnh nén
 ```
 
 
@@ -496,28 +496,28 @@ Qua trinh nen phat ra hai su kien (cac su kien mo rong tang Session da noi o Chu
 UI co the subscribe cac su kien nay de hien thi goi y tien trinh nhu "dang nen context...".
 
 ```
-① 触发判断
-   shouldCompact() → contextTokens(185K) > contextWindow(200K) - reserve(16K)
-   红灯亮起，开始压缩
+① Phán quyết kích hoạt
+ shouldCompact() → contextTokens(185K) > contextWindow(200K) - reserve(16K)
+ bật đèn đỏ, Bắt đầu nén
 
-② 找切割点
-   向后遍历 → 累积 token 到 keepRecent(20K) → 找最近的有效切割点
-   排除 ToolResult 后的位置 → 保证消息对完整
+② Tìm điểm cắt
+ Đi lùi → tích lũy token Đến keepRecent(20K) → Tìm điểm cắt hiệu quả gần nhất
+ loại trừ ToolResult vị trí sau → Đảm bảo tính toàn vẹn của cặp tin nhắn
 
-③ 分割消息
-   切割点之前 → messagesToSummarize（被压缩）
-   切割点之后 → kept（保留）
+③ chia tin nhắn
+ trước điểm cắt → messagesToSummarize(nén)
+ sau điểm cắt → kept(Dự trữ)
 
-④ 生成摘要
-   序列化消息为文本 → 调 LLM 填写 6 section 结构化摘要
-   传入 previousSummary 做增量更新 → 合并文件跟踪列表
+④ Tạo bản tóm tắt
+ Nối tiếp tin nhắn thành văn bản → điều chỉnh LLM điền vào 6 section tóm tắt có cấu trúc
+ đến previousSummary thực hiện cập nhật gia tăng → Hợp nhất danh sách theo dõi tập tin
 
-⑤ 存储结果
-   CompactionEntry 追加到 Session Tree
+⑤ Lưu trữ kết quả
+ CompactionEntry nối thêm vào Session Tree
 
-⑥ 下次运行时
-   buildSessionContext() → 用 CompactionSummaryMessage 替换旧消息
-   convertToLlm → 摘要翻译成 UserMessage 发给 LLM
+⑥ lần sau nó chạy
+ buildSessionContext() → sử dụng CompactionSummaryMessage Thay thế tin nhắn cũ
+ convertToLlm → tóm tắt được dịch sang UserMessage cấp cho LLM
 ```
 
 

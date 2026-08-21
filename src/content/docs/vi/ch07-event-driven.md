@@ -56,9 +56,9 @@ Giả sử bạn muốn thêm một tính năng "log lời gọi tool" cho Agent
 
 ```
 session.subscribe((event) => {
-    if (event.type === "tool_execution_end") {
-        console.log(`[LOG] 调用了 ${event.toolName}，结果：${event.isError ? "失败": "成功"}`);
-    }
+ if (event.type === "tool_execution_end") {
+ console.log(`[LOG] được gọi là ${event.toolName}, kết quả: ${event.isError ? "thất bại": "sự thành công"}`);
+ }
 });
 ```
 
@@ -72,18 +72,18 @@ Sáu dòng code. Không đụng một dòng source Agent nào. Agent cập nhậ
 Dùng thuật ngữ lập trình, event-driven hiện thực mẫu thiết kế **pub-sub** (publish-subscribe, đăng-nhận theo kiểu nhà xuất bản-người đăng ký). Đối chiếu với cách gọi hàm trực tiếp:
 
 ```
-直接调用（打电话）：
-  Agent ──调用──→ 终端渲染
-       ──调用──→ 文件存储
-       ──调用──→ 日志记录
-  Agent 需要知道所有消费者的存在，每加一个新功能就要改 Agent
+gọi trực tiếp(gọi): 
+ Agent ──gọi──→ kết xuất thiết bị đầu cuối
+ ──gọi──→ Lưu trữ tập tin
+ ──gọi──→ khai thác gỗ
+ Agent Cần biết sự tồn tại của tất cả người tiêu dùng, Mỗi khi một tính năng mới được thêm vào, nó cần phải được thay đổi Agent
 
-发布-订阅（广播）：
-  Agent ──emit事件──→ 📡 事件总线
-                          ├──→ 终端渲染（订阅了）
-                          ├──→ 文件存储（订阅了）
-                          ├──→ 日志记录（订阅了）
-                          └──→ （新功能只需订阅，Agent 不需要知道）
+xuất bản-Đăng ký(phát sóng): 
+ Agent ──emitsự kiện──→ 📡 xe buýt sự kiện
+ ├──→ kết xuất thiết bị đầu cuối(Đã đăng ký)
+ ├──→ Lưu trữ tập tin(Đã đăng ký)
+ ├──→ khai thác gỗ(Đã đăng ký)
+ └──→ (Các tính năng mới chỉ cần đăng ký, Agent không cần biết)
 ```
 
 
@@ -101,50 +101,50 @@ Tầng lõi Agent định nghĩa 10 loại `AgentEvent` (sự kiện do Agent ph
 
 ```
 export type AgentEvent =
-  // 第1层：Agent 生命周期（整个运行）
-  | { type: "agent_start" }
-  | { type: "agent_end"; messages: AgentMessage[] }
+ // Tầng : Agent vòng đời(toàn bộ hoạt động)
+ | { type: "agent_start" }
+ | { type: "agent_end"; messages: AgentMessage[] }
 
-  // 第2层：Turn 生命周期（一轮模型调用 + 工具执行）
-  | { type: "turn_start" }
-  | { type: "turn_end"; message: AgentMessage; toolResults: ToolResultMessage[] }
+ // Tầng : Turn vòng đời(Một vòng gọi mẫu + thực thi công cụ)
+ | { type: "turn_start" }
+ | { type: "turn_end"; message: AgentMessage; toolResults: ToolResultMessage[] }
 
-  // 第3层：Message 生命周期（一条消息）
-  | { type: "message_start"; message: AgentMessage }
-  | { type: "message_update"; message: AgentMessage; assistantMessageEvent: AssistantMessageEvent }
-  | { type: "message_end"; message: AgentMessage }
+ // Tầng : Message vòng đời(một tin nhắn)
+ | { type: "message_start"; message: AgentMessage }
+ | { type: "message_update"; message: AgentMessage; assistantMessageEvent: AssistantMessageEvent }
+ | { type: "message_end"; message: AgentMessage }
 
-  // 第4层：Tool Execution 生命周期（一次工具执行）
-  | { type: "tool_execution_start"; toolCallId: string; toolName: string; args: any }
-  | { type: "tool_execution_update"; toolCallId: string; toolName: string; args: any; partialResult: any }
-  | { type: "tool_execution_end"; toolCallId: string; toolName: string; result: any; isError: boolean };
+ // Tầng : Tool Execution vòng đời(Thực thi một công cụ)
+ | { type: "tool_execution_start"; toolCallId: string; toolName: string; args: any }
+ | { type: "tool_execution_update"; toolCallId: string; toolName: string; args: any; partialResult: any }
+ | { type: "tool_execution_end"; toolCallId: string; toolName: string; result: any; isError: boolean };
 ```
 
 
 10 loại nghe thì nhiều, nhưng quy luật rất rõ: chúng là **vòng đời 4 tầng lồng nhau**, mỗi tầng đều có cặp "bắt đầu -> cập nhật -> kết thúc":
 
 ```
-Agent 运行
-├── agent_start ───────────────────── Agent 开始
+Agent chạy
+├── agent_start ───────────────────── Agent bắt đầu
 │
-├── Turn 1（第3章讲过：一次模型调用 + 它触发的工具执行）
-│   ├── turn_start ────────────────── Turn 开始
-│   │
-│   ├── Message（LLM 的响应）
-│   │   ├── message_start
-│   │   ├── message_update ×N ────── 流式增量（逐 token 更新）
-│   │   └── message_end
-│   │
-│   ├── Tool Execution（工具执行）
-│   │   ├── tool_execution_start
-│   │   ├── tool_execution_update ×N  工具进度（如 Bash 的输出）
-│   │   └── tool_execution_end
-│   │
-│   └── turn_end ──────────────────── Turn 结束
+├── Turn 1(Chương  nói: một cuộc gọi mẫu + Công cụ nó kích hoạt thực thi)
+│ ├── turn_start ────────────────── Turn bắt đầu
+│ │
+│ ├── Message(LLM phản ứng)
+│ │ ├── message_start
+│ │ ├── message_update ×N ────── truyền tải đồng bằng(đuổi theo token cập nhật)
+│ │ └── message_end
+│ │
+│ ├── Tool Execution(thực thi công cụ)
+│ │ ├── tool_execution_start
+│ │ ├── tool_execution_update ×N tiến độ công cụ(Chẳng hạn như Bash Đầu ra của)
+│ │ └── tool_execution_end
+│ │
+│ └── turn_end ──────────────────── Turn kết thúc
 │
 ├── Turn 2 ...
 │
-└── agent_end ──────────────────────── Agent 结束
+└── agent_end ──────────────────────── Agent kết thúc
 ```
 
 
@@ -194,28 +194,28 @@ Thực thể của `emit` là phương thức `processEvents` của class Agent,
 
 ```
 private async processEvents(event: AgentEvent): Promise<void> {
-    // 第一步：根据事件类型更新内部状态
-    switch (event.type) {
-        case "message_start":
-            this._state.streamingMessage = event.message;   // 开始追踪流式消息
-            break;
-        case "message_update":
-            this._state.streamingMessage = event.message;   // 更新流式消息内容
-            break;
-        case "message_end":
-            this._state.streamingMessage = undefined;       // 清空临时工位
-            this._state.messages.push(event.message);       // 搬入正式档案
-            break;
-        // ... tool_execution_start/end 更新 pendingToolCalls 等
-    }
+ // bước đầu tiên: Cập nhật trạng thái nội bộ dựa trên loại sự kiện
+ switch (event.type) {
+ case "message_start":
+ this._state.streamingMessage = event.message; // Bắt đầu theo dõi tin tức trực tuyến
+ break;
+ case "message_update":
+ this._state.streamingMessage = event.message; // Cập nhật nội dung tin nhắn phát trực tuyến
+ break;
+ case "message_end":
+ this._state.streamingMessage = undefined; // Xóa các máy trạm tạm thời
+ this._state.messages.push(event.message); // Di chuyển vào các tập tin chính thức
+ break;
+ // ... tool_execution_start/end cập nhật pendingToolCalls Đợi đã
+ }
 
-    // 第二步：拿 AbortSignal
-    const signal = this.activeRun?.abortController.signal;
+ // Bước 2: lấy AbortSignal
+ const signal = this.activeRun?.abortController.signal;
 
-    // 第三步：同步等待所有监听器完成
-    for (const listener of this.listeners) {
-        await listener(event, signal);   // ← 一个一个等！
-    }
+ // Bước 3: Đồng bộ chờ tất cả người nghe hoàn thành
+ for (const listener of this.listeners) {
+ await listener(event, signal); // ← Đợi từng người một！
+ }
 }
 ```
 
@@ -229,28 +229,28 @@ Bạn có thể hỏi: cái này khác gì "gọi hàm trong một vòng lặp"?
 Giả sử không await. Xem chuyện gì sẽ xảy ra:
 
 ```
-假设 emit 是 fire-and-forget（不等待）：
+giả thuyết emit Có fire-and-forget(đừng chờ đợi): 
 
-Agent Loop: emit(start)  emit(update)  emit(end)
-                ↓             ↓              ↓
-TUI 监听器: [开始渲染...]  [还没处理完    [三个事件堆在一起了]
-                              start...]
+Agent Loop: emit(start) emit(update) emit(end)
+ ↓ ↓ ↓
+TUI người nghe: [Bắt đầu kết xuất...] [Chưa hoàn thành [Ba sự kiện xếp chồng lên nhau]
+ start...]
 
-问题：TUI 还没处理完 message_start，message_update 就来了。
-      UI 可能显示空消息，也可能显示过时的内容:状态不一致。
+câu hỏi: TUI Chưa hoàn thành message_start, message_update Nó đến đây. 
+ UI Có thể hiển thị tin nhắn trống, Cũng có thể hiển thị nội dung lỗi thời:Trạng thái không nhất quán. 
 ```
 
 
 
 
 ```
-实际设计（await，同步屏障）：
+thiết kế thực tế(await, rào cản đồng bộ): 
 
-Agent Loop: emit(start)──await──→  emit(update)──await──→  emit(end)──await──→
-                ↓                      ↓                       ↓
-TUI 监听器: [处理完毕，返回]       [处理完毕，返回]          [处理完毕，返回]
+Agent Loop: emit(start)──await──→ emit(update)──await──→ emit(end)──await──→
+ ↓ ↓ ↓
+TUI người nghe: [Đã xử lý, Trở lại] [Đã xử lý, Trở lại] [Đã xử lý, Trở lại]
 
-保证：Agent 在监听器返回前不会发出下一个事件。
+đảm bảo: Agent Sự kiện tiếp theo sẽ không được phát ra cho đến khi người nghe quay lại. 
 ```
 
 
@@ -265,17 +265,17 @@ Nếu mỗi event đều phải await, thì `tool_execution_update` thì sao? Tr
 Đúng vậy, Pi xử lý đặc biệt cho loại event tần suất cao này: **gom trước, rồi chờ theo lô**:
 
 ```
-const updateEvents: Promise<void>[] = [];   // 收集箱
+const updateEvents: Promise<void>[] = []; // hộp sưu tập
 let acceptingUpdates = true;
 
 const result = await tool.execute(id, args, signal, (partialResult) => {
-    if (!acceptingUpdates) return;   // 工具已结束，丢弃迟到 update
-    // 不 await！先把 emit 的 Promise 收集起来
-    updateEvents.push(emit({ type: "tool_execution_update", ... }));
+ if (!acceptingUpdates) return; // Công cụ đã kết thúc, bỏ muộn update
+ // Không await！đầu tiên emit của Promise thu thập
+ updateEvents.push(emit({ type: "tool_execution_update", ... }));
 });
 
-acceptingUpdates = false;             // 关闭闸门
-await Promise.all(updateEvents);      // 一次性等所有 update 处理完
+acceptingUpdates = false; // đóng cửa xả lũ
+await Promise.all(updateEvents); // Tất cả cùng một lúc update Đã hoàn thành
 ```
 
 
@@ -291,7 +291,7 @@ Vòng lặp listener của `processEvents` có một chi tiết dễ bị bỏ q
 
 ```
 for (const listener of this.listeners) {
-    await listener(event, signal);   // 没有 try-catch！
+ await listener(event, signal); // Không try-catch！
 }
 ```
 
@@ -321,12 +321,12 @@ Dưới đây là một số kịch bản tiêu biểu:
 
 ```
 session.subscribe((event) => {
-    if (event.type === "tool_execution_start") {
-        console.log(`🔧 ${event.toolName}(${JSON.stringify(event.args).slice(0, 50)})`);
-    }
-    if (event.type === "tool_execution_end") {
-        console.log(`   └─ ${event.isError ? "❌ 失败": "✅ 成功"}`);
-    }
+ if (event.type === "tool_execution_start") {
+ console.log(`🔧 ${event.toolName}(${JSON.stringify(event.args).slice(0, 50)})`);
+ }
+ if (event.type === "tool_execution_end") {
+ console.log(` └─ ${event.isError ? "❌ thất bại": "✅ sự thành công"}`);
+ }
 });
 ```
 
@@ -345,14 +345,14 @@ Extension có thể sửa danh sách message trước khi gọi LLM: inject th�
 
 
 ```
-// 服务端
+// Máy chủ
 session.subscribe((event) => {
-    if (event.type === "message_update") {
-        res.write(`data: ${JSON.stringify({ type: "delta", text: extractText(event.message) })}\n\n`);
-    }
-    if (event.type === "agent_end") {
-        res.end();
-    }
+ if (event.type === "message_update") {
+ res.write(`data: ${JSON.stringify({ type: "delta", text: extractText(event.message) })}\n\n`);
+ }
+ if (event.type === "agent_end") {
+ res.end();
+ }
 });
 ```
 
@@ -375,29 +375,29 @@ Hành trình xuyên tầng hoàn chỉnh của text_delta
 Giả sử LLM đang sinh ra hai chữ "hello". Một chữ 'h', từ lúc sinh ra đến lúc hiển thị, trải qua 5 bước:
 
 ```
-触发端：LLM SSE 网络流
-  │  data: {"type":"text_delta","delta":"你",...}
-  │
-  ▼ 中转1：AI 层 EventStream.push()
-  │  异步队列，AssistantMessageEvent { type: "text_delta", delta: "你" }
-  │  （第4章讲过的12种事件之一）
-  │
-  ▼ 中转2：Agent Loop 事件转换
-  │  AI 层 text_delta → Agent 层 message_update
-  │  原始事件通过 assistantMessageEvent 字段透传
-  │
-  ▼ 中转3：Agent.processEvents()（同步屏障）
-  │  更新 streamingMessage 内部状态
-  │  await 所有 listeners
-  │
-  ▼ 中转4：AgentSession._handleAgentEvent()
-  │  通知扩展系统 → 分发给 Session 监听器 → 持久化
-  │
-  ▼ 终点：TUI 监听器
-  │  提取 delta "你" → 渲染到终端
-  │
-  ▼
-你看到了 "你" 字出现
+Kết thúc kích hoạt: LLM SSE luồng mạng
+ │ data: {"type":"text_delta","delta":"bạn",...}
+ │
+ ▼ quá cảnh1: AI lớp EventStream.push()
+ │ hàng đợi không đồng bộ, AssistantMessageEvent { type: "text_delta", delta: "bạn" }
+ │ (Chương  nói12một trong những sự kiện)
+ │
+ ▼ quá cảnh2: Agent Loop chuyển tiếp sự kiện
+ │ AI lớp text_delta → Agent lớp message_update
+ │ sự kiện ban đầu đã qua assistantMessageEvent Truyền trong suốt trường
+ │
+ ▼ quá cảnh3: Agent.processEvents()(rào cản đồng bộ)
+ │ cập nhật streamingMessage trạng thái nội bộ
+ │ await tất cả listeners
+ │
+ ▼ quá cảnh4: AgentSession._handleAgentEvent()
+ │ Hệ thống mở rộng thông báo → phân phối cho Session người nghe → kiên trì
+ │
+ ▼ điểm cuối: TUI người nghe
+ │ Trích xuất delta "bạn" → Kết xuất đến thiết bị đầu cuối
+ │
+ ▼
+bạn đã thấy "bạn" từ xuất hiện
 ```
 
 
@@ -419,13 +419,13 @@ Sáu mục trước nói về hệ thống event của lõi Agent: 10 loại. Nh
 
 ```
 AgentSessionEvent =
-    基础 10 种（agent_end 被重载，增加 willRetry 字段）
-  + Session 新增 7 种：
-      queue_update           ← steering/followUp 队列变化
-      compaction_start/end   ← 上下文压缩（第9章详讲）
-      auto_retry_start/end   ← LLM 调用失败自动重试
-      session_info_changed   ← 会话名称变更
-      thinking_level_changed ← 思考深度切换
+ Khái niệm cơ bản 10 loài(agent_end bị quá tải, tăng lên willRetry trường)
+ + Session Mới 7 loài: 
+ queue_update ← steering/followUp Thay đổi hàng đợi
+ compaction_start/end ← Nén ngữ cảnh(chi tiết ở Chương )
+ auto_retry_start/end ← LLM Tự động thử lại nếu cuộc gọi không thành công
+ session_info_changed ← Thay đổi tên phiên
+ thinking_level_changed ← Công tắc chiều sâu suy nghĩ
 ```
 
 

@@ -47,15 +47,15 @@ The most intuitive solution is to delete old messages: throw away the first 30 t
 Pi's solution is **Compaction**: turn old messages into a structured summary, use the summary to replace the raw messages. This both frees up space and retains key information.
 
 ```
-压缩前（185,000 token）：
-┌── 第1-30轮（135,000 token）──┬── 第31-50轮（50,000 token）──┐
-│  原始消息（大量工具结果）      │  原始消息（最近的上下文）      │
+before compression(185,000 token): 
+┌── turns -(135,000 token)──┬── turns -(50,000 token)──┐
+│ original message(Lots of tool results) │ original message(recent context) │
 └──────────────────────────┴──────────────────────────┘
 
-压缩后（约 60,000 token）：
-┌── 摘要（约 10,000 token）──┬── 第31-50轮（50,000 token）──┐
-│  结构化总结（目标、进度、     │  原始消息（完整保留）          │
-│  决策、文件跟踪……）          │                              │
+After compression(approx. 60,000 token): 
+┌── Summary(approx. 10,000 token)──┬── turns -(50,000 token)──┐
+│ structured summary(target, Progress, │ original message(keep intact) │
+│ decision making, File tracking……) │ │
 └────────────────────────┴──────────────────────────┘
 ```
 
@@ -67,23 +67,23 @@ The Agent still "remembers" what the first 30 turns did: its memory just changed
 Before reading every subsequent detail, etch one core timeline into your head: **compaction is not triggered during the dialog, it happens between two turns of dialog**:
 
 ```
-用户问 → Agent 回答 → (Agent 这一轮结束，发 agent_end 事件)
-                              │
-                              ▼
-                     检查 token：超阈值了吗？
-                              │
-                   ┌──────────┴──────────┐
-                   ▼                     ▼
-                没超 → 等下一轮       超了 → 立刻压缩
-                                       ├─ 找切割点
-                                       ├─ 生成摘要
-                                       └─ 把 CompactionEntry 写进 Session Tree
-                                              │
-                                              ▼
-                              下一轮用户开始问时：
-                              buildSessionContext() 从 Session Tree 重建上下文
-                              → CompactionSummaryMessage 替代旧消息
-                              → LLM 看到的是"摘要 + 近期消息"
+User asked → Agent answer → (Agent This round is over, send agent_end event)
+ │
+ ▼
+ Check token: Is it beyond the threshold?？
+ │
+ ┌──────────┴──────────┐
+ ▼ ▼
+ Not over → Wait for the next round Exceeded → Compress immediately
+ ├─ Find the cutting point
+ ├─ Generate summary
+ └─ put CompactionEntry write in Session Tree
+ │
+ ▼
+ When the next round of users starts asking questions: 
+ buildSessionContext() from Session Tree Rebuild context
+ → CompactionSummaryMessage Replace old messages
+ → LLM What I see is"Summary + recent news"
 ```
 
 
@@ -91,8 +91,8 @@ Before reading every subsequent detail, etch one core timeline into your head: *
 
 ```
 function shouldCompact(contextTokens, contextWindow, settings): boolean {
-    if (!settings.enabled) return false;
-    return contextTokens > contextWindow - settings.reserveTokens;
+ if (!settings.enabled) return false;
+ return contextTokens > contextWindow - settings.reserveTokens;
 }
 ```
 
@@ -116,12 +116,12 @@ When `contextTokens > 200,000 - 16,384 = 183,616`, compaction triggers.
 A key question: how do you know how many tokens there are currently? Exact calculation requires a tokenizer, but different models have different tokenizers, and the computation overhead is large. Pi uses a rough-and-ready approach:
 
 ```
-// 实际签名（compaction.ts:256-296）：estimateTokens(message: AgentMessage): number
-// 对每个 message 取其文本字符数 chars，然后 return Math.ceil(chars / 4)
+// actual signature(compaction.ts:256-296): estimateTokens(message: AgentMessage): number
+// for each message Get the number of text characters chars, then return Math.ceil(chars / 4)
 function estimateTokens(message: AgentMessage): number {
-    let chars = 0;
-    // ...按 message.role 分别累加 text/thinking/toolCall/command/output/summary 的字符数
-    return Math.ceil(chars / 4);  // chars / 4
+ let chars = 0;
+ // ...press message.role Accumulate separately text/thinking/toolCall/command/output/summary number of characters
+ return Math.ceil(chars / 4); // chars / 4
 }
 ```
 
@@ -156,14 +156,14 @@ The LLM's dialog history has strict structural constraints. For example a `ToolR
 So the cut point must be a **valid cut point**: one that won't break the position of message pairs.
 
 ```
-entry: 0     1     2      3       4     5      6       7      8
-       ┌─────┬─────┬──────┬───────┬─────┬──────┬───────┬──────┬─────┐
-       │ hdr │ usr │ ass  │ tool  │ usr │ ass  │ tool  │ ass  │tool │
-       └─────┴─────┴──────┴───────┴─────┴──────┴───────┴──────┴─────┘
+entry: 0 1 2 3 4 5 6 7 8
+ ┌─────┬─────┬──────┬───────┬─────┬──────┬───────┬──────┬─────┐
+ │ hdr │ usr │ ass │ tool │ usr │ ass │ tool │ ass │tool │
+ └─────┴─────┴──────┴───────┴─────┴──────┴───────┴──────┴─────┘
 
-有效切割点 = [1(usr), 2(ass), 4(usr), 5(ass), 7(ass)]
-                                                       ↑
-                                          注意：3(tool)、6(tool)、8(tool) 全部被排除
+Effective cutting point = [1(usr), 2(ass), 4(usr), 5(ass), 7(ass)]
+ ↑
+ Note: 3(tool), 6(tool), 8(tool) All are excluded
 ```
 
 
@@ -178,14 +178,14 @@ To understand the cut point grasp one key: **the cut point is not "the last mess
 The cut point is `user`, what does that mean? user itself enters the kept area, **the assistant and toolResult following it also enter the kept area**: this user-led entire Turn is all kept. What gets compressed is the messages **before** this user.
 
 ```
-例子：切点选 entry 4 (usr)
-entry: 0     1     2      3       4     5      6       7      8
-       hdr   usr   ass   tool    [usr]  ass   tool    ass   tool
-       └──────── 压缩区 ────────┘  └────── 保留区 ──────────────┘
-                                   ↑
-                              切点 = 保留区第一条
-                              user + 后面的 ass + tool 全部保留
-                              → 这个 Turn 完整！
+Example: Click to select entry 4 (usr)
+entry: 0 1 2 3 4 5 6 7 8
+ hdr usr ass tool [usr] ass tool ass tool
+ └──────── compression zone ────────┘ └────── reserved area ──────────────┘
+ ↑
+ cut point = Reserved Area 1
+ user + behind ass + tool keep all
+ → this Turn complete！
 ```
 
 
@@ -198,9 +198,9 @@ After determining valid cut points, where to cut from? Pi's strategy is **accumu
 Why backward? Because **the most recent context is the most important**. The model needs to know "what did we do", "what files did we just read", "what did the user just say". Walk backward until enough tokens are accumulated (20,000), ensuring enough recent context is kept.
 
 ```
-从最新消息往回走，累积 token 数。
-当累积量 >= keepRecentTokens（20,000）时，停止。
-在停止位置之后找最近的有效切割点:那里就是切刀。
+Go back from the latest news, accumulate token number. 
+When the cumulative amount >= keepRecentTokens(20,000)time, stop. 
+Find the nearest valid cutting point after the stop position:That's the cutter right there. 
 ```
 
 
@@ -210,17 +210,17 @@ Why backward? Because **the most recent context is the most important**. The mod
 
 ```
 function findCutPoint(entries, keepRecentTokens) {
-    const cutPoints = findValidCutPoints(entries);  // 排除 toolResult
+ const cutPoints = findValidCutPoints(entries); // exclude toolResult
 
-    let accumulated = 0;
-    for (let i = entries.length - 1; i >= 0; i--) {
-        accumulated += estimateTokens(entries[i]);
-        if (accumulated >= keepRecentTokens) {
-            // 找到第一个 >= i 的有效切割点
-            return 第一个 >= i 的 cutPoint;
-        }
-    }
-    return 最早的 cutPoint;  // 全部需要压缩
+ let accumulated = 0;
+ for (let i = entries.length - 1; i >= 0; i--) {
+ accumulated += estimateTokens(entries[i]);
+ if (accumulated >= keepRecentTokens) {
+ // Find the first one >= i effective cutting point
+ return first one >= i of cutPoint;
+ }
+ }
+ return earliest cutPoint; // All needs to be compressed
 }
 ```
 
@@ -228,8 +228,8 @@ function findCutPoint(entries, keepRecentTokens) {
 The cut result splits messages into two groups:
 
 ```
-切割点之前的消息 → messagesToSummarize（被压缩）
-切割点之后的消息 → kept（保留）
+Message before cutting point → messagesToSummarize(compressed)
+Messages after the cut point → kept(Reserve)
 ```
 
 
@@ -244,12 +244,12 @@ The dozens of compressed turns of dialog are not directly thrown away; they beco
 Pi does not ask the LLM to "just write a summary": it requires the LLM to fill in a fixed-format table, 6 sections:
 
 ```
-## Goal                    ← 用户最初要做什么
-## Constraints & Preferences  ← 有什么约束
-## Progress                ← 做了什么（Done / In Progress / Blocked）
-## Key Decisions           ← 关键决策
-## Next Steps              ← 下一步做什么
-## Critical Context        ← 不能忘记的关键信息
+## Goal ← What does the user initially want to do?
+## Constraints & Preferences ← What are the constraints?
+## Progress ← what did(Done / In Progress / Blocked)
+## Key Decisions ← key decisions
+## Next Steps ← what to do next
+## Critical Context ← Key information not to be forgotten
 ```
 
 
@@ -260,23 +260,23 @@ Why structured format? Because free text easily misses information: the LLM may 
 The summary-generation process: first serialize the messages into text, then call the LLM to generate the summary.
 
 ```
-原始消息（AgentMessage[]）
-    │
-    ▼ 序列化
-"[User]: 帮我修 auth.ts
+original message(AgentMessage[])
+ │
+ ▼ serialization
+"[User]: help me fix it auth.ts
  [Assistant tool calls]: read(path=\"auth.ts\")
  [Tool result]: export function authenticate() {...}
- [Assistant]: 找到问题了，缺少 salt..."
-    │
-    ▼ LLM 调用（用摘要 prompt）
-    │
-结构化摘要
-    ## Goal
-    Fix authentication bug in auth.ts
-    ## Progress
-    ### Done
-    - [x] Read auth.ts, identified missing salt
-    ...
+ [Assistant]: Found the problem, missing salt..."
+ │
+ ▼ LLM call(Use summary prompt)
+ │
+structured summary
+ ## Goal
+ Fix authentication bug in auth.ts
+ ## Progress
+ ### Done
+ - [x] Read auth.ts, identified missing salt
+ ...
 ```
 
 
@@ -285,13 +285,13 @@ The summary-generation process: first serialize the messages into text, then cal
 If a long dialog is compressed multiple times (the first time compresses turns 1-30, the second time turns 31-50), the second compression takes the previous summary as `previousSummary`:
 
 ```
-第一次压缩：
-  输入：第1-30轮原始消息
-  输出：摘要 A
+First compression: 
+ input: turns - original message
+ output: Summary A
 
-第二次压缩：
-  输入：摘要 A + 第31-50轮原始消息
-  输出：摘要 B（在 A 的基础上合并新信息）
+Second compression: 
+ input: Summary A + turns - original message
+ output: Summary B(in A Incorporate new information on the basis of)
 ```
 
 
@@ -354,10 +354,10 @@ This is a **trade-off**:
 Pi chose the latter: **first make sure compaction can take effect**, then use the turnPrefix summary to compensate for the loss of Turn completeness.
 
 ```
-entry: 1     2      3      4      5     6      7     8
-       usr   ass   tool   ass   tool   ass   tool   ass
-                                          ↑
-                                    向后累积到这里 token 预算用完
+entry: 1 2 3 4 5 6 7 8
+ usr ass tool ass tool ass tool ass
+ ↑
+ Accumulate backwards to here token Budget ran out
 ```
 
 
@@ -373,16 +373,16 @@ Note the division of labor between the main summary and the turnPrefix summary:
 After both summaries are merged, they are stored in the same CompactionEntry; the next buildSessionContext injects them together. What the LLM sees is a complete "what happened before compaction + half Turn's prefix".
 
 ```
-entry: 1     2      3      4      5      6       7      8     9
-       ┌─────┬──────┬──────┬──────┬──────┬───────┬──────┬─────┬──────┐
-       │ usr │ ass  │ tool │ ass  │ tool │ tool  │ ass  │tool │ ass │
-       └─────┴──────┴──────┴──────┴──────┴───────┴──────┴─────┴──────┘
-         ↑     └────────── turnPrefixMessages ──────────┘  └─ kept ─┘
-       turnStart=1            (entries 2-6)              entries 7-9
+entry: 1 2 3 4 5 6 7 8 9
+ ┌─────┬──────┬──────┬──────┬──────┬───────┬──────┬─────┬──────┐
+ │ usr │ ass │ tool │ ass │ tool │ tool │ ass │tool │ ass │
+ └─────┴──────┴──────┴──────┴──────┴───────┴──────┴─────┴──────┘
+ ↑ └────────── turnPrefixMessages ──────────┘ └─ kept ─┘
+ turnStart=1 (entries 2-6) entries 7-9
 
-       切点在 entry 7（assistant），但 entry 1（user）是它的 Turn 起点
-       → entry 1 在主摘要里压缩
-       → entry 2-6 是"被切断的 Turn 前缀"，单独生成 turnPrefix 摘要
+ The cutting point is entry 7(assistant), But entry 1(user)is its Turn starting point
+ → entry 1 Compress in main summary
+ → entry 2-6 Yes"cut off Turn prefix", Generate separately turnPrefix Summary
 ```
 
 
@@ -408,15 +408,15 @@ Recalling the message system in Chapter 6: `CompactionSummaryMessage` is a custo
 
 ```
 {
-    type: "compaction",
-    summary: "## Goal\nFix auth.ts...\n## Progress\n...",   // 摘要文本
-    tokensBefore: 185000,              // 压缩前 token 数（用于诊断和审计）
-    firstKeptEntryId: "e30",           // 保留的起始 entry id（重建上下文时从这开始）
-    details: {                         // 文件操作跟踪（来自 extractFileOperations）
-        readFiles: ["src/auth.ts", "src/utils/hash.ts"],
-        modifiedFiles: ["src/auth.ts"],
-    },
-    // ... 含 id/parentId/timestamp 等 SessionEntryBase 字段
+ type: "compaction",
+ summary: "## Goal\nFix auth.ts...\n## Progress\n...", // summary text
+ tokensBefore: 185000, // before compression token number(for diagnostics and auditing)
+ firstKeptEntryId: "e30", // reserved start entry id(Start here when rebuilding the context)
+ details: { // File operation tracking(from extractFileOperations)
+ readFiles: ["src/auth.ts", "src/utils/hash.ts"],
+ modifiedFiles: ["src/auth.ts"],
+ },
+ // ... Contains id/parentId/timestamp Wait SessionEntryBase Field
 }
 ```
 
@@ -435,17 +435,17 @@ The compaction process emits two events (Session-layer extension events discusse
 UI can subscribe to these events to display progress hints like "compacting context...".
 
 ```
-重建后的上下文：
-├── CompactionSummaryMessage（role: "compactionSummary"）
-│     content = 摘要文本
-│     （第6章讲过：convertToLlm 把它翻译成 UserMessage）
+Reconstructed context: 
+├── CompactionSummaryMessage(role: "compactionSummary")
+│ content = summary text
+│ (No.6chapter: convertToLlm translate it to UserMessage)
 │
-├── 保留的原始消息（entry 30 之后的消息）
-│     ├── UserMessage: "继续修复"
-│     ├── AssistantMessage: ...
-│     └── ...
+├── Original message retained(entry 30 later news)
+│ ├── UserMessage: "Continue to repair"
+│ ├── AssistantMessage: ...
+│ └── ...
 │
-└── （新的消息会在运行中追加）
+└── (New messages will be appended on the fly)
 ```
 
 
@@ -473,18 +473,18 @@ The result of a compation IS a `CompactionSummaryMessage` injected at the bounda
 That's all about the complete chain. The remaining sections are about design essence: a summary of the design ideas of these mechanisms.
 
 ```
-Agent 运行结束（agent_end 事件）
-    │
-    ▼
-检查 shouldCompact()？
-    │
-    ├── 不需要 → 结束
-    │
-    └── 需要 → 执行压缩
-         ├── findCutPoint → 找切割点
-         ├── 序列化 + LLM 调用 → 生成摘要
-         ├── 追加 CompactionEntry 到 Session Tree
-         └── 下次运行时 buildSessionContext 使用压缩后的上下文
+Agent End of operation(agent_end event)
+ │
+ ▼
+Check shouldCompact()？
+ │
+ ├── No need → end
+ │
+ └── need → Perform compression
+ ├── findCutPoint → Find the cutting point
+ ├── serialization + LLM call → Generate summary
+ ├── Append CompactionEntry Arrive Session Tree
+ └── next time it runs buildSessionContext Use compressed context
 ```
 
 
@@ -496,28 +496,28 @@ The compaction process emits two events (Session-layer extension events discusse
 UI can subscribe to these events to display progress hints like "compacting context...".
 
 ```
-① 触发判断
-   shouldCompact() → contextTokens(185K) > contextWindow(200K) - reserve(16K)
-   红灯亮起，开始压缩
+① Trigger judgment
+ shouldCompact() → contextTokens(185K) > contextWindow(200K) - reserve(16K)
+ red light on, Start compression
 
-② 找切割点
-   向后遍历 → 累积 token 到 keepRecent(20K) → 找最近的有效切割点
-   排除 ToolResult 后的位置 → 保证消息对完整
+② Find the cutting point
+ Traverse backward → accumulate token Arrive keepRecent(20K) → Find the nearest effective cutting point
+ exclude ToolResult position after → Ensure message pair integrity
 
-③ 分割消息
-   切割点之前 → messagesToSummarize（被压缩）
-   切割点之后 → kept（保留）
+③ split message
+ before cutting point → messagesToSummarize(compressed)
+ after cutting point → kept(Reserve)
 
-④ 生成摘要
-   序列化消息为文本 → 调 LLM 填写 6 section 结构化摘要
-   传入 previousSummary 做增量更新 → 合并文件跟踪列表
+④ Generate summary
+ Serialize message to text → tune LLM fill in 6 section structured summary
+ incoming previousSummary do incremental updates → Merge file tracking list
 
-⑤ 存储结果
-   CompactionEntry 追加到 Session Tree
+⑤ Store results
+ CompactionEntry append to Session Tree
 
-⑥ 下次运行时
-   buildSessionContext() → 用 CompactionSummaryMessage 替换旧消息
-   convertToLlm → 摘要翻译成 UserMessage 发给 LLM
+⑥ next time it runs
+ buildSessionContext() → use CompactionSummaryMessage Replace old message
+ convertToLlm → abstract translated into UserMessage issued to LLM
 ```
 
 

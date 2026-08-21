@@ -39,7 +39,7 @@ Trước khi bàn về Agent Loop, ta lùi một bước xem bản thân việc 
 Cách dùng nguyên thủy và trực quan nhất. Bạn dựng prompt, gọi API một lần, lấy kết quả, xong.
 
 ```
-用户输入 → 构建提示词 → 调模型 → 模型输出 → 展示结果
+đầu vào của người dùng → Xây dựng các từ gợi ý → gọi model → Đầu ra mô hình → hiển thị kết quả
 ```
 
 
@@ -48,10 +48,10 @@ Code kiểu thế này:
 
 ```
 const response = await llm.chat({
-  messages: [
-    { role: "system", content: "你是一个翻译助手" },
-    { role: "user", content: "把这段代码翻译成 Python" },
-  ],
+ messages: [
+ { role: "system", content: "Bạn là trợ lý dịch thuật" },
+ { role: "user", content: "Dịch mã này sang Python" },
+ ],
 });
 console.log(response.content);
 ```
@@ -66,9 +66,9 @@ Tình huống áp dụng: dịch, tóm tắt, hỏi đáp, hoàn thiện code: b
 Khi task phức tạp lên, bạn thấy khó có kết quả tốt trong một lần. Vậy là bạn chia task lớn thành nhiều bước, mỗi bước gọi model một lần, giữa các bước **code của bạn** điều khiển luồng.
 
 ```
-用户输入 → [步骤1: 调模型分析] → [你的代码: 提取关键信息]
-         → [步骤2: 调模型生成草稿] → [你的代码: 检查质量]
-         → [步骤3: 调模型润色] → 最终输出
+đầu vào của người dùng → [bước1: Phân tích mô hình điều chỉnh] → [mã của bạn: Trích xuất thông tin chính]
+ → [bước2: Điều chỉnh dự thảo tạo mô hình] → [mã của bạn: Kiểm tra chất lượng]
+ → [bước3: Điều chỉnh và đánh bóng mô hình] → đầu ra cuối cùng
 ```
 
 
@@ -81,9 +81,9 @@ Tình huống áp dụng: pipeline tạo tài liệu, tự động review code, 
 Ở chế độ Agent, bạn giao quyền quyết định cho model.
 
 ```
-用户输入 → 调模型 → 模型说"我需要读文件" → 执行读文件 → 模型看结果
-         → 模型说"还需要搜索代码" → 执行搜索 → 模型看结果
-         → 模型说"我知道了，答案是..." → 输出 → 结束
+đầu vào của người dùng → gọi model → Model nói"Tôi cần đọc một tập tin" → Thực hiện đọc file → Làm mẫu để xem kết quả
+ → Model nói"Vẫn cần tìm kiếm mã" → Thực hiện tìm kiếm → Làm mẫu để xem kết quả
+ → Model nói"tôi biết, Câu trả lời là..." → đầu ra → kết thúc
 ```
 
 
@@ -115,13 +115,13 @@ Trước khi đào sâu source, có hai khái niệm bắt buộc phân biệt. 
 Trace là toàn bộ quá trình từ lúc người dùng nhấn Enter, cho đến khi Agent dừng hẳn và phát ra sự kiện agent_end. Một Trace gồm nhiều Turn.
 
 ```
-一个 Trace（一次 agent_start 到 agent_end）
+một Trace(một lần agent_start Đến agent_end)
 │
-├── Turn 1：调模型 → 模型返回 toolUse（要读文件）→ 执行 read 工具
+├── Turn 1: gọi model → Trả về mô hình toolUse(để đọc tập tin)→ thi hành read Công cụ
 │
-├── Turn 2：带着工具结果再调模型 → 模型返回 toolUse（还要改文件）→ 执行 edit 工具
+├── Turn 2: gọi model bằng kết quả công cụ → Trả về mô hình toolUse(Cần thay đổi tập tin)→ thi hành edit Công cụ
 │
-└── Turn 3：带着工具结果再调模型 → 模型返回 stop（改好了，没有工具调用）→ agent_end
+└── Turn 3: gọi model bằng kết quả công cụ → Trả về mô hình stop(Đã thay đổi, Không có cuộc gọi công cụ)→ agent_end
 ```
 
 
@@ -135,15 +135,15 @@ Mỗi Turn được bọc bởi một cặp sự kiện turn_start và turn_end.
 
 ```
 while (hasMoreToolCalls || ...) {
-    if (!firstTurn) emit(turn_start);    // ← 新 Turn 开始
+ if (!firstTurn) emit(turn_start); // ← mới Turn bắt đầu
 
-    处理 pendingMessages
-    streamAssistantResponse()             // ← 一次模型调用
-    检查 stopReason
-    executeToolCalls()                    // ← 执行这个 Turn 触发的一批工具
-    emit(turn_end);                       // ← 这个 Turn 结束
+ Quy trình pendingMessages
+ streamAssistantResponse() // ← một cuộc gọi mẫu
+ Kiểm tra stopReason
+ executeToolCalls() // ← thực hiện điều này Turn Một loạt công cụ được kích hoạt
+ emit(turn_end); // ← cái này Turn kết thúc
 
-    prepareNextTurn / shouldStopAfterTurn / 检查 steering
+ prepareNextTurn / shouldStopAfterTurn / Kiểm tra steering
 }
 ```
 
@@ -155,25 +155,25 @@ Nếu model trong một Turn gọi một lúc 3 tool (read + grep + find), thì 
 ### Vậy quan hệ giữa Trace và Turn là
 
 ```
-Trace（一次完整运行）
-│  agent_start
+Trace(một lần chạy hoàn chỉnh)
+│ agent_start
 │
 ├── Turn 1
-│   │  turn_start
-│   ├── 调模型 → toolUse → 执行工具（read + grep）
-│   │  turn_end
-│   │
+│ │ turn_start
+│ ├── gọi model → toolUse → Công cụ thực thi(read + grep)
+│ │ turn_end
+│ │
 ├── Turn 2
-│   │  turn_start
-│   ├── 调模型 → toolUse → 执行工具（edit）
-│   │  turn_end
-│   │
+│ │ turn_start
+│ ├── gọi model → toolUse → Công cụ thực thi(edit)
+│ │ turn_end
+│ │
 ├── Turn 3
-│   │  turn_start
-│   ├── 调模型 → stop → 没有工具
-│   │  turn_end
-│   │
-│   agent_end
+│ │ turn_start
+│ ├── gọi model → stop → không có công cụ
+│ │ turn_end
+│ │
+│ agent_end
 ```
 
 ## 3. Toàn cảnh: hành trình một message, và vòng lặp quay ra sao
@@ -186,51 +186,51 @@ Trace（一次完整运行）
 Mô tả hình: vỏ ngoài Trace bao 3 Turn; mỗi Turn là vòng kín gọi model + thực thi tool. Lưu ý Turn 3 không có ToolCall (khung nét đứt); stopReason = stop của nó kích hoạt vòng lặp thoát ra.
 
 ```
-你按下回车："帮我读一下 src/main.ts"
+Bạn nhấn enter: "đọc nó cho tôi src/main.ts"
 │
-│  ① 你的输入变成一条消息
+│ ① Đầu vào của bạn sẽ trở thành một tin nhắn
 │
-UserMessage { role: "user", content: "帮我读一下 src/main.ts" }
+UserMessage { role: "user", content: "đọc nó cho tôi src/main.ts" }
 │
-│  ② 进入循环（agentLoop 入口）: agent_start（一个 Trace 开始了）
+│ ② nhập vòng lặp(agentLoop lối vào): agent_start(một Trace bắt đầu)
 │
 └── runLoop()
-    │
-    │  ③ 消息转换（AgentMessage → LLM 认识的 Message）
-    │
-    │  ┌── Turn 1 ──────────────────────────────────────────┐
-    │  │  turn_start                                         │
-    │  │  ④ 调用 Model（每 Turn 仅一次模型调用）               │
-    │  │  streamSimple(model, { systemPrompt, messages })    │
-    │  │       ↓ 逐 token 流式返回                            │
-    │  │  AssistantMessage {                                  │
-    │  │      content: [ ..., ToolCall { name: "read", ... } ],│
-    │  │      stopReason: "toolUse"  ← 有工具调用，继续转      │
-    │  │  }                                                  │
-    │  │  ⑤ 执行 Tool（工具的五步管道，详见第5章）              │
-    │  │  ToolResultMessage { content: [{ text: "文件内容" }] }│
-    │  │  turn_end                                            │
-    │  └─────────────────────────────────────────────────────┘
-    │
-    │  循环判断：stopReason 是 toolUse → hasMoreToolCalls = true → 继续
-    │
-    │  ┌── Turn 2 ──────────────────────────────────────────┐
-    │  │  turn_start                                         │
-    │  │  ⑥ 第二次调用 Model（工具结果已追加到消息列表）         │
-    │  │  streamSimple(model, { messages: [..., toolResult] })│
-    │  │       ↓ 模型看到文件内容，开始解释                      │
-    │  │  AssistantMessage {                                  │
-    │  │      content: [ TextContent { text: "这个文件..." } ],│
-    │  │      stopReason: "stop"  ← 没有工具调用，准备停        │
-    │  │  }                                                  │
-    │  │  turn_end                                            │
-    │  └─────────────────────────────────────────────────────┘
-    │
-    │  循环判断：hasMoreToolCalls = false，pendingMessages 为空
-    │  → 内层循环退出
-    │  → 外层循环检查 followUp → 空 → 外层循环退出
-    │
-    └── agent_end（一个 Trace 结束，共 2 个 Turn）
+ │
+ │ ③ chuyển đổi tin nhắn(AgentMessage → LLM người quen Message)
+ │
+ │ ┌── Turn 1 ──────────────────────────────────────────┐
+ │ │ turn_start │
+ │ │ ④ gọi Model(mỗi Turn Chỉ có một cuộc gọi mẫu) │
+ │ │ streamSimple(model, { systemPrompt, messages }) │
+ │ │ ↓ đuổi theo token Truyền phát trở lại │
+ │ │ AssistantMessage { │
+ │ │ content: [ ..., ToolCall { name: "read", ... } ],│
+ │ │ stopReason: "toolUse" ← Có một cuộc gọi công cụ, Tiếp tục chuyển │
+ │ │ } │
+ │ │ ⑤ thi hành Tool(Quy trình công cụ gồm năm bước, Để biết chi tiết, xem Chương5chương) │
+ │ │ ToolResultMessage { content: [{ text: "Nội dung tập tin" }] }│
+ │ │ turn_end │
+ │ └─────────────────────────────────────────────────────┘
+ │
+ │ Phán quyết vòng tròn: stopReason Có toolUse → hasMoreToolCalls = true → tiếp tục
+ │
+ │ ┌── Turn 2 ──────────────────────────────────────────┐
+ │ │ turn_start │
+ │ │ ⑥ cuộc gọi thứ hai Model(Kết quả công cụ được thêm vào danh sách tin nhắn) │
+ │ │ streamSimple(model, { messages: [..., toolResult] })│
+ │ │ ↓ Mô hình xem nội dung tập tin, bắt đầu giải thích │
+ │ │ AssistantMessage { │
+ │ │ content: [ TextContent { text: "tập tin này..." } ],│
+ │ │ stopReason: "stop" ← Không có cuộc gọi công cụ, Chuẩn bị dừng lại │
+ │ │ } │
+ │ │ turn_end │
+ │ └─────────────────────────────────────────────────────┘
+ │
+ │ Phán quyết vòng tròn: hasMoreToolCalls = false, pendingMessages trống rỗng
+ │ → thoát vòng lặp bên trong
+ │ → Kiểm tra vòng ngoài followUp → trống rỗng → Thoát khỏi vòng lặp bên ngoài
+ │
+ └── agent_end(một Trace kết thúc, tổng cộng 2 một Turn)
 ```
 
 ### Vòng lặp quay ra sao: stopReason: đèn tín hiệu duy nhất
@@ -265,12 +265,12 @@ Thực ra vòng lặp chỉ nhìn một thứ: output của model có chứa too
 Đây không phải quyết định thông minh của model. Nói cách khác: không phải model đang nói tôi xong rồi, mà là ta đang nói mày không xin tool, thì coi như mày xong.
 
 ```
-// 简化逻辑（实际见 agent-loop.ts:202-216）
+// Đơn giản hóa logic(Xem thực tế agent-loop.ts:202-216)
 const toolCalls = message.content.filter(c => c.type === "toolCall");
 hasMoreToolCalls = false;
 if (toolCalls.length > 0) {
-  const executedToolBatch = await executeToolCalls(...);
-  hasMoreToolCalls = !executedToolBatch.terminate;  // 任何一个工具 terminate 则停止
+ const executedToolBatch = await executeToolCalls(...);
+ hasMoreToolCalls = !executedToolBatch.terminate; // bất kỳ công cụ nào terminate sau đó dừng lại
 }
 ```
 
@@ -286,21 +286,21 @@ if (toolCalls.length > 0) {
 - stopReason === error hoặc aborted → dừng cứng: thoát ngay cả vòng lặp, không kiểm tra followUp
 
 ```
-         ┌──────────────────────────────────┐
-         │                                  │
-         ▼                                  │
-    ┌─────────┐  toolUse   ┌──────────┐    │
-    │ 调模型   │ ─────────→ │ 执行工具  │    │
-    └─────────┘            └──────────┘    │
-         │                      │          │
-         │ stop / length        │ 结果追加  │
-         │                      ▼ 到消息    │
-         ▼                 重新调模型 ──────┘
-    ┌─────────┐
-    │ 准备停   │   ← 不是模型决定的，是我们的规则
-    └─────────┘
+ ┌──────────────────────────────────┐
+ │ │
+ ▼ │
+ ┌─────────┐ toolUse ┌──────────┐ │
+ │ gọi model │ ─────────→ │ Công cụ thực thi │ │
+ └─────────┘ └──────────┘ │
+ │ │ │
+ │ stop / length │ Nối kết quả │
+ │ ▼ đến tin tức │
+ ▼ Điều chỉnh lại mô hình ──────┘
+ ┌─────────┐
+ │ Chuẩn bị dừng lại │ ← Nó không được xác định bởi mô hình, là quy tắc của chúng tôi
+ └─────────┘
 
-    error / aborted → 直接跳出整个循环（硬停止）
+ error / aborted → Nhảy ra khỏi toàn bộ vòng lặp trực tiếp(dừng lại)
 ```
 
 ### Vòng lặp tối thiểu: mẫu số chung nhỏ nhất của mọi Agent
@@ -328,24 +328,24 @@ Mục 3 đã cho bạn toàn cảnh khái niệm: message chảy ra sao, stopRea
 Trước khi xem source Pi, hãy làm rõ một điều: Agent Loop đơn giản nhất thật ra cực kỳ ngắn.
 
 ```
-// 最简 Agent Loop（伪代码）
+// Đơn giản nhất Agent Loop(mã giả)
 async function simpleLoop(messages, model, tools) {
-    while (true) {
-        // ① 调模型
-        const response = await callModel(model, messages, tools);
-        messages.push(response);
+ while (true) {
+ // ① gọi model
+ const response = await callModel(model, messages, tools);
+ messages.push(response);
 
-        // ② 没有工具调用 → 结束
-        if (response.stopReason !== "toolUse") {
-            return messages;
-        }
+ // ② Không có cuộc gọi công cụ → kết thúc
+ if (response.stopReason !== "toolUse") {
+ return messages;
+ }
 
-        // ③ 有工具调用 → 执行，把结果喂回去
-        for (const toolCall of response.toolCalls) {
-            const result = await executeTool(toolCall);
-            messages.push(result);
-        }
-    }
+ // ③ Có một cuộc gọi công cụ → thi hành, Trả lại kết quả
+ for (const toolCall of response.toolCalls) {
+ const result = await executeTool(toolCall);
+ messages.push(result);
+ }
+ }
 }
 ```
 
@@ -377,12 +377,12 @@ Sau khi bạn nhấn Enter, chuỗi gọi là: Agent.prompt() → runPromptMessa
 ```
 // agent-loop.ts:95-118
 async function runAgentLoop(
-    prompts: AgentMessage[],     // 你的消息
-    context: AgentContext,       // 当前对话上下文（快照副本）
-    config: AgentLoopConfig,     // 循环配置（模型、钩子、队列回调）
-    emit: AgentEventSink,        // 事件发射器
-    signal?: AbortSignal,        // 中止信号
-    streamFn?: StreamFn,         // 流式函数（可替换）
+ prompts: AgentMessage[], // tin nhắn của bạn
+ context: AgentContext, // bối cảnh hội thoại hiện tại(sao chép ảnh chụp nhanh)
+ config: AgentLoopConfig, // Cấu hình vòng lặp(model, cái móc, Gọi lại hàng đợi)
+ emit: AgentEventSink, // bộ phát sự kiện
+ signal?: AbortSignal, // tín hiệu hủy bỏ
+ streamFn?: StreamFn, // Chức năng truyền phát(Có thể thay thế)
 ): Promise<AgentMessage[]>
 ```
 
@@ -394,9 +394,9 @@ prompts: message của bạn đã được đóng gói thành định dạng chu
 
 ```
 [{
-  role: "user",
-  content: [{ type: "text", text: "帮我读一下 src/main.ts" }],
-  timestamp: 1748000000000
+ role: "user",
+ content: [{ type: "text", text: "đọc nó cho tôi src/main.ts" }],
+ timestamp: 1748000000000
 }]
 ```
 
@@ -406,12 +406,12 @@ context: snapshot của context hội thoại. Lưu ý là bản sao (do createC
 
 ```
 {
-  systemPrompt: "You are a helpful coding assistant...",
-  messages: [ /* 之前的对话历史 */ ],
-  tools: [
-    { name: "read", description: "...", parameters: Type.Object({...}), execute: ... },
-    { name: "bash", description: "...", parameters: Type.Object({...}), execute: ... },
-  ]
+ systemPrompt: "You are a helpful coding assistant...",
+ messages: [ /* Lịch sử cuộc trò chuyện trước đó */ ],
+ tools: [
+ { name: "read", description: "...", parameters: Type.Object({...}), execute: ... },
+ { name: "bash", description: "...", parameters: Type.Object({...}), execute: ... },
+ ]
 }
 ```
 
@@ -421,15 +421,15 @@ config: cấu hình hành vi của Loop. Có một nhóm hook quan trọng (đ�
 
 ```
 {
-  model: Model,                    // 用哪个 LLM
-  convertToLlm: Function,          // AgentMessage[] → Message[] 转换
-  transformContext?: Function,      // 调 LLM 前的上下文预处理（如压缩）
-  getSteeringMessages?: Function,   // 获取"紧急插队"消息
-  getFollowUpMessages?: Function,   // 获取"追加任务"消息
-  shouldStopAfterTurn?: Function,   // 每轮结束后是否该停
-  beforeToolCall?: Function,        // 工具执行前钩子
-  afterToolCall?: Function,         // 工具执行后钩子
-  toolExecution: "parallel",        // 工具执行模式
+ model: Model, // Sử dụng cái nào LLM
+ convertToLlm: Function, // AgentMessage[] → Message[] Chuyển đổi
+ transformContext?: Function, // điều chỉnh LLM Tiền xử lý bối cảnh trước(chẳng hạn như nén)
+ getSteeringMessages?: Function, // nhận được"Cắt hàng đợi khẩn cấp"tin tức
+ getFollowUpMessages?: Function, // nhận được"Nhiệm vụ bổ sung"tin tức
+ shouldStopAfterTurn?: Function, // Chúng ta có nên dừng lại sau mỗi vòng đấu không?
+ beforeToolCall?: Function, // Móc trước khi thực hiện công cụ
+ afterToolCall?: Function, // Công cụ móc sau khi thực hiện
+ toolExecution: "parallel", // Chế độ thực thi công cụ
 }
 ```
 
@@ -439,17 +439,17 @@ Các hook này đều là hàm chứ không phải dữ liệu: Loop gọi chún
 Hàm đầu vào chỉ làm ba bước chuẩn bị:
 
 ```
-Step 1: 创建 newMessages 数组
-        → 收集本轮 Trace 产生的所有新消息
+Step 1: tạo ra newMessages mảng
+ → Thu thập vòng này Trace Tất cả tin nhắn mới được tạo
 
-Step 2: 把 prompts 追加到 context.messages
-        → context.messages = [...context.messages, ...prompts]
+Step 2: đặt prompts nối thêm vào context.messages
+ → context.messages = [...context.messages, ...prompts]
 
-Step 3: 发初始事件
-        → emit("agent_start")    ← Trace 开始
-        → emit("turn_start")     ← 首轮 Turn 开始（入口就发，后续 Turn 在内层循环里发）
-        → 对每条 prompt：emit("message_start") + emit("message_end")
-        → 调用 runLoop()
+Step 3: sự kiện ban đầu
+ → emit("agent_start") ← Trace bắt đầu
+ → emit("turn_start") ← vòng đầu tiên Turn bắt đầu(Giao tại lối vào, Theo dõi Turn Gửi vào vòng lặp bên trong)
+ → cho mỗi prompt: emit("message_start") + emit("message_end")
+ → gọi runLoop()
 ```
 
 
@@ -457,13 +457,13 @@ Dữ liệu thay đổi:
 
 
 ```
-入口前：
-  context.messages = [user1, asst1, toolResult1]    ← 之前的对话
-  newMessages = []
+Trước lối vào: 
+ context.messages = [user1, asst1, toolResult1] ← cuộc trò chuyện trước đó
+ newMessages = []
 
-入口后：
-  context.messages = [user1, asst1, toolResult1, user2]  ← 你的消息被追加
-  newMessages = [user2]                                   ← 收集器开始记录
+Sau lối vào: 
+ context.messages = [user1, asst1, toolResult1, user2] ← Tin nhắn của bạn đã được thêm vào
+ newMessages = [user2] ← Người thu thập bắt đầu ghi
 ```
 
 ### 4.2 Bộ xương của runLoop(): lõi trước, lớp phủ sau
@@ -480,14 +480,14 @@ Giờ ta vào runLoop(): đoạn code cốt lõi nhất của cả hệ thống.
 Nếu chỉ giữ lại logic vòng lặp tối thiểu, runLoop trông thế này:
 
 ```
-// 只保留内核的 runLoop（伪代码）
+// Chỉ giữ lại kernel runLoop(mã giả)
 while (hasMoreToolCalls) {
-    // 步骤 B：调 LLM
-    // 步骤 C：检查 stopReason → error/aborted 就退出
-    // 步骤 D：执行工具
-    // 步骤 E：emit turn_end
+ // bước B: điều chỉnh LLM
+ // bước C: Kiểm tra stopReason → error/aborted Cứ bỏ đi
+ // bước D: Công cụ thực thi
+ // bước E: emit turn_end
 }
-// 结束 → emit agent_end
+// kết thúc → emit agent_end
 ```
 
 #### Lớp phủ: coding-agent thêm hai vỏ ngoài
@@ -507,42 +507,42 @@ Ghép lõi và hai lớp phủ lại, ta có bộ xương runLoop đầy đủ:
 ```
 async function runLoop(currentContext, newMessages, config, signal, emit, streamFn) {
 
-    // ① 首次 steering 检查（在进入内层循环之前！）
-    let pendingMessages = (await config.getSteeringMessages?.()) || [];
+ // ① lần đầu tiên steering Kiểm tra(trước khi vào vòng trong！)
+ let pendingMessages = (await config.getSteeringMessages?.()) || [];
 
-    // ========== 叠加2：外层循环（followUp 续命）==========
-    while (true) {
-        let hasMoreToolCalls = true;
-        let firstTurn = true;  // 首轮跳过 turn_start（入口已发）
+ // ========== Lớp phủ2: Vòng ngoài(followUp Kéo dài cuộc sống)==========
+ while (true) {
+ let hasMoreToolCalls = true;
+ let firstTurn = true; // Bỏ qua vòng đầu tiên turn_start(Lối vào đã được gửi)
 
-        // ========== 内核 + 叠加1：内层循环 ==========
-        while (hasMoreToolCalls || pendingMessages.length > 0) {
-            //                                    ↑ 叠加1：steering 消息也驱动循环
+ // ========== hạt nhân + Lớp phủ1: vòng lặp bên trong ==========
+ while (hasMoreToolCalls || pendingMessages.length > 0) {
+ // ↑ Lớp phủ1: steering Tin nhắn cũng thúc đẩy các vòng lặp
 
-            if (!firstTurn) {
-                emit({ type: "turn_start" });
-            }
-            firstTurn = false;
+ if (!firstTurn) {
+ emit({ type: "turn_start" });
+ }
+ firstTurn = false;
 
-            // 步骤 A：注入 pendingMessages（steering 消息）← 叠加1
-            // 步骤 B：调 LLM → streamAssistantResponse()  ← 内核
-            // 步骤 C：检查 stopReason                      ← 内核
-            // 步骤 D：执行工具                              ← 内核
-            // 步骤 E：emit turn_end                         ← 内核
-            // 步骤 F：prepareNextTurn → shouldStopAfterTurn ← 叠加（钩子）
-            //         → 再次检查 steering                    ← 叠加1
-        }
+ // bước A: tiêm pendingMessages(steering tin tức)← Lớp phủ1
+ // bước B: điều chỉnh LLM → streamAssistantResponse() ← hạt nhân
+ // bước C: Kiểm tra stopReason ← hạt nhân
+ // bước D: Công cụ thực thi ← hạt nhân
+ // bước E: emit turn_end ← hạt nhân
+ // bước F: prepareNextTurn → shouldStopAfterTurn ← Lớp phủ(cái móc)
+ // → Kiểm tra lại steering ← Lớp phủ1
+ }
 
-        // ========== 内层循环结束 ==========
-        // 叠加2：检查 followUp 队列
-        const followUpMessages = (await config.getFollowUpMessages?.()) || [];
-        if (followUpMessages.length > 0) {
-            pendingMessages = followUpMessages;
-            continue;  // 回到外层循环顶部，内层循环重开
-        }
+ // ========== Kết thúc vòng lặp bên trong ==========
+ // Lớp phủ2: Kiểm tra followUp Hàng đợi
+ const followUpMessages = (await config.getFollowUpMessages?.()) || [];
+ if (followUpMessages.length > 0) {
+ pendingMessages = followUpMessages;
+ continue; // Trở về đầu vòng lặp bên ngoài, Vòng lặp bên trong mở lại
+ }
 
-        break;  // 两个队列都空，真正退出
-    }
+ break; // Cả hai hàng đợi đều trống, Thực sự bỏ cuộc
+ }
 }
 ```
 
@@ -560,13 +560,13 @@ Steering chính là cơ chế chen ngang này. Chỉ dẫn mới người dùng 
 
 ```
 if (pendingMessages.length > 0) {
-    for (const message of pendingMessages) {
-        await emit({ type: "message_start", message });
-        await emit({ type: "message_end", message });
-        currentContext.messages.push(message);
-        newMessages.push(message);
-    }
-    pendingMessages = [];  // 消费完毕，清空
+ for (const message of pendingMessages) {
+ await emit({ type: "message_start", message });
+ await emit({ type: "message_end", message });
+ currentContext.messages.push(message);
+ newMessages.push(message);
+ }
+ pendingMessages = []; // Tiêu thụ hoàn thành, Xóa
 }
 ```
 
@@ -582,7 +582,7 @@ Nguồn đầu tiên của pendingMessages là lần kiểm tra steering đầu 
 ```
 let messages = context.messages;
 if (config.transformContext) {
-    messages = await config.transformContext(messages, signal);
+ messages = await config.transformContext(messages, signal);
 }
 ```
 
@@ -605,11 +605,11 @@ convertToLlm là người phiên dịch đứng ở ranh giới này: dịch ng�
 
 ```
 function defaultConvertToLlm(messages: AgentMessage[]): Message[] {
-    return messages.filter(
-        (message) => message.role === "user"
-                  || message.role === "assistant"
-                  || message.role === "toolResult",
-    );
+ return messages.filter(
+ (message) => message.role === "user"
+ || message.role === "assistant"
+ || message.role === "toolResult",
+);
 }
 ```
 
@@ -618,19 +618,19 @@ Biến đổi dữ liệu:
 
 
 ```
-转换前（AgentMessage[]）：
+Trước khi chuyển đổi(AgentMessage[]): 
 [
-  { role: "user", content: "帮我读一下 src/main.ts", ... },    ← 保留
-  { role: "assistant", content: [...], ... },                   ← 保留
-  { role: "compactionSummary", summary: "之前的对话摘要..." },   ← 过滤掉
-  { role: "toolResult", content: [...], ... },                  ← 保留
+ { role: "user", content: "đọc nó cho tôi src/main.ts", ... }, ← Dự trữ
+ { role: "assistant", content: [...], ... }, ← Dự trữ
+ { role: "compactionSummary", summary: "Tóm tắt cuộc trò chuyện trước đó..." }, ← lọc ra
+ { role: "toolResult", content: [...], ... }, ← Dự trữ
 ]
 
-转换后（Message[]）：
+Sau khi chuyển đổi(Message[]): 
 [
-  { role: "user", content: "帮我读一下 src/main.ts", ... },
-  { role: "assistant", content: [...], ... },
-  { role: "toolResult", content: [...], ... },
+ { role: "user", content: "đọc nó cho tôi src/main.ts", ... },
+ { role: "assistant", content: [...], ... },
+ { role: "toolResult", content: [...], ... },
 ]
 ```
 
@@ -643,20 +643,20 @@ Biến đổi dữ liệu:
 
 ```
 const llmContext: Context = {
-    systemPrompt: context.systemPrompt,
-    messages: llmMessages,
-    tools: context.tools,
+ systemPrompt: context.systemPrompt,
+ messages: llmMessages,
+ tools: context.tools,
 };
 
 const streamFunction = streamFn || streamSimple;
 const resolvedApiKey =
-    (config.getApiKey ? await config.getApiKey(config.model.provider): undefined)
-    || config.apiKey;
+ (config.getApiKey ? await config.getApiKey(config.model.provider): undefined)
+ || config.apiKey;
 
 const response = await streamFunction(config.model, llmContext, {
-    ...config,
-    apiKey: resolvedApiKey,
-    signal,
+ ...config,
+ apiKey: resolvedApiKey,
+ signal,
 });
 ```
 
@@ -682,9 +682,9 @@ Vậy có vỡ prompt cache không? Không. prompt cache của Anthropic là con
 Cái thứ ba đặc biệt tinh tế: cache breakpoint không cố định ở message đầu tiên; nó chạy theo user message mới nhất. Như vậy, prefix cũ tiếp tục hit, nội dung mới thêm vào cũng được ghi vào, cả lịch sử hội thoại đều hưởng lợi từ cache. Chuỗi hit đại khái là:
 
 ```
-Turn 1: 写入 [system + tools] → 写入 [messages §1]
-Turn 2: 命中 [system + tools] → 命中 [messages §1] → 写入 [messages §2]
-Turn 3: 命中 [system + tools] → 命中 [messages §1+§2] → 写入 [messages §3]
+Turn 1: viết [system + tools] → viết [messages §1]
+Turn 2: đánh [system + tools] → đánh [messages §1] → viết [messages §2]
+Turn 3: đánh [system + tools] → đánh [messages §1+§2] → viết [messages §3]
 ```
 
 #### Pha D: xử lý streaming response: cái hay của việc thay tại chỗ
@@ -697,29 +697,29 @@ OpenAI đi hướng khác (openai-completions.ts:554): prompt_cache_key: session
 
 ```
 for await (const event of response) {
-    switch (event.type) {
-        case "start":
-            // 拿到一个"空壳"消息，直接 push 到 context
-            partialMessage = event.partial;
-            context.messages.push(partialMessage);
-            emit({ type: "message_start", ... });
-            break;
+ switch (event.type) {
+ case "start":
+ // lấy một cái"vỏ rỗng"tin tức, trực tiếp push Đến context
+ partialMessage = event.partial;
+ context.messages.push(partialMessage);
+ emit({ type: "message_start", ... });
+ break;
 
-        case "text_delta": // 文本增量
-        case "toolcall_delta": // 工具调用增量
-        case "thinking_delta": // 思考增量
-            partialMessage = event.partial;            // 更新后的部分消息
-            context.messages[last] = partialMessage;    // ★ 原地替换！
-            emit({ type: "message_update", ... });      // UI 收到增量更新
-            break;
+ case "text_delta": // tăng văn bản
+ case "toolcall_delta": // Tăng cuộc gọi công cụ
+ case "thinking_delta": // Hãy suy nghĩ dần dần
+ partialMessage = event.partial; // Một số tin tức cập nhật
+ context.messages[last] = partialMessage; // ★ Thay thế tại chỗ！
+ emit({ type: "message_update", ... }); // UI Nhận thông tin cập nhật gia tăng
+ break;
 
-        case "done":
-        case "error":
-            finalMessage = await response.result();
-            context.messages[last] = finalMessage;       // ★ 用最终完整消息替换
-            emit({ type: "message_end", ... });
-            return finalMessage;
-    }
+ case "done":
+ case "error":
+ finalMessage = await response.result();
+ context.messages[last] = finalMessage; // ★ Thay thế bằng thông báo hoàn chỉnh cuối cùng
+ emit({ type: "message_end", ... });
+ return finalMessage;
+ }
 }
 ```
 
@@ -727,11 +727,11 @@ for await (const event of response) {
 Sao push vỏ rỗng trước rồi thay tại chỗ? Lưu ý ý nghĩa của thay tại chỗ: không phải đẩy mục mới vào mảng context.messages; mà là sửa các khối nội dung của message cuối cùng tại chỗ. Chunk streaming response lần lượt đến; ta chưa có toàn bộ message. Ta push trước một AssistantMessage rỗng để bộ thu thập đã có sẵn chỗ cho kết quả cuối cùng. Sau đó mỗi chunk streaming sẽ mutate message này tại chỗ: miễn là sau khi response xong, bộ thu thập duyệt messages, nó sẽ thấy message đã hoàn chỉnh.
 
 ```
-start    → { role: "assistant", content: [] }                    ← 空壳 push
-text_delta → { content: [{ type:"text", text:"好的..." }] }       ← 文字在长
-toolcall   → { content: [{ text:"好的..." },                        ← 工具调用出现
-                         { type:"toolCall", name:"read", arguments:{file_path:"src/main.ts"} }] }
-done     → { content: [...], stopReason:"toolUse", usage:{...} } ← 最终完整消息替换
+start → { role: "assistant", content: [] } ← vỏ rỗng push
+text_delta → { content: [{ type:"text", text:"được rồi..." }] } ← Văn bản đang phát triển
+toolcall → { content: [{ text:"được rồi..." }, ← Cuộc gọi công cụ xuất hiện
+ { type:"toolCall", name:"read", arguments:{file_path:"src/main.ts"} }] }
+done → { content: [...], stopReason:"toolUse", usage:{...} } ← Thay thế tin nhắn hoàn chỉnh cuối cùng
 ```
 
 ### 4.5 [Lõi · Bước C] kiểm tra stopReason
@@ -745,9 +745,9 @@ Mục 3 đã nói kỹ về stopReason. Ở đây ta xem code thật:
 ```
 // agent-loop.ts:196-200
 if (message.stopReason === "error" || message.stopReason === "aborted") {
-    await emit({ type: "turn_end", message, toolResults: [] });
-    await emit({ type: "agent_end", messages: newMessages });
-    return;   // ← 直接退出整个 runLoop，不检查 followUp
+ await emit({ type: "turn_end", message, toolResults: [] });
+ await emit({ type: "agent_end", messages: newMessages });
+ return; // ← Thoát toàn bộ runLoop, Đừng kiểm tra followUp
 }
 ```
 
@@ -766,63 +766,63 @@ Rồi quyết định cụm tool này chạy song song hay nối tiếp:
 
 ```
 if (config.toolExecution === "sequential" || hasSequentialToolCall) {
-    return executeToolCallsSequential(...);   // 串行
+ return executeToolCallsSequential(...); // nối tiếp
 }
-return executeToolCallsParallel(...);         // 并行
+return executeToolCallsParallel(...); // Song song
 ```
 
 
 Chiến lược phủ quyết: miễn là bất kỳ một tool nào trong cụm khai báo executionMode: sequential, toàn bộ cụm phải chạy nối tiếp. Đây là lựa chọn bảo thủ: khi một tool cần thao tác trên kết quả của tool trước, không còn cách nào khác ngoài chạy tuần tự.
 
 ```
-串行模式：
-  ToolCall A: 准备 → 验证 → beforeHook → 执行 → afterHook → emit end
-  ToolCall B: 准备 → 验证 → beforeHook → 执行 → afterHook → emit end
-  （一个完全结束，才开始下一个）
+chế độ nối tiếp: 
+ ToolCall A: chuẩn bị → Xác minh → beforeHook → thi hành → afterHook → emit end
+ ToolCall B: chuẩn bị → Xác minh → beforeHook → thi hành → afterHook → emit end
+ (một kết thúc hoàn chỉnh, Vừa mới bắt đầu phần tiếp theo)
 
-并行模式（三阶段设计）：
-  阶段1 - 准备（顺序）：  A 准备 → B 准备 → C 准备
-      ↑ prepareToolCall 含验证和 beforeHook，必须顺序执行
-  阶段2 - 执行（并行）：  A、B、C 同时执行（Promise.all）
-      ↑ 只有 tool.execute 并行，省时间
-  阶段3 - 事件（有序）：  end 按完成顺序发；result 按调用顺序发
-      ↑ result 消息保持和 ToolCall 一致的顺序，LLM 收到的上下文才是正确的
+chế độ song song(thiết kế ba giai đoạn): 
+ sân khấu1 - chuẩn bị(đặt hàng): A chuẩn bị → B chuẩn bị → C chuẩn bị
+ ↑ prepareToolCall Chứa xác minh và beforeHook, Phải thực hiện tuần tự
+ sân khấu2 - thi hành(Song song): A, B, C thực hiện đồng thời(Promise.all)
+ ↑ chỉ tool.execute Song song, tiết kiệm thời gian
+ sân khấu3 - sự kiện(có trật tự): end Gửi theo thứ tự hoàn thành; result Gửi theo thứ tự gọi
+ ↑ result giữ tin nhắn và ToolCall trật tự nhất quán, LLM Ngữ cảnh nhận được là chính xác
 ```
 
 
 Lưu ý sự tinh tế của chế độ song song: pha chuẩn bị luôn tuần tự (vì validate và kiểm tra quyền không thể chạy song song: nếu B bị chặn thì C không nên chạy). Chỉ sau khi mọi tool đã validate xong thì mới thật sự chạy song song.
 
 ```
-工具执行后：
-  context.messages = [..., user2, assistantMessage, {
-    role: "toolResult", toolCallId: "toolu_01", toolName: "read",
-    content: [{ text: "文件内容..." }], isError: false
-  }]
+Sau khi thực hiện công cụ: 
+ context.messages = [..., user2, assistantMessage, {
+ role: "toolResult", toolCallId: "toolu_01", toolName: "read",
+ content: [{ text: "Nội dung tập tin..." }], isError: false
+ }]
 ```
 
 
 Cơ chế terminate: tool có thể đặt terminate: true trong kết quả trả về, nghĩa là tôi nghĩ nên dừng. Nếu tất cả tool trong cụm đều đồng ý terminate (code dùng every, không phải some), vòng lặp dừng.
 
 ```
-// ① emit turn_end: 通知外部"这一轮结束了"（内核）
+// ① emit turn_end: Thông báo bên ngoài"Vòng này kết thúc"(hạt nhân)
 await emit({ type: "turn_end", message, toolResults });
 
-// ② prepareNextTurn: 给外部一个机会"改装"下一轮（叠加）
-// 返回值可包含 context / model / thinkingLevel 三者之一的覆盖
+// ② prepareNextTurn: Hãy cho thế giới bên ngoài một cơ hội"sửa đổi"vòng tiếp theo(Lớp phủ)
+// Giá trị trả về có thể chứa context / model / thinkingLevel Bảo hiểm của một trong ba
 const nextTurnSnapshot = await config.prepareNextTurn?.({...});
 if (nextTurnSnapshot) {
-    currentContext = nextTurnSnapshot.context ?? currentContext;
-    config.model = nextTurnSnapshot.model ?? config.model;
-    // thinkingLevel 也在此处覆盖（详见 agent-loop.ts 中 prepareNextTurn 处理逻辑）
+ currentContext = nextTurnSnapshot.context ? currentContext;
+ config.model = nextTurnSnapshot.model ? config.model;
+ // thinkingLevel Cũng được đề cập ở đây(Xem chi tiết agent-loop.ts trong prepareNextTurn logic xử lý)
 }
 
-// ③ shouldStopAfterTurn: 外部判断是否该停了（叠加）
+// ③ shouldStopAfterTurn: Đánh giá bên ngoài về việc liệu đã đến lúc phải dừng lại(Lớp phủ)
 if (await config.shouldStopAfterTurn?.({...})) {
-    await emit({ type: "agent_end", messages: newMessages });
-    return;
+ await emit({ type: "agent_end", messages: newMessages });
+ return;
 }
 
-// ④ 再次检查 steering: 有没有新的紧急消息？（叠加1）
+// ④ Kiểm tra lại steering: Có tin tức khẩn cấp nào mới không?？(Lớp phủ1)
 pendingMessages = (await config.getSteeringMessages?.()) || [];
 ```
 
@@ -832,17 +832,17 @@ pendingMessages = (await config.getSteeringMessages?.()) || [];
 prepareNextTurn: đây là extension point dễ bị bỏ qua nhưng rất mạnh. Sau mỗi turn_end và trước vòng tiếp theo, Loop gọi hàm này để cho bên ngoài cơ hội đổi model hoặc sửa context:
 
 ```
-场景：按任务复杂度切换模型
+bối cảnh: Chuyển đổi mô hình dựa trên độ phức tạp của nhiệm vụ
 
-Turn 1: 用户问了一个简单问题 → 模型用 Haiku（快、便宜）
-        turn_end → prepareNextTurn 检查到问题很简单
-        → 返回 { model: haiku } → 下一轮继续用 Haiku
+Turn 1: Người dùng đã hỏi một câu hỏi đơn giản → Dành cho model Haiku(Nhanh, giá rẻ)
+ turn_end → prepareNextTurn Phát hiện vấn đề thật dễ dàng
+ → Trở lại { model: haiku } → Tiếp tục sử dụng ở lần tiếp theo Haiku
 
-场景：中途发现任务变复杂了
+bối cảnh: Đi được nửa đường, tôi phát hiện ra rằng nhiệm vụ đã trở nên phức tạp hơn.
 
-Turn 1: 用户让"重构这个模块" → Haiku 开始读文件
-        turn_end → prepareNextTurn 发现要改的文件很多
-        → 返回 { model: opus } → 下一轮自动切到 Opus（强、贵）
+Turn 1: Người dùng cho phép"Tái cấu trúc mô-đun này" → Haiku Bắt đầu đọc tập tin
+ turn_end → prepareNextTurn Nhận thấy có nhiều file cần thay đổi
+ → Trở lại { model: opus } → Tự động cắt sang vòng tiếp theo Opus(mạnh mẽ, Đắt)
 ```
 
 ### 4.8 Quay về đầu vòng lặp
@@ -863,10 +863,10 @@ Một trong hai điều kiện đúng thì vòng lặp tiếp tục. hasMoreTool
 ```
 const followUpMessages = (await config.getFollowUpMessages?.()) || [];
 if (followUpMessages.length > 0) {
-    pendingMessages = followUpMessages;   // 塞进 pending，触发新 Turn
-    continue;                              // 回到外层循环顶部
+ pendingMessages = followUpMessages; // nhồi bông pending, kích hoạt mới Turn
+ continue; // Trở về đầu vòng lặp bên ngoài
 }
-break;  // 两个队列都空了，真正退出
+break; // Cả hai hàng đợi đều trống, Thực sự bỏ cuộc
 ```
 
 ### 4.10 steering vs followUp: một bảng nhìn rõ hai can thiệp

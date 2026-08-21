@@ -39,16 +39,16 @@ Chương này ta sẽ mở toàn cảnh "context engineering" của Pi. Bạn s�
 Nếu liệt kê tất cả "nguồn thông tin" của một phiên coding-agent, bạn sẽ nhận ra vấn đề nghiêm trọng cỡ nào:
 
 ```
-一次会话送进 LLM 的内容
-├── 系统提示词（工具说明、guidelines、pi 文档路径）
-├── 项目上下文文件（CLAUDE.md / AGENTS.md，可能多层嵌套）
-├── Skills 列表（每个 skill 一段描述）
-├── 工具定义（每个工具的 JSON schema）
-├── 对话历史（每一轮 user / assistant / toolResult）
-│   ├── 用户输入
-│   ├── LLM 回复（含 thinking、toolCall）
-│   └── 工具结果（read 文件、bash 输出、grep 命中……）
-└── 当前轮的新输入
+Cho ăn trong một phiên LLM nội dung
+├── Lời nhắc hệ thống(Mô tả công cụ, guidelines, pi Đường dẫn tài liệu)
+├── tập tin bối cảnh dự án(CLAUDE.md / AGENTS.md, Có thể có nhiều cấp độ lồng nhau)
+├── Skills danh sách(mỗi skill một mô tả)
+├── Định nghĩa công cụ(của từng công cụ JSON schema)
+├── Lịch sử cuộc trò chuyện(mỗi vòng user / assistant / toolResult)
+│ ├── đầu vào của người dùng
+│ ├── LLM trả lời(Chứa thinking, toolCall)
+│ └── Kết quả công cụ(read tập tin, bash đầu ra, grep đánh……)
+└── đầu vào mới cho vòng hiện tại
 ```
 
 
@@ -73,16 +73,16 @@ Trước khi đào vào từng kỹ thuật, hãy dựng một bức tranh tổn
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│                       输入侧（送进 LLM 之前）                 │
-│  ① 工具输出截断: bash/read/grep 结果按行/字节裁剪            │
-│  ② 系统提示词组装: 多层 CLAUDE.md 向上递归 + Skills 懒加载   │
+│ Phía đầu vào(Gửi vào LLM trước đây) │
+│ ① Cắt bớt đầu ra của công cụ: bash/read/grep Kết quả theo hàng/Cắt byte │
+│ ② Tập hợp từ nhắc nhở hệ thống: nhiều lớp CLAUDE.md Lặp lại trở lên + Skills Tải chậm │
 └──────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
+ │
+ ▼
 ┌──────────────────────────────────────────────────────────────┐
-│                  历史侧（长对话管理）                         │
-│  ③ Compaction: 阈值触发，把旧消息变成结构化摘要             │
-│  ④ 分支摘要    : 切换会话树分支时，给"被放弃的分支"做摘要   │
+│ mặt lịch sử(Quản lý cuộc trò chuyện dài) │
+│ ③ Compaction: kích hoạt ngưỡng, Biến tin nhắn cũ thành đoạn có cấu trúc │
+│ ④ tóm tắt chi nhánh : Khi chuyển nhánh cây phiên, cho"chi nhánh bị bỏ rơi"Viết tóm tắt │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -149,20 +149,20 @@ Mô tả của tool bash viết rất rõ trong source (`bash.ts:284`):
 Từ **"last"** là then chốt: hợp đồng của tool bash là "giữ phần đuôi". Logic cốt lõi của `truncateTail` là chọn các dòng giữ lại bằng cách lùi từ đuôi về trước (`truncate.ts:247-266`), đơn giản hóa:
 
 ```
-// 伪代码：truncateTail 的核心思路
+// mã giả: truncateTail Ý tưởng cốt lõi của
 function truncateTail(content, maxLines, maxBytes) {
-    const lines = content.split("\n");
-    const kept = [];           // 从末尾往回收集的行
-    let bytes = 0;
+ const lines = content.split("\n");
+ const kept = []; // Hàng được thu thập từ cuối về phía sau
+ let bytes = 0;
 
-    for (let i = lines.length - 1; i >= 0; i--) {
-        const lineBytes = byteLength(lines[i]) + 1;  // +1 是换行符
-        if (kept.length >= maxLines) break;          // 行数到了，停
-        if (bytes + lineBytes > maxBytes) break;     // 字节到了，停
-        kept.unshift(lines[i]);                      // 插到头部，保持原顺序
-        bytes += lineBytes;
-    }
-    return kept.join("\n");
+ for (let i = lines.length - 1; i >= 0; i--) {
+ const lineBytes = byteLength(lines[i]) + 1; // +1 là một ký tự dòng mới
+ if (kept.length >= maxLines) break; // Số hàng đã tăng lên, dừng lại
+ if (bytes + lineBytes > maxBytes) break; // Byte đã đến, dừng lại
+ kept.unshift(lines[i]); // Chèn vào đầu, Giữ trật tự ban đầu
+ bytes += lineBytes;
+ }
+ return kept.join("\n");
 }
 ```
 
@@ -235,14 +235,14 @@ Tại sao đệ quy đi lên? Vì dự án hiện đại thường là cấu tr�
 
 ```
 /myorg
-├── CLAUDE.md          ← 全组织规范（通用）
+├── CLAUDE.md ← Tiêu chuẩn toàn tổ chức(phổ quát)
 └── teams
-    └── teamA
-        ├── CLAUDE.md  ← 团队 A 规范（细化）
-        └── projects
-            └── app1
-                ├── CLAUDE.md  ← 项目规范（最具体）
-                └── src/       ← cwd 在这里
+ └── teamA
+ ├── CLAUDE.md ← đội A quy phạm(tinh chỉnh)
+ └── projects
+ └── app1
+ ├── CLAUDE.md ← Thông số dự án(cụ thể nhất)
+ └── src/ ← cwd ở đây
 ```
 
 
@@ -252,11 +252,11 @@ Ngoài đệ quy đi lên, còn có **context global**: một file được đ�
 
 ```
 ┌──────────────────────────────────────────────────────┐
-│  系统提示词组装顺序                                   │
+│ Trình tự tập hợp từ nhắc nhở hệ thống │
 ├──────────────────────────────────────────────────────┤
-│  1. agentDir/CLAUDE.md   ← 全局（用户级）            │
-│  2. 祖先目录/CLAUDE.md   ← 从 / 到 cwd 上一层        │
-│  3. cwd/CLAUDE.md        ← 当前项目                  │
+│ 1. agentDir/CLAUDE.md ← tình hình chung(cấp độ người dùng) │
+│ 2. Thư mục tổ tiên/CLAUDE.md ← từ / Đến cwd Cấp độ trước đó │
+│ 3. cwd/CLAUDE.md ← Dự án hiện tại │
 └──────────────────────────────────────────────────────┘
 ```
 
@@ -273,11 +273,11 @@ Sau khi tìm được các file context, `buildSystemPrompt` (`system-prompt.ts:
 Project-specific instructions and guidelines:
 
 <project_instructions path="/myorg/CLAUDE.md">
-全组织规范：所有项目使用 TypeScript strict 模式...
+Tiêu chuẩn toàn tổ chức: Tất cả các dự án đều sử dụng TypeScript strict chế độ...
 </project_instructions>
 
 <project_instructions path="/myorg/teams/teamA/projects/app1/CLAUDE.md">
-本项目使用 pnpm，测试用 vitest...
+Dự án này sử dụng pnpm, để thử nghiệm vitest...
 </project_instructions>
 
 </project_context>
@@ -298,18 +298,18 @@ Skills (hướng dẫn thao tác riêng của dự án) có một thiết kế t
 Cách làm của Pi là `formatSkillsForPrompt` (`skills.ts:335-361`): **chỉ để danh sách nhẹ, nội dung đầy đủ đọc theo nhu cầu**:
 
 ```
-传统方式（推模式）              Pi 的方式（拉模式）
-─────────────────────          ─────────────────────
-系统提示词 ←─ 全文塞进           系统提示词 ←─ 只放清单
-                                  │
-                                  ▼
-                               LLM 看清单，判断需要哪个
-                                  │
-                                  ▼
-                               LLM 主动调 read 工具
-                                  │
-                                  ▼
-                               SKILL.md 全文进入后续上下文
+cách truyền thống(chế độ đẩy) Pi đường(chế độ kéo)
+───────────────────── ─────────────────────
+Lời nhắc hệ thống ←─ Chèn toàn bộ văn bản Lời nhắc hệ thống ←─ Danh sách duy nhất
+ │
+ ▼
+ LLM nhìn vào danh sách, Quyết định cái nào là cần thiết
+ │
+ ▼
+ LLM Chủ động điều chỉnh read Công cụ
+ │
+ ▼
+ SKILL.md Toàn văn nhập vào ngữ cảnh tiếp theo
 ```
 
 
@@ -317,11 +317,11 @@ Cuối cùng trong system prompt trông như thế này:
 
 ```
 <available_skills>
-  <skill>
-    <name>test-setup</name>
-    <description>How to run tests for this project</description>
-    <location>/path/to/skills/test-setup/SKILL.md</location>
-  </skill>
+ <skill>
+ <name>test-setup</name>
+ <description>How to run tests for this project</description>
+ <location>/path/to/skills/test-setup/SKILL.md</location>
+ </skill>
 </available_skills>
 ```
 
@@ -342,16 +342,16 @@ Cuối cùng trong system prompt trông như thế này:
 Nối tất cả các yếu tố trên lại, cấu trúc prompt đầy đủ mà `buildSystemPrompt` sinh ra là:
 
 ```
-1. 角色定位
-   "You are an expert coding assistant operating inside pi..."
-2. 工具列表
-   "- read: Read a file\n- bash: Execute...\n- edit: ..."
-3. 通用 guidelines
-   "- Be concise in your responses\n- Show file paths clearly..."
-4. Pi 文档路径（让 LLM 能 read 自身文档）
-5. [可选] appendSystemPrompt（追加内容）
-6. <project_context>... CLAUDE.md 内容 ...</project_context>
-7. <available_skills>... Skills 清单 ...</available_skills>
+1. định vị vai trò
+ "You are an expert coding assistant operating inside pi..."
+2. Danh sách công cụ
+ "- read: Read a file\n- bash: Execute...\n- edit: ..."
+3. phổ quát guidelines
+ "- Be concise in your responses\n- Show file paths clearly..."
+4. Pi Đường dẫn tài liệu(hãy để LLM có thể read tài liệu riêng)
+5. [Tùy chọn] appendSystemPrompt(Nội dung bổ sung)
+6. <project_context>... CLAUDE.md nội dung ...</project_context>
+7. <available_skills>... Skills Danh sách kiểm tra ...</available_skills>
 8. Current date: 2026-07-03
 9. Current working directory: /path/to/cwd
 ```
@@ -383,30 +383,30 @@ Chương đó trình bày chi tiết:
 Chương này §7 (chuỗi liên kết toàn cảnh) sẽ tích hợp Compaction vào; ở đây không lặp lại. **Chỉ nhớ một sự thật then chốt là đủ**: `CompactionSummaryMessage` do Compaction sinh ra sẽ xuất hiện trong `context.messages` của hội thoại tiếp theo, như một context mới.
 
 ```
-对话树：
-        root
-         │
-       [探索方案 A]
-         │
-       [A 的实现]
-         │
-        leaf_1 ← 用户当前在这里
+cây đối thoại: 
+ root
+ │
+ [Khám phá các tùy chọn A]
+ │
+ [A hiện thực hóa]
+ │
+ leaf_1 ← Người dùng hiện đang ở đây
 
-用户：从 root 重新分叉探索方案 B
-        root
-         │
-       [探索方案 A]  ← 这部分还在，但被"放弃"了
-         │
-       [A 的实现]
-         │
-        leaf_1（旧叶子）
+người dùng: từ root Chia lại kế hoạch thăm dò B
+ root
+ │
+ [Khám phá các tùy chọn A] ← Phần này vẫn còn đó, Nhưng đã"từ bỏ"Hiểu rồi
+ │
+ [A hiện thực hóa]
+ │
+ leaf_1(lá già)
 
-用户切换到：
-        root
-         │
-       [探索方案 B]  ← 新分支
-         │
-        leaf_2 ← 用户现在在这里
+Người dùng chuyển sang: 
+ root
+ │
+ [Khám phá các tùy chọn B] ← chi nhánh mới
+ │
+ leaf_2 ← Người dùng hiện đang ở đây
 ```
 
 
@@ -435,13 +435,13 @@ Bước đầu tiên là xác định "nhánh bị bỏ chứa nội dung gì". 
 Logic của `collectEntriesForBranchSummary` (`branch-summarization.ts:67-96`), nói đơn giản, có ba bước:
 
 ```
-旧路径：root → ... → leaf_1
-新路径：root → ... → leaf_2
+con đường cũ: root → ... → leaf_1
+con đường mới: root → ... → leaf_2
 
-1. 把两条路径都拿出来
-2. 在新路径上从后往前找，第一个也在旧路径里的节点 = LCA（分叉点）
-3. 从 leaf_1 向上爬到 LCA（不含 LCA），沿途收集的内容
-   就是"被放弃的分支"
+1. Loại bỏ cả hai con đường
+2. Tìm từ sau ra trước trên con đường mới, Nút đầu tiên cũng nằm trong đường dẫn cũ = LCA(điểm phân nhánh)
+3. từ leaf_1 leo lên tới LCA(Không chứa LCA), Những gì bạn thu thập trên đường đi
+ Thế thôi"chi nhánh bị bỏ rơi"
 ```
 
 
@@ -462,11 +462,11 @@ Nghĩa là, **hai cơ chế tóm tắt dùng chung pipeline nền, chỉ khác p
 **Khác biệt 1: preamble context khác**
 
 ```
-// 这段前言精准描述了语义:"用户探索了一个不同的分支，然后回到这里"
-// LLM 看到这句，知道这不是"主线历史"，而是"另一条线的探索记录"
-// 对待方式会更轻量（当作参考，而不是主线）
+// Lời nói đầu này mô tả chính xác ngữ nghĩa:"Người dùng đã khám phá một nhánh khác, sau đó quay lại đây"
+// LLM Xem câu này, biết đây không phải là"Lịch sử dòng chính", đúng hơn"Một dòng hồ sơ thăm dò khác"
+// Việc điều trị sẽ nhẹ nhàng hơn(như một tài liệu tham khảo, thay vì dòng chính)
 const BRANCH_SUMMARY_PREAMBLE =
-    `The user explored a different conversation branch before returning here.\nSummary of that exploration:\n\n`;
+ `The user explored a different conversation branch before returning here.\nSummary of that exploration:\n\n`;
 ```
 
 
@@ -612,62 +612,62 @@ Kết quả của Compaction lưu thành `CompactionEntry`, "append vào Session
 Chương tới: quản lý phiên: trả lời những câu hỏi này.
 
 ```
-用户输入 "修复 auth.ts 的 bug"
-    │
-    ▼
-[1] 系统提示词组装（§四）
-    buildSystemPrompt()
-    ├─ 找 CLAUDE.md（向上递归 + agentDir）
-    ├─ 加载 Skills 清单（懒加载）
-    ├─ 拼接工具列表 + guidelines
-    └─ 末尾加 Current date / cwd
-    │
-    ▼
-[2] 用户消息进入 context.messages（第6章）
-    │
-    ▼
-[3] Agent Loop 开始（第3章五步管道）
-    │
-    ▼
-[4] LLM 返回 toolCall: read("auth.ts")
-    │
-    ▼
-[5] 执行工具: read auth.ts
-    │
-    ▼
-[6] 工具输出截断（§三）
-    ├─ truncateHead（read 用 head）
-    │   └─ 2000 行 / 50KB 双限制
-    ├─ UTF-8 边界安全
-    └─ 超限返回 firstLineExceedsLimit 标志
-    │
-    ▼
-[7] 工具结果进入 context.messages（第5章）
-    │
-    ▼
-   ...循环...
-    │
-    ▼
-[8] agent_end 事件触发（第7章）
-    │
-    ▼
-[9] 检查 shouldCompact？（§五 / 第9章）
-    │
-    ├── 否 → 等下一轮
-    │
-    └── 是 → 执行 Compaction
-         ├─ findCutPoint
-         ├─ generateSummary（LLM 调用）
-         ├─ 生成 CompactionSummaryMessage
-         └─ 写入 Session Tree
+đầu vào của người dùng "sửa chữa auth.ts của bug"
+ │
+ ▼
+[1] Tập hợp từ nhắc nhở hệ thống(§bốn)
+ buildSystemPrompt()
+ ├─ Tìm CLAUDE.md(Lặp lại trở lên + agentDir)
+ ├─ Tải Skills Danh sách kiểm tra(Tải chậm)
+ ├─ Danh sách công cụ nối + guidelines
+ └─ Thêm vào cuối Current date / cwd
+ │
+ ▼
+[2] Mục nhập tin nhắn của người dùng context.messages(Chương )
+ │
+ ▼
+[3] Agent Loop bắt đầu(Chương  Năm bước đường ống)
+ │
+ ▼
+[4] LLM Trở lại toolCall: read("auth.ts")
+ │
+ ▼
+[5] Công cụ thực thi: read auth.ts
+ │
+ ▼
+[6] Cắt bớt đầu ra của công cụ(§ba)
+ ├─ truncateHead(read sử dụng head)
+ │ └─ 2000 được rồi / 50KB giới hạn gấp đôi
+ ├─ UTF-8 an ninh biên giới
+ └─ Trả lại vượt quá giới hạn firstLineExceedsLimit biểu tượng
+ │
+ ▼
+[7] Công cụ nhập kết quả context.messages(Chương )
+ │
+ ▼
+ ...vòng lặp...
+ │
+ ▼
+[8] agent_end kích hoạt sự kiện(Chương )
+ │
+ ▼
+[9] Kiểm tra shouldCompact？(§năm / Chương )
+ │
+ ├── Không → Đợi vòng tiếp theo
+ │
+ └── Có → thi hành Compaction
+ ├─ findCutPoint
+ ├─ generateSummary(LLM gọi)
+ ├─ tạo ra CompactionSummaryMessage
+ └─ viết Session Tree
 
-    用户切换分支？
-         │
-         ▼
-[10] Branch Summarization（§六）
-     ├─ collectEntriesForBranchSummary（LCA）
-     ├─ generateBranchSummary（LLM 调用）
-     └─ 生成 BranchSummaryMessage
+ Người dùng chuyển nhánh？
+ │
+ ▼
+[10] Branch Summarization(§Sáu)
+ ├─ collectEntriesForBranchSummary(LCA)
+ ├─ generateBranchSummary(LLM gọi)
+ └─ tạo ra BranchSummaryMessage
 ```
 
 

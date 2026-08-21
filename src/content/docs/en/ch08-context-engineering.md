@@ -39,16 +39,16 @@ This chapter opens Pi's full picture of "context engineering". You will see: con
 If you list all the "information sources" of a coding-agent session, you realize how serious the problem is:
 
 ```
-一次会话送进 LLM 的内容
-├── 系统提示词（工具说明、guidelines、pi 文档路径）
-├── 项目上下文文件（CLAUDE.md / AGENTS.md，可能多层嵌套）
-├── Skills 列表（每个 skill 一段描述）
-├── 工具定义（每个工具的 JSON schema）
-├── 对话历史（每一轮 user / assistant / toolResult）
-│   ├── 用户输入
-│   ├── LLM 回复（含 thinking、toolCall）
-│   └── 工具结果（read 文件、bash 输出、grep 命中……）
-└── 当前轮的新输入
+Feed in one session LLM content
+├── System prompt word(Tool description, guidelines, pi Document path)
+├── project context file(CLAUDE.md / AGENTS.md, Possibly multiple levels of nesting)
+├── Skills list(each skill a description)
+├── Tool definition(of each tool JSON schema)
+├── Conversation history(every round user / assistant / toolResult)
+│ ├── user input
+│ ├── LLM Reply(Contains thinking, toolCall)
+│ └── Tool results(read File, bash output, grep hit……)
+└── new input for current round
 ```
 
 
@@ -73,16 +73,16 @@ Before diving into each technique, let's build an overall picture. Pi's context 
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│                       输入侧（送进 LLM 之前）                 │
-│  ① 工具输出截断: bash/read/grep 结果按行/字节裁剪            │
-│  ② 系统提示词组装: 多层 CLAUDE.md 向上递归 + Skills 懒加载   │
+│ Input side(Send in LLM before) │
+│ ① Tool output truncation: bash/read/grep Results by row/Byte clipping │
+│ ② System prompt word assembly: multi-layer CLAUDE.md Recurse upward + Skills Lazy loading │
 └──────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
+ │
+ ▼
 ┌──────────────────────────────────────────────────────────────┐
-│                  历史侧（长对话管理）                         │
-│  ③ Compaction: 阈值触发，把旧消息变成结构化摘要             │
-│  ④ 分支摘要    : 切换会话树分支时，给"被放弃的分支"做摘要   │
+│ historical side(Long conversation management) │
+│ ③ Compaction: threshold trigger, Turn old messages into structured snippets │
+│ ④ branch summary : When switching session tree branches, give"abandoned branch"Make a summary │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -149,20 +149,20 @@ The bash tool's description writes this in source (`bash.ts:284`):
 The word **"last"** is key: the bash tool's contract is "keep the tail". The core logic of `truncateTail` is to pick keep-lines backward from the tail (`truncate.ts:247-266`), simplified:
 
 ```
-// 伪代码：truncateTail 的核心思路
+// pseudocode: truncateTail The core idea of
 function truncateTail(content, maxLines, maxBytes) {
-    const lines = content.split("\n");
-    const kept = [];           // 从末尾往回收集的行
-    let bytes = 0;
+ const lines = content.split("\n");
+ const kept = []; // Rows collected from the end backwards
+ let bytes = 0;
 
-    for (let i = lines.length - 1; i >= 0; i--) {
-        const lineBytes = byteLength(lines[i]) + 1;  // +1 是换行符
-        if (kept.length >= maxLines) break;          // 行数到了，停
-        if (bytes + lineBytes > maxBytes) break;     // 字节到了，停
-        kept.unshift(lines[i]);                      // 插到头部，保持原顺序
-        bytes += lineBytes;
-    }
-    return kept.join("\n");
+ for (let i = lines.length - 1; i >= 0; i--) {
+ const lineBytes = byteLength(lines[i]) + 1; // +1 is a newline character
+ if (kept.length >= maxLines) break; // The row count is up, stop
+ if (bytes + lineBytes > maxBytes) break; // The byte has arrived, stop
+ kept.unshift(lines[i]); // Insert into head, Keep the original order
+ bytes += lineBytes;
+ }
+ return kept.join("\n");
 }
 ```
 
@@ -235,14 +235,14 @@ Why recurse upward? Because modern projects are often monorepo nested:
 
 ```
 /myorg
-├── CLAUDE.md          ← 全组织规范（通用）
+├── CLAUDE.md ← Organization-wide Norms(Universal)
 └── teams
-    └── teamA
-        ├── CLAUDE.md  ← 团队 A 规范（细化）
-        └── projects
-            └── app1
-                ├── CLAUDE.md  ← 项目规范（最具体）
-                └── src/       ← cwd 在这里
+ └── teamA
+ ├── CLAUDE.md ← team A normative(refine)
+ └── projects
+ └── app1
+ ├── CLAUDE.md ← Project specifications(most specific)
+ └── src/ ← cwd here
 ```
 
 
@@ -252,11 +252,11 @@ Beyond upward recursion, there is also **global context**: one piece is read fro
 
 ```
 ┌──────────────────────────────────────────────────────┐
-│  系统提示词组装顺序                                   │
+│ System prompt word assembly sequence │
 ├──────────────────────────────────────────────────────┤
-│  1. agentDir/CLAUDE.md   ← 全局（用户级）            │
-│  2. 祖先目录/CLAUDE.md   ← 从 / 到 cwd 上一层        │
-│  3. cwd/CLAUDE.md        ← 当前项目                  │
+│ 1. agentDir/CLAUDE.md ← overall(user level) │
+│ 2. Ancestor Directory/CLAUDE.md ← from / Arrive cwd Previous level │
+│ 3. cwd/CLAUDE.md ← Current project │
 └──────────────────────────────────────────────────────┘
 ```
 
@@ -273,11 +273,11 @@ With context files found, `buildSystemPrompt` (`system-prompt.ts:154-161`) wraps
 Project-specific instructions and guidelines:
 
 <project_instructions path="/myorg/CLAUDE.md">
-全组织规范：所有项目使用 TypeScript strict 模式...
+Organization-wide Norms: All projects use TypeScript strict mode...
 </project_instructions>
 
 <project_instructions path="/myorg/teams/teamA/projects/app1/CLAUDE.md">
-本项目使用 pnpm，测试用 vitest...
+This project uses pnpm, for testing vitest...
 </project_instructions>
 
 </project_context>
@@ -298,18 +298,18 @@ Skills (project-specific operation guides) have another subtle design. Each skil
 Pi's solution is `formatSkillsForPrompt` (`skills.ts:335-361`): **just put a lightweight list, full text read on demand**:
 
 ```
-传统方式（推模式）              Pi 的方式（拉模式）
-─────────────────────          ─────────────────────
-系统提示词 ←─ 全文塞进           系统提示词 ←─ 只放清单
-                                  │
-                                  ▼
-                               LLM 看清单，判断需要哪个
-                                  │
-                                  ▼
-                               LLM 主动调 read 工具
-                                  │
-                                  ▼
-                               SKILL.md 全文进入后续上下文
+traditional way(push mode) Pi way(pull mode)
+───────────────────── ─────────────────────
+System prompt word ←─ Insert full text System prompt word ←─ Only list
+ │
+ ▼
+ LLM look at list, Decide which one is needed
+ │
+ ▼
+ LLM Actively adjust read Tools
+ │
+ ▼
+ SKILL.md Full text enters the subsequent context
 ```
 
 
@@ -317,11 +317,11 @@ This is what it finally looks like in the system prompt:
 
 ```
 <available_skills>
-  <skill>
-    <name>test-setup</name>
-    <description>How to run tests for this project</description>
-    <location>/path/to/skills/test-setup/SKILL.md</location>
-  </skill>
+ <skill>
+ <name>test-setup</name>
+ <description>How to run tests for this project</description>
+ <location>/path/to/skills/test-setup/SKILL.md</location>
+ </skill>
 </available_skills>
 ```
 
@@ -342,16 +342,16 @@ Compare with "stuff full text into system prompt":
 Stringing all of the above elements together, the complete prompt structure that `buildSystemPrompt` generates is:
 
 ```
-1. 角色定位
-   "You are an expert coding assistant operating inside pi..."
-2. 工具列表
-   "- read: Read a file\n- bash: Execute...\n- edit: ..."
-3. 通用 guidelines
-   "- Be concise in your responses\n- Show file paths clearly..."
-4. Pi 文档路径（让 LLM 能 read 自身文档）
-5. [可选] appendSystemPrompt（追加内容）
-6. <project_context>... CLAUDE.md 内容 ...</project_context>
-7. <available_skills>... Skills 清单 ...</available_skills>
+1. role positioning
+ "You are an expert coding assistant operating inside pi..."
+2. Tool list
+ "- read: Read a file\n- bash: Execute...\n- edit: ..."
+3. Universal guidelines
+ "- Be concise in your responses\n- Show file paths clearly..."
+4. Pi Document path(let LLM can read own documentation)
+5. [Optional] appendSystemPrompt(Additional content)
+6. <project_context>... CLAUDE.md content ...</project_context>
+7. <available_skills>... Skills Checklist ...</available_skills>
 8. Current date: 2026-07-03
 9. Current working directory: /path/to/cwd
 ```
@@ -383,30 +383,30 @@ That chapter covers in detail:
 This chapter's §7 full-link pipeline will incorporate Compaction; here we don't repeat. **Remember one key fact**: the `CompactionSummaryMessage` Compaction generates will appear in the subsequent dialog's `context.messages`, as new context.
 
 ```
-对话树：
-        root
-         │
-       [探索方案 A]
-         │
-       [A 的实现]
-         │
-        leaf_1 ← 用户当前在这里
+dialogue tree: 
+ root
+ │
+ [Explore options A]
+ │
+ [A realization]
+ │
+ leaf_1 ← User is currently here
 
-用户：从 root 重新分叉探索方案 B
-        root
-         │
-       [探索方案 A]  ← 这部分还在，但被"放弃"了
-         │
-       [A 的实现]
-         │
-        leaf_1（旧叶子）
+User: from root Re-fork the exploration plan B
+ root
+ │
+ [Explore options A] ← This part is still there, But was"give up"Got it
+ │
+ [A realization]
+ │
+ leaf_1(old leaves)
 
-用户切换到：
-        root
-         │
-       [探索方案 B]  ← 新分支
-         │
-        leaf_2 ← 用户现在在这里
+User switches to: 
+ root
+ │
+ [Explore options B] ← new branch
+ │
+ leaf_2 ← User is here now
 ```
 
 
@@ -435,13 +435,13 @@ The first step is to determine "what content does the abandoned branch include".
 The logic of `collectEntriesForBranchSummary` (`branch-summarization.ts:67-96`), in plain terms, has three steps:
 
 ```
-旧路径：root → ... → leaf_1
-新路径：root → ... → leaf_2
+old path: root → ... → leaf_1
+new path: root → ... → leaf_2
 
-1. 把两条路径都拿出来
-2. 在新路径上从后往前找，第一个也在旧路径里的节点 = LCA（分叉点）
-3. 从 leaf_1 向上爬到 LCA（不含 LCA），沿途收集的内容
-   就是"被放弃的分支"
+1. Take out both paths
+2. Find from back to front on the new path, The first node that is also in the old path = LCA(bifurcation point)
+3. from leaf_1 climb up to LCA(Does not contain LCA), What you collect along the way
+ That’s it"abandoned branch"
 ```
 
 
@@ -462,11 +462,11 @@ That is, **the two summary mechanisms share the same underlying pipeline, only t
 **Difference 1: different context preamble**
 
 ```
-// 这段前言精准描述了语义:"用户探索了一个不同的分支，然后回到这里"
-// LLM 看到这句，知道这不是"主线历史"，而是"另一条线的探索记录"
-// 对待方式会更轻量（当作参考，而不是主线）
+// This preface accurately describes the semantics:"The user explored a different branch, then come back here"
+// LLM See this sentence, know this is not"Main line history", Rather"Another line of exploration records"
+// The treatment will be lighter(as a reference, rather than the main line)
 const BRANCH_SUMMARY_PREAMBLE =
-    `The user explored a different conversation branch before returning here.\nSummary of that exploration:\n\n`;
+ `The user explored a different conversation branch before returning here.\nSummary of that exploration:\n\n`;
 ```
 
 
@@ -612,62 +612,62 @@ Compaction's result is stored as `CompactionEntry`, "appended to the Session Tre
 The next chapter: session management: answers these questions.
 
 ```
-用户输入 "修复 auth.ts 的 bug"
-    │
-    ▼
-[1] 系统提示词组装（§四）
-    buildSystemPrompt()
-    ├─ 找 CLAUDE.md（向上递归 + agentDir）
-    ├─ 加载 Skills 清单（懒加载）
-    ├─ 拼接工具列表 + guidelines
-    └─ 末尾加 Current date / cwd
-    │
-    ▼
-[2] 用户消息进入 context.messages（第6章）
-    │
-    ▼
-[3] Agent Loop 开始（第3章五步管道）
-    │
-    ▼
-[4] LLM 返回 toolCall: read("auth.ts")
-    │
-    ▼
-[5] 执行工具: read auth.ts
-    │
-    ▼
-[6] 工具输出截断（§三）
-    ├─ truncateHead（read 用 head）
-    │   └─ 2000 行 / 50KB 双限制
-    ├─ UTF-8 边界安全
-    └─ 超限返回 firstLineExceedsLimit 标志
-    │
-    ▼
-[7] 工具结果进入 context.messages（第5章）
-    │
-    ▼
-   ...循环...
-    │
-    ▼
-[8] agent_end 事件触发（第7章）
-    │
-    ▼
-[9] 检查 shouldCompact？（§五 / 第9章）
-    │
-    ├── 否 → 等下一轮
-    │
-    └── 是 → 执行 Compaction
-         ├─ findCutPoint
-         ├─ generateSummary（LLM 调用）
-         ├─ 生成 CompactionSummaryMessage
-         └─ 写入 Session Tree
+user input "Repair auth.ts of bug"
+ │
+ ▼
+[1] System prompt word assembly(§Four)
+ buildSystemPrompt()
+ ├─ Find CLAUDE.md(Recurse upward + agentDir)
+ ├─ Load Skills Checklist(Lazy loading)
+ ├─ Splicing tool list + guidelines
+ └─ Add at the end Current date / cwd
+ │
+ ▼
+[2] User message entry context.messages(Chapter )
+ │
+ ▼
+[3] Agent Loop start(Chapter ) Five Step Pipeline)
+ │
+ ▼
+[4] LLM Return toolCall: read("auth.ts")
+ │
+ ▼
+[5] Execution tool: read auth.ts
+ │
+ ▼
+[6] Tool output truncation(§three)
+ ├─ truncateHead(read use head)
+ │ └─ 2000 OK / 50KB double limit
+ ├─ UTF-8 border security
+ └─ Return beyond limit firstLineExceedsLimit logo
+ │
+ ▼
+[7] Tool results enter context.messages(Chapter )
+ │
+ ▼
+ ...loop...
+ │
+ ▼
+[8] agent_end event trigger(Chapter )
+ │
+ ▼
+[9] Check shouldCompact？(§five / Chapter )
+ │
+ ├── No → Wait for the next round
+ │
+ └── Yes → execute Compaction
+ ├─ findCutPoint
+ ├─ generateSummary(LLM call)
+ ├─ generate CompactionSummaryMessage
+ └─ write Session Tree
 
-    用户切换分支？
-         │
-         ▼
-[10] Branch Summarization（§六）
-     ├─ collectEntriesForBranchSummary（LCA）
-     ├─ generateBranchSummary（LLM 调用）
-     └─ 生成 BranchSummaryMessage
+ User switches branches？
+ │
+ ▼
+[10] Branch Summarization(§Six)
+ ├─ collectEntriesForBranchSummary(LCA)
+ ├─ generateBranchSummary(LLM call)
+ └─ generate BranchSummaryMessage
 ```
 
 

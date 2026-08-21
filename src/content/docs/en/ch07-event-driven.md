@@ -56,9 +56,9 @@ Suppose you want to add a "tool call log" feature to the Agent: each time a tool
 
 ```
 session.subscribe((event) => {
-    if (event.type === "tool_execution_end") {
-        console.log(`[LOG] 调用了 ${event.toolName}，结果：${event.isError ? "失败": "成功"}`);
-    }
+ if (event.type === "tool_execution_end") {
+ console.log(`[LOG] called ${event.toolName}, result: ${event.isError ? "failed": "success"}`);
+ }
 });
 ```
 
@@ -72,18 +72,18 @@ This is the most core value of event-driven: **completely separate "what happene
 In programming terminology, event-driven implements the **pub-sub pattern** (publish-subscribe, đăng-nhận theo kiểu nhà xuất bản-người đăng ký). Compare it to a direct function call:
 
 ```
-直接调用（打电话）：
-  Agent ──调用──→ 终端渲染
-       ──调用──→ 文件存储
-       ──调用──→ 日志记录
-  Agent 需要知道所有消费者的存在，每加一个新功能就要改 Agent
+call directly(call): 
+ Agent ──call──→ terminal rendering
+ ──call──→ File storage
+ ──call──→ logging
+ Agent needs to know the existence of all consumers, Every time a new feature is added, it needs to be changed Agent
 
-发布-订阅（广播）：
-  Agent ──emit事件──→ 📡 事件总线
-                          ├──→ 终端渲染（订阅了）
-                          ├──→ 文件存储（订阅了）
-                          ├──→ 日志记录（订阅了）
-                          └──→ （新功能只需订阅，Agent 不需要知道）
+publish-Subscribe(broadcast): 
+ Agent ──emitevent──→ 📡 event bus
+ ├──→ terminal rendering(Subscribed)
+ ├──→ File storage(Subscribed)
+ ├──→ logging(Subscribed)
+ └──→ (New features just need to subscribe, Agent no need to know)
 ```
 
 
@@ -101,50 +101,50 @@ The Agent core layer defines 10 kinds of `AgentEvent`. Together they form the Ag
 
 ```
 export type AgentEvent =
-  // 第1层：Agent 生命周期（整个运行）
-  | { type: "agent_start" }
-  | { type: "agent_end"; messages: AgentMessage[] }
+ // Layer : Agent life cycle(entire run)
+ | { type: "agent_start" }
+ | { type: "agent_end"; messages: AgentMessage[] }
 
-  // 第2层：Turn 生命周期（一轮模型调用 + 工具执行）
-  | { type: "turn_start" }
-  | { type: "turn_end"; message: AgentMessage; toolResults: ToolResultMessage[] }
+ // Layer : Turn life cycle(One round of model calls + tool execution)
+ | { type: "turn_start" }
+ | { type: "turn_end"; message: AgentMessage; toolResults: ToolResultMessage[] }
 
-  // 第3层：Message 生命周期（一条消息）
-  | { type: "message_start"; message: AgentMessage }
-  | { type: "message_update"; message: AgentMessage; assistantMessageEvent: AssistantMessageEvent }
-  | { type: "message_end"; message: AgentMessage }
+ // Layer : Message life cycle(a message)
+ | { type: "message_start"; message: AgentMessage }
+ | { type: "message_update"; message: AgentMessage; assistantMessageEvent: AssistantMessageEvent }
+ | { type: "message_end"; message: AgentMessage }
 
-  // 第4层：Tool Execution 生命周期（一次工具执行）
-  | { type: "tool_execution_start"; toolCallId: string; toolName: string; args: any }
-  | { type: "tool_execution_update"; toolCallId: string; toolName: string; args: any; partialResult: any }
-  | { type: "tool_execution_end"; toolCallId: string; toolName: string; result: any; isError: boolean };
+ // Layer : Tool Execution life cycle(One tool execution)
+ | { type: "tool_execution_start"; toolCallId: string; toolName: string; args: any }
+ | { type: "tool_execution_update"; toolCallId: string; toolName: string; args: any; partialResult: any }
+ | { type: "tool_execution_end"; toolCallId: string; toolName: string; result: any; isError: boolean };
 ```
 
 
 10 kinds sounds like a lot, but the pattern is clear: they are a **4-layer nested lifecycle (vòng đời 4 tầng lồng nhau)**, each layer has the "start -> update -> end" pair:
 
 ```
-Agent 运行
-├── agent_start ───────────────────── Agent 开始
+Agent run
+├── agent_start ───────────────────── Agent start
 │
-├── Turn 1（第3章讲过：一次模型调用 + 它触发的工具执行）
-│   ├── turn_start ────────────────── Turn 开始
-│   │
-│   ├── Message（LLM 的响应）
-│   │   ├── message_start
-│   │   ├── message_update ×N ────── 流式增量（逐 token 更新）
-│   │   └── message_end
-│   │
-│   ├── Tool Execution（工具执行）
-│   │   ├── tool_execution_start
-│   │   ├── tool_execution_update ×N  工具进度（如 Bash 的输出）
-│   │   └── tool_execution_end
-│   │
-│   └── turn_end ──────────────────── Turn 结束
+├── Turn 1(No.3chapter: a model call + The tool it triggers executes)
+│ ├── turn_start ────────────────── Turn start
+│ │
+│ ├── Message(LLM response)
+│ │ ├── message_start
+│ │ ├── message_update ×N ────── streaming delta(chase token update)
+│ │ └── message_end
+│ │
+│ ├── Tool Execution(tool execution)
+│ │ ├── tool_execution_start
+│ │ ├── tool_execution_update ×N tool progress(Such as Bash The output of)
+│ │ └── tool_execution_end
+│ │
+│ └── turn_end ──────────────────── Turn end
 │
 ├── Turn 2 ...
 │
-└── agent_end ──────────────────────── Agent 结束
+└── agent_end ──────────────────────── Agent end
 ```
 
 
@@ -194,28 +194,28 @@ The implementation of `emit` is the Agent class's `processEvents` method, which 
 
 ```
 private async processEvents(event: AgentEvent): Promise<void> {
-    // 第一步：根据事件类型更新内部状态
-    switch (event.type) {
-        case "message_start":
-            this._state.streamingMessage = event.message;   // 开始追踪流式消息
-            break;
-        case "message_update":
-            this._state.streamingMessage = event.message;   // 更新流式消息内容
-            break;
-        case "message_end":
-            this._state.streamingMessage = undefined;       // 清空临时工位
-            this._state.messages.push(event.message);       // 搬入正式档案
-            break;
-        // ... tool_execution_start/end 更新 pendingToolCalls 等
-    }
+ // first step: Update internal state based on event type
+ switch (event.type) {
+ case "message_start":
+ this._state.streamingMessage = event.message; // Start tracking streaming news
+ break;
+ case "message_update":
+ this._state.streamingMessage = event.message; // Update streaming message content
+ break;
+ case "message_end":
+ this._state.streamingMessage = undefined; // Clear temporary workstations
+ this._state.messages.push(event.message); // Move into official files
+ break;
+ // ... tool_execution_start/end update pendingToolCalls Wait
+ }
 
-    // 第二步：拿 AbortSignal
-    const signal = this.activeRun?.abortController.signal;
+ // Step 2: take AbortSignal
+ const signal = this.activeRun?.abortController.signal;
 
-    // 第三步：同步等待所有监听器完成
-    for (const listener of this.listeners) {
-        await listener(event, signal);   // ← 一个一个等！
-    }
+ // Step 3: Synchronously wait for all listeners to complete
+ for (const listener of this.listeners) {
+ await listener(event, signal); // ← Wait one by one！
+ }
 }
 ```
 
@@ -229,28 +229,28 @@ You may ask: how is this different from "calling functions in a loop"? The diffe
 Suppose we don't await. See what would happen:
 
 ```
-假设 emit 是 fire-and-forget（不等待）：
+hypothesis emit Yes fire-and-forget(don't wait): 
 
-Agent Loop: emit(start)  emit(update)  emit(end)
-                ↓             ↓              ↓
-TUI 监听器: [开始渲染...]  [还没处理完    [三个事件堆在一起了]
-                              start...]
+Agent Loop: emit(start) emit(update) emit(end)
+ ↓ ↓ ↓
+TUI listener: [Start rendering...] [Not finished yet [Three events piled together]
+ start...]
 
-问题：TUI 还没处理完 message_start，message_update 就来了。
-      UI 可能显示空消息，也可能显示过时的内容:状态不一致。
+question: TUI Not finished yet message_start, message_update Here it comes. 
+ UI May display empty message, May also display outdated content:Inconsistent status. 
 ```
 
 
 
 
 ```
-实际设计（await，同步屏障）：
+actual design(await, sync barrier): 
 
-Agent Loop: emit(start)──await──→  emit(update)──await──→  emit(end)──await──→
-                ↓                      ↓                       ↓
-TUI 监听器: [处理完毕，返回]       [处理完毕，返回]          [处理完毕，返回]
+Agent Loop: emit(start)──await──→ emit(update)──await──→ emit(end)──await──→
+ ↓ ↓ ↓
+TUI listener: [Processed, Return] [Processed, Return] [Processed, Return]
 
-保证：Agent 在监听器返回前不会发出下一个事件。
+guarantee: Agent The next event will not be emitted until the listener returns. 
 ```
 
 
@@ -265,17 +265,17 @@ If every event must await, what about `tool_execution_update`? During tool execu
 Indeed Pi has special handling for this kind of high-frequency event: **collect first, then batch-wait**:
 
 ```
-const updateEvents: Promise<void>[] = [];   // 收集箱
+const updateEvents: Promise<void>[] = []; // collection box
 let acceptingUpdates = true;
 
 const result = await tool.execute(id, args, signal, (partialResult) => {
-    if (!acceptingUpdates) return;   // 工具已结束，丢弃迟到 update
-    // 不 await！先把 emit 的 Promise 收集起来
-    updateEvents.push(emit({ type: "tool_execution_update", ... }));
+ if (!acceptingUpdates) return; // Tool has ended, discard late update
+ // No await！First emit of Promise collect up
+ updateEvents.push(emit({ type: "tool_execution_update", ... }));
 });
 
-acceptingUpdates = false;             // 关闭闸门
-await Promise.all(updateEvents);      // 一次性等所有 update 处理完
+acceptingUpdates = false; // close the floodgates
+await Promise.all(updateEvents); // All at once update Finished
 ```
 
 
@@ -291,7 +291,7 @@ There is an easy-to-overlook detail in `processEvents`'s listener loop: **no try
 
 ```
 for (const listener of this.listeners) {
-    await listener(event, signal);   // 没有 try-catch！
+ await listener(event, signal); // No try-catch！
 }
 ```
 
@@ -321,12 +321,12 @@ Here are some representative scenarios:
 
 ```
 session.subscribe((event) => {
-    if (event.type === "tool_execution_start") {
-        console.log(`🔧 ${event.toolName}(${JSON.stringify(event.args).slice(0, 50)})`);
-    }
-    if (event.type === "tool_execution_end") {
-        console.log(`   └─ ${event.isError ? "❌ 失败": "✅ 成功"}`);
-    }
+ if (event.type === "tool_execution_start") {
+ console.log(`🔧 ${event.toolName}(${JSON.stringify(event.args).slice(0, 50)})`);
+ }
+ if (event.type === "tool_execution_end") {
+ console.log(` └─ ${event.isError ? "❌ failed": "✅ success"}`);
+ }
 });
 ```
 
@@ -345,14 +345,14 @@ Extensions can modify the message list before the LLM call: inject the current t
 
 
 ```
-// 服务端
+// Server
 session.subscribe((event) => {
-    if (event.type === "message_update") {
-        res.write(`data: ${JSON.stringify({ type: "delta", text: extractText(event.message) })}\n\n`);
-    }
-    if (event.type === "agent_end") {
-        res.end();
-    }
+ if (event.type === "message_update") {
+ res.write(`data: ${JSON.stringify({ type: "delta", text: extractText(event.message) })}\n\n`);
+ }
+ if (event.type === "agent_end") {
+ res.end();
+ }
 });
 ```
 
@@ -375,29 +375,29 @@ The complete cross-layer journey of a text_delta
 Suppose the LLM is generating the two characters "hello". A single 'h' character, from creation to display, goes through 5 steps:
 
 ```
-触发端：LLM SSE 网络流
-  │  data: {"type":"text_delta","delta":"你",...}
-  │
-  ▼ 中转1：AI 层 EventStream.push()
-  │  异步队列，AssistantMessageEvent { type: "text_delta", delta: "你" }
-  │  （第4章讲过的12种事件之一）
-  │
-  ▼ 中转2：Agent Loop 事件转换
-  │  AI 层 text_delta → Agent 层 message_update
-  │  原始事件通过 assistantMessageEvent 字段透传
-  │
-  ▼ 中转3：Agent.processEvents()（同步屏障）
-  │  更新 streamingMessage 内部状态
-  │  await 所有 listeners
-  │
-  ▼ 中转4：AgentSession._handleAgentEvent()
-  │  通知扩展系统 → 分发给 Session 监听器 → 持久化
-  │
-  ▼ 终点：TUI 监听器
-  │  提取 delta "你" → 渲染到终端
-  │
-  ▼
-你看到了 "你" 字出现
+Trigger end: LLM SSE network flow
+ │ data: {"type":"text_delta","delta":"you",...}
+ │
+ ▼ transit1: AI layer EventStream.push()
+ │ asynchronous queue, AssistantMessageEvent { type: "text_delta", delta: "you" }
+ │ (Chapter ) said12one of the events)
+ │
+ ▼ transit2: Agent Loop event transition
+ │ AI layer text_delta → Agent layer message_update
+ │ original event passed assistantMessageEvent Field transparent transmission
+ │
+ ▼ transit3: Agent.processEvents()(sync barrier)
+ │ update streamingMessage internal state
+ │ await all listeners
+ │
+ ▼ transit4: AgentSession._handleAgentEvent()
+ │ Notification extension system → distributed to Session listener → persistence
+ │
+ ▼ end point: TUI listener
+ │ Extract delta "you" → Render to terminal
+ │
+ ▼
+you saw "you" word appears
 ```
 
 
@@ -419,13 +419,13 @@ The previous six sections talked about the Agent core's event system: 10 kinds o
 
 ```
 AgentSessionEvent =
-    基础 10 种（agent_end 被重载，增加 willRetry 字段）
-  + Session 新增 7 种：
-      queue_update           ← steering/followUp 队列变化
-      compaction_start/end   ← 上下文压缩（第9章详讲）
-      auto_retry_start/end   ← LLM 调用失败自动重试
-      session_info_changed   ← 会话名称变更
-      thinking_level_changed ← 思考深度切换
+ Basics 10 species(agent_end is overloaded, increase willRetry Field)
+ + Session New 7 species: 
+ queue_update ← steering/followUp Queue changes
+ compaction_start/end ← Context compression(Chapter ) details)
+ auto_retry_start/end ← LLM Automatically retry if call fails
+ session_info_changed ← Session name change
+ thinking_level_changed ← Thinking depth switch
 ```
 
 

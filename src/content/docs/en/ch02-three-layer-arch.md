@@ -76,12 +76,12 @@ Suppose you just cloned Pi''s repository and typed `ls` in the terminal. This is
 ```
 repo/
 ├── packages/
-│   ├── ai/              ← @earendil-works/pi-ai
-│   ├── agent/           ← @earendil-works/pi-agent-core
-│   ├── coding-agent/    ← @earendil-works/pi-coding-agent
-│   ├── orchestrator/    ← @earendil-works/pi-orchestrator（实验性，多 Agent 编排）
-│   └── tui/             ← @earendil-works/pi-tui
-├── package.json         ← 根配置，npm workspaces
+│ ├── ai/ ← @earendil-works/pi-ai
+│ ├── agent/ ← @earendil-works/pi-agent-core
+│ ├── coding-agent/ ← @earendil-works/pi-coding-agent
+│ ├── orchestrator/ ← @earendil-works/pi-orchestrator(Experimental, Much Agent Arrange)
+│ └── tui/ ← @earendil-works/pi-tui
+├── package.json ← root configuration, npm workspaces
 └── tsconfig.json
 ```
 
@@ -119,22 +119,22 @@ Concretely, it does three things:
 Just look at what its `index.ts` exports:
 
 ```
-// packages/ai/src/index.ts（v0.80.x 节选）
-// 顶部注释明确写：Core only, side-effect free: no generated catalogs,
+// packages/ai/src/index.ts(v0.80.x excerpt)
+// The top comment clearly says: Core only, side-effect free: no generated catalogs,
 // no provider factories, no api-registry, no OAuth implementations, no compat.
-// 全局 API 注册表、stream/complete 函数等已迁至 ./compat.ts（packages/ai/src/compat.ts）
+// overall API Registry, stream/complete Functions etc. have been moved to ./compat.ts(packages/ai/src/compat.ts)
 export type { Static, TSchema } from "typebox";
 export { Type } from "typebox";
-export * from "./api/lazy.ts"            // 各 Provider API 的懒加载入口
-export * from "./auth/context.ts"        // 认证上下文
+export * from "./api/lazy.ts" // each Provider API Lazy loading entry
+export * from "./auth/context.ts" // Authentication context
 export * from "./auth/credential-store.ts"
 export * from "./auth/helpers.ts"
 export * from "./auth/types.ts"
 export * from "./images-models.ts"
-export * from "./models.ts"              // 模型定义（KnownProvider 35 个）
-export * from "./types.ts"               // 统一类型
-export * from "./utils/event-stream.ts"  // 事件流基类
-// 流式调用入口（stream / streamSimple）实际位于 ./compat.ts
+export * from "./models.ts" // Model definition(KnownProvider 35 a)
+export * from "./types.ts" // unified type
+export * from "./utils/event-stream.ts" // event stream base class
+// Streaming call entrance(stream / streamSimple)actually located in ./compat.ts
 ```
 
 No "agent", no "tool", no "loop". It only does one thing: **flatten the differences between LLM APIs and expose a single unified interface**.
@@ -157,12 +157,12 @@ The key word is **"general-purpose"**. This package does not know whether it is 
 Look at its `index.ts` exports:
 
 ```
-// packages/agent/src/index.ts（节选）
-export * from "./agent.js"               // Agent 类
-export * from "./agent-loop.js"          // 循环函数
-export * from "./harness/session/..."    // 会话管理
-export * from "./harness/compaction/..." // 上下文压缩
-export * from "./types.js"              // 类型定义
+// packages/agent/src/index.ts(excerpt)
+export * from "./agent.js" // Agent class
+export * from "./agent-loop.js" // loop function
+export * from "./harness/session/..." // Session management
+export * from "./harness/compaction/..." // Context compression
+export * from "./types.js" // type definition
 ```
 
 No "read" (reading files), no "bash" (running commands), no "edit" (editing code). It does not care what the Agent does, only "how to run an Agent".
@@ -195,13 +195,13 @@ main(process.argv.slice(2));
 A tiny entry, but a complete startup chain behind it:
 
 ```
-你输入: pi "帮我改个 bug"
+you enter: pi "Help me change it bug"
 │
-├── cli.ts          ← 解析命令行参数
-│   └── main.ts     ← 创建会话、选择运行模式（交互/打印/RPC）
-│       └── AgentSession    ← 组装工具、加载扩展
-│           └── Agent       ← 管理状态、跑循环
-│               └── agentLoop()  ← 核心循环开始
+├── cli.ts ← Parse command line parameters
+│ └── main.ts ← Create session, Select operating mode(interaction/Print/RPC)
+│ └── AgentSession ← Assembly tools, Load extension
+│ └── Agent ← Management status, Run loop
+│ └── agentLoop() ← core loop starts
 ```
 
 ### 2.4 pi-tui: in charge of "display"
@@ -235,19 +235,19 @@ After reading the section above, you probably have a picture in your head alread
 
 ```
 ┌─────────────────────────────────────────────┐
-│  pi-coding-agent：我知道怎么写代码            │  ← 最懂业务
-│  （工具、扩展、CLI、会话持久化）               │
+│ pi-coding-agent: I know how to write code │ ← Know best about business
+│ (Tools, Expand, CLI, Session persistence) │
 ├─────────────────────────────────────────────┤
-│  pi-agent-core：我知道怎么跑 Agent            │  ← 只懂框架
-│  （循环、状态、事件、压缩）                    │
+│ pi-agent-core: i know how to run Agent │ ← Only understand the framework
+│ (loop, Status, event, Compression) │
 ├─────────────────────────────────────────────┤
-│  pi-ai：我知道怎么调模型                      │  ← 只懂模型
-│  （统一 API、流式调用、30+ 提供商适配）        │
+│ pi-ai: I know how to tune the model │ ← Only understand models
+│ (unify API, Streaming call, 30+ Provider adaptation) │
 └─────────────────────────────────────────────┘
 
-旁边还有一个独立的 UI 包：
+There is also a separate one next to it UI package: 
 ┌──────────┐
-│  pi-tui  │  ← 只管显示
+│ pi-tui │ ← Just show
 └──────────┘
 ```
 
@@ -266,10 +266,10 @@ If your mental model says "upper layers may only depend on the adjacent lower la
 ```
 // packages/coding-agent/package.json
 "dependencies": {
-    "@earendil-works/pi-agent-core": "^0.80.2",   // ← 依赖中间层，合理
-    "@earendil-works/pi-ai": "^0.80.2",            // ← 也直接依赖底层？
-    "@earendil-works/pi-tui": "^0.80.2",
-    // ... 其他依赖
+ "@earendil-works/pi-agent-core": "^0.80.2", // ← Depend on middle layer, reasonable
+ "@earendil-works/pi-ai": "^0.80.2", // ← Also depends directly on the underlying？
+ "@earendil-works/pi-tui": "^0.80.2",
+ // ... Other dependencies
 }
 ```
 
@@ -291,18 +291,18 @@ You can verify this by opening `packages/agent/src/types.ts`: almost every base 
 ```
 // packages/agent/src/types.ts:1-14
 import type {
-    Api,
-    AssistantMessage,
-    AssistantMessageEvent,
-    AssistantMessageEventStream,
-    Context,
-    ImageContent,
-    Message,
-    Model,
-    SimpleStreamOptions,
-    TextContent,
-    Tool,
-    ToolResultMessage,
+ Api,
+ AssistantMessage,
+ AssistantMessageEvent,
+ AssistantMessageEventStream,
+ Context,
+ ImageContent,
+ Message,
+ Model,
+ SimpleStreamOptions,
+ TextContent,
+ Tool,
+ ToolResultMessage,
 } from "@earendil-works/pi-ai";
 ```
 
@@ -329,16 +329,16 @@ So the layering rule is not "adjacent-only". It is "**strictly one-direction: lo
 Visualized, the dependency direction looks like this:
 
 ```
-pi-ai（底层）
-  ↑         ↑
-  │         │
-  │    pi-agent-core（中间层）
-  │         ↑
-  │         │
-  └─── pi-coding-agent（顶层）
-            ↑
-            │
-       pi-orchestrator（实验性外围编排层，可选）
+pi-ai(Ground floor)
+ ↑ ↑
+ │ │
+ │ pi-agent-core(middle layer)
+ │ ↑
+ │ │
+ └─── pi-coding-agent(top level)
+ ↑
+ │
+ pi-orchestrator(Experimental Peripheral Orchestration Layer, Optional)
 ```
 
 All the arrows point up. **The bottom layer never knows about the upper layer**: there is no import in pi-ai''s code that points to pi-agent-core or pi-coding-agent; orchestrator does not penetrate back into coding-agent either. That is the real rule of layering: **it does not restrict the depth of references, but ensures the dependency direction is strictly one-way upward.**
@@ -354,24 +354,24 @@ Now that the dependency rule is clear, we can use the type system to make the pr
 In pi-ai, a `Tool` is the smallest possible tool unit: only enough fields to describe what the tool is:
 
 ```
-// packages/ai/src/types.ts（节选）
-// 最基础的消息类型:所有 LLM 都认的格式
+// packages/ai/src/types.ts(excerpt)
+// The most basic message type:all LLM A format that everyone recognizes
 type Message = UserMessage | AssistantMessage | ToolResultMessage
 
-// 模型定义:描述一个 LLM 的全部信息
+// Model definition:describe a LLM All information of
 interface Model<TApi> {
-    id: string           // 如 "claude-sonnet-4-6"
-    name: string
-    api: TApi            // 如 "anthropic-messages"
-    contextWindow: number // 如 200000
-    // ... 更多字段
+ id: string // Such as "claude-sonnet-4-6"
+ name: string
+ api: TApi // Such as "anthropic-messages"
+ contextWindow: number // Such as 200000
+ // ... More fields
 }
 
-// 工具定义:描述一个工具的 schema
+// Tool definition:Describe a tool schema
 interface Tool<TSchema> {
-    name: string
-    description: string
-    parameters: TSchema
+ name: string
+ description: string
+ parameters: TSchema
 }
 ```
 
@@ -382,20 +382,20 @@ That is all. No `execute`, no UI hint, no `approval`. It is just a **type-level 
 In pi-agent-core, `AgentTool` is built on top of `Tool`, with an execution function added:
 
 ```
-// packages/agent/src/types.ts（节选）
+// packages/agent/src/types.ts(excerpt)
 import type {
-    Message, Model, Tool, ImageContent, ...
+ Message, Model, Tool, ImageContent, ...
 } from "@earendil-works/pi-ai";
 
-// 扩展消息：除了标准 LLM 消息，还可以有自定义消息
+// extended message: In addition to the standard LLM news, You can also have custom messages
 type AgentMessage = Message | CustomAgentMessages[keyof CustomAgentMessages]
 
-// 扩展工具：除了 schema，还有参数预处理、执行函数和执行模式（types.ts:371-394）
+// Extension tools: Except schema, There is also parameter preprocessing, Execution functions and execution modes(types.ts:371-394)
 interface AgentTool<TParameters extends TSchema = TSchema, TDetails = any> extends Tool<TParameters> {
-    label: string                                    // 显示名称
-    prepareArguments?: (args: unknown) => Static<TParameters>   // 参数预处理
-    execute: (toolCallId: string, params, signal?: AbortSignal, onUpdate?: AgentToolUpdateCallback<TDetails>) => Promise<AgentToolResult<TDetails>>
-    executionMode?: ToolExecutionMode                 // "sequential" | "parallel"
+ label: string // display name
+ prepareArguments?: (args: unknown) => Static<TParameters> // Parameter preprocessing
+ execute: (toolCallId: string, params, signal?: AbortSignal, onUpdate?: AgentToolUpdateCallback<TDetails>) => Promise<AgentToolResult<TDetails>>
+ executionMode?: ToolExecutionMode // "sequential" | "parallel"
 }
 ```
 
@@ -406,36 +406,36 @@ interface AgentTool<TParameters extends TSchema = TSchema, TDetails = any> exten
 In pi-coding-agent, the final `ToolDefinition` wraps `AgentTool` with everything UI/permission-related:
 
 ```
-// packages/coding-agent/src/core/extensions/types.ts:435-482（节选）
-// 工具定义（产品视角）:完整接口有 10+ 个字段，下面列出关键字段
-// 注意：ToolDefinition 在 TypeScript 层面是独立 interface 重新声明，
-// 与 AgentTool 是"结构兼容"而非用 extends 继承（详见 types.ts:435）
+// packages/coding-agent/src/core/extensions/types.ts:435-482(excerpt)
+// Tool definition(Product perspective):The complete interface is 10+ fields, Key fields are listed below
+// Note: ToolDefinition in TypeScript level is independent interface restate, 
+// with AgentTool Yes"Architecturally compatible"rather than using extends inheritance(See details types.ts:435)
 interface ToolDefinition<TParams extends TSchema, TDetails = unknown, TState = any> {
-    name: string
-    label: string                         // UI 展示名
-    description: string
-    promptSnippet?: string                // 自动拼到 system prompt 的工具片段
-    promptGuidelines?: string[]           // 工具使用守则
-    parameters: TParams
-    renderShell?: "default" | "self"      // 渲染模式
-    prepareArguments?: (args: unknown) => Static<TParams>   // 参数预处理钩子
-    executionMode?: ToolExecutionMode     // 并行/串行
-    execute: (toolCallId, params, signal, onUpdate, ctx: ExtensionContext) => Promise<AgentToolResult<TDetails>>  // 签名扩展：比 AgentTool.execute 多 ctx 参数
-    renderCall?: ...                      // 自定义调用渲染
-    // ... 还有渲染器、UI 组件等业务属性
+ name: string
+ label: string // UI display name
+ description: string
+ promptSnippet?: string // Automatically spelled system prompt tool fragment
+ promptGuidelines?: string[] // Tool usage guidelines
+ parameters: TParams
+ renderShell?: "default" | "self" // Rendering mode
+ prepareArguments?: (args: unknown) => Static<TParams> // Parameter preprocessing hook
+ executionMode?: ToolExecutionMode // Parallel/serial
+ execute: (toolCallId, params, signal, onUpdate, ctx: ExtensionContext) => Promise<AgentToolResult<TDetails>> // Signature extension: Than AgentTool.execute Much ctx parameters
+ renderCall?: ... // Custom call rendering
+ // ... And the renderer, UI Components and other business attributes
 }
 
-// 扩展定义（运行时聚合体，types.ts:1585-1595）
+// extended definition(runtime aggregate, types.ts:1585-1595)
 interface Extension {
-    path: string                                       // 扩展路径
-    resolvedPath: string                               // 解析后的绝对路径
-    sourceInfo: SourceInfo                             // 来源信息
-    handlers: Map<string, HandlerFn[]>                 // 各类处理器
-    tools: Map<string, RegisteredTool>                 // 注册的工具（Map，非 Record）
-    messageRenderers: Map<string, MessageRenderer>     // 消息渲染器
-    commands: Map<string, RegisteredCommand>           // 注册的命令（Map，非 Record）
-    flags: Map<string, ExtensionFlag>                  // 扩展标志
-    shortcuts: Map<KeyId, ExtensionShortcut>           // 快捷键绑定
+ path: string // Expansion path
+ resolvedPath: string // The resolved absolute path
+ sourceInfo: SourceInfo // Source information
+ handlers: Map<string, HandlerFn[]> // Various types of processors
+ tools: Map<string, RegisteredTool> // Registered tools(Map, Not Record)
+ messageRenderers: Map<string, MessageRenderer> // message renderer
+ commands: Map<string, RegisteredCommand> // Registered command(Map, Not Record)
+ flags: Map<string, ExtensionFlag> // extension flag
+ shortcuts: Map<KeyId, ExtensionShortcut> // Shortcut key bindings
 }
 ```
 
@@ -446,31 +446,31 @@ This is the shape that pi-coding-agent''s actual 7 tools implement (`read`, `bas
 To make the progression concrete, here is the field-by-field type extension chain:
 
 ```
-Before（pi-ai 层）：Tool 只知道"长什么样"
+Before(pi-ai layer): Tool only know"what does it look like"
 ────────────────────────────────────────────
 interface Tool<TSchema> {
-    name: string
-    description: string
-    parameters: TSchema
+ name: string
+ description: string
+ parameters: TSchema
 }
 
-         ↓ agent-core 扩展
+ ↓ agent-core Expand
 
-After（pi-agent-core 层）：AgentTool 知道"怎么执行"
+After(pi-agent-core layer): AgentTool know"How to execute"
 ────────────────────────────────────────────
 interface AgentTool<TSchema> extends Tool<TSchema> {
-    label: string                              ← 新增
-    execute: (...) => Promise<AgentToolResult> ← 新增
-    executionMode?: "sequential" | "parallel"  ← 新增
+ label: string ← New
+ execute: (...) => Promise<AgentToolResult> ← New
+ executionMode?: "sequential" | "parallel" ← New
 }
 
-         ↓ coding-agent 扩展
+ ↓ coding-agent Expand
 
-After（pi-coding-agent 层）：ToolDefinition 加上"怎么显示"
+After(pi-coding-agent layer): ToolDefinition plus"How to display"
 ────────────────────────────────────────────
 interface ToolDefinition {
-    // 继承 AgentTool 的全部字段
-    // + 渲染器、权限控制等业务属性
+ // inheritance AgentTool All fields of
+ // + Renderer, Business attributes such as permission control
 }
 ```
 
@@ -485,18 +485,18 @@ Let us walk through three scenarios to see.
 ### Scenario A: no layering, everything in one file
 
 ```
-// 假设：不分层的 Agent
+// hypothesis: not layered Agent
 import OpenAI from "openai";
 
 const client = new OpenAI();
 const messages = [];
 
 while (true) {
-    const response = await client.chat.completions.create({
-        model: "gpt-4o",
-        messages,
-    });
-    // 解析工具调用、执行、追加到 messages ...
+ const response = await client.chat.completions.create({
+ model: "gpt-4o",
+ messages,
+ });
+ // Parsing tool call, execute, append to messages ...
 }
 ```
 
@@ -505,7 +505,7 @@ Workable for tiny projects, but as soon as the Agent grows past ~1000 lines, eve
 ### Scenario B: only two layers (drop the coding-agent layer)
 
 ```
-// 只用底层 + 中间层
+// Only use the bottom layer + middle layer
 import { Agent, agentLoop } from "@earendil-works/pi-agent-core";
 import { streamSimple } from "@earendil-works/pi-ai";
 ```
@@ -515,12 +515,12 @@ Better, but you re-implement CLI argument parsing and session management every t
 ### Scenario C: only one layer (only pi-ai)
 
 ```
-// 只用底层
+// Only use the bottom layer
 import { streamSimple } from "@earendil-works/pi-ai";
 
 const stream = streamSimple(model, context);
 for await (const event of stream) {
-    console.log(event);
+ console.log(event);
 }
 ```
 

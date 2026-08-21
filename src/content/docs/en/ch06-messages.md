@@ -59,11 +59,11 @@ Before understanding how messages transform, let us clarify what the "target of 
 It has only three members:
 
 ```
-Message 联合类型（LLM 标准格式）
+Message union type(LLM standard format)
 │
-├── UserMessage        ← 用户说的话 / 发的图片
-├── AssistantMessage   ← LLM 的回复（含思考、工具调用）
-└── ToolResultMessage  ← 工具执行后的结果
+├── UserMessage ← What users say / Pictures posted
+├── AssistantMessage ← LLM Reply(Contains thinking, Tool call)
+└── ToolResultMessage ← The result after tool execution
 ```
 
 
@@ -73,9 +73,9 @@ Message 联合类型（LLM 标准格式）
 
 ```
 {
-    role: "user",
-    content: string | (TextContent | ImageContent)[],  // 纯文本或内容块数组
-    timestamp: number                                    // Unix 毫秒时间戳
+ role: "user",
+ content: string | (TextContent | ImageContent)[], // Plain text or content block array
+ timestamp: number // Unix millisecond timestamp
 }
 ```
 
@@ -86,15 +86,15 @@ content can be a plain string, or an array of content blocks. This means user me
 
 ```
 {
-    role: "assistant",
-    content: (TextContent | ThinkingContent | ToolCall)[],  // 三种内容块
-    api: Api,                   // 使用的 API 类型（如 "anthropic-messages"）
-    provider: ProviderId,       // 提供商（如 "anthropic"）
-    model: string,              // 模型名（如 "claude-sonnet-4-6"）
-    usage: Usage,               // token 用量统计
-    stopReason: StopReason,     // 停止原因（第3章讲过的5种值）
-    errorMessage?: string,      // 错误信息
-    timestamp: number
+ role: "assistant",
+ content: (TextContent | ThinkingContent | ToolCall)[], // Three types of content blocks
+ api: Api, // used API Type(Such as "anthropic-messages")
+ provider: ProviderId, // provider(Such as "anthropic")
+ model: string, // Model name(Such as "claude-sonnet-4-6")
+ usage: Usage, // token Usage statistics
+ stopReason: StopReason, // Stop reason(Chapter ) said5Kind of value)
+ errorMessage?: string, // error message
+ timestamp: number
 }
 ```
 
@@ -102,16 +102,16 @@ content can be a plain string, or an array of content blocks. This means user me
 What is worth paying attention to here is the content field: it is not a string, but a **content block array** that can contain three kinds of things:
 
 ```
-AssistantMessage 的 content 内容块
+AssistantMessage of content content block
 │
-├── TextContent       ← 普通文本
-│     { type: "text", text: "..." }
+├── TextContent ← normal text
+│ { type: "text", text: "..." }
 │
-├── ThinkingContent   ← 思考过程（第3章讲过，模型"在想"但不直接告诉用户的部分）
-│     { type: "thinking", thinking: "..." }
+├── ThinkingContent ← thought process(No.3chapter, model"Thinking"But don’t tell the user directly)
+│ { type: "thinking", thinking: "..." }
 │
-└── ToolCall          ← 工具调用（第5章讲过，触发五步管道的入口）
-      { type: "toolCall", id: "...", name: "read", arguments: { path: "..." } }
+└── ToolCall ← Tool call(No.5chapter, Trigger the entrance to the five-step pipeline)
+ { type: "toolCall", id: "...", name: "read", arguments: { path: "..." } }
 ```
 
 
@@ -123,13 +123,13 @@ AssistantMessage 的 content 内容块
 
 ```
 {
-    role: "toolResult",
-    toolCallId: string,                             // 对应哪个 ToolCall
-    toolName: string,                               // 工具名
-    content: (TextContent | ImageContent)[],        // 结果内容
-    details?: TDetails,                             // 结构化详情（给 UI 看的）
-    isError: boolean,                               // 是否执行失败（第5章的"永不抛出"产物）
-    timestamp: number
+ role: "toolResult",
+ toolCallId: string, // Corresponding to which ToolCall
+ toolName: string, // Tool name
+ content: (TextContent | ImageContent)[], // Result content
+ details?: TDetails, // Structured details(give UI To see)
+ isError: boolean, // Whether execution failed(Chapter "never throw" guarantee)
+ timestamp: number
 }
 ```
 
@@ -141,30 +141,30 @@ AssistantMessage 的 content 内容块
 Putting these three message kinds together, a typical dialog fragment looks like this:
 
 ```
-messages 数组：
+messages array: 
 │
 ├── [0] UserMessage
-│       role: "user"
-│       content: "帮我看看 auth.ts"
+│ role: "user"
+│ content: "help me see auth.ts"
 │
 ├── [1] AssistantMessage
-│       role: "assistant"
-│       content: [
-│           { type: "text", text: "让我帮你看看这个文件" },
-│           { type: "toolCall", id: "tc_001", name: "read", arguments: { path: "auth.ts" } }
-│       ]
-│       stopReason: "toolUse"     ← 第3章讲过：调了工具，循环继续
+│ role: "assistant"
+│ content: [
+│ { type: "text", text: "Let me help you look at this file" },
+│ { type: "toolCall", id: "tc_001", name: "read", arguments: { path: "auth.ts" } }
+│ ]
+│ stopReason: "toolUse" ← No.3chapter: called the tool, The cycle continues
 │
 ├── [2] ToolResultMessage
-│       role: "toolResult"
-│       toolCallId: "tc_001"      ← 和上面的 id 对应
-│       content: [{ type: "text", text: "import { auth } from '...' ..." }]
-│       isError: false            ← 第5章讲过：正常结果
+│ role: "toolResult"
+│ toolCallId: "tc_001" ← and above id Correspond
+│ content: [{ type: "text", text: "import { auth } from '...' ..." }]
+│ isError: false ← No.5chapter: normal result
 │
 └── [3] AssistantMessage
-        role: "assistant"
-        content: [{ type: "text", text: "auth.ts 是一个认证模块..." }]
-        stopReason: "stop"        ← 没调工具，循环结束
+ role: "assistant"
+ content: [{ type: "text", text: "auth.ts is an authentication module..." }]
+ stopReason: "stop" ← No adjustment tools, end of loop
 ```
 
 
@@ -194,12 +194,12 @@ Pi's design **compromises neither side**: **store in structured form inside `con
 Taking Pi's bundled coding-agent as example, it defines 4 kinds of custom messages in [packages/coding-agent/src/core/messages.ts](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/src/core/messages.ts):
 
 ```
-coding-agent 的自定义消息类型
+coding-agent custom message type
 │
-├── BashExecutionMessage       ← Bash 命令执行记录
-├── CustomMessage              ← 扩展注入的通用消息
-├── BranchSummaryMessage       ← 分支切换时的摘要
-└── CompactionSummaryMessage   ← 上下文压缩后的摘要
+├── BashExecutionMessage ← Bash Command execution record
+├── CustomMessage ← Generic messages for extension injection
+├── BranchSummaryMessage ← Summary when switching branches
+└── CompactionSummaryMessage ← Contextual compressed summary
 ```
 
 
@@ -207,15 +207,15 @@ Each kind has its own structured fields. Taking `BashExecutionMessage` as exampl
 
 ```
 {
-    role: "bashExecution",
-    command: string,          // 命令原文："ls -la"
-    output: string,           // 输出内容："file1.txt\nfile2.txt\n..."
-    exitCode: number | undefined,  // 退出码：0
-    cancelled: boolean,       // 是否被取消
-    truncated: boolean,       // 输出是否被截断
-    fullOutputPath?: string,  // 截断时的完整输出文件路径
-    timestamp: number,
-    excludeFromContext?: boolean  // 是否排除在 LLM 上下文之外
+ role: "bashExecution",
+ command: string, // Original text of command: "ls -la"
+ output: string, // Output content: "file1.txt\nfile2.txt\n..."
+ exitCode: number | undefined, // exit code: 0
+ cancelled: boolean, // Whether it was canceled
+ truncated: boolean, // Whether the output is truncated
+ fullOutputPath?: string, // Full output file path when truncated
+ timestamp: number,
+ excludeFromContext?: boolean // whether to exclude LLM out of context
 }
 ```
 
@@ -254,20 +254,20 @@ Translated into plain language: **`AgentMessage` = LLM standard messages + custo
 Looking at it with a picture is clearest:
 
 ```
-AgentMessage（Agent 内部使用的消息格式）
+AgentMessage(Agent Message format used internally)
 │
-├── Message（可直接发送给 LLM 的标准消息）
-│   │
-│   ├── UserMessage          ← role: "user"
-│   ├── AssistantMessage     ← role: "assistant"
-│   └── ToolResultMessage    ← role: "toolResult"
+├── Message(Can be sent directly to LLM standard message)
+│ │
+│ ├── UserMessage ← role: "user"
+│ ├── AssistantMessage ← role: "assistant"
+│ └── ToolResultMessage ← role: "toolResult"
 │
-└── CustomAgentMessages（仅 Agent 内部使用的扩展消息）
-    │
-    ├── BashExecutionMessage      ← role: "bashExecution"
-    ├── CustomMessage             ← role: "custom"
-    ├── BranchSummaryMessage      ← role: "branchSummary"
-    └── CompactionSummaryMessage  ← role: "compactionSummary"
+└── CustomAgentMessages(only Agent Extended messages for internal use)
+ │
+ ├── BashExecutionMessage ← role: "bashExecution"
+ ├── CustomMessage ← role: "custom"
+ ├── BranchSummaryMessage ← role: "branchSummary"
+ └── CompactionSummaryMessage ← role: "compactionSummary"
 ```
 
 
@@ -279,8 +279,8 @@ The key is the `CustomAgentMessages` interface:
 
 ```
 export interface CustomAgentMessages {
-    // Empty by default - apps extend via declaration merging
-    // 默认为空 - 应用通过声明合并扩展
+ // Empty by default - apps extend via declaration merging
+ // Default is empty - Apply extensions via declarative merging
 }
 ```
 
@@ -293,12 +293,12 @@ How does the application layer "insert"? It relies on TypeScript's **declaration
 
 ```
 declare module "@earendil-works/pi-agent-core" {
-    interface CustomAgentMessages {
-        bashExecution: BashExecutionMessage;
-        custom: CustomMessage;
-        branchSummary: BranchSummaryMessage;
-        compactionSummary: CompactionSummaryMessage;
-    }
+ interface CustomAgentMessages {
+ bashExecution: BashExecutionMessage;
+ custom: CustomMessage;
+ branchSummary: BranchSummaryMessage;
+ compactionSummary: CompactionSummaryMessage;
+ }
 }
 ```
 
@@ -322,21 +322,21 @@ Now we know the Agent internally uses 7 kinds of message types to express freely
 In the `streamAssistantResponse` function (the "call the model" step mentioned in Chapter 3), the timing of the translation is precise:
 
 ```
-每次 LLM 调用前的消息处理管道：
+every time LLM Message processing pipeline before calling: 
 
-context.messages: AgentMessage[]        ← Agent 内部的消息（最多 7 种类型）
-        │
-        ▼
-[1] transformContext (可选)             ← AgentMessage[] → AgentMessage[]
-        │                                  裁剪旧消息、注入外部上下文
-        ▼
-[2] convertToLlm (必须)                 ← AgentMessage[] → Message[]
-        │                                  自定义消息翻译成标准格式
-        ▼
-llmContext.messages: Message[]          ← LLM 看到的消息（只有 3 种类型）
-        │
-        ▼
-streamFunction(model, llmContext, ...)  ← 调用 LLM（第4章讲过）
+context.messages: AgentMessage[] ← Agent inside information(most 7 type)
+ │
+ ▼
+[1] transformContext (Optional) ← AgentMessage[] → AgentMessage[]
+ │ Crop old messages, Inject external context
+ ▼
+[2] convertToLlm (Must) ← AgentMessage[] → Message[]
+ │ Translate custom messages into standard formats
+ ▼
+llmContext.messages: Message[] ← LLM news seen(only 3 type)
+ │
+ ▼
+streamFunction(model, llmContext, ...) ← call LLM(No.4chapter)
 ```
 
 
@@ -368,13 +368,13 @@ Back to the opening scenario. A `BashExecutionMessage` from creation to being se
 
 ```
 {
-    role: "bashExecution",
-    command: "ls -la",
-    output: "total 32\ndrwxr-xr-x  5 user  staff  160 May 30 10:00 .\n...",
-    exitCode: 0,
-    cancelled: false,
-    truncated: false,
-    timestamp: 1748568000000
+ role: "bashExecution",
+ command: "ls -la",
+ output: "total 32\ndrwxr-xr-x 5 user staff 160 May 30 10:00 .\n...",
+ exitCode: 0,
+ cancelled: false,
+ truncated: false,
+ timestamp: 1748568000000
 }
 ```
 
@@ -383,12 +383,12 @@ Back to the opening scenario. A `BashExecutionMessage` from creation to being se
 
 ```
 {
-    role: "user",
-    content: [{
-        type: "text",
-        text: "Ran `ls -la`\n```\ntotal 32\ndrwxr-xr-x  5 user  staff  160 May 30 10:00 .\n...\n```"
-    }],
-    timestamp: 1748568000000
+ role: "user",
+ content: [{
+ type: "text",
+ text: "Ran `ls -la`\n```\ntotal 32\ndrwxr-xr-x 5 user staff 160 May 30 10:00 .\n...\n```"
+ }],
+ timestamp: 1748568000000
 }
 ```
 
@@ -437,10 +437,10 @@ The implementation is simple: `BashExecutionMessage` has an `excludeFromContext`
 
 ```
 case "bashExecution":
-    if (m.excludeFromContext) {
-        return undefined;   // 直接返回 undefined，后续被 filter 掉
-    }
-    // ... 否则正常转换
+ if (m.excludeFromContext) {
+ return undefined; // Return directly undefined, Subsequently filter drop
+ }
+ // ... Otherwise, normal conversion
 ```
 
 
@@ -465,42 +465,42 @@ Synthesizing the above analysis, Pi's message system has three visibility levels
 Connecting the whole chapter, the complete path of a message from birth to being seen by the LLM:
 
 ```
-用户在终端输入 !ls -la
-        │
-        ▼
-[1] 创建消息
-    BashExecutionMessage { role: "bashExecution", command: "ls -la", output: "...", ... }
-        │
-        ▼
-[2] 存入 context.messages: AgentMessage[]
-    [...原有消息, 新的 BashExecutionMessage]
-        │
-        ▼
-[3] Agent Loop 准备调用 LLM（第3章讲过的内层循环）
-        │
-        ▼
-[4] transformContext（可选）
-    输入/输出都是 AgentMessage[]
-    裁剪、注入、压缩（第8章详讲 transformContext、第9章详讲 Compaction）
-        │
-        ▼
-[5] convertToLlm（必须）
-    AgentMessage[] → Message[]
-    BashExecutionMessage → UserMessage
-    excludeFromContext → 过滤掉
-        │
-        ▼
-[6] LLM 收到
-    llmContext.messages = [
-        ...之前的消息,
-        { role: "user", content: "Ran `ls -la`\n```\n...\n```" }
-    ]
-        │
-        ▼
-[7] LLM 回复
-    → 产生新的 AssistantMessage
-    → 可能触发工具调用 → ToolResultMessage（第5章的五步管道）
-    → 回到 [2]，继续循环
+The user enters in the terminal !ls -la
+ │
+ ▼
+[1] Create message
+ BashExecutionMessage { role: "bashExecution", command: "ls -la", output: "...", ... }
+ │
+ ▼
+[2] Deposit context.messages: AgentMessage[]
+ [...Original news, new BashExecutionMessage]
+ │
+ ▼
+[3] Agent Loop ready to call LLM(No.3The inner loop discussed in Chapter)
+ │
+ ▼
+[4] transformContext(Optional)
+ input/The output is AgentMessage[]
+ Crop, Inject, Compression(Chapter ) details transformContext, Chapter  details Compaction)
+ │
+ ▼
+[5] convertToLlm(Must)
+ AgentMessage[] → Message[]
+ BashExecutionMessage → UserMessage
+ excludeFromContext → filter out
+ │
+ ▼
+[6] LLM received
+ llmContext.messages = [
+ ...previous news,
+ { role: "user", content: "Ran `ls -la`\n```\n...\n```" }
+ ]
+ │
+ ▼
+[7] LLM Reply
+ → generate new AssistantMessage
+ → May trigger tool calls → ToolResultMessage(Chapter )’s five-step pipeline)
+ → return to [2], Continue the cycle
 ```
 
 

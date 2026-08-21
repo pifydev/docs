@@ -39,7 +39,7 @@ Before talking about the Agent Loop, let's step back and see how many modes "usi
 The most primitive and intuitive usage. You build a prompt, call the API once, get the result, done.
 
 ```
-用户输入 → 构建提示词 → 调模型 → 模型输出 → 展示结果
+user input → Build prompt words → call the model → Model output → show results
 ```
 
 
@@ -48,10 +48,10 @@ The code roughly looks like this:
 
 ```
 const response = await llm.chat({
-  messages: [
-    { role: "system", content: "你是一个翻译助手" },
-    { role: "user", content: "把这段代码翻译成 Python" },
-  ],
+ messages: [
+ { role: "system", content: "You are a translation assistant" },
+ { role: "user", content: "Translate this code into Python" },
+ ],
 });
 console.log(response.content);
 ```
@@ -66,9 +66,9 @@ Applicable scenarios: translation, summarization, Q&A, code completion: anything
 When the task gets complex, you find it hard to get a satisfactory result in one go. So you break the big task into steps, calling the model once per step, with **your code** controlling the flow between steps.
 
 ```
-用户输入 → [步骤1: 调模型分析] → [你的代码: 提取关键信息]
-         → [步骤2: 调模型生成草稿] → [你的代码: 检查质量]
-         → [步骤3: 调模型润色] → 最终输出
+user input → [steps1: call the model analysis] → [your code: Extract key information]
+ → [steps2: Adjust model generation draft] → [your code: Check quality]
+ → [steps3: Adjust and polish the model] → final output
 ```
 
 
@@ -81,9 +81,9 @@ Applicable scenarios: document generation pipelines, code review automation, RAG
 In Agent mode, you hand the decision power over to the model.
 
 ```
-用户输入 → 调模型 → 模型说"我需要读文件" → 执行读文件 → 模型看结果
-         → 模型说"还需要搜索代码" → 执行搜索 → 模型看结果
-         → 模型说"我知道了，答案是..." → 输出 → 结束
+user input → call the model → Model says"I need to read a file" → Execute read file → Model to see the results
+ → Model says"Still need to search the code" → Perform a search → Model to see the results
+ → Model says"I know, The answer is..." → output → end
 ```
 
 
@@ -115,13 +115,13 @@ Before diving into the source, two concepts must be distinguished. They are ofte
 A Trace is the entire process from the user pressing Enter, to the Agent completely stopping and emitting the agent_end event. A Trace contains multiple Turns.
 
 ```
-一个 Trace（一次 agent_start 到 agent_end）
+one Trace(once agent_start Arrive agent_end)
 │
-├── Turn 1：调模型 → 模型返回 toolUse（要读文件）→ 执行 read 工具
+├── Turn 1: call the model → Model returns toolUse(to read file)→ execute read Tools
 │
-├── Turn 2：带着工具结果再调模型 → 模型返回 toolUse（还要改文件）→ 执行 edit 工具
+├── Turn 2: Adjust the model with tool results → Model returns toolUse(Need to change the file)→ execute edit Tools
 │
-└── Turn 3：带着工具结果再调模型 → 模型返回 stop（改好了，没有工具调用）→ agent_end
+└── Turn 3: Adjust the model with tool results → Model returns stop(Changed, No tool calls)→ agent_end
 ```
 
 
@@ -135,15 +135,15 @@ Reading the code makes this even clearer. The structure of each iteration of the
 
 ```
 while (hasMoreToolCalls || ...) {
-    if (!firstTurn) emit(turn_start);    // ← 新 Turn 开始
+ if (!firstTurn) emit(turn_start); // ← new Turn start
 
-    处理 pendingMessages
-    streamAssistantResponse()             // ← 一次模型调用
-    检查 stopReason
-    executeToolCalls()                    // ← 执行这个 Turn 触发的一批工具
-    emit(turn_end);                       // ← 这个 Turn 结束
+ Process pendingMessages
+ streamAssistantResponse() // ← a model call
+ Check stopReason
+ executeToolCalls() // ← execute this Turn A batch of tools triggered
+ emit(turn_end); // ← this Turn end
 
-    prepareNextTurn / shouldStopAfterTurn / 检查 steering
+ prepareNextTurn / shouldStopAfterTurn / Check steering
 }
 ```
 
@@ -155,25 +155,25 @@ If the model in one Turn requests 3 tools at once (read + grep + find), those 3 
 ### So the relationship between Trace and Turn is
 
 ```
-Trace（一次完整运行）
-│  agent_start
+Trace(one complete run)
+│ agent_start
 │
 ├── Turn 1
-│   │  turn_start
-│   ├── 调模型 → toolUse → 执行工具（read + grep）
-│   │  turn_end
-│   │
+│ │ turn_start
+│ ├── call the model → toolUse → Execution tool(read + grep)
+│ │ turn_end
+│ │
 ├── Turn 2
-│   │  turn_start
-│   ├── 调模型 → toolUse → 执行工具（edit）
-│   │  turn_end
-│   │
+│ │ turn_start
+│ ├── call the model → toolUse → Execution tool(edit)
+│ │ turn_end
+│ │
 ├── Turn 3
-│   │  turn_start
-│   ├── 调模型 → stop → 没有工具
-│   │  turn_end
-│   │
-│   agent_end
+│ │ turn_start
+│ ├── call the model → stop → no tools
+│ │ turn_end
+│ │
+│ agent_end
 ```
 
 ## 3. Big picture: how a message journeys, and how the loop spins
@@ -186,51 +186,51 @@ Trace（一次完整运行）
 Diagram description: a Trace outer shell nests 3 Turns; each Turn is a complete model call + tool execution closed loop. Note that Turn 3 has no ToolCall (dashed box); its stopReason = stop triggers the loop to exit.
 
 ```
-你按下回车："帮我读一下 src/main.ts"
+You press enter: "read it for me src/main.ts"
 │
-│  ① 你的输入变成一条消息
+│ ① Your input becomes a message
 │
-UserMessage { role: "user", content: "帮我读一下 src/main.ts" }
+UserMessage { role: "user", content: "read it for me src/main.ts" }
 │
-│  ② 进入循环（agentLoop 入口）: agent_start（一个 Trace 开始了）
+│ ② enter loop(agentLoop entrance): agent_start(one Trace started)
 │
 └── runLoop()
-    │
-    │  ③ 消息转换（AgentMessage → LLM 认识的 Message）
-    │
-    │  ┌── Turn 1 ──────────────────────────────────────────┐
-    │  │  turn_start                                         │
-    │  │  ④ 调用 Model（每 Turn 仅一次模型调用）               │
-    │  │  streamSimple(model, { systemPrompt, messages })    │
-    │  │       ↓ 逐 token 流式返回                            │
-    │  │  AssistantMessage {                                  │
-    │  │      content: [ ..., ToolCall { name: "read", ... } ],│
-    │  │      stopReason: "toolUse"  ← 有工具调用，继续转      │
-    │  │  }                                                  │
-    │  │  ⑤ 执行 Tool（工具的五步管道，详见第5章）              │
-    │  │  ToolResultMessage { content: [{ text: "文件内容" }] }│
-    │  │  turn_end                                            │
-    │  └─────────────────────────────────────────────────────┘
-    │
-    │  循环判断：stopReason 是 toolUse → hasMoreToolCalls = true → 继续
-    │
-    │  ┌── Turn 2 ──────────────────────────────────────────┐
-    │  │  turn_start                                         │
-    │  │  ⑥ 第二次调用 Model（工具结果已追加到消息列表）         │
-    │  │  streamSimple(model, { messages: [..., toolResult] })│
-    │  │       ↓ 模型看到文件内容，开始解释                      │
-    │  │  AssistantMessage {                                  │
-    │  │      content: [ TextContent { text: "这个文件..." } ],│
-    │  │      stopReason: "stop"  ← 没有工具调用，准备停        │
-    │  │  }                                                  │
-    │  │  turn_end                                            │
-    │  └─────────────────────────────────────────────────────┘
-    │
-    │  循环判断：hasMoreToolCalls = false，pendingMessages 为空
-    │  → 内层循环退出
-    │  → 外层循环检查 followUp → 空 → 外层循环退出
-    │
-    └── agent_end（一个 Trace 结束，共 2 个 Turn）
+ │
+ │ ③ message conversion(AgentMessage → LLM acquaintance Message)
+ │
+ │ ┌── Turn 1 ──────────────────────────────────────────┐
+ │ │ turn_start │
+ │ │ ④ call Model(every Turn Only one model call) │
+ │ │ streamSimple(model, { systemPrompt, messages }) │
+ │ │ ↓ chase token Streaming return │
+ │ │ AssistantMessage { │
+ │ │ content: [ ..., ToolCall { name: "read", ... } ],│
+ │ │ stopReason: "toolUse" ← There is a tool call, Continue to transfer │
+ │ │ } │
+ │ │ ⑤ execute Tool(The five-step pipeline of tools, For details, see Chapter5chapter) │
+ │ │ ToolResultMessage { content: [{ text: "File content" }] }│
+ │ │ turn_end │
+ │ └─────────────────────────────────────────────────────┘
+ │
+ │ Circular judgment: stopReason Yes toolUse → hasMoreToolCalls = true → continue
+ │
+ │ ┌── Turn 2 ──────────────────────────────────────────┐
+ │ │ turn_start │
+ │ │ ⑥ second call Model(Tool results appended to message list) │
+ │ │ streamSimple(model, { messages: [..., toolResult] })│
+ │ │ ↓ The model sees the file contents, start explaining │
+ │ │ AssistantMessage { │
+ │ │ content: [ TextContent { text: "this file..." } ],│
+ │ │ stopReason: "stop" ← No tool calls, Prepare to stop │
+ │ │ } │
+ │ │ turn_end │
+ │ └─────────────────────────────────────────────────────┘
+ │
+ │ Circular judgment: hasMoreToolCalls = false, pendingMessages is empty
+ │ → inner loop exit
+ │ → Outer loop check followUp → empty → Outer loop exits
+ │
+ └── agent_end(one Trace end, total 2 a Turn)
 ```
 
 ### How the loop spins: stopReason: the only signal
@@ -265,12 +265,12 @@ The loop only looks at one thing: whether the model's output contains tool calls
 This is not the model's intelligent decision. Put another way: it is not the model saying I am done, it is us saying you did not ask for a tool, so we treat you as done.
 
 ```
-// 简化逻辑（实际见 agent-loop.ts:202-216）
+// Simplify the logic(See in practice agent-loop.ts:202-216)
 const toolCalls = message.content.filter(c => c.type === "toolCall");
 hasMoreToolCalls = false;
 if (toolCalls.length > 0) {
-  const executedToolBatch = await executeToolCalls(...);
-  hasMoreToolCalls = !executedToolBatch.terminate;  // 任何一个工具 terminate 则停止
+ const executedToolBatch = await executeToolCalls(...);
+ hasMoreToolCalls = !executedToolBatch.terminate; // any tool terminate then stop
 }
 ```
 
@@ -286,21 +286,21 @@ The inner loop's condition is while (hasMoreToolCalls || pendingMessages.length 
 - stopReason === error or aborted → hard stop: immediately exit the entire loop, do not check followUp
 
 ```
-         ┌──────────────────────────────────┐
-         │                                  │
-         ▼                                  │
-    ┌─────────┐  toolUse   ┌──────────┐    │
-    │ 调模型   │ ─────────→ │ 执行工具  │    │
-    └─────────┘            └──────────┘    │
-         │                      │          │
-         │ stop / length        │ 结果追加  │
-         │                      ▼ 到消息    │
-         ▼                 重新调模型 ──────┘
-    ┌─────────┐
-    │ 准备停   │   ← 不是模型决定的，是我们的规则
-    └─────────┘
+ ┌──────────────────────────────────┐
+ │ │
+ ▼ │
+ ┌─────────┐ toolUse ┌──────────┐ │
+ │ call the model │ ─────────→ │ Execution tool │ │
+ └─────────┘ └──────────┘ │
+ │ │ │
+ │ stop / length │ Append result │
+ │ ▼ to the news │
+ ▼ Retune the model ──────┘
+ ┌─────────┐
+ │ Prepare to stop │ ← It’s not determined by the model, is our rule
+ └─────────┘
 
-    error / aborted → 直接跳出整个循环（硬停止）
+ error / aborted → Jump out of the entire loop directly(hard stop)
 ```
 
 ### Minimal Loop: lowest common denominator of all Agents
@@ -328,24 +328,24 @@ Section 3 gave you the conceptual panorama: how messages flow, how stopReason dr
 Before looking at Pi's source, let us make one thing clear: the simplest Agent Loop is extremely short.
 
 ```
-// 最简 Agent Loop（伪代码）
+// The simplest Agent Loop(pseudocode)
 async function simpleLoop(messages, model, tools) {
-    while (true) {
-        // ① 调模型
-        const response = await callModel(model, messages, tools);
-        messages.push(response);
+ while (true) {
+ // ① call the model
+ const response = await callModel(model, messages, tools);
+ messages.push(response);
 
-        // ② 没有工具调用 → 结束
-        if (response.stopReason !== "toolUse") {
-            return messages;
-        }
+ // ② No tool calls → end
+ if (response.stopReason !== "toolUse") {
+ return messages;
+ }
 
-        // ③ 有工具调用 → 执行，把结果喂回去
-        for (const toolCall of response.toolCalls) {
-            const result = await executeTool(toolCall);
-            messages.push(result);
-        }
-    }
+ // ③ There is a tool call → execute, Feed the results back
+ for (const toolCall of response.toolCalls) {
+ const result = await executeTool(toolCall);
+ messages.push(result);
+ }
+ }
 }
 ```
 
@@ -377,12 +377,12 @@ After you press Enter, the call chain is: Agent.prompt(), runPromptMessages(), r
 ```
 // agent-loop.ts:95-118
 async function runAgentLoop(
-    prompts: AgentMessage[],     // 你的消息
-    context: AgentContext,       // 当前对话上下文（快照副本）
-    config: AgentLoopConfig,     // 循环配置（模型、钩子、队列回调）
-    emit: AgentEventSink,        // 事件发射器
-    signal?: AbortSignal,        // 中止信号
-    streamFn?: StreamFn,         // 流式函数（可替换）
+ prompts: AgentMessage[], // your message
+ context: AgentContext, // current conversation context(snapshot copy)
+ config: AgentLoopConfig, // Loop configuration(model, hook, Queue callback)
+ emit: AgentEventSink, // event emitter
+ signal?: AbortSignal, // abort signal
+ streamFn?: StreamFn, // Streaming function(Replaceable)
 ): Promise<AgentMessage[]>
 ```
 
@@ -394,9 +394,9 @@ prompts: your messages have already been wrapped into standard format:
 
 ```
 [{
-  role: "user",
-  content: [{ type: "text", text: "帮我读一下 src/main.ts" }],
-  timestamp: 1748000000000
+ role: "user",
+ content: [{ type: "text", text: "read it for me src/main.ts" }],
+ timestamp: 1748000000000
 }]
 ```
 
@@ -406,12 +406,12 @@ context: a snapshot of the conversation context. Note that it is a copy (created
 
 ```
 {
-  systemPrompt: "You are a helpful coding assistant...",
-  messages: [ /* 之前的对话历史 */ ],
-  tools: [
-    { name: "read", description: "...", parameters: Type.Object({...}), execute: ... },
-    { name: "bash", description: "...", parameters: Type.Object({...}), execute: ... },
-  ]
+ systemPrompt: "You are a helpful coding assistant...",
+ messages: [ /* Previous conversation history */ ],
+ tools: [
+ { name: "read", description: "...", parameters: Type.Object({...}), execute: ... },
+ { name: "bash", description: "...", parameters: Type.Object({...}), execute: ... },
+ ]
 }
 ```
 
@@ -421,15 +421,15 @@ config: the Loop's behavior configuration. This contains a set of key hooks (all
 
 ```
 {
-  model: Model,                    // 用哪个 LLM
-  convertToLlm: Function,          // AgentMessage[] → Message[] 转换
-  transformContext?: Function,      // 调 LLM 前的上下文预处理（如压缩）
-  getSteeringMessages?: Function,   // 获取"紧急插队"消息
-  getFollowUpMessages?: Function,   // 获取"追加任务"消息
-  shouldStopAfterTurn?: Function,   // 每轮结束后是否该停
-  beforeToolCall?: Function,        // 工具执行前钩子
-  afterToolCall?: Function,         // 工具执行后钩子
-  toolExecution: "parallel",        // 工具执行模式
+ model: Model, // Which to use LLM
+ convertToLlm: Function, // AgentMessage[] → Message[] Convert
+ transformContext?: Function, // tune LLM Context preprocessing before(such as compression)
+ getSteeringMessages?: Function, // get"Emergency queue cutting"news
+ getFollowUpMessages?: Function, // get"Additional tasks"news
+ shouldStopAfterTurn?: Function, // Should we stop after each round?
+ beforeToolCall?: Function, // Tool pre-execution hook
+ afterToolCall?: Function, // Tool post-execution hook
+ toolExecution: "parallel", // Tool execution mode
 }
 ```
 
@@ -439,17 +439,17 @@ These hooks are all functions rather than data: the Loop calls them at runtime t
 The entry function only does three prep steps:
 
 ```
-Step 1: 创建 newMessages 数组
-        → 收集本轮 Trace 产生的所有新消息
+Step 1: create newMessages array
+ → Collect this round Trace All new messages generated
 
-Step 2: 把 prompts 追加到 context.messages
-        → context.messages = [...context.messages, ...prompts]
+Step 2: put prompts append to context.messages
+ → context.messages = [...context.messages, ...prompts]
 
-Step 3: 发初始事件
-        → emit("agent_start")    ← Trace 开始
-        → emit("turn_start")     ← 首轮 Turn 开始（入口就发，后续 Turn 在内层循环里发）
-        → 对每条 prompt：emit("message_start") + emit("message_end")
-        → 调用 runLoop()
+Step 3: initial event
+ → emit("agent_start") ← Trace start
+ → emit("turn_start") ← first round Turn start(Delivered at the entrance, Follow-up Turn Send in inner loop)
+ → for each prompt: emit("message_start") + emit("message_end")
+ → call runLoop()
 ```
 
 
@@ -457,13 +457,13 @@ Data change:
 
 
 ```
-入口前：
-  context.messages = [user1, asst1, toolResult1]    ← 之前的对话
-  newMessages = []
+In front of the entrance: 
+ context.messages = [user1, asst1, toolResult1] ← previous conversation
+ newMessages = []
 
-入口后：
-  context.messages = [user1, asst1, toolResult1, user2]  ← 你的消息被追加
-  newMessages = [user2]                                   ← 收集器开始记录
+After the entrance: 
+ context.messages = [user1, asst1, toolResult1, user2] ← Your message is appended
+ newMessages = [user2] ← The collector starts recording
 ```
 
 ### 4.2 Skeleton of runLoop(): core first, then layering
@@ -480,14 +480,14 @@ Now we enter runLoop(): the most core code in the whole system. Don't be intimid
 If we only keep the minimal Loop logic, runLoop looks like this:
 
 ```
-// 只保留内核的 runLoop（伪代码）
+// Only keep the kernel runLoop(pseudocode)
 while (hasMoreToolCalls) {
-    // 步骤 B：调 LLM
-    // 步骤 C：检查 stopReason → error/aborted 就退出
-    // 步骤 D：执行工具
-    // 步骤 E：emit turn_end
+ // steps B: tune LLM
+ // steps C: Check stopReason → error/aborted Just quit
+ // steps D: Execution tool
+ // steps E: emit turn_end
 }
-// 结束 → emit agent_end
+// end → emit agent_end
 ```
 
 #### Layering: coding-agent adds two outer shells
@@ -507,42 +507,42 @@ Combining the core and the two layers is the full runLoop skeleton:
 ```
 async function runLoop(currentContext, newMessages, config, signal, emit, streamFn) {
 
-    // ① 首次 steering 检查（在进入内层循环之前！）
-    let pendingMessages = (await config.getSteeringMessages?.()) || [];
+ // ① first time steering Check(before entering the inner loop！)
+ let pendingMessages = (await config.getSteeringMessages?.()) || [];
 
-    // ========== 叠加2：外层循环（followUp 续命）==========
-    while (true) {
-        let hasMoreToolCalls = true;
-        let firstTurn = true;  // 首轮跳过 turn_start（入口已发）
+ // ========== Overlay2: Outer loop(followUp Extend life)==========
+ while (true) {
+ let hasMoreToolCalls = true;
+ let firstTurn = true; // Skip first round turn_start(The entrance has been sent)
 
-        // ========== 内核 + 叠加1：内层循环 ==========
-        while (hasMoreToolCalls || pendingMessages.length > 0) {
-            //                                    ↑ 叠加1：steering 消息也驱动循环
+ // ========== Kernel + Overlay1: inner loop ==========
+ while (hasMoreToolCalls || pendingMessages.length > 0) {
+ // ↑ Overlay1: steering Messages also drive loops
 
-            if (!firstTurn) {
-                emit({ type: "turn_start" });
-            }
-            firstTurn = false;
+ if (!firstTurn) {
+ emit({ type: "turn_start" });
+ }
+ firstTurn = false;
 
-            // 步骤 A：注入 pendingMessages（steering 消息）← 叠加1
-            // 步骤 B：调 LLM → streamAssistantResponse()  ← 内核
-            // 步骤 C：检查 stopReason                      ← 内核
-            // 步骤 D：执行工具                              ← 内核
-            // 步骤 E：emit turn_end                         ← 内核
-            // 步骤 F：prepareNextTurn → shouldStopAfterTurn ← 叠加（钩子）
-            //         → 再次检查 steering                    ← 叠加1
-        }
+ // steps A: Inject pendingMessages(steering news)← Overlay1
+ // steps B: tune LLM → streamAssistantResponse() ← Kernel
+ // steps C: Check stopReason ← Kernel
+ // steps D: Execution tool ← Kernel
+ // steps E: emit turn_end ← Kernel
+ // steps F: prepareNextTurn → shouldStopAfterTurn ← Overlay(hook)
+ // → Check again steering ← Overlay1
+ }
 
-        // ========== 内层循环结束 ==========
-        // 叠加2：检查 followUp 队列
-        const followUpMessages = (await config.getFollowUpMessages?.()) || [];
-        if (followUpMessages.length > 0) {
-            pendingMessages = followUpMessages;
-            continue;  // 回到外层循环顶部，内层循环重开
-        }
+ // ========== End of inner loop ==========
+ // Overlay2: Check followUp Queue
+ const followUpMessages = (await config.getFollowUpMessages?.()) || [];
+ if (followUpMessages.length > 0) {
+ pendingMessages = followUpMessages;
+ continue; // Return to the top of the outer loop, Inner loop reopens
+ }
 
-        break;  // 两个队列都空，真正退出
-    }
+ break; // Both queues are empty, Really quit
+ }
 }
 ```
 
@@ -560,13 +560,13 @@ Steering is this queue-jumping mechanism. New instructions typed by the user whi
 
 ```
 if (pendingMessages.length > 0) {
-    for (const message of pendingMessages) {
-        await emit({ type: "message_start", message });
-        await emit({ type: "message_end", message });
-        currentContext.messages.push(message);
-        newMessages.push(message);
-    }
-    pendingMessages = [];  // 消费完毕，清空
+ for (const message of pendingMessages) {
+ await emit({ type: "message_start", message });
+ await emit({ type: "message_end", message });
+ currentContext.messages.push(message);
+ newMessages.push(message);
+ }
+ pendingMessages = []; // Consumption completed, Clear
 }
 ```
 
@@ -582,7 +582,7 @@ The first source of pendingMessages is the first steering check executed when ru
 ```
 let messages = context.messages;
 if (config.transformContext) {
-    messages = await config.transformContext(messages, signal);
+ messages = await config.transformContext(messages, signal);
 }
 ```
 
@@ -605,11 +605,11 @@ convertToLlm is the translator standing on this boundary: it translates the Agen
 
 ```
 function defaultConvertToLlm(messages: AgentMessage[]): Message[] {
-    return messages.filter(
-        (message) => message.role === "user"
-                  || message.role === "assistant"
-                  || message.role === "toolResult",
-    );
+ return messages.filter(
+ (message) => message.role === "user"
+ || message.role === "assistant"
+ || message.role === "toolResult",
+);
 }
 ```
 
@@ -618,19 +618,19 @@ Data transformation:
 
 
 ```
-转换前（AgentMessage[]）：
+Before conversion(AgentMessage[]): 
 [
-  { role: "user", content: "帮我读一下 src/main.ts", ... },    ← 保留
-  { role: "assistant", content: [...], ... },                   ← 保留
-  { role: "compactionSummary", summary: "之前的对话摘要..." },   ← 过滤掉
-  { role: "toolResult", content: [...], ... },                  ← 保留
+ { role: "user", content: "read it for me src/main.ts", ... }, ← Reserve
+ { role: "assistant", content: [...], ... }, ← Reserve
+ { role: "compactionSummary", summary: "Summary of previous conversation..." }, ← filter out
+ { role: "toolResult", content: [...], ... }, ← Reserve
 ]
 
-转换后（Message[]）：
+After conversion(Message[]): 
 [
-  { role: "user", content: "帮我读一下 src/main.ts", ... },
-  { role: "assistant", content: [...], ... },
-  { role: "toolResult", content: [...], ... },
+ { role: "user", content: "read it for me src/main.ts", ... },
+ { role: "assistant", content: [...], ... },
+ { role: "toolResult", content: [...], ... },
 ]
 ```
 
@@ -643,20 +643,20 @@ Data transformation:
 
 ```
 const llmContext: Context = {
-    systemPrompt: context.systemPrompt,
-    messages: llmMessages,
-    tools: context.tools,
+ systemPrompt: context.systemPrompt,
+ messages: llmMessages,
+ tools: context.tools,
 };
 
 const streamFunction = streamFn || streamSimple;
 const resolvedApiKey =
-    (config.getApiKey ? await config.getApiKey(config.model.provider): undefined)
-    || config.apiKey;
+ (config.getApiKey ? await config.getApiKey(config.model.provider): undefined)
+ || config.apiKey;
 
 const response = await streamFunction(config.model, llmContext, {
-    ...config,
-    apiKey: resolvedApiKey,
-    signal,
+ ...config,
+ apiKey: resolvedApiKey,
+ signal,
 });
 ```
 
@@ -682,9 +682,9 @@ Does this break the prompt cache? No. Anthropic's prompt cache is content-addres
 The third is particularly clever: the cache breakpoint is not fixed at the first message; it rides along with the latest user message. That way, the old prefix keeps hitting, the newly appended content gets written in, and the entire conversation history enjoys the cache benefit. The hit chain roughly is:
 
 ```
-Turn 1: 写入 [system + tools] → 写入 [messages §1]
-Turn 2: 命中 [system + tools] → 命中 [messages §1] → 写入 [messages §2]
-Turn 3: 命中 [system + tools] → 命中 [messages §1+§2] → 写入 [messages §3]
+Turn 1: write [system + tools] → write [messages §1]
+Turn 2: hit [system + tools] → hit [messages §1] → write [messages §2]
+Turn 3: hit [system + tools] → hit [messages §1+§2] → write [messages §3]
 ```
 
 #### Phase D: stream the response: the cleverness of in-place replacement
@@ -697,29 +697,29 @@ OpenAI takes a different route (openai-completions.ts:554): prompt_cache_key: se
 
 ```
 for await (const event of response) {
-    switch (event.type) {
-        case "start":
-            // 拿到一个"空壳"消息，直接 push 到 context
-            partialMessage = event.partial;
-            context.messages.push(partialMessage);
-            emit({ type: "message_start", ... });
-            break;
+ switch (event.type) {
+ case "start":
+ // get one"empty shell"news, direct push Arrive context
+ partialMessage = event.partial;
+ context.messages.push(partialMessage);
+ emit({ type: "message_start", ... });
+ break;
 
-        case "text_delta": // 文本增量
-        case "toolcall_delta": // 工具调用增量
-        case "thinking_delta": // 思考增量
-            partialMessage = event.partial;            // 更新后的部分消息
-            context.messages[last] = partialMessage;    // ★ 原地替换！
-            emit({ type: "message_update", ... });      // UI 收到增量更新
-            break;
+ case "text_delta": // text increment
+ case "toolcall_delta": // Tool call increment
+ case "thinking_delta": // Think incrementally
+ partialMessage = event.partial; // Some updated news
+ context.messages[last] = partialMessage; // ★ Replace in place！
+ emit({ type: "message_update", ... }); // UI Receive incremental updates
+ break;
 
-        case "done":
-        case "error":
-            finalMessage = await response.result();
-            context.messages[last] = finalMessage;       // ★ 用最终完整消息替换
-            emit({ type: "message_end", ... });
-            return finalMessage;
-    }
+ case "done":
+ case "error":
+ finalMessage = await response.result();
+ context.messages[last] = finalMessage; // ★ Replace with final complete message
+ emit({ type: "message_end", ... });
+ return finalMessage;
+ }
 }
 ```
 
@@ -727,11 +727,11 @@ for await (const event of response) {
 Why push an empty shell first and then replace in-place? Note what in-place replacement means: it is not pushing new items into the context.messages array; it is modifying the last message's content blocks in place. The streaming response chunks come in one by one; we do not have the full message yet. We first push an empty AssistantMessage so the message collector already has a slot for the final result. Then each streaming chunk mutates this message in place: as long as the collector iterates over messages after the response completes, it sees the completed message.
 
 ```
-start    → { role: "assistant", content: [] }                    ← 空壳 push
-text_delta → { content: [{ type:"text", text:"好的..." }] }       ← 文字在长
-toolcall   → { content: [{ text:"好的..." },                        ← 工具调用出现
-                         { type:"toolCall", name:"read", arguments:{file_path:"src/main.ts"} }] }
-done     → { content: [...], stopReason:"toolUse", usage:{...} } ← 最终完整消息替换
+start → { role: "assistant", content: [] } ← empty shell push
+text_delta → { content: [{ type:"text", text:"OK..." }] } ← The text is growing
+toolcall → { content: [{ text:"OK..." }, ← Tool call appears
+ { type:"toolCall", name:"read", arguments:{file_path:"src/main.ts"} }] }
+done → { content: [...], stopReason:"toolUse", usage:{...} } ← Final complete message replacement
 ```
 
 ### 4.5 [Core · Step C] check stopReason
@@ -745,9 +745,9 @@ Section 3 covered stopReason in detail. Here we look at the actual code:
 ```
 // agent-loop.ts:196-200
 if (message.stopReason === "error" || message.stopReason === "aborted") {
-    await emit({ type: "turn_end", message, toolResults: [] });
-    await emit({ type: "agent_end", messages: newMessages });
-    return;   // ← 直接退出整个 runLoop，不检查 followUp
+ await emit({ type: "turn_end", message, toolResults: [] });
+ await emit({ type: "agent_end", messages: newMessages });
+ return; // ← Exit the entire runLoop, Don't check followUp
 }
 ```
 
@@ -766,63 +766,63 @@ Then decide whether this batch of tools runs in parallel or serial:
 
 ```
 if (config.toolExecution === "sequential" || hasSequentialToolCall) {
-    return executeToolCallsSequential(...);   // 串行
+ return executeToolCallsSequential(...); // serial
 }
-return executeToolCallsParallel(...);         // 并行
+return executeToolCallsParallel(...); // Parallel
 ```
 
 
 Veto strategy: as long as any one tool in this batch declares executionMode: sequential, the entire batch must run serially. This is a conservative choice: when a tool needs to operate on the result of the previous tool, it has no choice but to run in order.
 
 ```
-串行模式：
-  ToolCall A: 准备 → 验证 → beforeHook → 执行 → afterHook → emit end
-  ToolCall B: 准备 → 验证 → beforeHook → 执行 → afterHook → emit end
-  （一个完全结束，才开始下一个）
+serial mode: 
+ ToolCall A: Prepare → Verify → beforeHook → execute → afterHook → emit end
+ ToolCall B: Prepare → Verify → beforeHook → execute → afterHook → emit end
+ (a complete end, Just started the next one)
 
-并行模式（三阶段设计）：
-  阶段1 - 准备（顺序）：  A 准备 → B 准备 → C 准备
-      ↑ prepareToolCall 含验证和 beforeHook，必须顺序执行
-  阶段2 - 执行（并行）：  A、B、C 同时执行（Promise.all）
-      ↑ 只有 tool.execute 并行，省时间
-  阶段3 - 事件（有序）：  end 按完成顺序发；result 按调用顺序发
-      ↑ result 消息保持和 ToolCall 一致的顺序，LLM 收到的上下文才是正确的
+parallel mode(three-stage design): 
+ stage1 - Prepare(order): A Prepare → B Prepare → C Prepare
+ ↑ prepareToolCall Contains verification and beforeHook, Must be executed sequentially
+ stage2 - execute(Parallel): A, B, C execute simultaneously(Promise.all)
+ ↑ only tool.execute Parallel, save time
+ stage3 - event(orderly): end Send in order of completion; result Send in order of calling
+ ↑ result message keep and ToolCall consistent order, LLM The context received is correct
 ```
 
 
 Note the subtlety of parallel mode: the prepare phase is always sequential (because validation and permission checks cannot be parallel: if B is blocked, C should not execute). Only after all tools have been validated can they execute in parallel.
 
 ```
-工具执行后：
-  context.messages = [..., user2, assistantMessage, {
-    role: "toolResult", toolCallId: "toolu_01", toolName: "read",
-    content: [{ text: "文件内容..." }], isError: false
-  }]
+After tool execution: 
+ context.messages = [..., user2, assistantMessage, {
+ role: "toolResult", toolCallId: "toolu_01", toolName: "read",
+ content: [{ text: "File content..." }], isError: false
+ }]
 ```
 
 
 terminate mechanism: a tool can set terminate: true in its return result, meaning I think we should stop. If all tools in a batch agree to terminate (the code uses every, not some), the loop stops.
 
 ```
-// ① emit turn_end: 通知外部"这一轮结束了"（内核）
+// ① emit turn_end: Notify external"This round is over"(Kernel)
 await emit({ type: "turn_end", message, toolResults });
 
-// ② prepareNextTurn: 给外部一个机会"改装"下一轮（叠加）
-// 返回值可包含 context / model / thinkingLevel 三者之一的覆盖
+// ② prepareNextTurn: Give the outside world a chance"Modification"next round(Overlay)
+// The return value can contain context / model / thinkingLevel Coverage of one of the three
 const nextTurnSnapshot = await config.prepareNextTurn?.({...});
 if (nextTurnSnapshot) {
-    currentContext = nextTurnSnapshot.context ?? currentContext;
-    config.model = nextTurnSnapshot.model ?? config.model;
-    // thinkingLevel 也在此处覆盖（详见 agent-loop.ts 中 prepareNextTurn 处理逻辑）
+ currentContext = nextTurnSnapshot.context ? currentContext;
+ config.model = nextTurnSnapshot.model ? config.model;
+ // thinkingLevel Also covered here(See details agent-loop.ts in prepareNextTurn processing logic)
 }
 
-// ③ shouldStopAfterTurn: 外部判断是否该停了（叠加）
+// ③ shouldStopAfterTurn: External judgment as to whether it is time to stop(Overlay)
 if (await config.shouldStopAfterTurn?.({...})) {
-    await emit({ type: "agent_end", messages: newMessages });
-    return;
+ await emit({ type: "agent_end", messages: newMessages });
+ return;
 }
 
-// ④ 再次检查 steering: 有没有新的紧急消息？（叠加1）
+// ④ Check again steering: Is there any new emergency news?？(Overlay1)
 pendingMessages = (await config.getSteeringMessages?.()) || [];
 ```
 
@@ -832,17 +832,17 @@ pendingMessages = (await config.getSteeringMessages?.()) || [];
 prepareNextTurn: this is an easy-to-miss but powerful extension point. After each turn_end and before the next iteration, the Loop calls this function to give the outside a chance to switch the model or modify the context:
 
 ```
-场景：按任务复杂度切换模型
+scene: Switch models based on task complexity
 
-Turn 1: 用户问了一个简单问题 → 模型用 Haiku（快、便宜）
-        turn_end → prepareNextTurn 检查到问题很简单
-        → 返回 { model: haiku } → 下一轮继续用 Haiku
+Turn 1: User asked a simple question → For models Haiku(Fast, cheap)
+ turn_end → prepareNextTurn Detecting the problem is easy
+ → Return { model: haiku } → Continue using it next round Haiku
 
-场景：中途发现任务变复杂了
+scene: Halfway through, I discovered that the task had become more complicated.
 
-Turn 1: 用户让"重构这个模块" → Haiku 开始读文件
-        turn_end → prepareNextTurn 发现要改的文件很多
-        → 返回 { model: opus } → 下一轮自动切到 Opus（强、贵）
+Turn 1: User lets"Refactor this module" → Haiku Start reading file
+ turn_end → prepareNextTurn Found that there are many files to be changed
+ → Return { model: opus } → Automatically cut to the next round Opus(Strong, Expensive)
 ```
 
 ### 4.8 Back to top of the loop
@@ -863,10 +863,10 @@ Either condition being true continues the loop. hasMoreToolCalls is determined b
 ```
 const followUpMessages = (await config.getFollowUpMessages?.()) || [];
 if (followUpMessages.length > 0) {
-    pendingMessages = followUpMessages;   // 塞进 pending，触发新 Turn
-    continue;                              // 回到外层循环顶部
+ pendingMessages = followUpMessages; // stuffed pending, trigger new Turn
+ continue; // Return to the top of the outer loop
 }
-break;  // 两个队列都空了，真正退出
+break; // Both queues are empty, Really quit
 ```
 
 ### 4.10 steering vs followUp: a table to see both interventions

@@ -44,9 +44,9 @@ Gắn một translator vào một provider id. Translator được gọi cho m�
 
 ```ts
 function streamSimple(
-  model: ModelDescriptor,
-  context: Context,
-  options?: StreamOptions
+ model: ModelDescriptor,
+ context: Context,
+ options?: StreamOptions
 ): AsyncIterable<StreamEvent>;
 ```
 
@@ -56,20 +56,20 @@ Mở một streaming request và trả về async iterable gồm các event có 
 
 ```ts
 interface ModelDescriptor {
-  id: string;
-  provider: string;
-  displayName: string;
-  contextWindow: number;
-  maxOutputTokens: number;
-  pricing: { input: number; output: number };
-  capabilities: {
-    toolUse: boolean;
-    images: boolean;
-    streaming: boolean;
-    thinking: boolean;
-  };
-  baseUrl: string;
-  apiKeyEnvVar: string;
+ id: string;
+ provider: string;
+ displayName: string;
+ contextWindow: number;
+ maxOutputTokens: number;
+ pricing: { input: number; output: number };
+ capabilities: {
+ toolUse: boolean;
+ images: boolean;
+ streaming: boolean;
+ thinking: boolean;
+ };
+ baseUrl: string;
+ apiKeyEnvVar: string;
 }
 ```
 
@@ -77,17 +77,17 @@ interface ModelDescriptor {
 
 ```ts
 interface Translator {
-  request(
-    model: ModelDescriptor,
-    context: Context,
-    options?: StreamOptions
-  ): Promise<HttpRequest>;
+ request(
+ model: ModelDescriptor,
+ context: Context,
+ options?: StreamOptions
+): Promise<HttpRequest>;
 
-  response(
-    model: ModelDescriptor,
-    response: Response,
-    options?: StreamOptions
-  ): AsyncIterable<StreamEvent>;
+ response(
+ model: ModelDescriptor,
+ response: Response,
+ options?: StreamOptions
+): AsyncIterable<StreamEvent>;
 }
 ```
 
@@ -120,11 +120,11 @@ Chạy một agent turn. Loop phát ra cùng bộ từ vựng event như `stream
 
 ```ts
 interface AgentLoopOptions {
-  model: ModelDescriptor;
-  systemPrompt?: string;
-  messages: Message[];
-  tools?: Tool[];
-  session?: Session;
+ model: ModelDescriptor;
+ systemPrompt?: string;
+ messages: Message[];
+ tools?: Tool[];
+ session?: Session;
 }
 ```
 
@@ -132,11 +132,11 @@ interface AgentLoopOptions {
 
 ```ts
 interface Tool {
-  name: string;
-  description: string;
-  parameters: unknown; // JSON Schema hoặc TypeBox schema
-  handler: (args: unknown) => Promise<unknown>;
-  requiresPermission?: boolean;
+ name: string;
+ description: string;
+ parameters: unknown; // JSON Schema hoặc TypeBox schema
+ handler: (args: unknown) => Promise<unknown>;
+ requiresPermission?: boolean;
 }
 ```
 
@@ -144,17 +144,17 @@ interface Tool {
 
 ```ts
 class Session {
-  static load(opts: { root: string; id: string; pinModel?: boolean }): Promise<Session>;
-  static branch(opts: {
-    root: string;
-    parentId: string;
-    fromTurn: number;
-    newId?: string;
-  }): Promise<Session>;
+ static load(opts: { root: string; id: string; pinModel?: boolean }): Promise<Session>;
+ static branch(opts: {
+ root: string;
+ parentId: string;
+ fromTurn: number;
+ newId?: string;
+ }): Promise<Session>;
 
-  save(events: StreamEvent[]): Promise<void>;
-  readonly id: string;
-  readonly metadata: SessionMetadata;
+ save(events: StreamEvent[]): Promise<void>;
+ readonly id: string;
+ readonly metadata: SessionMetadata;
 }
 ```
 
@@ -182,14 +182,14 @@ function registerExtension(extension: Extension): void;
 
 ```ts
 interface Extension {
-  name: string;
-  systemPrompt?: (ctx: { cwd: string; model: ModelDescriptor }) => string | Promise<string>;
-  tools?: Tool[];
-  commands?: { name: string; description: string; handler: (args: string) => Promise<void> }[];
-  messageTransformers?: {
-    beforeModel?: (event: StreamEvent) => StreamEvent | null;
-    afterModel?: (event: StreamEvent) => StreamEvent | null;
-  };
+ name: string;
+ systemPrompt?: (ctx: { cwd: string; model: ModelDescriptor }) => string | Promise<string>;
+ tools?: Tool[];
+ commands?: { name: string; description: string; handler: (args: string) => Promise<void> }[];
+ messageTransformers?: {
+ beforeModel?: (event: StreamEvent) => StreamEvent | null;
+ afterModel?: (event: StreamEvent) => StreamEvent | null;
+ };
 }
 ```
 

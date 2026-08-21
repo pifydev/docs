@@ -103,39 +103,39 @@ Tách ra từng phần:
 
 ```
 ┌──────────────────────────────────────────┐
-│          pi-coding-agent                 │  ← Sản phẩm CLI đầy đủ + SDK
-│  System prompt · Tool tích hợp sẵn · Quản lý session · Extensions  │
+│ pi-coding-agent │ ← Sản phẩm CLI đầy đủ + SDK
+│ System prompt · Tool tích hợp sẵn · Quản lý session · Extensions │
 ├──────────────────────────────────────────┤
-│  pi-tui              │  pi-agent-core    │  ← Terminal UI + Agent engine
-│  Differential render  │  AgentLoop · Tool │
-│  · hệ component       │  system · events  │
+│ pi-tui │ pi-agent-core │ ← Terminal UI + Agent engine
+│ Differential render │ AgentLoop · Tool │
+│ · hệ component │ system · events │
 ├──────────────────────┴───────────────────┤
-│              pi-ai                       │  ← Lớp trừu tượng LLM đa nhà cung cấp
-│  Unified API · Context hand-off · Streaming · Theo dõi Token  │
+│ pi-ai │ ← Lớp trừu tượng LLM đa nhà cung cấp
+│ Unified API · Context hand-off · Streaming · Theo dõi Token │
 └──────────────────────────────────────────┘
 ```
 
 ```mermaid
 %% Pi-Agent four-package architecture
 graph TB
-    subgraph TOP["Top layer: full CLI product + SDK"]
-        PCA["pi-coding-agent<br/>system prompt · built-in tools · session mgmt · extensions"]
-    end
-    subgraph MID["Middle layer: Agent engine + orthogonal UI"]
-        PAC["pi-agent-core<br/>AgentLoop · tool system · events"]
-        TUI["pi-tui<br/>differential render · component system"]
-    end
-    BOT["pi-ai<br/>unified API · context hand-off · streaming · token tracking"]
-    PCA --> PAC
-    PCA --> BOT
-    PCA --> TUI
-    PAC --> BOT
-    classDef top fill:#fff4d6,stroke:#d4a017,color:#000
-    classDef mid fill:#e6f3ff,stroke:#1976d2,color:#000
-    classDef bot fill:#e8f5e9,stroke:#388e3c,color:#000
-    class PCA top
-    class PAC,TUI mid
-    class BOT bot
+ subgraph TOP["Top layer: full CLI product + SDK"]
+ PCA["pi-coding-agent<br/>system prompt · built-in tools · session mgmt · extensions"]
+ end
+ subgraph MID["Middle layer: Agent engine + orthogonal UI"]
+ PAC["pi-agent-core<br/>AgentLoop · tool system · events"]
+ TUI["pi-tui<br/>differential render · component system"]
+ end
+ BOT["pi-ai<br/>unified API · context hand-off · streaming · token tracking"]
+ PCA --> PAC
+ PCA --> BOT
+ PCA --> TUI
+ PAC --> BOT
+ classDef top fill:#fff4d6,stroke:#d4a017,color:#000
+ classDef mid fill:#e6f3ff,stroke:#1976d2,color:#000
+ classDef bot fill:#e8f5e9,stroke:#388e3c,color:#000
+ class PCA top
+ class PAC,TUI mid
+ class BOT bot
 ```
 
 Trong bốn lớp này, `pi-ai` / `pi-agent-core` / `pi-coding-agent` tạo thành một **stack ba lớp** (mỗi lớp dùng độc lập được), và `pi-tui` là một **thư viện UI trực giao (orthogonal)** tách rời hoàn toàn khỏi hệ thống Agent: bạn có thể chỉ dùng `pi-ai` để gọi model, hoặc dùng `pi-agent-core` để chạy một Agent Loop trong ứng dụng của riêng bạn mà không cần đụng vào CLI. Đây là giá trị cốt lõi của Pi với tư cách SDK; chúng tôi sẽ trình bày chi tiết trong mục 5.
@@ -254,31 +254,31 @@ Giải pháp của Pi là một file cấu hình JSON cục bộ: `~/.pi/agent/m
 
 ```
 {
-  "providers": {
-    "zhipu": {
-      "baseUrl": "https://open.bigmodel.cn/api/paas/v4",
-      "api": "openai-completions",
-      "apiKey": "<your-zhipu-key>",
-      "models": [
-        { "id": "glm-4.5-air", "name": "GLM-4-Air" },
-        { "id": "glm-4-flash", "name": "GLM-4-Flash" }
-      ]
-    },
-    "deepseek": {
-      "baseUrl": "https://api.deepseek.com",
-      "api": "openai-completions",
-      "apiKey": "<your-deepseek-key>",
-      "models": [
-        { "id": "deepseek-v4-flash", "name": "DeepSeek V4 Flash" },
-        {
-          "id": "deepseek-v4-pro",
-          "name": "DeepSeek V4 Pro",
-          "contextWindow": 1000000,
-          "maxTokens": 384000
-        }
-      ]
-    }
-  }
+ "providers": {
+ "zhipu": {
+ "baseUrl": "https://open.bigmodel.cn/api/paas/v4",
+ "api": "openai-completions",
+ "apiKey": "<your-zhipu-key>",
+ "models": [
+ { "id": "glm-4.5-air", "name": "GLM-4-Air" },
+ { "id": "glm-4-flash", "name": "GLM-4-Flash" }
+ ]
+ },
+ "deepseek": {
+ "baseUrl": "https://api.deepseek.com",
+ "api": "openai-completions",
+ "apiKey": "<your-deepseek-key>",
+ "models": [
+ { "id": "deepseek-v4-flash", "name": "DeepSeek V4 Flash" },
+ {
+ "id": "deepseek-v4-pro",
+ "name": "DeepSeek V4 Pro",
+ "contextWindow": 1000000,
+ "maxTokens": 384000
+ }
+ ]
+ }
+ }
 }
 ```
 
@@ -371,14 +371,14 @@ import type { Context } from "@earendil-works/pi-ai";
 const model = getModel("anthropic", "claude-sonnet-4-5");
 // Context là interface (không phải class), khởi tạo bằng object literal
 const context: Context = {
-  systemPrompt: "You are helpful.",
-  messages: [{ role: "user", content: "Hello!" }],
+ systemPrompt: "You are helpful.",
+ messages: [{ role: "user", content: "Hello!" }],
 };
 
 // stream() trả về event stream; complete() trực tiếp await để lấy AssistantMessage cuối cùng
 const eventStream = stream(model, context);
 for await (const event of eventStream) {
-  if (event.type === "text_delta") process.stdout.write(event.delta);
+ if (event.type === "text_delta") process.stdout.write(event.delta);
 }
 ```
 
@@ -395,7 +395,7 @@ import { Agent } from "@earendil-works/pi-agent-core";
 // import { defineTool } from "@earendil-works/pi-coding-agent";
 
 const agent = new Agent({
-  /* AgentOptions: hooks, streamFn, convertToLlm, v.v. */
+ /* AgentOptions: hooks, streamFn, convertToLlm, v.v. */
 });
 
 // Entry thực sự là agent.prompt(), bên trong gọi private runWithLifecycle()
@@ -413,15 +413,15 @@ import { createAgentSession } from "@earendil-works/pi-coding-agent";
 import { getModel } from "@earendil-works/pi-ai/compat";
 
 const session = await createAgentSession({
-  cwd: "/path/to/project",
-  model: getModel("anthropic", "claude-sonnet-4-5"), // Model object, không phải {id, api}
+ cwd: "/path/to/project",
+ model: getModel("anthropic", "claude-sonnet-4-5"), // Model object, không phải {id, api}
 });
 
 // subscribe nhận một hàm listener; event được định kiểu bởi union AgentSessionEvent
 session.subscribe((event) => {
-  if (event.type === "turn_end") {
-    console.log("Agent đã hoàn thành một vòng suy nghĩ");
-  }
+ if (event.type === "turn_end") {
+ console.log("Agent đã hoàn thành một vòng suy nghĩ");
+ }
 });
 
 await session.prompt("Read the codebase and explain the architecture.");

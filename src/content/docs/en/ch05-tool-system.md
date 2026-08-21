@@ -55,9 +55,9 @@ Open `packages/ai/src/types.ts` and you will see the lowest-level tool definitio
 ```
 // packages/ai/src/types.ts:433-437
 export interface Tool<TParameters extends TSchema = TSchema> {
-    name: string;            // 工具名，如 "read"、"bash"
-    description: string;     // 给 LLM 看的工具描述
-    parameters: TParameters; // 参数的 JSON Schema（用 TypeBox 定义）
+ name: string; // Tool name, Such as "read", "bash"
+ description: string; // give LLM See tool description
+ parameters: TParameters; // parametric JSON Schema(use TypeBox definition)
 }
 ```
 
@@ -78,17 +78,17 @@ So the `pi-agent-core` layer extends `AgentTool` on top of `Tool`:
 ```
 // packages/agent/src/types.ts:371-394
 export interface AgentTool<TParameters, TDetails>
-    extends Tool<TParameters>          // 继承 Tool 的三个字段
+ extends Tool<TParameters> // inheritance Tool The three fields of
 {
-    label: string;                     // 给人看的标签（不同于给 LLM 的 description）
-    prepareArguments?: (args: unknown) => Static<TParameters>;  // 兼容性垫片
-    execute: (                         // 执行函数
-        toolCallId: string,
-        params: Static<TParameters>,
-        signal?: AbortSignal,
-        onUpdate?: AgentToolUpdateCallback<TDetails>,
-    ) => Promise<AgentToolResult<TDetails>>;
-    executionMode?: "sequential" | "parallel";  // 执行模式
+ label: string; // Tags for people to see(different from giving LLM of description)
+ prepareArguments?: (args: unknown) => Static<TParameters>; // Compatibility spacer
+ execute: (// Execute function
+ toolCallId: string,
+ params: Static<TParameters>,
+ signal?: AbortSignal,
+ onUpdate?: AgentToolUpdateCallback<TDetails>,
+) => Promise<AgentToolResult<TDetails>>;
+ executionMode?: "sequential" | "parallel"; // execution mode
 }
 ```
 
@@ -110,8 +110,8 @@ So a third layer `ToolDefinition` appears. Its `execute` function has one more p
 ```
 AgentTool.execute: (toolCallId, params, signal, onUpdate) => ...
 ToolDefinition.execute: (toolCallId, params, signal, onUpdate, ctx) => ...
-                                                                   ^^^
-                                                    多了 ExtensionContext（会话上下文）
+ ^^^
+ More ExtensionContext(session context)
 ```
 
 
@@ -129,17 +129,17 @@ Notice the last line. `AgentTool`'s `execute` has only 4 parameters, but `ToolDe
 ```
 // packages/coding-agent/src/core/tools/tool-definition-wrapper.ts
 export function wrapToolDefinition(definition, ctxFactory?) {
-    return {
-        name: definition.name,
-        label: definition.label,
-        description: definition.description,
-        parameters: definition.parameters,
-        prepareArguments: definition.prepareArguments,
-        executionMode: definition.executionMode,
-        // 关键：重写 execute，通过闭包注入 ExtensionContext
-        execute: (toolCallId, params, signal, onUpdate) =>
-            definition.execute(toolCallId, params, signal, onUpdate, ctxFactory?.()),
-    };
+ return {
+ name: definition.name,
+ label: definition.label,
+ description: definition.description,
+ parameters: definition.parameters,
+ prepareArguments: definition.prepareArguments,
+ executionMode: definition.executionMode,
+ // key: rewrite execute, Injection via closure ExtensionContext
+ execute: (toolCallId, params, signal, onUpdate) =>
+ definition.execute(toolCallId, params, signal, onUpdate, ctxFactory?.()),
+ };
 }
 ```
 
@@ -178,32 +178,32 @@ Each step has clear responsibility and exit mechanism. The first 3 steps are "pr
 
 
 ```
-LLM 输出 ToolCall
-    │
-    ▼
+LLM output ToolCall
+ │
+ ▼
 ┌──────────────────────────────────────────────────┐
-│ 第 1 步：prepareArguments（参数预处理）           │
-│   处理 LLM 的参数怪癖                            │
-│   如：把字符串化的数组解析回真正的数组             │
+│ No. 1 step: prepareArguments(Parameter preprocessing) │
+│ Process LLM The parameter quirks of │
+│ Such as: Parse stringified array back to real array │
 ├──────────────────────────────────────────────────┤
-│ 第 2 步：validateToolArguments（Schema 验证）     │
-│   用 TypeBox Schema 做运行时类型检查              │
-│   如：path 是 string，不是 number                │
+│ No. 2 step: validateToolArguments(Schema Verify) │
+│ use TypeBox Schema Do runtime type checking │
+│ Such as: path Yes string, No number │
 ├──────────────────────────────────────────────────┤
-│ 第 3 步：beforeToolCall（前置钩子）              │
-│   产品层的权限拦截，可以阻止执行                   │
-│   返回 { block: true, reason: "危险命令"}         │
+│ No. 3 step: beforeToolCall(Prehook) │
+│ Product layer permission interception, Can prevent execution │
+│ Return { block: true, reason: "Dangerous order"} │
 ├──────────────────────────────────────────────────┤
-│ 第 4 步：tool.execute（实际执行）                 │
-│   调用工具的 execute 函数                         │
-│   支持 onUpdate 流式进度回调                      │
+│ No. 4 step: tool.execute(actual execution) │
+│ calling tools execute function │
+│ support onUpdate Streaming progress callback │
 ├──────────────────────────────────────────────────┤
-│ 第 5 步：afterToolCall（后置钩子）               │
-│   产品层的结果后处理，可以修改返回值               │
-│   可以替换 content、details、isError              │
+│ No. 5 step: afterToolCall(rear hook) │
+│ Product layer result post-processing, The return value can be modified │
+│ can be replaced content, details, isError │
 └──────────────────────────────────────────────────┘
-    │
-    ▼
+ │
+ ▼
 ToolResultMessage
 ```
 
@@ -218,10 +218,10 @@ For example, the `Edit` tool expects `edits` to be an array. If the tool does no
 
 
 ```
-// 模型实际传来的（某些模型把 JSON 数组序列化成了字符串）
+// The model actually comes from(Some models JSON Array serialized into string)
 { edits: "[{\"oldText\":\"hello\",\"newText\":\"world\"}]" }
 
-// 经过 prepareArguments 处理后
+// passed prepareArguments After processing
 { edits: [{ oldText: "hello", newText: "world" }] }
 ```
 
@@ -249,8 +249,8 @@ After the first 3 steps pass, the tool's `execute` function is called. Let us lo
 
 
 ```
-Before：{ path: 12345 }
-After： 验证失败 → 报错 → 不执行工具
+Before: { path: 12345 }
+After: Authentication failed → Report an error → Don't execute tool
 ```
 
 
@@ -306,13 +306,13 @@ In the inner loop of Agent Loop, a single model reply may contain multiple ToolC
 
 ```
 {
-    role: "toolResult",
-    toolCallId: "call_abc123",      // 关联到原始 ToolCall
-    toolName: "read",
-    content: [{ type: "text", text: "1│ import { Agent }..." }],
-    details: { language: "typescript" },  // 给 UI 的元数据
-    isError: false,                  // 是否为错误结果
-    timestamp: 1700000000000,
+ role: "toolResult",
+ toolCallId: "call_abc123", // related to original ToolCall
+ toolName: "read",
+ content: [{ type: "text", text: "1│ import { Agent }..." }],
+ details: { language: "typescript" }, // give UI metadata
+ isError: false, // Is it an error result?
+ timestamp: 1700000000000,
 }
 ```
 
@@ -322,10 +322,10 @@ Three ToolCalls, all read-only operations. Intuition tells us we should run them
 
 ```
 assistantMessage.content = [
-    { type: "text", text: "我来查一下文件" },
-    { type: "toolCall", id: "call_1", name: "read", arguments: {path: "a.ts"} },
-    { type: "toolCall", id: "call_2", name: "grep", arguments: {pattern: "TODO"} },
-    { type: "toolCall", id: "call_3", name: "find", arguments: {pattern: "*.test.ts"} },
+ { type: "text", text: "Let me check the file" },
+ { type: "toolCall", id: "call_1", name: "read", arguments: {path: "a.ts"} },
+ { type: "toolCall", id: "call_2", name: "grep", arguments: {pattern: "TODO"} },
+ { type: "toolCall", id: "call_3", name: "find", arguments: {pattern: "*.test.ts"} },
 ]
 ```
 
@@ -346,8 +346,8 @@ Pi's strategy is simple: **as long as one tool is marked `sequential`, the entir
 ```
 ToolCall 1: edit { path: "app.ts", oldText: "v1", newText: "v2" }
 ToolCall 2: edit { path: "app.ts", oldText: "v3", newText: "v4" }
-                     ^^^^^^^^
-                     同一个文件！并行执行 → ToolCall 1 的修改被 ToolCall 2 覆盖
+ ^^^^^^^^
+ same file！Parallel execution → ToolCall 1 The modification was ToolCall 2 Cover
 ```
 
 
@@ -361,14 +361,14 @@ Why design it this way? Because **the prepare phase may have side effects** (`be
 
 
 ```
-// 检查是否有串行工具
+// Check if serial tools are available
 const hasSequentialToolCall = toolCalls.some(
-    (tc) => tools?.find((t) => t.name === tc.name)?.executionMode === "sequential",
+ (tc) => tools?.find((t) => t.name === tc.name)?.executionMode === "sequential",
 );
 
-// 有串行工具 → 整批串行；没有 → 并行
+// There are serial tools → whole batch serial; No → Parallel
 if (config.toolExecution === "sequential" || hasSequentialToolCall) {
-    return executeToolCallsSequential(...);
+ return executeToolCallsSequential(...);
 }
 return executeToolCallsParallel(...);
 ```
@@ -401,25 +401,25 @@ Notice the right column: **the final form of every error is `ToolResultMessage`*
 
 
 ```
-阶段 1 - 准备（顺序执行）：
-  ToolCall 1: emit_start → prepareArguments → validate → beforeToolCall
-  ToolCall 2: emit_start → prepareArguments → validate → beforeToolCall
-  ToolCall 3: emit_start → prepareArguments → validate → beforeToolCall
-  // 准备阶段必须顺序，因为 beforeToolCall 可能有副作用（如修改全局状态）
+stage 1 - Prepare(sequential execution): 
+ ToolCall 1: emit_start → prepareArguments → validate → beforeToolCall
+ ToolCall 2: emit_start → prepareArguments → validate → beforeToolCall
+ ToolCall 3: emit_start → prepareArguments → validate → beforeToolCall
+ // The preparation phase must be in sequence, because beforeToolCall may have side effects(Such as modifying the global status)
 
-阶段 2 - 执行（并行）：
-  ToolCall 1: execute ────────────────┐
-  ToolCall 2: execute ───────────────┤ Promise.all
-  ToolCall 3: execute ───────────────┘
-  // 只有 tool.execute() 并行
+stage 2 - execute(Parallel): 
+ ToolCall 1: execute ────────────────┐
+ ToolCall 2: execute ───────────────┤ Promise.all
+ ToolCall 3: execute ───────────────┘
+ // only tool.execute() Parallel
 
-阶段 3 - 事件发送（有序）：
-  ToolCall 2: emit_end    ← 先完成的先发 tool_execution_end
-  ToolCall 1: emit_end
-  ToolCall 3: emit_end
-  ToolCall 1: emit_result ← 但 ToolResultMessage 按调用顺序发
-  ToolCall 2: emit_result
-  ToolCall 3: emit_result
+stage 3 - Event sending(orderly): 
+ ToolCall 2: emit_end ← First to finish first tool_execution_end
+ ToolCall 1: emit_end
+ ToolCall 3: emit_end
+ ToolCall 1: emit_result ← But ToolResultMessage Send in order of calling
+ ToolCall 2: emit_result
+ ToolCall 3: emit_result
 ```
 
 
@@ -439,36 +439,36 @@ This code does three things, each corresponding to a key engineering decision:
 ```
 // packages/agent/src/agent-loop.ts:628-669
 async function executePreparedToolCall(prepared, signal, emit) {
-    const updateEvents: Promise<void>[] = [];
-    let acceptingUpdates = true;          // 工具 Promise settle 后关闭
+ const updateEvents: Promise<void>[] = [];
+ let acceptingUpdates = true; // Tools Promise settle Close after
 
-    try {
-        const result = await prepared.tool.execute(
-            prepared.toolCall.id,
-            prepared.args,
-            signal,
-            (partialResult) => {
-                if (!acceptingUpdates) return;     // settle 后的孤儿回调直接忽略
-                updateEvents.push(/* ... 发 tool_execution_update ... */);
-            },
-        );
-        acceptingUpdates = false;
-        await Promise.all(updateEvents);
-        return { result, isError: false };
+ try {
+ const result = await prepared.tool.execute(
+ prepared.toolCall.id,
+ prepared.args,
+ signal,
+ (partialResult) => {
+ if (!acceptingUpdates) return; // settle The orphan callback after
+ updateEvents.push(/* ... send tool_execution_update ... */);
+ },
+);
+ acceptingUpdates = false;
+ await Promise.all(updateEvents);
+ return { result, isError: false };
 
-    } catch (error) {
-        acceptingUpdates = false;
-        // 关键：先等所有进度事件发完，再把异常编码成消息
-        await Promise.all(updateEvents);
-        return {
-            result: createErrorToolResult(
-                error instanceof Error ? error.message: String(error)
-            ),
-            isError: true,
-        };
-    } finally {
-        acceptingUpdates = false;          // 兜底：无论如何都关闭闸门
-    }
+ } catch (error) {
+ acceptingUpdates = false;
+ // key: Wait for all progress events to be sent first, Then encode the exception into a message
+ await Promise.all(updateEvents);
+ return {
+ result: createErrorToolResult(
+ error instanceof Error ? error.message: String(error)
+),
+ isError: true,
+ };
+ } finally {
+ acceptingUpdates = false; // Keep everything in mind: Close the floodgates no matter what
+ }
 }
 ```
 
@@ -502,20 +502,20 @@ If the framework directly throws an exception to break the loop, it gives up all
 
 
 ```
-工具抛出的原始异常（catch 之前）：        编码后的 ToolResultMessage（catch 之后）：
-Error: ENOENT: no such file or dir       {
-  → 一路穿透管道                            role: "toolResult",
-  → 打断 Agent Loop                         toolCallId: "call_abc",
-  → 事件序列不完整，UI 卡死                  toolName: "read",
-                                            content: [{
-                                              type: "text",
-                                              text: "ENOENT: no such file or dir"
-                                            }],
-                                            isError: true   ← 唯一标记
-                                          }
-                                          → 追加到对话历史
-                                          → 下一轮发给模型
-                                          → 模型看到后自己决定怎么办
+The original exception thrown by the tool(catch before): encoded ToolResultMessage(catch after): 
+Error: ENOENT: no such file or dir {
+ → all the way through the pipe role: "toolResult",
+ → interrupt Agent Loop toolCallId: "call_abc",
+ → Incomplete sequence of events, UI stuck toolName: "read",
+ content: [{
+ type: "text",
+ text: "ENOENT: no such file or dir"
+ }],
+ isError: true ← unique tag
+ }
+ → Append to conversation history
+ → The model will be sent to the next round
+ → Decide what to do after seeing the model
 ```
 
 
@@ -539,13 +539,13 @@ Looking back at the source code to see how Pi's own tools do it, you will find t
 
 
 ```
-模糊错误（不可取）：                      具体 error.message（推荐）：
-{                                        {
-  content: [{ text: "Read failed" }]       content: [{
-  isError: true                              text: "Offset 200 is beyond end of file (100 lines total)"
-}                                          }]
-                                           isError: true
-                                         }
+Ambiguous error(Not advisable): specific error.message(Recommended): 
+{ {
+ content: [{ text: "Read failed" }] content: [{
+ isError: true text: "Offset 200 is beyond end of file (100 lines total)"
+} }]
+ isError: true
+ }
 ```
 
 
@@ -565,7 +565,7 @@ This is Pi's real design: **two-layer error handling, layered responsibility**.
 
 ```
 if (startLine >= allLines.length) {
-    throw new Error(`Offset ${offset} is beyond end of file (${allLines.length} lines total)`);
+ throw new Error(`Offset ${offset} is beyond end of file (${allLines.length} lines total)`);
 }
 ```
 
@@ -589,21 +589,21 @@ throw new Error(`Could not edit file: ${path}. ${errorMessage}.`);
 
 ```
 } catch (err) {
-    const snapshot = await finishOutput();              // 先把已经输出的内容固定下来
-    const { text } = formatOutput(snapshot, "");
-    if (err instanceof Error && err.message === "aborted") {
-        throw new Error(appendStatus(text, "Command aborted"));
-        //                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        //                  重新包装：附上"中止前的输出" + "中止状态"
-    }
-    if (err instanceof Error && err.message.startsWith("timeout:")) {
-        const timeoutSecs = err.message.split(":")[1];
-        throw new Error(appendStatus(text, `Command timed out after ${timeoutSecs} seconds`));
-    }
-    if (exitCode !== 0 && exitCode !== null) {
-        throw new Error(appendStatus(outputText, `Command exited with code ${exitCode}`));
-    }
-    throw err;    // ← 关键：识别不了的异常，原样抛出，交给框架兜底
+ const snapshot = await finishOutput(); // First fix the output content
+ const { text } = formatOutput(snapshot, "");
+ if (err instanceof Error && err.message === "aborted") {
+ throw new Error(appendStatus(text, "Command aborted"));
+ // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ // repackage: Attached"Output before abort" + "abort status"
+ }
+ if (err instanceof Error && err.message.startsWith("timeout:")) {
+ const timeoutSecs = err.message.split(":")[1];
+ throw new Error(appendStatus(text, `Command timed out after ${timeoutSecs} seconds`));
+ }
+ if (exitCode !== 0 && exitCode !== null) {
+ throw new Error(appendStatus(outputText, `Command exited with code ${exitCode}`));
+ }
+ throw err; // ← key: Unrecognized exception, Throw as is, Leave it to the framework
 }
 ```
 
@@ -614,14 +614,14 @@ This is Pi's real design: **two-layer error handling, layered responsibility**.
 
 
 ```
-第一层（工具内部，主动）：识别已知错误类型，包装成具体可读的描述
-└── Read/Edit/Bash 都是这样:Bash 甚至把"已输出的内容"附在错误里
-└── 目的：给模型提供"为什么失败、怎么改才对"的具体线索
+first floor(Inside the tool, Take the initiative): Identify known error types, Packed into a concrete readable description
+└── Read/Edit/Bash It's all like this:Bash even put"What has been output"Attached to error
+└── purpose: Provide the model with"why failed, How to change it?"specific clues
 
-第二层（框架兜底，被动）：executePreparedToolCall 的 catch
-└── 只在工具没识别出来时生效
-└── 不创造新的错误描述，只把 error.message 原样透传给模型
-└── 目的：保证任何异常都不会穿透到 Agent Loop
+second floor(Frame cover, Passive): executePreparedToolCall of catch
+└── Only takes effect when the tool is not recognized
+└── Do not create new error descriptions, Just put error.message Transparently passed to the model as is
+└── purpose: Ensure that any exceptions will not penetrate Agent Loop
 ```
 
 
@@ -632,12 +632,12 @@ The `createErrorToolResult` function body is only three lines (`agent-loop.ts:71
 
 ```
 } catch (error) {
-    return {
-        result: createErrorToolResult(error instanceof Error ? error.message: String(error)),
-        //                                                   ^^^^^^^^^^^^^^^^
-        //                              工具内部包装好的具体描述，框架不动它，只搬运
-        isError: true,
-    };
+ return {
+ result: createErrorToolResult(error instanceof Error ? error.message: String(error)),
+ // ^^^^^^^^^^^^^^^^
+ // Detailed description of the internal packaging of the tool, The frame doesn't move it, only transport
+ isError: true,
+ };
 }
 ```
 
@@ -656,20 +656,20 @@ Borrowing from the Bash tool's writing style, a custom tool's `execute` should l
 
 ```
 execute: async (id, params, signal, onUpdate) => {
-    try {
-        // ... 业务逻辑
-        return { content: [...], details: {...} };
-    } catch (err) {
-        // 第 1 步：识别已知错误类型，重新包装成具体描述
-        if (err instanceof MyKnownErrorA) {
-            throw new Error(`具体的描述A：${err.message}。建议的修复方法...`);
-        }
-        if (err instanceof MyKnownErrorB) {
-            throw new Error(`具体的描述B：${err.message}。可能的原因...`);
-        }
-        // 第 2 步：实在识别不了的异常，原样抛出，让框架兜底
-        throw err;
-    }
+ try {
+ // ... business logic
+ return { content: [...], details: {...} };
+ } catch (err) {
+ // No. 1 step: Identify known error types, Repackage into specific description
+ if (err instanceof MyKnownErrorA) {
+ throw new Error(`specific descriptionA: ${err.message}. Suggested fix...`);
+ }
+ if (err instanceof MyKnownErrorB) {
+ throw new Error(`specific descriptionB: ${err.message}. possible reasons...`);
+ }
+ // No. 2 step: Abnormalities that are really unrecognizable, Throw as is, Let the framework take over
+ throw err;
+ }
 }
 ```
 
@@ -711,9 +711,9 @@ Inside the Read tool's `execute` function, all file operations are called throug
 
 ```
 export interface ReadOperations {
-    readFile: (absolutePath: string) => Promise<Buffer>;
-    access: (absolutePath: string) => Promise<void>;
-    detectImageMimeType?: (absolutePath: string) => Promise<string | null>;
+ readFile: (absolutePath: string) => Promise<Buffer>;
+ access: (absolutePath: string) => Promise<void>;
+ detectImageMimeType?: (absolutePath: string) => Promise<string | null>;
 }
 ```
 
@@ -723,10 +723,10 @@ Inside the Read tool's `execute` function, all file operations are called throug
 
 ```
 execute: async (toolCallId, params, signal, onUpdate, ctx) => {
-    const ops = options?.operations ?? defaultReadOperations;
-    await ops.access(absolutePath);        // 通过接口检查权限
-    const buffer = await ops.readFile(absolutePath);  // 通过接口读文件
-    // ...
+ const ops = options?.operations ? defaultReadOperations;
+ await ops.access(absolutePath); // Check permissions via interface
+ const buffer = await ops.readFile(absolutePath); // Reading files through the interface
+ // ...
 }
 ```
 
@@ -735,13 +735,13 @@ execute: async (toolCallId, params, signal, onUpdate, ctx) => {
 
 
 ```
-直接调 fs（硬编码）：               通过 Operations 接口（可替换）：
-┌──────────────────────┐            ┌──────────────────────┐
-│ Read 工具             │            │ Read 工具             │
-│ fs.readFile(path)    │            │ ops.readFile(path)   │
-│ 只能读本地文件        │            │ 本地 / SSH / Mock     │
-│ 测试必须创建真实文件   │            │ 注入什么就调什么      │
-└──────────────────────┘            └──────────────────────┘
+Directly adjust fs(hardcoded): Pass Operations interface(Replaceable): 
+┌──────────────────────┐ ┌──────────────────────┐
+│ Read Tools │ │ Read Tools │
+│ fs.readFile(path) │ │ ops.readFile(path) │
+│ Can only read local files │ │ local / SSH / Mock │
+│ Tests must create real files │ │ Adjust whatever you inject. │
+└──────────────────────┘ └──────────────────────┘
 ```
 
 
@@ -749,23 +749,23 @@ Operations are captured by closure **at tool creation time**. Every subsequent e
 
 
 ```
-// 本地执行（默认）
-const tool = createReadToolDefinition(cwd);  // 用 defaultReadOperations
+// local execution(Default)
+const tool = createReadToolDefinition(cwd); // use defaultReadOperations
 
-// 单元测试（Mock）
+// Unit testing(Mock)
 const tool = createReadToolDefinition(cwd, {
-    operations: {
-        readFile: () => Buffer.from("mock file content"),  // 不需要创建真实文件
-        access: () => {},  // 不抛异常就是文件存在
-    }
+ operations: {
+ readFile: () => Buffer.from("mock file content"), // No need to create real files
+ access: () => {}, // If no exception is thrown, the file exists.
+ }
 });
 
-// 远程执行（SSH，假设）
+// remote execution(SSH, hypothesis)
 const tool = createReadToolDefinition(cwd, {
-    operations: {
-        readFile: (path) => sshExec(`cat ${path}`),
-        access: (path) => sshExec(`test -r ${path}`),
-    }
+ operations: {
+ readFile: (path) => sshExec(`cat ${path}`),
+ access: (path) => sshExec(`test -r ${path}`),
+ }
 });
 ```
 
@@ -812,19 +812,19 @@ Now you have the complete answer:
 
 
 ```
-模型输出 ToolCall { name: "read", arguments: { path: "src/main.ts" } }
-    │
-    ├── 第 1 步：prepareArguments 处理模型怪癖
-    ├── 第 2 步：validateToolArguments 做 Schema 验证
-    ├── 第 3 步：beforeToolCall 检查权限
-    ├── 第 4 步：tool.execute 通过 Operations 接口读文件
-    │              └── ops.readFile() → 不直接调 fs
-    └── 第 5 步：afterToolCall 做结果后处理
-    │
-    ▼
-ToolResultMessage { content: 文件内容, isError: false }
-    │
-    ▼ 追加到对话历史，下一轮发给模型
+Model output ToolCall { name: "read", arguments: { path: "src/main.ts" } }
+ │
+ ├── No. 1 step: prepareArguments Handling model quirks
+ ├── No. 2 step: validateToolArguments do Schema Verify
+ ├── No. 3 step: beforeToolCall Check permissions
+ ├── No. 4 step: tool.execute Pass Operations Interface to read files
+ │ └── ops.readFile() → Not directly adjusted fs
+ └── No. 5 step: afterToolCall Post-process the results
+ │
+ ▼
+ToolResultMessage { content: File content, isError: false }
+ │
+ ▼ Append to conversation history, The model will be sent to the next round
 ```
 
 
