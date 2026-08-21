@@ -61,9 +61,9 @@
 /* ---------- Design tokens (light) ---------- */
 :root {
   /* Reading column */
-  --sl-content-width: 78rem;
-  --sl-sidebar-width: 16rem;
-  --sl-toc-width: 12rem;
+  --sl-content-width: 88rem;
+  --sl-sidebar-width: 14rem;
+  --sl-toc-width: 10rem;
 
   /* Type stack */
   --sl-font: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
@@ -169,7 +169,7 @@ main li {
 }
 
 main p {
-  max-width: 105ch;
+  max-width: 120ch;
 }
 
 /* Tabular numbers for stats / data */
