@@ -11,7 +11,7 @@ export default defineConfig({
     starlight({
       title: "Pify Agent Book",
       description: "Source-code reading notes for the Pi Agent SDK",
-      defaultLocale: "zh",
+      defaultLocale: "en",
       locales: {
         zh: { label: "中文", lang: "zh-CN" },
         en: { label: "English", lang: "en" },
