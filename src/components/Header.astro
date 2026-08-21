@@ -1,0 +1,33 @@
+---
+import Default from "@astrojs/starlight/components/Header.astro";
+const { entry } = Astro.locals.starlightRoute;
+---
+
+<div class="header-wrap">
+  <Default><slot /></Default>
+  <span class="version-badge" title="Documentation baseline">
+    v0.80.2
+  </span>
+</div>
+
+<style>
+  .header-wrap {
+    display: contents;
+  }
+  .version-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.15rem 0.55rem;
+    margin-inline-start: 0.5rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    font-family: var(--sl-font-mono);
+    color: var(--pify-accent);
+    background: color-mix(in srgb, var(--pify-accent) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--pify-accent) 35%, transparent);
+    border-radius: 999px;
+    text-decoration: none;
+    white-space: nowrap;
+    letter-spacing: 0.01em;
+  }
+</style>

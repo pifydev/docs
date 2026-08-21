@@ -182,6 +182,9 @@ export default defineConfig({
       ],
       customCss: ["/src/styles/custom.css"],
       lastUpdated: true,
+      components: {
+        Header: './src/components/Header.astro',
+      },
       social: [
         { icon: "github", label: "GitHub", href: "https://github.com/pifydev/docs" },
       ],

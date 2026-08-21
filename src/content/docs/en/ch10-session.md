@@ -765,3 +765,8 @@ But there's still one important capability we haven't covered: **the extension s
 > `packages/coding-agent/src/core/session-manager.ts`: coding-agent's `SessionManager` (`buildSessionContext`, `appendEntry`, `branchWithSummary`, etc.)
 > `packages/coding-agent/src/core/compaction/branch-summarization.ts`: branch-summary generation
 
+---
+
+> **Version note**
+> This chapter is written against Pi **v0.80.2**. Code analysis follows the [earendil-works/pi](https://github.com/earendil-works/pi) repository (tutorial links may point at `main` and differ slightly from v0.80.2).
+

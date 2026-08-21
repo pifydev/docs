@@ -683,3 +683,15 @@ The next chapter: session management: answers these questions.
 > `packages/coding-agent/src/core/skills.ts:335-361`: Skills lazy loading (`formatSkillsForPrompt`)
 > `packages/agent/src/harness/compaction/branch-summarization.ts`: branch summary (LCA + 5-section template; a same-name file in coding-agent package has a more detailed 371-line implementation, this section references the agent-package line numbers)
 > `packages/agent/src/harness/compaction/compaction.ts`: Compaction main algorithm (see Chapter 9 for details)
+
+---
+
+> **Version note**
+> This chapter is written against Pi **v0.80.2**. Code analysis follows the [earendil-works/pi](https://github.com/earendil-works/pi) repository (tutorial links may point at `main` and differ slightly from v0.80.2).
+
+
+---
+
+> **Next up**
+> [Chapter 9: Context Compaction](/en/ch09-compaction/)
+

@@ -895,3 +895,14 @@ Diagram description: left red right green comparison: steering is checked at the
 
 ## 6. Next stop
 
+---
+
+> **Version note**
+> This chapter is written against Pi **v0.80.2**. Code analysis follows the [earendil-works/pi](https://github.com/earendil-works/pi) repository (tutorial links may point at `main` and differ slightly from v0.80.2).
+
+
+---
+
+> **Next up**
+> [Chapter 4: Model Invocation](/en/ch04-model-invocation/)
+

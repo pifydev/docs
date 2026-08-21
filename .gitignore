@@ -40,3 +40,18 @@ skills-lock.json
 
 # Codex / skills install location (skills live in ~/.codex/skills)
 .agents/
+
+# Build artifacts staged under docs/ for local serving (do not commit)
+docs/_astro/
+docs/pagefind/
+docs/fonts/
+docs/en/
+docs/vi/
+docs/zh/
+docs/index.html
+docs/404.html
+docs/favicon.svg
+docs/og-image.png
+docs/pify-*.png
+docs/sitemap-*.xml
+

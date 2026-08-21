@@ -469,3 +469,15 @@ The next two chapters we open Pi's full context engineering picture. Chapter 8 f
 > `packages/agent/src/agent.ts:168,231-233`: `subscribe` and `listeners`
 > `packages/agent/src/agent-loop.ts:628-669`: `executePreparedToolCall` (update special handling)
 > `packages/coding-agent/src/core/agent-session.ts:126-150`: `AgentSessionEvent` (17 kinds of events)
+
+---
+
+> **Version note**
+> This chapter is written against Pi **v0.80.2**. Code analysis follows the [earendil-works/pi](https://github.com/earendil-works/pi) repository (tutorial links may point at `main` and differ slightly from v0.80.2).
+
+
+---
+
+> **Next up**
+> [Chapter 8: Context Engineering](/en/ch08-context-engineering/)
+

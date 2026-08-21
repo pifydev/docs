@@ -562,3 +562,14 @@ Next chapter, we open this black box: the tool system.
 > `packages/ai/src/models.ts:410-429`: `clampThinkingLevel` fallback strategy
 > `packages/ai/src/utils/overflow.ts:126-155`: `isContextOverflow` triple detection
 
+---
+
+> **Version note**
+> This chapter is written against Pi **v0.80.2**. Code analysis follows the [earendil-works/pi](https://github.com/earendil-works/pi) repository (tutorial links may point at `main` and differ slightly from v0.80.2).
+
+
+---
+
+> **Next up**
+> [Chapter 5: Tool System](/en/ch05-tool-system/)
+

@@ -562,3 +562,15 @@ In the next chapter, we open the Agent's "nervous system": event-driven architec
 > `packages/agent/src/agent-loop.ts:275-308`: translation pipeline (`transformContext` -> `convertToLlm`)
 > `packages/coding-agent/src/core/messages.ts:82-195`: custom translation rules
 > `packages/coding-agent/src/core/messages.ts:38-39`: `excludeFromContext` field
+
+---
+
+> **Version note**
+> This chapter is written against Pi **v0.80.2**. Code analysis follows the [earendil-works/pi](https://github.com/earendil-works/pi) repository (tutorial links may point at `main` and differ slightly from v0.80.2).
+
+
+---
+
+> **Next up**
+> [Chapter 7: Event-Driven Architecture](/en/ch07-event-driven/)
+

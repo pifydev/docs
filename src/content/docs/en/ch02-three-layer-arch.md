@@ -606,3 +606,15 @@ In the next chapter we drill into the Agent''s heart: **the Agent Loop**. We wil
 ---
 
 > **About this book''s structure**: chapters 1–6 (Chapter 1 Opening → Chapter 6 Message System) build a complete understanding of Pi-Agent''s core mechanisms; we recommend reading them in order. Starting from Chapter 7 (Event-Driven, Context Engineering, Context Compaction, Session Management, etc.), the topics become advanced engineering concerns; each chapter is relatively independent and can be read as needed.
+
+---
+
+> **Version note**
+> This chapter is written against Pi **v0.80.2**. Code analysis follows the [earendil-works/pi](https://github.com/earendil-works/pi) repository (tutorial links may point at `main` and differ slightly from v0.80.2).
+
+
+---
+
+> **Next up**
+> [Chapter 3: Agent Loop](/en/ch03-agent-loop/)
+

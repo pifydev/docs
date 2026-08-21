@@ -580,3 +580,15 @@ The next chapter: session management: answers these questions.
 > `packages/coding-agent/src/core/session-manager.ts`: CompactionEntry definition + buildSessionContext
 > `packages/coding-agent/src/core/messages.ts`: CompactionSummaryMessage
 > `packages/coding-agent/src/core/agent-session.ts`: automatic compaction integration (triggered after agent_end)
+
+---
+
+> **Version note**
+> This chapter is written against Pi **v0.80.2**. Code analysis follows the [earendil-works/pi](https://github.com/earendil-works/pi) repository (tutorial links may point at `main` and differ slightly from v0.80.2).
+
+
+---
+
+> **Next up**
+> [Chapter 10: Session Management](/en/ch10-session/)
+

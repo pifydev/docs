@@ -851,3 +851,14 @@ Next chapter, we open the Agent's "memory system": the message system. No, wait:
 > `packages/coding-agent/src/core/tools/edit.ts:330`: Edit tool appends file path
 > `packages/coding-agent/src/core/tools/read.ts:43-50`: `ReadOperations` (Operations abstraction)
 
+---
+
+> **Version note**
+> This chapter is written against Pi **v0.80.2**. Code analysis follows the [earendil-works/pi](https://github.com/earendil-works/pi) repository (tutorial links may point at `main` and differ slightly from v0.80.2).
+
+
+---
+
+> **Next up**
+> [Chapter 6: Message System](/en/ch06-messages/)
+
