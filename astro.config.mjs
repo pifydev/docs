@@ -35,6 +35,46 @@ export default defineConfig({
             "zh-CN":  "章节目录",
           },
           items: [
+            { slug: "quickstart" },
+            { slug: "glossary" },
+          ],
+        },
+        {
+          label: "How-to Guides",
+          translations: {
+            en: "How-to Guides",
+            vi: "Hướng dẫn",
+            "zh-CN": "操作指南",
+          },
+          items: [
+            { slug: "how-to/add-custom-tool" },
+            { slug: "how-to/plug-new-model" },
+            { slug: "how-to/stream-output" },
+            { slug: "how-to/persist-sessions" },
+            { slug: "how-to/customize-system-prompt" },
+          ],
+        },
+        {
+          label: "Reference",
+          translations: {
+            en: "Reference",
+            vi: "Tham khảo",
+            "zh-CN": "参考",
+          },
+          items: [
+            { slug: "reference/api" },
+            { slug: "reference/configuration" },
+            { slug: "reference/environment-variables" },
+          ],
+        },
+        {
+          label: "Chapters",
+          translations: {
+            en: "Chapters",
+            vi: "Các chương",
+            "zh-CN": "章节目录",
+          },
+          items: [
             {
               slug: "ch01-overview",
               label: "1. Introduction",
@@ -127,8 +167,21 @@ export default defineConfig({
             },
           ],
         },
+        {
+          label: "Help",
+          translations: {
+            en: "Help",
+            vi: "Hỗ trợ",
+            "zh-CN": "帮助",
+          },
+          items: [
+            { slug: "help/faq" },
+            { slug: "changelog" },
+          ],
+        },
       ],
       customCss: ["/src/styles/custom.css"],
+      lastUpdated: true,
       social: [
         { icon: "github", label: "GitHub", href: "https://github.com/pifydev/docs" },
       ],
