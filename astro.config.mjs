@@ -5,7 +5,7 @@ import mermaid from "astro-mermaid";
 export default defineConfig({
   site: "https://pifydev.github.io",
   base: "/docs",
-  trailingSlash: "never",
+  trailingSlash: "ignore",
   integrations: [
     mermaid(),
     starlight({
