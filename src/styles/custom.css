@@ -62,8 +62,8 @@
 :root {
   /* Reading column */
   --sl-content-width: 105rem;
-  --sl-sidebar-width: 13rem;
-  --sl-toc-width: 5rem;
+  --sl-sidebar-width: 17rem;
+  --sl-toc-width: 12rem;
 
   /* Type stack */
   --sl-font: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
