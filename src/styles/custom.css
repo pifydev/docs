@@ -168,10 +168,6 @@ main li {
   text-wrap: pretty;
 }
 
-main p {
-  max-width: 140ch;
-}
-
 /* Tabular numbers for stats / data */
 .hero-stat-value,
 [data-tabular] {
