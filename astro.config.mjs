@@ -23,7 +23,7 @@ export default defineConfig({
           translations: {
             en: "About",
             vi: "Giới thiệu",
-            zh: "关于",
+            "zh-CN":  "关于",
           },
           items: [{ label: "Introduction", link: "" }],
         },
@@ -32,19 +32,99 @@ export default defineConfig({
           translations: {
             en: "Chapters",
             vi: "Các chương",
-            zh: "章节目录",
+            "zh-CN":  "章节目录",
           },
           items: [
-            { slug: "ch01-overview" },
-            { slug: "ch02-three-layer-arch" },
-            { slug: "ch03-agent-loop" },
-            { slug: "ch04-model-invocation" },
-            { slug: "ch05-tool-system" },
-            { slug: "ch06-messages" },
-            { slug: "ch07-event-driven" },
-            { slug: "ch08-context-engineering" },
-            { slug: "ch09-compaction" },
-            { slug: "ch10-session" },
+            {
+              slug: "ch01-overview",
+              label: "1. Introduction",
+              translations: {
+                en: "1. Introduction",
+                vi: "1. Mở đầu",
+                "zh-CN":  "第1章 开篇",
+              },
+            },
+            {
+              slug: "ch02-three-layer-arch",
+              label: "2. Three-Layer Architecture",
+              translations: {
+                en: "2. Three-Layer Architecture",
+                vi: "2. Kiến trúc ba lớp",
+                "zh-CN":  "第2章 三层架构",
+              },
+            },
+            {
+              slug: "ch03-agent-loop",
+              label: "3. Agent Loop",
+              translations: {
+                en: "3. Agent Loop",
+                vi: "3. Agent Loop",
+                "zh-CN":  "第3章 Agent Loop",
+              },
+            },
+            {
+              slug: "ch04-model-invocation",
+              label: "4. Model Invocation",
+              translations: {
+                en: "4. Model Invocation",
+                vi: "4. Gọi model",
+                "zh-CN":  "第4章 模型调用",
+              },
+            },
+            {
+              slug: "ch05-tool-system",
+              label: "5. Tool System",
+              translations: {
+                en: "5. Tool System",
+                vi: "5. Hệ thống Tool",
+                "zh-CN":  "第5章 工具系统",
+              },
+            },
+            {
+              slug: "ch06-messages",
+              label: "6. Message System",
+              translations: {
+                en: "6. Message System",
+                vi: "6. Hệ thống Message",
+                "zh-CN":  "第6章 消息系统",
+              },
+            },
+            {
+              slug: "ch07-event-driven",
+              label: "7. Event-Driven",
+              translations: {
+                en: "7. Event-Driven",
+                vi: "7. Hướng sự kiện",
+                "zh-CN":  "第7章 事件驱动",
+              },
+            },
+            {
+              slug: "ch08-context-engineering",
+              label: "8. Context Engineering",
+              translations: {
+                en: "8. Context Engineering",
+                vi: "8. Context Engineering",
+                "zh-CN":  "第8章 上下文工程",
+              },
+            },
+            {
+              slug: "ch09-compaction",
+              label: "9. Context Compaction",
+              translations: {
+                en: "9. Context Compaction",
+                vi: "9. Nén ngữ cảnh",
+                "zh-CN":  "第9章 上下文压缩",
+              },
+            },
+            {
+              slug: "ch10-session",
+              label: "10. Session Management",
+              translations: {
+                en: "10. Session Management",
+                vi: "10. Quản lý Session",
+                "zh-CN":  "第10章 会话管理",
+              },
+            },
           ],
         },
       ],
