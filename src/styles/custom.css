@@ -62,7 +62,7 @@
 :root {
   /* Reading column */
   --sl-content-width: 105rem;
-  --sl-sidebar-width: 11rem;
+  --sl-sidebar-width: 13rem;
   --sl-toc-width: 5rem;
 
   /* Type stack */
@@ -306,7 +306,7 @@ starlight-sidebar nav,
 starlight-sidebar a,
 nav.sidebar a,
 .right-sidebar-container nav a {
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   line-height: 1.4;
 }
 /* ---------- Site chrome ---------- */
