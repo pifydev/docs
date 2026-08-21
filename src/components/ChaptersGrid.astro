@@ -1,5 +1,7 @@
 ---
 const { lang } = Astro.props;
+const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+const basePrefix = base ? base + "/" : "/";
 
 const chapters = [
   { num: 1, slug: "ch01-overview", title_en: "Introduction: Why Pi-Agent Is Worth Your Time", title_vi: "Mở đầu: Tại sao Pi-Agent đáng để bạn dành thời gian", title_zh: "开篇: 为什么 Pi-Agent 值得你花时间" },
@@ -19,7 +21,7 @@ const titleKey = lang === "vi" ? "title_vi" : lang === "zh" ? "title_zh" : "titl
 
 <div class="chapters-grid">
   {chapters.map((ch) => (
-    <a class="chapter-card" href={`/${lang}/${ch.slug}`}>
+    <a class="chapter-card" href={basePrefix + lang + "/" + ch.slug}>
       <span class="chapter-num">Chapter {ch.num}</span>
       <span class="chapter-title">{ch[titleKey]}</span>
       <span class="chapter-arrow">→</span>

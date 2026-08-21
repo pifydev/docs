@@ -1,0 +1,25 @@
+---
+const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+const basePrefix = base ? base + "/" : "/";
+const defaultLocale = "zh";
+---
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>Pify Agent Book</title>
+    <meta http-equiv="refresh" content={`0;url=${basePrefix}${defaultLocale}`} />
+    <link rel="canonical" href={`${basePrefix}${defaultLocale}`} />
+    <style>
+      html, body { margin: 0; padding: 0; height: 100%; }
+      body {
+        display: flex; align-items: center; justify-content: center;
+        font-family: system-ui, sans-serif; color: #666;
+      }
+      a { color: inherit; }
+    </style>
+  </head>
+  <body>
+    <p>Redirecting to <a href={`${basePrefix}${defaultLocale}`}>Pify Agent Book</a>...</p>
+  </body>
+</html>

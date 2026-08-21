@@ -22,3 +22,7 @@ package-lock.json
 
 # Astro
 .astro/
+
+# Local dev
+dev.log
+
