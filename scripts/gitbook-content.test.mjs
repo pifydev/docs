@@ -7,6 +7,7 @@ import {
   normalizeDocument,
   rewriteLocaleLinks,
 } from "./lib/gitbook-content.mjs";
+import { validateRepository } from "./validate-gitbook-content.mjs";
 
 const manifestURL = new URL("../content/translation-manifest.json", import.meta.url);
 
@@ -99,4 +100,9 @@ test("FAQ contribution guidance does not reference retired Astro automation", as
     assert.doesNotMatch(faq, /src\/content\/docs\/(?:en|vi)\//);
     assert.doesNotMatch(faq, /scripts\/translate\.mjs/);
   }
+});
+
+test("migrated repository satisfies the GitBook content contract", async () => {
+  const errors = await validateRepository(new URL("..", import.meta.url));
+  assert.deepEqual(errors, []);
 });

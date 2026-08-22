@@ -441,6 +441,21 @@ await session.prompt("Read the codebase and explain the architecture.");
 
 **Why is it in Pi?** Because Pi chose the "terminal shell" form (see section 2). `pi-tui` is the reusable component that form made necessary.
 
+### 5.2 Extension system: let the Agent modify its own capabilities
+
+Pi's extension system supports **hot reload**: when the Agent edits an extension file, the change takes effect immediately, no session restart needed. This unlocks a powerful pattern: **let the coding agent modify and enhance its own capabilities**.
+
+Extensions can implement:
+
+- **Custom tools**: define new tools, with TypeBox-schema parameter validation.
+- **UI components**: embed custom interfaces in the terminal.
+- **Slash commands**: register new `/` commands.
+- **Event listeners**: hook into tool calls, turn-end, and other moments.
+- **Themes**: customize the TUI look.
+- **Prompt templates**: reusable prompt fragments.
+
+These five customization levers (Extensions, Skills, Prompt Templates, Themes, Pi Packages) provide **a smooth upgrade path from "using Pi" to "modifying Pi"**.
+
 ### 5.3 Four run modes
 
 | Mode | Use case | Example |
@@ -486,23 +501,3 @@ But the most important thing Pi proves is that **subtraction is a competitive pr
 
 > Version note
 > This doc series is written against Pi **v0.80.2**. Code analysis follows the [earendil-works/pi](https://github.com/earendil-works/pi) repo (tutorial links point at `main` and may differ slightly from v0.80.2).
-
-### 5.2 Extension system: let the Agent modify its own capabilities
-
-Pi's extension system supports **hot reload**: when the Agent edits an extension file, the change takes effect immediately, no session restart needed. This unlocks a powerful pattern: **let the coding agent modify and enhance its own capabilities**.
-
-Extensions can implement:
-
-- **Custom tools**: define new tools, with TypeBox-schema parameter validation.
-- **UI components**: embed custom interfaces in the terminal.
-- **Slash commands**: register new `/` commands.
-- **Event listeners**: hook into tool calls, turn-end, and other moments.
-- **Themes**: customize the TUI look.
-- **Prompt templates**: reusable prompt fragments.
-
-These five customization levers (Extensions, Skills, Prompt Templates, Themes, Pi Packages) provide **a smooth upgrade path from "using Pi" to "modifying Pi"**.
-
-
-
-
-
