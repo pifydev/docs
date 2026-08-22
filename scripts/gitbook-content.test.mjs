@@ -87,3 +87,16 @@ Start with [Quickstart](/en/quickstart/).
   assert.match(output, /\[Quickstart\]\(quickstart\.md\)/);
   assert.match(output, /\{% endhint %\}/);
 });
+
+test("FAQ contribution guidance does not reference retired Astro automation", async () => {
+  const repositoryRoot = new URL("../", import.meta.url);
+  const faqFiles = [
+    new URL("src/content/docs/en/help/faq.md", repositoryRoot),
+    new URL("src/content/docs/vi/help/faq.md", repositoryRoot),
+  ];
+  for (const faqFile of faqFiles) {
+    const faq = await readFile(faqFile, "utf8");
+    assert.doesNotMatch(faq, /src\/content\/docs\/(?:en|vi)\//);
+    assert.doesNotMatch(faq, /scripts\/translate\.mjs/);
+  }
+});

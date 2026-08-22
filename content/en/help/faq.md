@@ -1,12 +1,9 @@
 ---
-title: "FAQ"
-description: "Frequently asked questions about Pi and the Pify Agent Book."
-template: doc
-sidebar:
-  label: "FAQ"
-  order: 1
+title: FAQ
+description: Frequently asked questions about Pi and the Pify Agent Book.
+translation_key: faq
+language: en
 ---
-
 Common questions about Pi and this book. If your question is not here, open an issue on GitHub.
 
 ## Pi itself
@@ -21,7 +18,7 @@ Pi is intentionally minimal. It does not ship a planning mode, a built-in subage
 
 ### Which model providers does Pi support?
 
-Any provider that speaks the OpenAI Chat Completions protocol or the Anthropic Messages protocol. Pi ships translators for Anthropic, OpenAI, Google, Bedrock, and several more. You can add a new provider by writing one translator file. See [How to plug in a new model](/en/how-to/plug-new-model/).
+Any provider that speaks the OpenAI Chat Completions protocol or the Anthropic Messages protocol. Pi ships translators for Anthropic, OpenAI, Google, Bedrock, and several more. You can add a new provider by writing one translator file. See [How to plug in a new model](../how-to/plug-new-model.md).
 
 ### Is Pi free?
 
@@ -43,7 +40,7 @@ The Pi SDK is written in TypeScript. TypeScript is the source of truth. JavaScri
 
 ### Can I copy the snippets into my own project?
 
-Yes, with one caveat: the snippets assume `@pi-ai/core` or `@pi-agent-core` is installed. See the [Quickstart](/en/quickstart/) for the install pattern.
+Yes, with one caveat: the snippets assume `@pi-ai/core` or `@pi-agent-core` is installed. See the [Quickstart](../quickstart.md) for the install pattern.
 
 ## Contributing
 
@@ -71,7 +68,7 @@ Sessions are stored under the Pi home directory, defaulting to `~/.pi/agent/sess
 
 ### The TUI renders oddly over SSH.
 
-Set `PI_TUI_ESC_TIMEOUT` higher. Pi 0.84.x added this knob for high-latency terminals. See [Reference: Environment Variables](/en/reference/environment-variables/#pi_tui_esc_timeout).
+Set `PI_TUI_ESC_TIMEOUT` higher. Pi 0.84.x added this knob for high-latency terminals. See [Reference: Environment Variables](../reference/environment-variables.md#pi_tui_esc_timeout).
 
 ### The model returns 429 even though I have a valid key.
 

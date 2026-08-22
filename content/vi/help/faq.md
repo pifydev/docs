@@ -1,12 +1,9 @@
 ---
-title: "FAQ"
-description: "Các câu hỏi thường gặp về Pi và Pify Agent Book."
-template: doc
-sidebar:
-  label: "FAQ"
-  order: 1
+title: FAQ
+description: Các câu hỏi thường gặp về Pi và Pify Agent Book.
+translation_key: faq
+language: vi
 ---
-
 Các câu hỏi thường gặp về Pi và cuốn sách này. Nếu câu hỏi của bạn không có ở đây, hãy mở issue trên GitHub.
 
 ## Về Pi
@@ -21,7 +18,7 @@ Pi cố tình tối giản. Nó không có planning mode, không có subagent c�
 
 ### Pi hỗ trợ những model provider nào?
 
-Bất kỳ provider nào nói chuyện theo giao thức OpenAI Chat Completions hoặc Anthropic Messages. Pi có translator cho Anthropic, OpenAI, Google, Bedrock, và một số khác. Bạn có thể thêm provider mới bằng cách viết một file translator. Xem [How to plug in a new model](/vi/how-to/plug-new-model/).
+Bất kỳ provider nào nói chuyện theo giao thức OpenAI Chat Completions hoặc Anthropic Messages. Pi có translator cho Anthropic, OpenAI, Google, Bedrock, và một số khác. Bạn có thể thêm provider mới bằng cách viết một file translator. Xem [How to plug in a new model](../how-to/plug-new-model.md).
 
 ### Pi có miễn phí không?
 
@@ -43,7 +40,7 @@ Pi SDK viết bằng TypeScript. TypeScript là nguồn sự thật. JavaScript 
 
 ### Có thể copy snippet vào project riêng không?
 
-Có, với một lưu ý: snippet giả định `@pi-ai/core` hoặc `@pi-agent-core` đã được cài. Xem [Quickstart](/vi/quickstart/) để biết pattern cài đặt.
+Có, với một lưu ý: snippet giả định `@pi-ai/core` hoặc `@pi-agent-core` đã được cài. Xem [Quickstart](../quickstart.md) để biết pattern cài đặt.
 
 ## Đóng góp
 
@@ -71,7 +68,7 @@ Session được lưu dưới thư mục Pi home, mặc định `~/.pi/agent/ses
 
 ### TUI render xấu qua SSH.
 
-Đặt `PI_TUI_ESC_TIMEOUT` cao hơn. Pi 0.84.x thêm núm chỉnh này cho terminal có độ trễ cao. Xem [Reference: Environment Variables](/vi/reference/environment-variables/#pi_tui_esc_timeout).
+Đặt `PI_TUI_ESC_TIMEOUT` cao hơn. Pi 0.84.x thêm núm chỉnh này cho terminal có độ trễ cao. Xem [Reference: Environment Variables](../reference/environment-variables.md#pi_tui_esc_timeout).
 
 ### Model trả 429 dù key hợp lệ.
 

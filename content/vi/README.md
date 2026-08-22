@@ -1,0 +1,36 @@
+---
+title: Pify Agent Book
+description: 'Ghi chú đọc mã nguồn cho Pi Agent SDK, bằng tiếng Anh và tiếng Việt.'
+translation_key: home
+language: vi
+---
+Ghi chú đọc mã nguồn cho [Pi Agent SDK](https://github.com/earendil-works/pi). Đây là bản dịch tiếng Việt của [Pi Agent Book](https://www.dgzhuya.com/); tiếng Trung là bản gốc. Các chương tiếng Việt theo đúng cấu trúc và thứ tự của bản gốc.
+
+{% hint style="info" %}
+Mới đến với Pi? Bắt đầu với [Quickstart](quickstart.md) và bạn sẽ có một Pi agent hoạt động trong mười phút. Nếu muốn đọc chuyên sâu ngay, có thể nhảy thẳng vào các chương.
+{% endhint %}
+
+## Cách đọc
+
+- **Mới với Pi:** [Quickstart](quickstart.md) trước, rồi đọc các chương theo thứ tự.
+- **Đọc để hiểu kiến trúc:** chương 1 đến 3 là phần lõi. Chương 2 đặt nền cho mô hình ba lớp; chương 3 là agent loop. Các chương còn lại là tài liệu tham khảo có thể đọc theo nhu cầu.
+- **Xây dựng trên Pi:** [How-to Guides](how-to/add-custom-tool.md) là các công thức ngắn theo tác vụ.
+- **Tra cứu API hoặc env var:** [Reference](reference/api.md) được cấu trúc để tra cứu, không phải để đọc tuần tự.
+
+Mỗi chương liên kết tới trang [pi.dev](https://pi.dev/docs/latest) tương ứng để đối chiếu. Code mẫu chạy được với `@pi-ai/core` và `@pi-agent-core`.
+
+## Mục lục
+
+- [**Quickstart**](quickstart.md) — tutorial 10 phút. Chạy model call đầu tiên.
+- [**Glossary**](glossary.md) — các thuật ngữ Pi tự dùng cho mình, và cách cuốn sách này dùng chúng.
+- [**How-to Guides**](how-to/add-custom-tool.md) — 5 công thức theo tác vụ: tools, model providers, streaming, sessions, prompts.
+- [**Reference**](reference/api.md) — mọi public export, schema settings, và bề mặt env var.
+- [**Chapters**](ch01-overview.md) — 10 chương dài bao phủ SDK từ đầu đến cuối.
+- [**FAQ**](help/faq.md) — các câu hỏi thường gặp về Pi và cuốn sách này.
+- [**Changelog**](changelog.md) — những gì đã thay đổi trên site này.
+
+## Phản hồi
+
+- Báo lỗi dịch hoặc nội dung thiếu trong [GitHub Issues](https://github.com/pifydev/docs/issues).
+- Đóng góp: xem [CONTRIBUTING.md](https://github.com/pifydev/docs/blob/main/CONTRIBUTING.md).
+- Thảo luận và câu hỏi: [GitHub Discussions](https://github.com/pifydev/docs/discussions).
