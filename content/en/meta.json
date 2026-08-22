@@ -1,0 +1,26 @@
+{
+  "title": "Pify Agent Book",
+  "pages": [
+    "index",
+    "quickstart",
+    "glossary",
+    "---How-to guides---",
+    "how-to",
+    "---Reference---",
+    "reference",
+    "---Chapters---",
+    "ch01-overview",
+    "ch02-three-layer-arch",
+    "ch03-agent-loop",
+    "ch04-model-invocation",
+    "ch05-tool-system",
+    "ch06-messages",
+    "ch07-event-driven",
+    "ch08-context-engineering",
+    "ch09-compaction",
+    "ch10-session",
+    "---Help---",
+    "help",
+    "changelog"
+  ]
+}

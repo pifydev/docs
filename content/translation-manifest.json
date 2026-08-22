@@ -1,7 +1,7 @@
 {
   "version": 1,
   "pages": [
-    { "key": "home", "group": "start", "en": "README.md", "vi": "README.md", "zh": "README.md" },
+    { "key": "home", "group": "start", "en": "index.mdx", "vi": "index.mdx", "zh": "README.md" },
     { "key": "quickstart", "group": "start", "en": "quickstart.md", "vi": "quickstart.md" },
     { "key": "glossary", "group": "start", "en": "glossary.md", "vi": "glossary.md" },
     { "key": "how-to-add-custom-tool", "group": "how-to", "en": "how-to/add-custom-tool.md", "vi": "how-to/add-custom-tool.md" },

@@ -1,0 +1,10 @@
+{
+  "title": "How-to guides",
+  "pages": [
+    "add-custom-tool",
+    "plug-new-model",
+    "stream-output",
+    "persist-sessions",
+    "customize-system-prompt"
+  ]
+}

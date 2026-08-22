@@ -1,0 +1,26 @@
+{
+  "title": "Pify Agent Book",
+  "pages": [
+    "index",
+    "quickstart",
+    "glossary",
+    "---Hướng dẫn---",
+    "how-to",
+    "---Tham khảo---",
+    "reference",
+    "---Các chương---",
+    "ch01-overview",
+    "ch02-three-layer-arch",
+    "ch03-agent-loop",
+    "ch04-model-invocation",
+    "ch05-tool-system",
+    "ch06-messages",
+    "ch07-event-driven",
+    "ch08-context-engineering",
+    "ch09-compaction",
+    "ch10-session",
+    "---Hỗ trợ---",
+    "help",
+    "changelog"
+  ]
+}
