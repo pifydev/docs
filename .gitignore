@@ -14,7 +14,9 @@ desktop.ini
 
 # Node
 node_modules/
-package-lock.json
+
+# Isolated implementation worktrees
+.worktrees/
 
 # Env / secrets
 .env
