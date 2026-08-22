@@ -9,7 +9,9 @@ language: en
 This glossary collects the English terms Pi uses for itself. The translations preserve these originals. A term appears here when it has a precise meaning in the Pi codebase, or when the literal translation would mislead.
 
 :::note[Why a glossary]
+
 Pi ships a small vocabulary and uses each word with intent. Reading the source without these definitions is possible but slow. If a chapter uses a term that is not on this list, treat it as ordinary English.
+
 :::
 
 ## Agent

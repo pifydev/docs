@@ -9,7 +9,9 @@ language: en
 What changed in this documentation site, in reverse chronological order. For the Pi SDK itself, see the [upstream changelog](https://github.com/earendil-works/pi/releases).
 
 :::note
+
 Entries below cover the **Pify Agent Book** site, not the Pi SDK. Translation drift, layout changes, and content additions live here.
+
 :::
 
 ## Unreleased

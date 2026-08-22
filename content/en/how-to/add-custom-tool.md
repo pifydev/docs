@@ -9,7 +9,9 @@ language: en
 This guide shows how to register a tool the model can call during a turn. After it you will have a working `get_weather` tool that the agent invokes when relevant and reads the result back into the loop.
 
 :::tip[What you will have]
+
 A tool definition (name, description, JSON schema) and a handler. The handler runs when the model emits a `tool_use` block. The result is fed back as a `tool_result` block on the next loop iteration.
+
 :::
 
 ## 1. Describe the tool
@@ -34,7 +36,9 @@ export const get_weather = {
 ```
 
 :::note[Why TypeBox and not raw JSON Schema]
+
 The SDK accepts both. TypeBox gives compile-time safety for the parameters, so a typo in `city` shows up at build time rather than as a runtime validation error.
+
 :::
 
 ## 2. Write the handler

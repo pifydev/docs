@@ -9,9 +9,11 @@ language: en
 This guide shows how Pi composes the system prompt from CLI flags, project files, and extension contributions. After it you will know which file to edit for which effect and how to debug the final prompt the model actually sees.
 
 :::tip[When you need this]
+
 - Project-specific rules ("never use `any` in `src/`")
 - Team conventions encoded once, applied everywhere
 - Debugging why the model is or is not following a rule
+
 :::
 
 ## The composition order
@@ -41,7 +43,9 @@ Create `AGENTS.md` in your project root:
 Pi reads this on every session that opens inside the project. The file is resolved by walking up from the working directory.
 
 :::note[Closest file wins]
+
 If both `./apps/web/AGENTS.md` and `./AGENTS.md` exist, Pi uses `./apps/web/AGENTS.md` because it is closer to the cwd. This lets you have repo-wide rules plus per-app overrides.
+
 :::
 
 ## 2. Add an explicit system prompt block with SYSTEM.md

@@ -7,7 +7,9 @@ language: en
 The public surface of the three Pi packages. This page lists every export a user is expected to import. Internal helpers are deliberately omitted.
 
 :::note[Versioning]
+
 The APIs documented here reflect `@pi-ai/core`, `@pi-agent-core`, and `@pi-coding-agent` at **v0.80.2**. Newer releases may add exports; check the upstream changelog for additions.
+
 :::
 
 ## `@pi-ai/core`

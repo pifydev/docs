@@ -9,7 +9,9 @@ language: vi
 Tutorial này đưa bạn từ một thư mục rỗng đến một Pi agent hoạt động, có khả năng stream phản hồi từ model. Bạn sẽ cài `@pi-ai/core`, gắn một model vào, và chạy một script 5 dòng. Không yêu cầu kiến thức nền tảng về Pi.
 
 :::tip[Bạn sẽ có gì ở cuối tutorial]
+
 Một file TypeScript gọi model thông qua cùng interface `streamSimple` mà chính Pi agent sử dụng. Từ đó bạn có thể xếp thêm tool, event, session, và toàn bộ agent loop.
+
 :::
 
 ## Trước khi bắt đầu
@@ -21,7 +23,9 @@ Bạn cần:
 - **Một terminal** trong một thư mục rỗng
 
 :::caution[Chi phí và an toàn]
+
 Tutorial này gọi API thật. Đặt spend limit thấp trên tài khoản provider trước khi tiếp tục, và đừng commit key vào bất kỳ file nào.
+
 :::
 
 ## 1. Khởi tạo project
@@ -47,7 +51,9 @@ ANTHROPIC_API_KEY=sk-ant-...
 ```
 
 :::note[Vì sao dùng file `.env` chứ không hardcode]
+
 Key được SDK đọc lúc runtime. Giữ key trong `.env` nghĩa là bạn có thể `.gitignore` nó và không bao giờ để lộ key trong source control.
+
 :::
 
 Thêm `.env` vào `.gitignore`:
@@ -96,6 +102,7 @@ node --env-file=.env --import tsx agent.ts
 ```
 
 :::tip[Hoặc dùng script]
+
 Nếu bạn thích setup vĩnh viễn, thêm vào `package.json`:
 
 ```json title="package.json"
@@ -107,6 +114,7 @@ Nếu bạn thích setup vĩnh viễn, thêm vào `package.json`:
 ```
 
 Sau đó `npm start` làm cùng điều đó.
+
 :::
 
 Bạn sẽ thấy gì đó như:

@@ -88,6 +88,55 @@ function prose(content) {
   return content.replace(/^```[^\n]*\n[\s\S]*?^```\s*$/gm, "");
 }
 
+function containerDirectiveErrors(content) {
+  const supported = new Set([
+    "caution",
+    "danger",
+    "info",
+    "note",
+    "tip",
+    "warn",
+    "warning",
+  ]);
+  const errors = [];
+  let fence = null;
+  let open = null;
+
+  for (const [index, line] of content.split(/\r?\n/).entries()) {
+    const fenceMatch = line.match(/^(```|~~~)/);
+    if (fenceMatch) {
+      fence = fence === fenceMatch[1] ? null : (fence ?? fenceMatch[1]);
+      continue;
+    }
+    if (fence) continue;
+
+    if (line.trim() === ":::") {
+      if (!open) errors.push(`unexpected directive close on line ${index + 1}`);
+      open = null;
+      continue;
+    }
+
+    const directive = line.match(/^:::([a-z]+)(?:\[[^\]]+\])?\s*$/);
+    if (!directive) {
+      if (line.startsWith(":::")) {
+        errors.push(`invalid directive syntax on line ${index + 1}`);
+      }
+      continue;
+    }
+    if (!supported.has(directive[1])) {
+      errors.push(`unsupported directive ${directive[1]} on line ${index + 1}`);
+    }
+    if (open) {
+      errors.push(`nested directive on line ${index + 1}`);
+    }
+    open = { line: index + 1, type: directive[1] };
+  }
+
+  if (open)
+    errors.push(`unclosed ${open.type} directive from line ${open.line}`);
+  return errors;
+}
+
 function headingShape(content) {
   return [...prose(content).matchAll(/^(#{1,6})\s+.+$/gm)].map(
     (match) => match[1].length,
@@ -189,6 +238,9 @@ export async function validateRepository(rootURL) {
         errors.push(
           `${locale}/${relativePath}: GitBook hint syntax is not allowed`,
         );
+      }
+      for (const error of containerDirectiveErrors(parsed[locale].content)) {
+        errors.push(`${locale}/${relativePath}: ${error}`);
       }
       if (/^#\s+/m.test(prose(parsed[locale].content))) {
         errors.push(

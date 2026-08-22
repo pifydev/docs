@@ -24,6 +24,14 @@ export const translations = i18n
       "No Headings(table of contents)": "Không có đề mục",
       "No results found(search dialog)": "Không tìm thấy kết quả",
       "On this page(table of contents)": "Trong trang này",
+      "Copy Markdown(page actions)": "Sao chép Markdown",
+      "Edit on GitHub(edit page)": "Sửa trên GitHub",
+      "Open in ChatGPT(page actions)": "Mở trong ChatGPT",
+      "Open in Claude(page actions)": "Mở trong Claude",
+      "Open in Cursor(page actions)": "Mở trong Cursor",
+      "Open in GitHub(page actions)": "Mở trong GitHub",
+      "Open in Scira AI(page actions)": "Mở trong Scira AI",
+      "Open(page actions)": "Mở",
       "Open Search(search trigger)(aria-label)": "Mở tìm kiếm",
       "Open Sidebar(sidebar)(aria-label)": "Mở thanh điều hướng",
       "Page Not Found(404 page)": "Không tìm thấy trang",
@@ -35,6 +43,7 @@ export const translations = i18n
         "Trang bạn tìm có thể đã bị xoá, đổi tên hoặc tạm thời không khả dụng.",
       "Toggle Menu(mobile menu)(aria-label)": "Mở hoặc đóng menu",
       "Toggle Theme(theme switcher)(aria-label)": "Đổi giao diện",
+      "View as Markdown(page actions)": "Xem dạng Markdown",
     },
   });
 

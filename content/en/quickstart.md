@@ -9,7 +9,9 @@ language: en
 This tutorial takes you from an empty folder to a working Pi agent that streams a model reply. You will install `@pi-ai/core`, plug in one model, and run a 5-line script. No prior Pi knowledge required.
 
 :::tip[What you will have at the end]
+
 A TypeScript file that talks to one model through the same `streamSimple` interface the Pi agent itself uses. From there you can layer on tools, events, sessions, and the full agent loop.
+
 :::
 
 ## Before you start
@@ -21,7 +23,9 @@ You need:
 - **A terminal** in an empty folder
 
 :::caution[Cost and safety]
+
 This tutorial makes real API calls. Set a low spend limit on your provider account before continuing, and keep the key out of any file you commit.
+
 :::
 
 ## 1. Initialize the project
@@ -47,7 +51,9 @@ ANTHROPIC_API_KEY=sk-ant-...
 ```
 
 :::note[Why a `.env` file and not a hardcoded string]
+
 The key is read by the SDK at runtime. Keeping it in `.env` means you can `.gitignore` the file and never leak the key to source control.
+
 :::
 
 Add `.env` to `.gitignore`:
@@ -96,6 +102,7 @@ node --env-file=.env --import tsx agent.ts
 ```
 
 :::tip[Or use a script]
+
 If you prefer a permanent setup, add this to `package.json`:
 
 ```json title="package.json"
@@ -107,6 +114,7 @@ If you prefer a permanent setup, add this to `package.json`:
 ```
 
 Then `npm start` does the same thing.
+
 :::
 
 You should see something like:

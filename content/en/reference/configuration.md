@@ -7,7 +7,9 @@ language: en
 The settings Pi reads at startup. Most live in `settings.json` under the Pi home directory; some can be overridden per-project or per-CLI.
 
 :::note[Resolution order]
+
 CLI flags > `settings.json` (project) > `settings.json` (global) > defaults. Per-project settings live in `./.pi/settings.json`.
+
 :::
 
 ## File locations
@@ -90,7 +92,9 @@ If `true`, skips the permission prompt before invoking any tool with `requiresPe
 ```
 
 :::caution
+
 YOLO mode lets the agent write files and run shell commands without asking. Use it only in disposable sandboxes.
+
 :::
 
 ### Per-tool overrides

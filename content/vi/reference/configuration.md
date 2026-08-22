@@ -6,8 +6,10 @@ language: vi
 ---
 Các thiết lập Pi đọc khi khởi động. Hầu hết nằm trong `settings.json` dưới thư mục Pi home; một số có thể được ghi đè theo project hoặc theo CLI.
 
-:::note[Resolution order]
+:::note[Thứ tự phân giải]
+
 CLI flags > `settings.json` (project) > `settings.json` (global) > defaults. Thiết lập theo project nằm trong `./.pi/settings.json`.
+
 :::
 
 ## File locations
@@ -90,7 +92,9 @@ Nếu `true`, bỏ qua permission prompt trước khi gọi bất kỳ tool nào
 ```
 
 :::caution
+
 YOLO mode cho phép agent ghi file và chạy shell command mà không hỏi. Chỉ dùng trong sandbox có thể vứt bỏ.
+
 :::
 
 ### Per-tool overrides

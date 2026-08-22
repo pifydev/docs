@@ -304,6 +304,11 @@ samp {
 }
 
 @media (max-width: 767px) {
+  #nd-subnav button {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
+
   #nd-page.pify-docs-page {
     max-width: none;
     padding: 1.75rem 1rem 3rem;

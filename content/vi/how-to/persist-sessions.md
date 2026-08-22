@@ -7,9 +7,11 @@ language: vi
 Hướng dẫn này chỉ cách persist một cuộc hội thoại qua nhiều lần chạy. Sau khi xong bạn sẽ có thể khởi động agent, lưu session, tắt tiến trình, và resume ở lần chạy sau với context đầy đủ được khôi phục.
 
 :::tip[Khi nào cần]
+
 - Một task chạy lâu phải sống qua restart
 - Người dùng đóng laptop và mở lại project ngày mai
 - Một cây hội thoại rẽ nhánh từ một điểm chung
+
 :::
 
 ## Mô hình session
@@ -67,7 +69,9 @@ const session = await Session.load({
 `Session.load` đọc `metadata.json` và các file turn, theo thứ tự, và tái dựng message history. Model và provider được khôi phục từ metadata, không phải từ `getModel`.
 
 :::caution[Kiểm tra model vẫn khả dụng]
+
 Nếu model gốc không còn trong catalog, resume thất bại. Pin model bằng `Session.load({ ..., pinModel: true })` để tiếp tục dùng descriptor gốc ngay cả khi catalog thay đổi.
+
 :::
 
 ## 3. Rẽ nhánh session

@@ -9,9 +9,11 @@ language: vi
 Hướng dẫn này chỉ cách consume agent stream theo thời gian thực. Sau khi xong bạn sẽ có thể render text delta, hiện tool call khi chúng xảy ra, và stream thinking block ra UI mà không buffer cả turn.
 
 :::tip[Khi nào cần]
+
 - Một chat UI hiện token xuất hiện từng chữ một
 - Một CLI in tiến trình khi model đang suy nghĩ
 - Một web app cần huỷ một generation dài
+
 :::
 
 ## Event stream

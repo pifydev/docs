@@ -9,9 +9,11 @@ language: en
 This guide shows how to consume the agent stream in real time. After it you will be able to render text deltas, surface tool calls as they happen, and stream thinking blocks to the UI without buffering the whole turn.
 
 :::tip[When you need this]
+
 - A chat UI that shows tokens appearing letter by letter
 - A CLI that prints progress while the model thinks
 - A web app that needs to cancel a long generation
+
 :::
 
 ## The event stream

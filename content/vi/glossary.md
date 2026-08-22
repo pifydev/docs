@@ -9,7 +9,9 @@ language: vi
 Glossary này tổng hợp các thuật ngữ tiếng Anh mà Pi dùng cho chính nó. Bản dịch giữ nguyên các thuật ngữ gốc này. Một thuật ngữ xuất hiện ở đây khi nó có ý nghĩa chính xác trong codebase của Pi, hoặc khi dịch nguyên văn sẽ gây hiểu lầm.
 
 :::note[Vì sao có glossary]
+
 Pi dùng một từ vựng nhỏ gọn và dùng mỗi từ với chủ đích. Đọc source mà không có các định nghĩa này thì được nhưng chậm. Nếu một chapter dùng thuật ngữ không có trong danh sách này, hãy hiểu theo nghĩa tiếng Anh thông thường.
+
 :::
 
 ## Agent

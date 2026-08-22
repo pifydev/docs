@@ -9,7 +9,9 @@ language: vi
 Hướng dẫn này chỉ cách đăng ký một tool mà model có thể gọi trong một turn. Sau khi xong bạn sẽ có một tool `get_weather` hoạt động, được agent gọi khi phù hợp và đọc kết quả trở lại loop.
 
 :::tip[Bạn sẽ có gì]
+
 Một định nghĩa tool (tên, mô tả, JSON schema) và một handler. Handler chạy khi model phát ra một block `tool_use`. Kết quả được feed trở lại dưới dạng block `tool_result` ở vòng lặp tiếp theo.
+
 :::
 
 ## 1. Mô tả tool
@@ -34,7 +36,10 @@ export const get_weather = {
 ```
 
 :::note[Vì sao dùng TypeBox mà không phải raw JSON Schema]
+
 SDK nhận cả hai. TypeBox cho type safety ở thời điểm biên dịch cho parameters, vì vậy một lỗi đánh máy trong `city` hiện ra lúc build chứ không phải lúc runtime.
+
+:::
 
 ## 2. Viết handler
 

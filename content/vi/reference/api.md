@@ -6,8 +6,10 @@ language: vi
 ---
 Bề mặt công khai của ba package Pi. Trang này liệt kê mọi export mà người dùng được kỳ vọng sẽ import. Hàm nội bộ được cố ý bỏ qua.
 
-:::note[Versioning]
+:::note[Phiên bản]
+
 Các API được mô tả ở đây phản ánh `@pi-ai/core`, `@pi-agent-core`, và `@pi-coding-agent` tại **v0.80.2**. Bản phát hành mới hơn có thể bổ sung export; kiểm tra upstream changelog để biết thêm.
+
 :::
 
 ## `@pi-ai/core`

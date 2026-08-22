@@ -7,7 +7,9 @@ language: en
 Pi reads environment variables for API keys, runtime flags, and process markers. This page lists every variable the SDK touches.
 
 :::note[How Pi reads these]
+
 Provider API keys are read at the moment a request is sent, not at startup. This means rotating a key (e.g. after `pi auth print-api-key`) takes effect on the next turn without restarting the agent.
+
 :::
 
 ## Provider API keys

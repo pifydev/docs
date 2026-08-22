@@ -9,9 +9,11 @@ language: vi
 Hướng dẫn này chỉ cách thêm một model provider mà `@pi-ai/core` không có sẵn. Sau khi xong bạn sẽ có thể gọi `getModel("my-provider", "my-model")` và SDK sẽ nói chuyện với provider mới mà không thay đổi gì trong agent loop.
 
 :::tip[Khi nào cần]
+
 - Một llama.cpp server cục bộ
 - Một self-hosted model gateway bọc Anthropic hoặc OpenAI
 - Một provider thương mại mới chưa được thêm upstream
+
 :::
 
 ## Hai nửa
@@ -109,7 +111,9 @@ export const openaiCompletionsTranslator: Translator = {
 ```
 
 :::note[Đây là skeleton]
+
 Translator thật trong `@pi-ai/core` dài 200-300 dòng. Chúng xử lý tool call, image content, lỗi, retry, và streaming back-pressure. Hãy copy translator có sẵn gần nhất và adapt thay vì viết từ đầu.
+
 :::
 
 ## 4. Gắn translator

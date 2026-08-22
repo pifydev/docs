@@ -9,9 +9,11 @@ language: vi
 Hướng dẫn này cho thấy Pi compose system prompt từ CLI flag, project file, và extension contribution. Sau khi xong bạn sẽ biết cần edit file nào để có tác dụng gì và cách debug prompt cuối cùng mà model thật sự thấy.
 
 :::tip[Khi nào cần]
+
 - Rule riêng cho project ("không dùng `any` trong `src/`")
 - Quy ước team encode một lần, áp dụng mọi nơi
 - Debug vì sao model theo hoặc không theo một rule
+
 :::
 
 ## Thứ tự composition
@@ -41,7 +43,9 @@ Tạo `AGENTS.md` ở root project:
 Pi đọc file này ở mọi session mở trong project. File được resolve bằng cách đi ngược lên từ working directory.
 
 :::note[File gần nhất thắng]
+
 Nếu cả `./apps/web/AGENTS.md` và `./AGENTS.md` tồn tại, Pi dùng `./apps/web/AGENTS.md` vì nó gần cwd hơn. Điều này cho phép có rule toàn repo cộng với override theo từng app.
+
 :::
 
 ## 2. Thêm block system prompt tường minh với SYSTEM.md

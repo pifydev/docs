@@ -45,7 +45,7 @@ export default async function DocumentationPage({
       </DocsDescription>
       <div className="pify-page-actions">
         <ViewOptionsPopover markdownUrl={markdownUrl} githubUrl={githubUrl} />
-        <EditOnGitHub href={githubUrl}>Edit on GitHub</EditOnGitHub>
+        <EditOnGitHub href={githubUrl} />
       </div>
       <DocsBody className="pify-docs-body">
         <Content

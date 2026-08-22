@@ -6,8 +6,10 @@ language: vi
 ---
 Pi đọc environment variable cho API key, runtime flag, và process marker. Trang này liệt kê mọi biến mà SDK chạm vào.
 
-:::note[How Pi reads these]
+:::note[Cách Pi đọc các biến này]
+
 API key của provider được đọc vào lúc gửi một request, không phải khi khởi động. Điều này có nghĩa xoay vòng key (ví dụ sau `pi auth print-api-key`) có hiệu lực ở turn kế tiếp mà không cần khởi động lại agent.
+
 :::
 
 ## Provider API keys

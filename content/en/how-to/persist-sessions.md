@@ -9,9 +9,11 @@ language: en
 This guide shows how to persist a conversation across runs. After it you will be able to start an agent, save the session, quit the process, and resume on the next run with full context restored.
 
 :::tip[When you need this]
+
 - A long-running task that must survive restarts
 - A user who closes the laptop and reopens the project tomorrow
 - A tree of conversations that branch from a shared point
+
 :::
 
 ## The session model
@@ -69,7 +71,9 @@ const session = await Session.load({
 `Session.load` reads `metadata.json` and the turn files, in order, and reconstructs the message history. The model and provider are restored from the metadata, not from `getModel`.
 
 :::caution[Check the model is still available]
+
 If the original model is no longer in your catalog, the resume fails. Pin the model with `Session.load({ ..., pinModel: true })` to keep using the original descriptor even if the catalog changes.
+
 :::
 
 ## 3. Branch a session

@@ -9,9 +9,11 @@ language: en
 This guide shows how to add a model provider that `@pi-ai/core` does not ship with. After it you will be able to call `getModel("my-provider", "my-model")` and have the SDK talk to the new provider with no changes to the agent loop.
 
 :::tip[When you need this]
+
 - A local llama.cpp server
 - A self-hosted model gateway that wraps Anthropic or OpenAI
 - A new commercial provider that has not been added upstream yet
+
 :::
 
 ## The two halves
@@ -109,7 +111,9 @@ export const openaiCompletionsTranslator: Translator = {
 ```
 
 :::note[This is a skeleton]
+
 The real translators in `@pi-ai/core` are 200-300 lines. They handle tool calls, image content, errors, retries, and streaming back-pressure. Copy the closest existing translator and adapt it rather than starting from scratch.
+
 :::
 
 ## 4. Wire the translator

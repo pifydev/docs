@@ -7,7 +7,9 @@ language: vi
 Những thay đổi trên site docs này, theo thứ tự thời gian ngược. Cho chính Pi SDK, xem [upstream changelog](https://github.com/earendil-works/pi/releases).
 
 :::note
+
 Các entry dưới đây ghi lại **Pify Agent Book** site, không phải Pi SDK. Translation drift, thay đổi layout, và thêm nội dung sống ở đây.
+
 :::
 
 ## Unreleased
