@@ -98,12 +98,33 @@ test("renders docs primitives, theme controls, and a usable mobile drawer", asyn
   await expect(page.locator(".pify-mermaid > div > svg")).toBeVisible();
   await expect(page.locator("pre").first()).toBeVisible();
 
+  const highlightedCode = page.locator(
+    ".pify-docs-body figure.shiki code.language-typescript",
+  );
+  await expect(highlightedCode.first()).toBeVisible();
+  await expect(
+    highlightedCode.first().locator("span[style]").first(),
+  ).toBeVisible();
+
+  const lightTokenColor = await highlightedCode
+    .first()
+    .locator("span[style]")
+    .first()
+    .evaluate((element) => getComputedStyle(element).color);
+
   const html = page.locator("html");
   await expect(html).toHaveClass(/light/);
   await page
     .getByRole("button", { name: "Toggle Theme" })
     .evaluate((element: HTMLButtonElement) => element.click());
   await expect(html).toHaveClass(/dark/);
+
+  const darkTokenColor = await highlightedCode
+    .first()
+    .locator("span[style]")
+    .first()
+    .evaluate((element) => getComputedStyle(element).color);
+  expect(darkTokenColor).not.toBe(lightTokenColor);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/vi/quickstart");
