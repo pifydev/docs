@@ -1,6 +1,7 @@
 import { getMDXComponents } from "@/components/mdx";
 import manifest from "@/content/translation-manifest.json";
-import { isLocale, switchLocale, toPublicPath } from "@/lib/routes";
+import { isLocale, toPublicPath } from "@/lib/routes";
+import { buildPageMetadata } from "@/lib/seo";
 import { source } from "@/lib/source";
 import { createRelativeLink } from "fumadocs-ui/mdx";
 import {
@@ -13,8 +14,6 @@ import {
 } from "fumadocs-ui/layouts/docs/page";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-
-const origin = "https://docs.pify.dev";
 
 type DocumentationPageProps = {
   params: Promise<{ lang: string; slug?: string[] }>;
@@ -73,37 +72,15 @@ export async function generateMetadata({
   if (!page) notFound();
 
   const pathname = slug?.length ? `/${lang}/${slug.join("/")}` : `/${lang}`;
-  const englishPath = switchLocale(pathname, "en");
-  const vietnamesePath = switchLocale(pathname, "vi");
   const title = page.data.title ?? "Pify Agent Book";
   const description = page.data.description ?? metadataDescription(lang);
 
-  return {
+  return buildPageMetadata({
+    locale: lang,
+    pathname,
     title,
     description,
-    alternates: {
-      canonical: new URL(pathname, origin),
-      languages: {
-        en: new URL(englishPath, origin),
-        vi: new URL(vietnamesePath, origin),
-        "x-default": new URL(englishPath, origin),
-      },
-    },
-    openGraph: {
-      type: "article",
-      locale: lang === "vi" ? "vi_VN" : "en_US",
-      title,
-      description,
-      url: new URL(pathname, origin),
-      images: [{ url: "/og-image.png", width: 1200, height: 630 }],
-    },
-    twitter: {
-      card: "summary_large_image",
-      title,
-      description,
-      images: ["/og-image.png"],
-    },
-  };
+  });
 }
 
 function metadataDescription(lang: "en" | "vi") {
