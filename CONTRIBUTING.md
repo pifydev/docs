@@ -130,4 +130,5 @@ link both files in the pair.
 
 ## License
 
-Contributions are licensed under the repository's MIT License.
+Contributions are licensed under the repository's GNU General Public License
+v3.0 only (`GPL-3.0-only`).
