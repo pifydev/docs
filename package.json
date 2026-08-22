@@ -12,7 +12,7 @@
     "lint:sync": "node scripts/sync-check.mjs",
     "lint:mermaid": "node scripts/validate-mermaid.mjs",
     "lint:gitbook": "node scripts/validate-gitbook-content.mjs",
-    "test:content": "node --test scripts/gitbook-content.test.mjs",
+    "test:content": "node --test scripts/gitbook-content.test.mjs scripts/ci-config.test.mjs",
     "quality:gitbook": "npm run test:content && npm run lint:gitbook && npm run lint:mermaid",
     "lint": "npm run lint:sync && npm run lint:frontmatter && npm run lint:mermaid"
   },
