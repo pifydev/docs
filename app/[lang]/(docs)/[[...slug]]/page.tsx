@@ -1,9 +1,11 @@
-import { getMDXComponents } from "@/components/mdx";
+import {
+  createLocalizedMarkdownLink,
+  getMDXComponents,
+} from "@/components/mdx";
 import manifest from "@/content/translation-manifest.json";
 import { isLocale, toPublicPath } from "@/lib/routes";
 import { buildPageMetadata } from "@/lib/seo";
 import { source } from "@/lib/source";
-import { createRelativeLink } from "fumadocs-ui/mdx";
 import {
   DocsBody,
   DocsDescription,
@@ -50,7 +52,7 @@ export default async function DocumentationPage({
       <DocsBody className="pify-docs-body">
         <Content
           components={getMDXComponents({
-            a: createRelativeLink(source, page),
+            a: createLocalizedMarkdownLink(lang, sourcePath),
           })}
         />
       </DocsBody>

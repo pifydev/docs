@@ -55,6 +55,44 @@ export function toPublicPath(locale: Locale, sourcePath: string): string {
   return slug ? `/${locale}/${slug}` : `/${locale}`;
 }
 
+export function resolveContentHref(
+  locale: Locale,
+  sourcePath: string,
+  href: string,
+): string {
+  if (
+    href.startsWith("/") ||
+    href.startsWith("#") ||
+    href.startsWith("//") ||
+    /^[a-z][a-z\d+.-]*:/i.test(href)
+  ) {
+    return href;
+  }
+
+  const suffixIndex = href.search(/[?#]/);
+  const pathname = suffixIndex === -1 ? href : href.slice(0, suffixIndex);
+  const suffix = suffixIndex === -1 ? "" : href.slice(suffixIndex);
+  if (!/\.(?:md|mdx)$/i.test(pathname)) return href;
+
+  const sourceSegments = sourcePath
+    .replaceAll("\\", "/")
+    .split("/")
+    .filter(Boolean);
+  sourceSegments.pop();
+
+  for (const segment of pathname.split("/")) {
+    if (!segment || segment === ".") continue;
+    if (segment === "..") {
+      if (sourceSegments.length === 0) return href;
+      sourceSegments.pop();
+      continue;
+    }
+    sourceSegments.push(segment);
+  }
+
+  return `${toPublicPath(locale, sourceSegments.join("/"))}${suffix}`;
+}
+
 export function switchLocale(path: string, targetLocale: Locale): string {
   const suffixIndex = path.search(/[?#]/);
   const pathname = suffixIndex === -1 ? path : path.slice(0, suffixIndex);

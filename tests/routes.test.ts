@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   isLocale,
+  resolveContentHref,
   selectLocale,
   switchLocale,
   toPublicPath,
@@ -31,6 +32,38 @@ describe("locale routing", () => {
     expect(toPublicPath("en", "index.mdx")).toBe("/en");
     expect(toPublicPath("vi", "how-to/add-custom-tool.md")).toBe(
       "/vi/how-to/add-custom-tool",
+    );
+  });
+
+  it("resolves Markdown authoring links to clean localized routes", () => {
+    expect(resolveContentHref("en", "index.mdx", "quickstart.md")).toBe(
+      "/en/quickstart",
+    );
+    expect(
+      resolveContentHref(
+        "vi",
+        "how-to/add-custom-tool.md",
+        "../ch05-tool-system.md",
+      ),
+    ).toBe("/vi/ch05-tool-system");
+    expect(
+      resolveContentHref("en", "reference/api.md", "configuration.md#models"),
+    ).toBe("/en/reference/configuration#models");
+  });
+
+  it("leaves external, fragment, and clean route links unchanged", () => {
+    expect(
+      resolveContentHref(
+        "en",
+        "index.mdx",
+        "https://github.com/pifydev/docs/blob/main/CONTRIBUTING.md",
+      ),
+    ).toBe("https://github.com/pifydev/docs/blob/main/CONTRIBUTING.md");
+    expect(resolveContentHref("vi", "quickstart.md", "#install")).toBe(
+      "#install",
+    );
+    expect(resolveContentHref("vi", "quickstart.md", "/vi/glossary")).toBe(
+      "/vi/glossary",
     );
   });
 

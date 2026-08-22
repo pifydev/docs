@@ -174,3 +174,45 @@ test("serves machine-readable documentation surfaces", async ({ request }) => {
   expect(full.headers()["content-type"]).toContain("text/plain");
   expect((await full.text()).length).toBeGreaterThan(100_000);
 });
+
+test("renders every internal Markdown source link as a clean public route", async ({
+  page,
+  request,
+}) => {
+  const sitemap = await request.get("/sitemap.xml");
+  expect(sitemap.ok()).toBe(true);
+
+  const paths = Array.from(
+    (await sitemap.text()).matchAll(
+      /<loc>https:\/\/docs\.pify\.dev([^<]+)<\/loc>/g,
+    ),
+    (match) => match[1],
+  );
+  expect(paths).toHaveLength(46);
+
+  for (const path of paths) {
+    const response = await request.get(path);
+    expect(response.ok(), path).toBe(true);
+    expect(await response.text(), path).not.toMatch(
+      /<a[^>]+href="(?!https?:\/\/|mailto:|#)[^"]*\.mdx?(?:[?#][^"]*)?"/i,
+    );
+  }
+
+  await page.goto("/en");
+  const quickstart = page.locator('.pify-docs-body a[href="/en/quickstart"]');
+  await expect(quickstart.first()).toBeVisible();
+  await quickstart.first().click();
+  await expect(page).toHaveURL(/\/en\/quickstart$/);
+
+  const customTool = page.locator(
+    '.pify-docs-body a[href="/en/how-to/add-custom-tool"]',
+  );
+  await expect(customTool).toBeVisible();
+  await customTool.click();
+  await expect(page).toHaveURL(/\/en\/how-to\/add-custom-tool$/);
+
+  await page.goto("/vi");
+  await expect(
+    page.locator('.pify-docs-body a[href="/vi/reference/api"]').first(),
+  ).toBeVisible();
+});
