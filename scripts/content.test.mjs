@@ -2,11 +2,14 @@ import assert from "node:assert/strict";
 import { access, readFile } from "node:fs/promises";
 import test from "node:test";
 
-import { extractMermaidBlocks } from "./lib/gitbook-content.mjs";
+import { extractMermaidBlocks } from "./lib/markdown.mjs";
 import { validateRepository } from "./validate-content.mjs";
 
 const repositoryRoot = new URL("../", import.meta.url);
-const manifestURL = new URL("content/translation-manifest.json", repositoryRoot);
+const manifestURL = new URL(
+  "content/translation-manifest.json",
+  repositoryRoot,
+);
 
 const rootPages = {
   en: [
@@ -101,7 +104,9 @@ test("translation manifest contains 23 unique EN/VI pairs", async () => {
 
 test("Chinese references remain internal provenance only", async () => {
   const manifest = JSON.parse(await readFile(manifestURL, "utf8"));
-  const chinese = manifest.pages.filter((page) => page.zh).map((page) => page.key);
+  const chinese = manifest.pages
+    .filter((page) => page.zh)
+    .map((page) => page.key);
   assert.deepEqual(chinese, [
     "home",
     "ch01-overview",
@@ -120,7 +125,10 @@ test("Chinese references remain internal provenance only", async () => {
 test("Fumadocs navigation contains every public page in stable localized order", async () => {
   for (const locale of ["en", "vi"]) {
     const rootMeta = JSON.parse(
-      await readFile(new URL(`content/${locale}/meta.json`, repositoryRoot), "utf8"),
+      await readFile(
+        new URL(`content/${locale}/meta.json`, repositoryRoot),
+        "utf8",
+      ),
     );
     assert.deepEqual(rootMeta.pages, rootPages[locale]);
 

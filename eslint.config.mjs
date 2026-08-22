@@ -11,7 +11,6 @@ export default defineConfig([
     ".astro/**",
     "dist/**",
     "playwright-report/**",
-    "scripts/screenshot/**",
     "test-results/**",
   ]),
 ]);

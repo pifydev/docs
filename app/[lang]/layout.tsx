@@ -16,7 +16,8 @@ export const metadata: Metadata = {
     default: "Pify Agent Book",
     template: "%s - Pify Agent Book",
   },
-  description: "Source-code reading notes for the Pi Agent SDK in English and Vietnamese.",
+  description:
+    "Source-code reading notes for the Pi Agent SDK in English and Vietnamese.",
   icons: { icon: "/favicon.svg" },
 };
 

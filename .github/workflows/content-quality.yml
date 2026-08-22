@@ -1,12 +1,15 @@
-name: GitBook Content Quality
+name: Content Quality
 
 on:
   pull_request:
     paths:
       - "content/**"
       - "source/**"
-      - "src/content/docs/**"
       - "scripts/**"
+      - "tests/**"
+      - "app/**"
+      - "components/**"
+      - "lib/**"
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/**"
@@ -15,8 +18,11 @@ on:
     paths:
       - "content/**"
       - "source/**"
-      - "src/content/docs/**"
       - "scripts/**"
+      - "tests/**"
+      - "app/**"
+      - "components/**"
+      - "lib/**"
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/**"
@@ -26,21 +32,25 @@ permissions:
   contents: read
 
 concurrency:
-  group: gitbook-content-${{ github.ref }}
+  group: content-quality-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   quality:
-    name: Validate GitBook content
+    name: Validate content and application
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 22
           cache: npm
       - run: npm ci
       - run: npm run test:content
-      - run: npm run lint:gitbook
-      - run: npm run lint
+      - run: npm run test:unit
+      - run: npm run lint:sync
+      - run: npm run lint:frontmatter
+      - run: npm run lint:content
+      - run: npm run lint:mermaid
+      - run: npm run lint:app

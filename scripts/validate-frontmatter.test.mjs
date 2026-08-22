@@ -1,16 +1,18 @@
-import { test } from "node:test";
-import { strict as assert } from "node:assert";
+import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
+import test from "node:test";
 import { promisify } from "node:util";
+
+import { validateFrontmatter } from "./validate-frontmatter.mjs";
 
 const exec = promisify(execFile);
 
-test("validate-frontmatter exits 0 on current repo", async () => {
+test("frontmatter validation covers every public document", async () => {
   const { stdout } = await exec("node", ["scripts/validate-frontmatter.mjs"]);
-  assert.match(stdout, /All files OK/);
-});
+  assert.match(stdout, /Validated 46 public content files/);
+  assert.match(stdout, /All frontmatter is valid/);
 
-test("chapter filename pattern excludes changelog", () => {
-  assert.equal(/^ch\d{2}-[a-z0-9-]+\.md$/.test("changelog.md"), false);
-  assert.equal(/^ch\d{2}-[a-z0-9-]+\.md$/.test("ch01-overview.md"), true);
+  const result = await validateFrontmatter(new URL("../", import.meta.url));
+  assert.equal(result.count, 46);
+  assert.deepEqual(result.errors, []);
 });

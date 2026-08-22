@@ -1,26 +1,38 @@
-name: Astro Rollback Build
+name: Next.js Application Build
 
 on:
   pull_request:
     paths:
-      - "src/**"
+      - "app/**"
+      - "components/**"
+      - "content/**"
+      - "lib/**"
       - "public/**"
-      - "scripts/build.mjs"
-      - "astro.config.mjs"
+      - "tests/**"
+      - "proxy.ts"
+      - "source.config.ts"
+      - "next.config.mjs"
+      - "postcss.config.mjs"
+      - "tsconfig.json"
       - "package.json"
       - "package-lock.json"
-      - "tsconfig.json"
       - ".github/workflows/deploy.yml"
   push:
     branches: [main]
     paths:
-      - "src/**"
+      - "app/**"
+      - "components/**"
+      - "content/**"
+      - "lib/**"
       - "public/**"
-      - "scripts/build.mjs"
-      - "astro.config.mjs"
+      - "tests/**"
+      - "proxy.ts"
+      - "source.config.ts"
+      - "next.config.mjs"
+      - "postcss.config.mjs"
+      - "tsconfig.json"
       - "package.json"
       - "package-lock.json"
-      - "tsconfig.json"
       - ".github/workflows/deploy.yml"
   workflow_dispatch:
 
@@ -28,19 +40,20 @@ permissions:
   contents: read
 
 concurrency:
-  group: astro-rollback-${{ github.ref }}
+  group: next-build-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build:
-    name: Build Astro rollback
+    name: Build Next.js application
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm run typecheck
       - run: npm run build

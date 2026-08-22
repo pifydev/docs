@@ -205,7 +205,11 @@ samp {
 }
 
 .pify-docs-body :where(a) {
-  text-decoration-color: color-mix(in srgb, var(--pify-accent) 55%, transparent);
+  text-decoration-color: color-mix(
+    in srgb,
+    var(--pify-accent) 55%,
+    transparent
+  );
   text-decoration-thickness: 1px;
   text-underline-offset: 0.2em;
 }

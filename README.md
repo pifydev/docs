@@ -1,82 +1,91 @@
 # Pify Agent Book
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="src/assets/logo-dark-bg.svg">
-    <img src="src/assets/logo-light-bg.svg" alt="Pify Agent Book" width="160">
-  </picture>
-</p>
+English and Vietnamese source-code reading notes and practical guides for the
+[Pi Agent SDK](https://github.com/earendil-works/pi).
 
-Translations of the [Pi Agent Book](https://www.dgzhuya.com/) source-code reading notes. This site covers the [Pi Agent SDK](https://github.com/earendil-works/pi); Chinese is the canonical source. See also the [pi.dev](https://pi.dev) docs.
+- English: [docs.pify.dev/en](https://docs.pify.dev/en)
+- Tiếng Việt: [docs.pify.dev/vi](https://docs.pify.dev/vi)
 
-## Available Languages
+## Stack
 
-| Language | Folder | Status |
-|---|---|---|
-| 中文 (canonical) | `src/content/docs/zh/` | In progress |
-| English | `src/content/docs/en/` | In progress |
-| Tiếng Việt | `src/content/docs/vi/` | In progress |
+- Next.js App Router
+- Fumadocs UI, Core, and MDX
+- TypeScript and Tailwind CSS
+- Local Geist and Geist Mono fonts
+- Vercel for Preview and Production deployments
+- GitHub Actions for read-only validation
 
-## Tech Stack
+The supported runtime is Node.js 22 and npm. `package-lock.json` is the
+authoritative dependency lockfile.
 
-- [Astro 7](https://astro.build/): static-site generator
-- [Starlight](https://starlight.astro.build/): documentation integration with built-in i18n
-- [astro-mermaid](https://github.com/lin-stephanie/astro-mermaid): renders Mermaid diagrams to SVG
-- Node 24: validation scripts and build
-- GitHub Actions: CI/CD build and deploy to GitHub Pages
-
-## Repository Layout
+## Repository layout
 
 ```text
-pi-docs/
-- src/content/docs/{zh,en,vi}/: chapters (one folder per language)
-- src/content.config.ts: Zod schema for chapter frontmatter
-- src/styles/custom.css: Starlight theme overrides
-- src/components/Hero.astro: homepage hero
-- scripts/: Node validation scripts (validate-frontmatter, sync-check, validate-mermaid, build)
-- public/: static assets (favicon, OG image)
-- GLOSSARY.md: preserved technical terms (English-only)
-- docs/superpowers/specs/: design specs
-- docs/superpowers/plans/: implementation plans
+app/                         Next.js routes, metadata, search, and LLM endpoints
+components/                  Pify and MDX presentation components
+content/en/                  Public English documentation
+content/vi/                  Public Vietnamese documentation
+content/translation-manifest.json
+                             Stable EN/VI page pairing
+lib/                         Locale, routing, source, and SEO helpers
+public/                      Logo, social image, favicon, and local fonts
+scripts/                     Content and CI validation
+source/zh/                   Internal translation provenance, never published
+tests/                       Unit and browser journeys
 ```
 
-## GitBook source directories
+Only `en` and `vi` are public locales. Every public page must be present in both
+locale directories and registered in `content/translation-manifest.json`.
+Navigation order is defined by the locale-specific `meta.json` files.
 
-- `content/en` is synced to the English GitBook space.
-- `content/vi` is synced to the Vietnamese GitBook space.
-- `source/zh` is reference material and is not published.
-- `src/content/docs` remains the temporary Astro rollback source until the Vercel cutover is accepted.
-
-Run `npm run quality:gitbook` before pushing content changes. Edit Markdown in this repository; do not create divergent edits in the GitBook editor.
-
-## Local Development
-
-Prerequisites: [Node 24+](https://nodejs.org/) and [npm](https://www.npmjs.com/).
+## Local development
 
 ```bash
-# Install dependencies
-npm install
-
-# Start dev server
+npm ci
 npm run dev
-
-# Build the site
-npm run build
-
-# Run validation
-npm run lint
 ```
+
+Open `http://localhost:3000`. The root route selects English or Vietnamese from
+the locale cookie and browser language. You can also open `/en` or `/vi`
+directly.
+
+Run the complete local quality gate before requesting review:
+
+```bash
+npm run test:content
+npm run test:unit
+npm run lint
+npm run typecheck
+npm run build
+```
+
+Browser tests require Chromium once:
+
+```bash
+npx playwright install chromium
+npm run test:e2e
+```
+
+## Deployment
+
+Vercel builds the Next.js application from the repository root. Branches and
+pull requests receive Preview deployments; `main` is the Production branch.
+GitHub Actions validates the same source with Node.js 22 but does not deploy it.
+
+The canonical origin is `https://docs.pify.dev`. The application also publishes
+localized search, `/sitemap.xml`, `/robots.txt`, `/en/llms.txt`,
+`/vi/llms.txt`, and the corresponding `llms-full.txt` files.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the authoring and translation rules.
 
 ## License
 
-MIT: see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).
 
 ## References
 
 - Original Chinese source: https://www.dgzhuya.com/
-- Official Pi docs: https://pi.dev/docs/latest
+- Official Pi documentation: https://pi.dev/docs/latest
 - Pi source code: https://github.com/earendil-works/pi

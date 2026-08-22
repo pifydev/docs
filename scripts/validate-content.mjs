@@ -128,12 +128,19 @@ export async function validateRepository(rootURL) {
   const root = fileURLToPath(rootURL);
   const errors = [];
   const manifestPath = path.join(root, "content/translation-manifest.json");
-  const manifest = await readJSON(manifestPath, errors, "translation-manifest.json");
+  const manifest = await readJSON(
+    manifestPath,
+    errors,
+    "translation-manifest.json",
+  );
 
   if (!manifest) return errors;
-  if (manifest.version !== 1) errors.push("translation-manifest.json: version must be 1");
+  if (manifest.version !== 1)
+    errors.push("translation-manifest.json: version must be 1");
   if (!Array.isArray(manifest.pages) || manifest.pages.length !== 23) {
-    errors.push("translation-manifest.json: exactly 23 page pairs are required");
+    errors.push(
+      "translation-manifest.json: exactly 23 page pairs are required",
+    );
     return errors;
   }
 
@@ -141,13 +148,17 @@ export async function validateRepository(rootURL) {
   const localePaths = { en: new Set(), vi: new Set() };
 
   for (const page of manifest.pages) {
-    if (keys.has(page.key)) errors.push(`${page.key}: duplicate translation key`);
+    if (keys.has(page.key))
+      errors.push(`${page.key}: duplicate translation key`);
     keys.add(page.key);
 
     const parsed = {};
     for (const locale of locales) {
       const relativePath = page[locale];
-      if (typeof relativePath !== "string" || !/\.(?:md|mdx)$/.test(relativePath)) {
+      if (
+        typeof relativePath !== "string" ||
+        !/\.(?:md|mdx)$/.test(relativePath)
+      ) {
         errors.push(`${page.key}: ${locale} path must be Markdown or MDX`);
         continue;
       }
@@ -164,7 +175,9 @@ export async function validateRepository(rootURL) {
 
       parsed[locale] = matter(await readFile(filePath, "utf8"));
       if (parsed[locale].data.translation_key !== page.key) {
-        errors.push(`${locale}/${relativePath}: translation_key must be ${page.key}`);
+        errors.push(
+          `${locale}/${relativePath}: translation_key must be ${page.key}`,
+        );
       }
       if (parsed[locale].data.language !== locale) {
         errors.push(`${locale}/${relativePath}: language must be ${locale}`);
@@ -173,7 +186,9 @@ export async function validateRepository(rootURL) {
         errors.push(`${locale}/${relativePath}: title is required`);
       }
       if (/\{%\s*(?:hint|endhint)\b/.test(parsed[locale].content)) {
-        errors.push(`${locale}/${relativePath}: GitBook hint syntax is not allowed`);
+        errors.push(
+          `${locale}/${relativePath}: GitBook hint syntax is not allowed`,
+        );
       }
       if (/^#\s+/m.test(prose(parsed[locale].content))) {
         errors.push(
@@ -215,14 +230,17 @@ export async function validateRepository(rootURL) {
     }
 
     for (const directory of ["root", "how-to", "reference", "help"]) {
-      const relative = directory === "root" ? "meta.json" : `${directory}/meta.json`;
+      const relative =
+        directory === "root" ? "meta.json" : `${directory}/meta.json`;
       const meta = await readJSON(
         path.join(root, "content", locale, relative),
         errors,
         `${locale}/${relative}`,
       );
       if (meta && !sameArray(meta.pages, navigation[locale][directory])) {
-        errors.push(`${locale}/${relative}: pages do not match the approved order`);
+        errors.push(
+          `${locale}/${relative}: pages do not match the approved order`,
+        );
       }
     }
   }

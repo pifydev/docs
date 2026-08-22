@@ -13,41 +13,60 @@ async function readWorkflow(filename) {
   return { source, workflow: parse(source) };
 }
 
-test("content workflow owns the complete validation pipeline", async () => {
-  const { workflow } = await readWorkflow("content-quality.yml");
-  const pullRequestPaths = workflow.on.pull_request.paths;
-  const pushPaths = workflow.on.push.paths;
-  const steps = workflow.jobs.quality.steps;
-  const setupNode = steps.find((step) => step.uses === "actions/setup-node@v4");
-  const commands = steps.filter((step) => step.run).map((step) => step.run);
+function workflowCommands(workflow, job) {
+  return workflow.jobs[job].steps
+    .filter((step) => step.run)
+    .map((step) => step.run);
+}
 
-  assert.equal(workflow.permissions.contents, "read");
-  assert.equal(workflow.jobs.quality["timeout-minutes"], 15);
-  assert.equal(setupNode.with["node-version"], 24);
-  assert.ok(pullRequestPaths.includes(".github/workflows/**"));
-  assert.ok(pushPaths.includes(".github/workflows/**"));
-  assert.ok(pullRequestPaths.includes("src/content/docs/**"));
-  assert.deepEqual(commands, [
+function assertReadOnlyNode22(workflow, job) {
+  const steps = workflow.jobs[job].steps;
+  const setupNode = steps.find((step) => step.uses === "actions/setup-node@v4");
+
+  assert.deepEqual(workflow.permissions, { contents: "read" });
+  assert.equal(workflow.jobs[job]["timeout-minutes"], 20);
+  assert.equal(setupNode.with["node-version"], 22);
+  assert.equal(setupNode.with.cache, "npm");
+}
+
+test("content workflow validates the Fumadocs source tree", async () => {
+  const { source, workflow } = await readWorkflow("content-quality.yml");
+
+  assert.equal(workflow.name, "Content Quality");
+  assertReadOnlyNode22(workflow, "quality");
+  assert.ok(workflow.on.pull_request.paths.includes("content/**"));
+  assert.ok(workflow.on.push.paths.includes("content/**"));
+  assert.deepEqual(workflowCommands(workflow, "quality"), [
     "npm ci",
     "npm run test:content",
-    "npm run lint:gitbook",
-    "npm run lint",
+    "npm run test:unit",
+    "npm run lint:sync",
+    "npm run lint:frontmatter",
+    "npm run lint:content",
+    "npm run lint:mermaid",
+    "npm run lint:app",
   ]);
+  assert.doesNotMatch(source, /GitBook|src\/content\/docs|lint:gitbook/i);
 });
 
-test("Astro rollback workflow builds without deploying", async () => {
+test("application workflow builds Next.js without deploying", async () => {
   const { source, workflow } = await readWorkflow("deploy.yml");
-  const steps = workflow.jobs.build.steps;
-  const setupNode = steps.find((step) => step.uses === "actions/setup-node@v4");
-  const commands = steps.filter((step) => step.run).map((step) => step.run);
 
-  assert.equal(workflow.name, "Astro Rollback Build");
-  assert.deepEqual(workflow.permissions, { contents: "read" });
-  assert.equal(workflow.jobs.build["timeout-minutes"], 15);
-  assert.equal(setupNode.with["node-version"], 24);
-  assert.deepEqual(commands, ["npm ci", "npm run build"]);
-  assert.doesNotMatch(source, /deploy-pages|upload-pages-artifact/);
+  assert.equal(workflow.name, "Next.js Application Build");
+  assertReadOnlyNode22(workflow, "build");
+  assert.deepEqual(workflowCommands(workflow, "build"), [
+    "npm ci",
+    "npm run typecheck",
+    "npm run build",
+  ]);
+  assert.match(source, /app\/\*\*/);
+  assert.match(source, /content\/\*\*/);
+  assert.doesNotMatch(
+    source,
+    /Astro|GitBook|deploy-pages|upload-pages-artifact/i,
+  );
   assert.doesNotMatch(source, /^\s+(?:pages|id-token):\s+write$/m);
+  assert.doesNotMatch(source, /vercel/i);
 });
 
 test("duplicate PR sync workflow is absent", async () => {
@@ -65,10 +84,9 @@ test("Mermaid validation supplies the documented Chromium CI sandbox override", 
   const configText = await readFile(
     new URL("scripts/puppeteer-ci.json", repositoryRoot),
     "utf8",
-  ).catch(() => null);
+  );
 
   assert.match(validator, /process\.env\.CI/);
   assert.match(validator, /puppeteer-ci\.json/);
-  assert.ok(configText, "scripts/puppeteer-ci.json must exist");
   assert.deepEqual(JSON.parse(configText), { args: ["--no-sandbox"] });
 });

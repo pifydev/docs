@@ -27,7 +27,9 @@ function negotiatedLocale(acceptLanguage?: string): Locale {
         index,
       };
     })
-    .sort((left, right) => right.quality - left.quality || left.index - right.index);
+    .sort(
+      (left, right) => right.quality - left.quality || left.index - right.index,
+    );
 
   for (const preference of preferences) {
     if (isLocale(preference.locale) && preference.quality > 0) {

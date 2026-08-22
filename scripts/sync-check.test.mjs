@@ -1,24 +1,33 @@
-import { test } from "node:test";
-import { strict as assert } from "node:assert";
+import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
+import test from "node:test";
 import { promisify } from "node:util";
 
-import { compareOptionalTermSets } from "./sync-check.mjs";
+import { checkSync, compareOptionalTermSets } from "./sync-check.mjs";
 
 const exec = promisify(execFile);
 
-test("sync-check exits 0 on current repo", async () => {
+test("sync-check validates all manifest page pairs", async () => {
   const { stdout } = await exec("node", ["scripts/sync-check.mjs"]);
-  assert.match(stdout, /All chapters in sync/);
-});
+  assert.match(stdout, /Checked 23 EN\/VI page pairs/);
+  assert.match(stdout, /All public translations are in sync/);
 
-test("chapter discovery excludes changelog", () => {
-  assert.equal(/^ch\d{2}-[a-z0-9-]+\.md$/.test("changelog.md"), false);
-  assert.equal(/^ch\d{2}-[a-z0-9-]+\.md$/.test("ch01-overview.md"), true);
+  const result = await checkSync(new URL("../", import.meta.url));
+  assert.equal(result.count, 23);
+  assert.deepEqual(result.errors, []);
 });
 
 test("optional term sets compare only defined languages", () => {
-  assert.deepEqual(compareOptionalTermSets({ en: ["Agent"], vi: ["Agent"] }), []);
-  assert.deepEqual(compareOptionalTermSets({ zh: undefined, en: ["Agent"], vi: ["Agent"] }), []);
-  assert.deepEqual(compareOptionalTermSets({ zh: [], en: ["Agent"], vi: ["Agent"] }), []);
+  assert.deepEqual(
+    compareOptionalTermSets({ en: ["Agent"], vi: ["Agent"] }),
+    [],
+  );
+  assert.deepEqual(
+    compareOptionalTermSets({ en: ["Agent"], vi: undefined }),
+    [],
+  );
+  assert.deepEqual(compareOptionalTermSets({ en: [], vi: ["Agent"] }), []);
+  assert.deepEqual(compareOptionalTermSets({ en: ["Agent"], vi: ["Tool"] }), [
+    "terms_used differs (en vs vi)",
+  ]);
 });

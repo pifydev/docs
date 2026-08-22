@@ -1,0 +1,21 @@
+.next/
+.source/
+.astro/
+node_modules/
+screenshots/
+playwright-report/
+test-results/
+
+# Translation prose has its own structural and editorial validators.
+content/
+source/
+GLOSSARY.md
+
+# Historical implementation records and generated dependency files.
+docs/superpowers/
+package-lock.json
+next-env.d.ts
+
+# Preserve unrelated repository configuration verbatim.
+.github/PULL_REQUEST_TEMPLATE.md
+.markdownlint.json
