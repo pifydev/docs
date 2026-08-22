@@ -5,7 +5,11 @@ import { defineDocs } from "fumadocs-mdx/macro";
 const docs = defineDocs({
   dir: "content",
   docs: {
+    files: ["**/*.md", "**/*.mdx"],
     postprocess: { includeProcessedMarkdown: true },
+  },
+  meta: {
+    files: ["**/meta.json"],
   },
 });
 
