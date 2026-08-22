@@ -57,6 +57,42 @@ test("publishes one page title and paired canonical metadata", async ({
   ).toHaveAttribute("href", "https://docs.pify.dev/en/quickstart");
 });
 
+test("publishes one adaptive Pify favicon for both locales", async ({
+  page,
+  request,
+}) => {
+  let iconHref = "";
+
+  for (const path of ["/en/quickstart", "/vi/quickstart"]) {
+    await page.goto(path);
+
+    const icons = page.locator('link[rel="icon"]');
+    await expect(icons).toHaveCount(1);
+    await expect(icons).toHaveAttribute("type", "image/svg+xml");
+    await expect(icons).toHaveAttribute("sizes", "any");
+
+    iconHref = (await icons.getAttribute("href")) ?? "";
+    const iconUrl = new URL(iconHref, "http://127.0.0.1:3010");
+    expect(iconUrl.pathname).toBe("/icon.svg");
+    expect(iconUrl.search).not.toBe("");
+  }
+
+  const [metadataIcon, compatibilityIcon] = await Promise.all([
+    request.get(iconHref),
+    request.get("/favicon.svg"),
+  ]);
+
+  for (const response of [metadataIcon, compatibilityIcon]) {
+    expect(response.ok()).toBe(true);
+    expect(response.headers()["content-type"]).toContain("image/svg+xml");
+  }
+
+  const svg = await metadataIcon.text();
+  expect(svg).toContain("@media (prefers-color-scheme: dark)");
+  expect(svg).toContain(".mark { fill: #09090b; }");
+  expect(svg).toContain(".mark { fill: #ffffff; }");
+});
+
 test("switches the current page and keeps search results locale-scoped", async ({
   page,
   request,

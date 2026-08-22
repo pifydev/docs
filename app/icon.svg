@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" width="800" height="800">
+  <style>
+    .mark { fill: #09090b; }
+    .accent { fill: #6366f1; }
+    @media (prefers-color-scheme: dark) {
+      .mark { fill: #ffffff; }
+      .accent { fill: #818cf8; }
+    }
+  </style>
+  <path class="mark" fill-rule="evenodd" d="
+    M165.29 165.29 H517.36 V400 H400 V517.36 H282.65 V634.72 H165.29 Z
+    M282.65 282.65 V400 H400 V282.65 Z
+  "/>
+  <rect class="accent" x="517.36" y="400" width="117.36" height="117.36"/>
+</svg>

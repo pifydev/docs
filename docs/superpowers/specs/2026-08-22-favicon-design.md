@@ -15,6 +15,7 @@ Make the Pify favicon reliably discoverable on every English and Vietnamese docu
 
 - Add the adaptive SVG through the Next.js App Router `app/icon.svg` metadata convention so Next.js publishes the icon link for every localized route.
 - Keep `public/favicon.svg` as the stable `/favicon.svg` compatibility URL.
+- Exclude `/icon.svg` and `/favicon.svg` from locale proxy matching so both static assets are served directly.
 - Remove the manual nested-layout icon declaration if it duplicates the file-convention metadata.
 - Do not add a manifest, installable-PWA behavior, or unrelated branding assets.
 

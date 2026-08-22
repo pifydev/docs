@@ -18,7 +18,6 @@ export const metadata: Metadata = {
   },
   description:
     "Source-code reading notes for the Pi Agent SDK in English and Vietnamese.",
-  icons: { icon: "/favicon.svg" },
 };
 
 export function generateStaticParams() {
