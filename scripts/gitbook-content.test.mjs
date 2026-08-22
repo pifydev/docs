@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
+  extractMermaidBlocks,
   mapSourcePath,
   normalizeDocument,
   rewriteLocaleLinks,
@@ -105,4 +106,9 @@ test("FAQ contribution guidance does not reference retired Astro automation", as
 test("migrated repository satisfies the GitBook content contract", async () => {
   const errors = await validateRepository(new URL("..", import.meta.url));
   assert.deepEqual(errors, []);
+});
+
+test("Mermaid extraction covers blocks outside numbered chapters", () => {
+  const markdown = "# Guide\n\n```mermaid\ngraph TD\n  A --> B\n```\n";
+  assert.deepEqual(extractMermaidBlocks(markdown), ["graph TD\n  A --> B"]);
 });

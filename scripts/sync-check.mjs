@@ -4,12 +4,28 @@ import { join } from "node:path";
 import matter from "gray-matter";
 
 const LANGS = ["zh", "en", "vi"];
+const CHAPTER_FILE = /^ch\d{2}-[a-z0-9-]+\.md$/;
 const errors = [];
 const warnings = [];
 const inventory = new Map();
 
 function countBy(content, regex) {
   return (content.match(regex) || []).length;
+}
+
+export function compareOptionalTermSets(termSets) {
+  const defined = Object.entries(termSets).filter(([, value]) => Array.isArray(value) && value.length > 0);
+  if (defined.length < 2) return [];
+  const [baseLanguage, baseTerms] = defined[0];
+  const expected = [...baseTerms].sort();
+  const errors = [];
+  for (const [language, terms] of defined.slice(1)) {
+    const actual = [...terms].sort();
+    if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+      errors.push(`terms_used differs (${baseLanguage} vs ${language})`);
+    }
+  }
+  return errors;
 }
 
 for (const lang of LANGS) {
@@ -20,7 +36,7 @@ for (const lang of LANGS) {
   } catch {
     continue;
   }
-  for (const name of files.filter((f) => f.startsWith("ch") && f.endsWith(".md"))) {
+  for (const name of files.filter((file) => CHAPTER_FILE.test(file))) {
     if (!inventory.has(name)) inventory.set(name, {});
     inventory.get(name)[lang] = join(dir, name);
   }
@@ -55,29 +71,9 @@ for (const [name, paths] of inventory) {
     }
   }
 
-  const termSets = {};
-  for (const lang of langs) {
-    if (fms[lang].terms_used) {
-      termSets[lang] = [...fms[lang].terms_used].sort();
-    }
-  }
-  const tkeys = Object.keys(termSets);
-  if (tkeys.length > 1) {
-    const first = tkeys[0];
-    for (const lang of tkeys) {
-      if (lang === first) continue;
-      const a = termSets[first];
-      const b = termSets[lang];
-      if (a.length !== b.length) {
-        errors.push(`${name}: terms_used count differs (${first}=${a.length}, ${lang}=${b.length})`);
-      } else {
-        for (let i = 0; i < a.length; i++) {
-          if (a[i] !== b[i]) {
-            errors.push(`${name}: terms_used differs at index ${i}`);
-          }
-        }
-      }
-    }
+  const termSets = Object.fromEntries(langs.map((lang) => [lang, fms[lang].terms_used]));
+  for (const error of compareOptionalTermSets(termSets)) {
+    errors.push(`${name}: ${error}`);
   }
 
   const counts = {};

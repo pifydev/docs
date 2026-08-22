@@ -1,41 +1,40 @@
 #!/usr/bin/env node
-import { readFile, readdir, mkdtemp, writeFile, rm } from "node:fs/promises";
+import { spawn } from "node:child_process";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { spawn } from "node:child_process";
 
-const LANGS = ["en", "vi"];
+import { extractMermaidBlocks } from "./lib/gitbook-content.mjs";
+
 const errors = [];
 let total = 0;
+
+const manifest = JSON.parse(await readFile("content/translation-manifest.json", "utf8"));
+const mmdc = join("node_modules", "@mermaid-js", "mermaid-cli", "src", "cli.js");
 
 const tmpDir = await mkdtemp(join(tmpdir(), "pi-docs-mermaid-"));
 
 try {
-  for (const lang of LANGS) {
-    const dir = join("src/content/docs", lang);
-    let files;
-    try {
-      files = await readdir(dir);
-    } catch {
-      continue;
-    }
-    for (const name of files.filter((f) => f.startsWith("ch") && f.endsWith(".md"))) {
-      const content = await readFile(join(dir, name), "utf-8");
-      const rx = /```mermaid\r?\n([\s\S]*?)\r?\n```/g;
-      let m;
-      while ((m = rx.exec(content)) !== null) {
+  for (const locale of ["en", "vi"]) {
+    for (const page of manifest.pages) {
+      const relativePath = page[locale];
+      const content = await readFile(join("content", locale, relativePath), "utf8");
+      for (const block of extractMermaidBlocks(content)) {
         total++;
         const mmdFile = join(tmpDir, `block-${total}.mmd`);
         const svgFile = join(tmpDir, `block-${total}.svg`);
-        await writeFile(mmdFile, m[1], "utf-8");
-        const code = await new Promise((resolve) => {
-          const proc = spawn("npx", ["mmdc", "-i", mmdFile, "-o", svgFile, "-q"], {
+        await writeFile(mmdFile, block, "utf8");
+        const result = await new Promise((resolve) => {
+          const proc = spawn(process.execPath, [mmdc, "-i", mmdFile, "-o", svgFile, "-q"], {
             stdio: "inherit",
           });
-          proc.on("close", resolve);
+          proc.once("error", (error) => resolve({ code: null, error }));
+          proc.once("close", (code) => resolve({ code, error: null }));
         });
-        if (code !== 0) {
-          errors.push(`${lang}/${name} block ${total}: mmdc failed`);
+        if (result.error) {
+          errors.push(`${locale}/${relativePath} block ${total}: ${result.error.message}`);
+        } else if (result.code !== 0) {
+          errors.push(`${locale}/${relativePath} block ${total}: mmdc failed`);
         }
       }
     }

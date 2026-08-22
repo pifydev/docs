@@ -18,6 +18,11 @@ const KEPT_FRONTMATTER = [
   "mermaid_blocks",
 ];
 
+export function extractMermaidBlocks(markdown) {
+  return [...markdown.matchAll(/^```mermaid\s*\r?\n([\s\S]*?)\r?\n```\s*$/gm)]
+    .map((match) => match[1]);
+}
+
 export function mapSourcePath(relativePath) {
   return relativePath === "index.mdx" ? "README.md" : relativePath.replace(/\\/g, "/");
 }

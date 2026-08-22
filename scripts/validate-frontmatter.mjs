@@ -5,6 +5,7 @@ import matter from "gray-matter";
 
 const ROOT = "src/content/docs";
 const LANGS = ["zh", "en", "vi"];
+const CHAPTER_FILE = /^ch\d{2}-[a-z0-9-]+\.md$/;
 const REQUIRED = ["chapter", "slug", "language", "source_url", "status"];
 const STATUS = ["draft", "translated", "reviewed", "published"];
 
@@ -36,7 +37,7 @@ for (const lang of LANGS) {
   } catch {
     continue;
   }
-  for (const name of files.filter((f) => f.startsWith("ch") && f.endsWith(".md"))) {
+  for (const name of files.filter((file) => CHAPTER_FILE.test(file))) {
     fileCount++;
     const path = join(dir, name);
     const file = await readFile(path, "utf-8");
@@ -57,8 +58,9 @@ for (const lang of LANGS) {
     if (fm.language !== undefined && fm.language !== lang) {
       errors.push(`${label}: language "${fm.language}" does not match directory "${lang}"`);
     }
-    if (fm.slug !== undefined && !/^ch[0-9]{2}-[a-z0-9-]+$/.test(fm.slug)) {
-      errors.push(`${label}: slug "${fm.slug}" does not match pattern`);
+    const expectedSlug = `${lang}/${name.replace(/\.md$/, "")}`;
+    if (fm.slug !== undefined && fm.slug !== expectedSlug) {
+      errors.push(`${label}: slug must be "${expectedSlug}" (got "${fm.slug}")`);
     }
     if (fm.status !== undefined && !STATUS.includes(fm.status)) {
       errors.push(`${label}: status must be ${STATUS.join("|")} (got "${fm.status}")`);
