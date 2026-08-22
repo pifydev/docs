@@ -17,7 +17,12 @@ export default async function DocumentationLayout({
   if (!isLocale(lang) || !i18n.languages.includes(lang)) notFound();
 
   return (
-    <DocsLayout tree={source.getPageTree(lang)} {...baseOptions(lang)}>
+    <DocsLayout
+      tree={source.getPageTree(lang)}
+      containerProps={{ className: "pify-docs-layout" }}
+      sidebar={{ className: "pify-sidebar" }}
+      {...baseOptions(lang)}
+    >
       {children}
     </DocsLayout>
   );

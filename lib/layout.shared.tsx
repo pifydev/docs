@@ -1,3 +1,4 @@
+import { PifyLogo } from "@/components/pify-logo";
 import type { Locale } from "@/lib/i18n";
 import { i18n } from "@/lib/i18n";
 import { uiTranslations } from "fumadocs-ui/i18n";
@@ -37,22 +38,10 @@ export const translations = i18n
     },
   });
 
-function Brand() {
-  return (
-    <span className="pify-brand">
-      <picture>
-        <source srcSet="/pify-on-dark-128.png" media="(prefers-color-scheme: dark)" />
-        <img src="/pify-on-light-128.png" alt="" width={28} height={28} />
-      </picture>
-      <span>Pify</span>
-    </span>
-  );
-}
-
 export function baseOptions(locale: Locale): BaseLayoutProps {
   return {
     nav: {
-      title: <Brand />,
+      title: <PifyLogo />,
       url: `/${locale}`,
       transparentMode: "none",
     },

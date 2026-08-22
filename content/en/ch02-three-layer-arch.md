@@ -53,8 +53,6 @@ code_blocks: 16
 code_lines: 203
 mermaid_blocks: 0
 ---
-# Chapter 2: Three-Layer Architecture: Pi-Agent Project Skeleton
-
 > In this chapter, we step back and look at Pi''s overall architecture: where the code lives, how the packages depend on each other, and how types flow between layers. Once you have this full picture, drilling into any single module later will not get you lost.
 
 ---
@@ -249,7 +247,7 @@ But wait :
 
 ## 4. Open package.json, things are not so simple
 
-> **Reading path hint**: Sections 4–5 are **advanced architecture understanding**, going into dependency relationships and type-flow details. Section 4 corrects the common misconception of "strict layering" and clarifies the dependency direction: **a must-read if you plan to build on top of the SDK**. Section 5 expands on the three-layer type progression; it leans more on TypeScript system details and you can forget field names without hurting later learning. **If you only want to get up and running quickly, you can skip these two sections and jump to Section 6 to see "how the layering promise holds".**
+> **Reading path hint**: Sections 4-5 are **advanced architecture understanding**, going into dependency relationships and type-flow details. Section 4 corrects the common misconception of "strict layering" and clarifies the dependency direction: **a must-read if you plan to build on top of the SDK**. Section 5 expands on the three-layer type progression; it leans more on TypeScript system details and you can forget field names without hurting later learning. **If you only want to get up and running quickly, you can skip these two sections and jump to Section 6 to see "how the layering promise holds".**
 
 If your mental model says "upper layers may only depend on the adjacent lower layer", then opening `packages/coding-agent/package.json` and looking at the `dependencies` field, you will see one unexpected detail:
 
@@ -595,7 +593,7 @@ In the next chapter we drill into the Agent''s heart: **the Agent Loop**. We wil
 
 ---
 
-> **About this book''s structure**: chapters 1–6 (Chapter 1 Opening → Chapter 6 Message System) build a complete understanding of Pi-Agent''s core mechanisms; we recommend reading them in order. Starting from Chapter 7 (Event-Driven, Context Engineering, Context Compaction, Session Management, etc.), the topics become advanced engineering concerns; each chapter is relatively independent and can be read as needed.
+> **About this book''s structure**: chapters 1-6 (Chapter 1 Opening → Chapter 6 Message System) build a complete understanding of Pi-Agent''s core mechanisms; we recommend reading them in order. Starting from Chapter 7 (Event-Driven, Context Engineering, Context Compaction, Session Management, etc.), the topics become advanced engineering concerns; each chapter is relatively independent and can be read as needed.
 
 ---
 

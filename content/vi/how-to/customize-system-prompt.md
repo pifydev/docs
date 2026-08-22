@@ -32,8 +32,6 @@ Mỗi layer sau thấy prompt đã được sửa bởi các layer trước. CLI
 Tạo `AGENTS.md` ở root project:
 
 ```md title="AGENTS.md"
-# Project rules
-
 - Use TypeScript strict mode everywhere.
 - Prefer `unknown` over `any`. Cast only at the boundary.
 - Tests live next to the code as `*.test.ts`.

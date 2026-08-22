@@ -41,8 +41,6 @@ code_blocks: 8
 code_lines: 89
 mermaid_blocks: 1
 ---
-# Chapter 1: Introduction: Why Pi-Agent Is Worth Your Time
-
 > This is the opening chapter of "Pi-Agent in Depth." It does not dig into source code; it answers a more fundamental question: what is Pi, and why is it worth your time? By the end you will have a clear mental model of Pi's three identities: **coding tool, learning material, development SDK**.
 
 ---
@@ -71,7 +69,7 @@ Breaking it apart:
 
 - **"Coding Agent"**: it reads your codebase, writes code, edits code, runs commands; like a pair-programming partner sitting next to you.
 - **"Terminal Shell"**: it lives in the terminal, no GUI, no IDE plugin; output is written to the terminal scrollback buffer. This single decision drives every downstream design choice.
-- **"Minimal"**: four core built-in tools (`read` / `write` / `edit` / `bash`), a static system prompt template of roughly 90 English words (about 200–400 words after tools, skills, and contextFiles are stitched in at runtime), and around 12,000 lines of TUI code (the core `tui.ts` file alone is about 1,700 lines). It deliberately does **not** build MCP, sub-agents, plan mode, permission dialogs, or background bash.
+- **"Minimal"**: four core built-in tools (`read` / `write` / `edit` / `bash`), a static system prompt template of roughly 90 English words (about 200-400 words after tools, skills, and contextFiles are stitched in at runtime), and around 12,000 lines of TUI code (the core `tui.ts` file alone is about 1,700 lines). It deliberately does **not** build MCP, sub-agents, plan mode, permission dialogs, or background bash.
 - **"Extensible"**: the missing features above the minimal core are filled in by TypeScript Extensions, Skills, and Pi Packages.
 
 ### Key numbers
@@ -80,7 +78,7 @@ Breaking it apart:
 | --- | --- | --- |
 | GitHub Stars | 64,000+ | Ten months of growth; demand is community-validated. |
 | Built-in tools | 4 core + 3 helpers | Core: `read` / `write` / `edit` / `bash`; helpers: `grep` / `find` / `ls`. |
-| System prompt | Static template ~90 words (200–400 words at runtime) | Compare with Claude Code's tens of thousands of words. |
+| System prompt | Static template ~90 words (200-400 words at runtime) | Compare with Claude Code's tens of thousands of words. |
 | TUI codebase | ~12,000 lines | The core `tui.ts` file alone is about 1,700 lines; Mario's game-engine background shows in the restraint. |
 | Supported providers | 30+ | The source `KnownProvider` enum lists 35 (including regional variants); about 27 unique brands: Anthropic, OpenAI, Google, Groq, Ollama, etc. |
 | Core packages | 4 | `pi-ai` / `pi-agent-core` / `pi-tui` / `pi-coding-agent`. |
@@ -319,7 +317,7 @@ This tutorial (illustrated edition) currently has **10 published chapters**. The
 
 > **Roadmap ahead**: chapters 11 (Extension system), 12 (testing patterns), 13 (design takeaways summary), and other advanced topics are not yet covered in this tutorial. Readers interested can consult the source and docs of the [official Pi repo](https://github.com/earendil-works/pi).
 
-> **Reading advice**: read chapters 1–6 in order; they are the foundation for understanding Pi's runtime. From chapter 7 onward each chapter is more independent; jump in by topic as needed.
+> **Reading advice**: read chapters 1-6 in order; they are the foundation for understanding Pi's runtime. From chapter 7 onward each chapter is more independent; jump in by topic as needed.
 
 Each chapter answers three layers of questions: **what** (the concept), **how** (source-code analysis), **why this way** (design trade-offs).
 

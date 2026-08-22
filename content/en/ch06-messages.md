@@ -14,8 +14,6 @@ code_blocks: 17
 code_lines: 181
 mermaid_blocks: 0
 ---
-# Chapter 6: Message System: How Agent Memory Is Organized and Passed
-
 Last chapter we learned the tool system: the model says "read the file", Agent Loop executes the `read` tool through a five-step pipeline, and finally produces a `ToolResultMessage`. But have you noticed: we have been saying "message" all along, yet we never opened it up to see what it looks like.
 
 `UserMessage`, `AssistantMessage`, `ToolResultMessage`: these three names appear again and again in the first five chapters. Chapter 3 says "messages flow in the Loop", Chapter 4 says "messages are sent to the model", Chapter 5 says "a tool result is a message".

@@ -14,8 +14,6 @@ code_blocks: 15
 code_lines: 164
 mermaid_blocks: 0
 ---
-# Chương 7: Hướng sự kiện: Hệ thần kinh của Agent
-
 Trong sáu chương vừa qua, có một thứ cứ lặp đi lặp lại mà ta chưa đào sâu: **sự kiện** (event).
 
 Chương 3 từng nói "Agent Loop mỗi bước đều phát event để UI cập nhật real time". Chương 5 từng nói "khi thực thi tool sẽ phát ra event `tool_execution_start`, `tool_execution_update`, `tool_execution_end`". Ở Chương 6, event khắp nơi đều mang theo `AgentMessage`.

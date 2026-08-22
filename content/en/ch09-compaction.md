@@ -14,8 +14,6 @@ code_blocks: 20
 code_lines: 183
 mermaid_blocks: 0
 ---
-# Chapter 9: Context Compaction: What to Do When the Dialog Gets Too Long
-
 Chapter 8 looked at the full picture of context engineering: among which `transformContext` is just an extension point; the actual "doing the compaction" core mechanism is Compaction. When the dialog grows longer and longer, messages get more and more, eventually exceeding the model's context window (Claude 200K, GPT 128K). At this point something more aggressive is needed: **compaction of the dialog history**.
 
 This chapter looks at how Pi compresses 50 turns of dialog into a summary when the context window is almost full, letting the Agent continue to "remember" what happened before.

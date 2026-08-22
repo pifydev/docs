@@ -14,8 +14,6 @@ code_blocks: 16
 code_lines: 215
 mermaid_blocks: 0
 ---
-# Chương 8: Context engineering: Nhét cuộc hội thoại vô hạn vào cửa sổ hữu hạn
-
 Chương 6 khi bàn về hệ thống message ta từng nói: bên trong Agent tự do diễn đạt qua 7 loại `AgentMessage`, nhưng trước khi gọi LLM nó đi qua một biên giới dịch `convertToLlm`, dịch thành 3 loại `Message` chuẩn. Chương 7 khi bàn về event-driven ta cũng từng nhắc: sau event `agent_end`, một "kiểm tra context" được kích hoạt.
 
 Đằng sau hai chuyện này thực ra là cùng một vấn đề cốt lõi: **cửa sổ context của LLM là cố định, nhưng hội thoại của coding-agent lại tăng không giới hạn**.

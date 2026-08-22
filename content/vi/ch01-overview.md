@@ -41,8 +41,6 @@ code_blocks: 8
 code_lines: 89
 mermaid_blocks: 1
 ---
-# Chương 1: Mở đầu: Tại sao Pi-Agent đáng để bạn dành thời gian
-
 > Đây là chương mở đầu của "Pi-Agent chuyên sâu." Chương này không đi vào chi tiết source code; nó trả lời một câu hỏi nền tảng hơn: Pi là gì, và tại sao nó đáng để bạn dành thời gian? Đến cuối chương, bạn sẽ có một mô hình tinh thần rõ ràng về ba danh tính (identity) của Pi: **công cụ code, tài liệu học tập, SDK phát triển**.
 
 ---
@@ -71,7 +69,7 @@ Tách ra từng phần:
 
 - **"Coding Agent"**: nó đọc codebase của bạn, viết code, sửa code, chạy lệnh; như một người pair-programming ngồi cạnh bạn.
 - **"Terminal Shell"**: nó sống trong terminal, không có GUI, không có IDE plugin; output ghi vào terminal scrollback buffer. Quyết định đơn lẻ này chi phối mọi lựa chọn thiết kế phía sau.
-- **"Tối giản" (Minimal)**: bốn tool tích hợp sẵn cốt lõi (`read` / `write` / `edit` / `bash`), một template system prompt tĩnh khoảng 90 từ tiếng Anh (khoảng 200–400 từ sau khi ghép tools, skills, contextFiles lúc runtime), và khoảng 12.000 dòng code TUI (riêng file `tui.ts` cốt lõi khoảng 1.700 dòng). Nó cố ý **không** xây MCP, sub-agent, plan mode, hộp thoại phân quyền, hay background bash.
+- **"Tối giản" (Minimal)**: bốn tool tích hợp sẵn cốt lõi (`read` / `write` / `edit` / `bash`), một template system prompt tĩnh khoảng 90 từ tiếng Anh (khoảng 200-400 từ sau khi ghép tools, skills, contextFiles lúc runtime), và khoảng 12.000 dòng code TUI (riêng file `tui.ts` cốt lõi khoảng 1.700 dòng). Nó cố ý **không** xây MCP, sub-agent, plan mode, hộp thoại phân quyền, hay background bash.
 - **"Có thể mở rộng" (Extensible)**: những tính năng còn thiếu phía trên lõi tối giản được bổ sung bằng Extensions, Skills, và Pi Packages viết bằng TypeScript.
 
 ### Những con số chính
@@ -80,7 +78,7 @@ Tách ra từng phần:
 | --- | --- | --- |
 | GitHub Stars | 64.000+ | Mười tháng tăng trưởng; nhu cầu đã được cộng đồng xác nhận. |
 | Tool tích hợp sẵn | 4 cốt lõi + 3 hỗ trợ | Cốt lõi: `read` / `write` / `edit` / `bash`; hỗ trợ: `grep` / `find` / `ls`. |
-| System prompt | Template tĩnh ~90 từ (200–400 từ lúc runtime) | So với hàng chục nghìn từ của Claude Code. |
+| System prompt | Template tĩnh ~90 từ (200-400 từ lúc runtime) | So với hàng chục nghìn từ của Claude Code. |
 | Quy mô code TUI | ~12.000 dòng | Riêng file `tui.ts` cốt lõi khoảng 1.700 dòng; thể hiện sự "kìm nén" từ background làm game engine của Mario. |
 | Provider được hỗ trợ | 30+ nhà cung cấp | Enum `KnownProvider` trong source thực ra liệt kê 35 (bao gồm biến thể khu vực); khoảng 27 thương hiệu độc lập: Anthropic, OpenAI, Google, Groq, Ollama, v.v. |
 | Package cốt lõi | 4 | `pi-ai` / `pi-agent-core` / `pi-tui` / `pi-coding-agent`. |
@@ -319,7 +317,7 @@ Tutorial này (phiên bản có hình minh họa) hiện có **10 chương đã 
 
 > **Lộ trình phía trước**: chương 11 (hệ thống Extension), chương 12 (pattern kiểm thử), chương 13 (tổng kết tinh hoa thiết kế), và các chủ đề nâng cao khác chưa có trong tutorial này. Bạn đọc quan tâm có thể tham khảo source code và tài liệu của [repo chính thức Pi](https://github.com/earendil-works/pi).
 
-> **Lời khuyên đọc**: chương 1–6 nên đọc theo thứ tự; chúng là nền tảng để hiểu runtime của Pi. Từ chương 7 trở đi mỗi chương khá độc lập; nhảy vào theo chủ đề khi cần.
+> **Lời khuyên đọc**: chương 1-6 nên đọc theo thứ tự; chúng là nền tảng để hiểu runtime của Pi. Từ chương 7 trở đi mỗi chương khá độc lập; nhảy vào theo chủ đề khi cần.
 
 Mỗi chương trả lời ba lớp câu hỏi: **cái gì** (khái niệm), **thế nào** (phân tích source code), **tại sao vậy** (đánh đổi thiết kế).
 

@@ -14,8 +14,6 @@ code_blocks: 29
 code_lines: 279
 mermaid_blocks: 0
 ---
-# Chapter 5: Tool System: The Pipeline That Turns "Calling a Function" Into a Controlled Process
-
 > Chapter 3 traced the journey from "the model decides to call the read tool" to "the tool result returns to the model". But at that point we treated it as a black box: we only said "Loop executes the tool" without explaining how.
 
 This chapter opens that black box.

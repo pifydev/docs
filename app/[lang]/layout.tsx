@@ -14,7 +14,7 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://docs.pify.dev"),
   title: {
     default: "Pify Agent Book",
-    template: "%s — Pify Agent Book",
+    template: "%s - Pify Agent Book",
   },
   description: "Source-code reading notes for the Pi Agent SDK in English and Vietnamese.",
   icons: { icon: "/favicon.svg" },

@@ -14,8 +14,6 @@ code_blocks: 17
 code_lines: 181
 mermaid_blocks: 0
 ---
-# Chương 6: Hệ thống Message: Bộ nhớ của Agent được tổ chức và truyền đi ra sao
-
 Chương trước ta đã học hệ thống tool: model nói "đọc file", Agent Loop thực thi tool `read` qua pipeline 5 bước, cuối cùng sinh ra một `ToolResultMessage`. Nhưng bạn có để ý không: ta nói "message" khắp nơi, mà chưa bao giờ thực sự mở nó ra xem trông thế nào.
 
 `UserMessage`, `AssistantMessage`, `ToolResultMessage`: ba cái tên này xuất hiện đi xuất hiện lại trong 5 chương đầu. Chương 3 nói "message chảy trong Loop", Chương 4 nói "message gửi cho model", Chương 5 nói "kết quả tool là một message".

@@ -39,14 +39,16 @@ export default async function DocumentationPage({
   const githubUrl = `https://github.com/pifydev/docs/blob/main/content/${lang}/${sourcePath}`;
 
   return (
-    <DocsPage toc={page.data.toc}>
-      <DocsTitle>{page.data.title}</DocsTitle>
-      <DocsDescription>{page.data.description}</DocsDescription>
+    <DocsPage toc={page.data.toc} className="pify-docs-page">
+      <DocsTitle className="pify-page-title">{page.data.title}</DocsTitle>
+      <DocsDescription className="pify-page-description">
+        {page.data.description}
+      </DocsDescription>
       <div className="pify-page-actions">
         <ViewOptionsPopover markdownUrl={markdownUrl} githubUrl={githubUrl} />
         <EditOnGitHub href={githubUrl}>Edit on GitHub</EditOnGitHub>
       </div>
-      <DocsBody>
+      <DocsBody className="pify-docs-body">
         <Content
           components={getMDXComponents({
             a: createRelativeLink(source, page),

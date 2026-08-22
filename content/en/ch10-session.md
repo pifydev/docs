@@ -14,8 +14,6 @@ code_blocks: 30
 code_lines: 187
 mermaid_blocks: 0
 ---
-# Chapter 10: Session Management: Dialog Storage, Recovery, and Forking
-
 When talking about the compaction algorithm in Chapter 9, we kept mentioning one concept: Session Tree. The compaction result (CompactionEntry) is stored on the Session Tree; `buildSessionContext()` builds the context the LLM needs from the Session Tree.
 
 This chapter answers: what exactly is a Session Tree?
@@ -366,7 +364,7 @@ These 4 become one entry in the messages array, sent to the LLM:
 
 | Type | What message is produced | Example |
 | --- | --- | --- |
-| `MessageEntry` | UserMessage / AssistantMessage / ToolResultMessage | All dialog messages from steps 2–5 |
+| `MessageEntry` | UserMessage / AssistantMessage / ToolResultMessage | All dialog messages from steps 2-5 |
 | `CustomMessageEntry` | CustomMessage (the custom messages covered in Chapter 6) | Special messages injected by extensions |
 | `CompactionEntry` | CompactionSummaryMessage (replaces old messages) | Compaction results covered in Chapter 9 |
 | `BranchSummaryEntry` | BranchSummaryMessage (summary of an abandoned branch) | Covered later in §4 |
@@ -627,7 +625,7 @@ The resulting `messages` array:
 
 ### Format: one Entry per line
 
-**This is the concrete implementation of "compaction result replaces old messages" mentioned in Chapter 9**: it does not delete e1 and e2 (append-only forbids deletion); instead, `buildSessionContext` "skips" them during traversal based on `firstKeptEntryId`. Next time you rewind to before e4, the path of `buildSessionContext` will not include e4, and e1–e3 will reappear as normal messages: compaction is not destructive, it is just a "view on the current path".
+**This is the concrete implementation of "compaction result replaces old messages" mentioned in Chapter 9**: it does not delete e1 and e2 (append-only forbids deletion); instead, `buildSessionContext` "skips" them during traversal based on `firstKeptEntryId`. Next time you rewind to before e4, the path of `buildSessionContext` will not include e4, and e1-e3 will reappear as normal messages: compaction is not destructive, it is just a "view on the current path".
 
 Notice that `firstKeptEntryId` is a field recorded on the `CompactionEntry` itself: it was calculated at compaction time as "which recent messages to keep". The "find a cutting point" logic from Chapter 9 exists precisely to determine this `firstKeptEntryId`.
 

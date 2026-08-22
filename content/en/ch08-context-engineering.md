@@ -14,8 +14,6 @@ code_blocks: 16
 code_lines: 215
 mermaid_blocks: 0
 ---
-# Chapter 8: Context Engineering: Fitting Infinite Conversations into a Finite Window
-
 When we talked about the message system in Chapter 6 we said: inside the Agent it expresses freely with 7 kinds of `AgentMessage`, but before calling the LLM it goes through a `convertToLlm` translation boundary and is translated into the 3 standard `Message`. When we talked about event-driven in Chapter 7 we mentioned: after the `agent_end` event, a "context check" is triggered.
 
 Behind these two things there is the same core problem: **the LLM's context window is fixed, but a coding-agent's dialog grows without limit**.
@@ -556,7 +554,7 @@ This is the wisdom of engineering: **acknowledge each mechanism's capability bou
 
 ### 2. Addition + subtraction: the bidirectional operations of context engineering
 
-§3 is "subtraction": make things that are too big smaller. §4 is "addition": actively **add** project specs and Skills. §5–§6 both trim and "add": **add** structured summaries, add abandoned-branch exploration results.
+§3 is "subtraction": make things that are too big smaller. §4 is "addition": actively **add** project specs and Skills. §5-§6 both trim and "add": **add** structured summaries, add abandoned-branch exploration results.
 
 Context engineering isn't mere "compaction", it's "**shaping**": under volume constraints, make information **more accurate, more structured, easier to understand**.
 

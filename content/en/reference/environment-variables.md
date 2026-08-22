@@ -104,9 +104,9 @@ Required for routing through Cloudflare AI Gateway. Set in `providers[provider].
 
 Pi sets the following on every child it spawns:
 
-- `AI_AGENT=pi` — generic agent marker, read by external tools
-- `PI_CODING_AGENT=true` — added when the child is the coding agent itself
-- `PI_PARENT_SESSION=<session-id>` — when the child was spawned from a session
+- `AI_AGENT=pi` - generic agent marker, read by external tools
+- `PI_CODING_AGENT=true` - added when the child is the coding agent itself
+- `PI_PARENT_SESSION=<session-id>` - when the child was spawned from a session
 
 Children may opt to read these or ignore them. Reading `PI_PARENT_SESSION` lets a sub-agent record its origin in the metadata of any session it creates.
 

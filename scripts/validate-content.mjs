@@ -84,8 +84,12 @@ function fences(content) {
   );
 }
 
+function prose(content) {
+  return content.replace(/^```[^\n]*\n[\s\S]*?^```\s*$/gm, "");
+}
+
 function headingShape(content) {
-  return [...content.matchAll(/^(#{1,6})\s+.+$/gm)].map(
+  return [...prose(content).matchAll(/^(#{1,6})\s+.+$/gm)].map(
     (match) => match[1].length,
   );
 }
@@ -170,6 +174,11 @@ export async function validateRepository(rootURL) {
       }
       if (/\{%\s*(?:hint|endhint)\b/.test(parsed[locale].content)) {
         errors.push(`${locale}/${relativePath}: GitBook hint syntax is not allowed`);
+      }
+      if (/^#\s+/m.test(prose(parsed[locale].content))) {
+        errors.push(
+          `${locale}/${relativePath}: page body must start below H1 because the layout renders the title`,
+        );
       }
 
       for (const href of localMarkdownLinks(parsed[locale].content)) {

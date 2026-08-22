@@ -14,8 +14,6 @@ code_blocks: 20
 code_lines: 183
 mermaid_blocks: 0
 ---
-# Chương 9: Context compaction: Hội thoại quá dài thì làm sao
-
 Chương 8 đã xem toàn cảnh context engineering: trong đó `transformContext` chỉ là extension point; cơ chế cốt lõi "ra tay nén" thực sự là Compaction. Khi hội thoại ngày càng dài, message ngày càng nhiều, cuối cùng sẽ vượt context window của model (Claude 200K, GPT 128K). Lúc đó cần một việc quyết liệt hơn: **nén lịch sử hội thoại**.
 
 Chương này xem Pi làm sao khi context window sắp đầy, nén 50 lượt hội thoại thành một đoạn tóm tắt, để Agent tiếp tục "nhớ" được trước đó đã xảy ra chuyện gì.

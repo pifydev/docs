@@ -16,8 +16,8 @@ A TypeScript file that talks to one model through the same `streamSimple` interf
 
 You need:
 
-- **Node.js 20 or later** — check with `node --version`
-- **An API key for one provider** — Anthropic, OpenAI, Google, or any local proxy that speaks the OpenAI Chat Completions protocol. Anthropic is used in the snippets below.
+- **Node.js 20 or later** - check with `node --version`
+- **An API key for one provider** - Anthropic, OpenAI, Google, or any local proxy that speaks the OpenAI Chat Completions protocol. Anthropic is used in the snippets below.
 - **A terminal** in an empty folder
 
 :::caution[Cost and safety]

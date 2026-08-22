@@ -14,8 +14,6 @@ code_blocks: 22
 code_lines: 138
 mermaid_blocks: 0
 ---
-# Chapter 4: Model Invocation: One Line, Many Providers
-
 > Chapter 3 traced the full operation of the Agent Loop. The most critical step is "calling the model": the loop sends the message to the LLM, gets a reply, and decides whether to continue or stop based on the reply.
 >
 > But at that point we skipped past it with a single line of code:

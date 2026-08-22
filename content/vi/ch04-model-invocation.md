@@ -14,8 +14,6 @@ code_blocks: 22
 code_lines: 138
 mermaid_blocks: 0
 ---
-# Chương 4: Gọi model: Một dòng, nhiều nhà cung cấp
-
 > Chương 3 đã truy vết toàn bộ hoạt động của Agent Loop. Bước then chốt nhất là "gọi model" (model invocation): vòng lặp gửi message cho LLM, nhận phản hồi, rồi quyết định tiếp tục hay dừng dựa trên phản hồi đó.
 >
 > Nhưng lúc đó ta đã bỏ qua chỉ bằng một dòng code:

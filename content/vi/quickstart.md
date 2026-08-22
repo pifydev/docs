@@ -16,8 +16,8 @@ Một file TypeScript gọi model thông qua cùng interface `streamSimple` mà 
 
 Bạn cần:
 
-- **Node.js 20 trở lên** — kiểm tra bằng `node --version`
-- **API key của một provider** — Anthropic, OpenAI, Google, hoặc bất kỳ local proxy nào nói chuyện được theo giao thức OpenAI Chat Completions. Snippet dưới dùng Anthropic.
+- **Node.js 20 trở lên** - kiểm tra bằng `node --version`
+- **API key của một provider** - Anthropic, OpenAI, Google, hoặc bất kỳ local proxy nào nói chuyện được theo giao thức OpenAI Chat Completions. Snippet dưới dùng Anthropic.
 - **Một terminal** trong một thư mục rỗng
 
 :::caution[Chi phí và an toàn]

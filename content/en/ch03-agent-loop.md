@@ -14,8 +14,6 @@ code_blocks: 37
 code_lines: 385
 mermaid_blocks: 0
 ---
-# Chapter 3: Agent Loop: The Engine That Spins the Model
-
 > The previous chapter walked through Pi's layered architecture. The architecture is just the "skeleton": the real vitality of an Agent comes from the "loop." This chapter, we start from the most basic questions: **why do we need a loop? how does it spin? when does it stop?** Then we trace the complete journey of a user message to see every heartbeat of the Agent Loop.
 
 ---

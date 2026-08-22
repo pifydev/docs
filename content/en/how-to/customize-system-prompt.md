@@ -32,8 +32,6 @@ Each later layer sees the prompt as modified by earlier layers. The CLI flags ov
 Create `AGENTS.md` in your project root:
 
 ```md title="AGENTS.md"
-# Project rules
-
 - Use TypeScript strict mode everywhere.
 - Prefer `unknown` over `any`. Cast only at the boundary.
 - Tests live next to the code as `*.test.ts`.

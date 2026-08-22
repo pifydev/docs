@@ -14,8 +14,6 @@ code_blocks: 29
 code_lines: 279
 mermaid_blocks: 0
 ---
-# Chương 5: Hệ thống Tool: Pipeline biến "gọi hàm" thành một quy trình có kiểm soát
-
 > Chương 3 đã truy vết hành trình từ "model quyết định gọi tool read" đến "kết quả tool quay về trước mặt model". Nhưng lúc đó ta coi nó như hộp đen: chỉ nói "Loop thực thi tool" mà không giải thích cụ thể.
 
 Chương này sẽ mở hộp đen đó ra.

@@ -14,8 +14,6 @@ code_blocks: 37
 code_lines: 385
 mermaid_blocks: 0
 ---
-# Chương 3: Agent Loop: Động cơ quay mô hình
-
 > Chương trước đã xem kiến trúc phân lớp của Pi. Kiến trúc chỉ là "bộ xương": sức sống thật sự của một Agent đến từ "vòng lặp" (loop). Chương này, ta bắt đầu từ những câu hỏi cơ bản nhất: **tại sao cần vòng lặp? nó quay như thế nào? khi nào dừng?** Rồi ta truy vết hành trình đầy đủ của một message người dùng để thấy từng nhịp đập của Agent Loop.
 
 ---

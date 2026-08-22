@@ -53,8 +53,6 @@ code_blocks: 16
 code_lines: 203
 mermaid_blocks: 0
 ---
-# Chương 2: Kiến trúc ba lớp: Bộ xương của Pi-Agent
-
 > Trong chương này, chúng ta đứng từ trên cao nhìn xuống toàn bộ kiến trúc của Pi: code nằm ở đâu, các package phụ thuộc lẫn nhau ra sao, và kiểu dữ liệu chảy giữa các lớp như thế nào. Khi đã có bức tranh toàn cảnh này, việc đào sâu vào bất kỳ module nào sau này cũng không làm bạn lạc.
 
 ---
@@ -249,7 +247,7 @@ Nhưng khoan :
 
 ## 4. Mở package.json ra, mọi thứ không đơn giản như vậy
 
-> **Gợi ý đường đọc**: Mục 4–5 là **phần kiến trúc nâng cao**, đi sâu vào chi tiết quan hệ phụ thuộc và luồng kiểu dữ liệu. Mục 4 sửa lại hiểu lầm thường gặp về "phân lớp chặt" và làm rõ hướng phụ thuộc: **bắt buộc đọc nếu bạn dự định xây dựng trên SDK**. Mục 5 mở rộng sự tiến hoá kiểu dữ liệu qua ba lớp; phần này nghiêng về chi tiết hệ thống kiểu, bạn có thể quên tên trường mà không ảnh hưởng tới việc học sau này. **Nếu chỉ muốn lập và chạy nhanh, bạn có thể bỏ qua hai mục này và nhảy thẳng tới Mục 6 để xem "lời hứa phân lớp được giữ thế nào".**
+> **Gợi ý đường đọc**: Mục 4-5 là **phần kiến trúc nâng cao**, đi sâu vào chi tiết quan hệ phụ thuộc và luồng kiểu dữ liệu. Mục 4 sửa lại hiểu lầm thường gặp về "phân lớp chặt" và làm rõ hướng phụ thuộc: **bắt buộc đọc nếu bạn dự định xây dựng trên SDK**. Mục 5 mở rộng sự tiến hoá kiểu dữ liệu qua ba lớp; phần này nghiêng về chi tiết hệ thống kiểu, bạn có thể quên tên trường mà không ảnh hưởng tới việc học sau này. **Nếu chỉ muốn lập và chạy nhanh, bạn có thể bỏ qua hai mục này và nhảy thẳng tới Mục 6 để xem "lời hứa phân lớp được giữ thế nào".**
 
 Nếu trực giác phân lớp của bạn là "tầng trên chỉ được phép phụ thuộc vào tầng dưới kề nó", thì khi mở `packages/coding-agent/package.json` và nhìn vào trường `dependencies`, bạn sẽ thấy một chi tiết bất ngờ:
 
@@ -595,4 +593,4 @@ Nhưng ta vẫn chưa trả lời một câu hỏi nền tảng hơn: Agent th�
 
 ---
 
-> **Về cấu trúc cuốn sách**: các chương 1–6 (Chương 1 Mở đầu → Chương 6 Hệ thống Message) xây dựng sự hiểu biết hoàn chỉnh về cơ chế lõi của Pi-Agent; nên đọc theo thứ tự. Từ Chương 7 (Event-Driven, Context Engineering, Context Compaction, Quản lý Session, v.v.) trở đi, các chủ đề trở thành những vấn đề kỹ thuật nâng cao; mỗi chương tương đối độc lập và có thể đọc theo nhu cầu.
+> **Về cấu trúc cuốn sách**: các chương 1-6 (Chương 1 Mở đầu → Chương 6 Hệ thống Message) xây dựng sự hiểu biết hoàn chỉnh về cơ chế lõi của Pi-Agent; nên đọc theo thứ tự. Từ Chương 7 (Event-Driven, Context Engineering, Context Compaction, Quản lý Session, v.v.) trở đi, các chủ đề trở thành những vấn đề kỹ thuật nâng cao; mỗi chương tương đối độc lập và có thể đọc theo nhu cầu.

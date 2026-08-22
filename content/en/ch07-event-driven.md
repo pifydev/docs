@@ -14,8 +14,6 @@ code_blocks: 15
 code_lines: 164
 mermaid_blocks: 0
 ---
-# Chapter 7: Event-Driven: Agent's Nervous System
-
 In the previous six chapters, one thing kept appearing but we never dug into in depth: **events**.
 
 Chapter 3 said "Agent Loop emits an event at every step to let the UI update in real time". Chapter 5 said "when the tool executes it emits the `tool_execution_start`, `tool_execution_update`, `tool_execution_end` events". In Chapter 6, events everywhere carried `AgentMessage`.

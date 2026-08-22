@@ -104,9 +104,9 @@ Bắt buộc để route qua Cloudflare AI Gateway. Đặt trong `providers[prov
 
 Pi đặt các biến sau trên mỗi tiến trình con được sinh ra:
 
-- `AI_AGENT=pi` — marker agent chung, được đọc bởi công cụ bên ngoài
-- `PI_CODING_AGENT=true` — thêm khi tiến trình con chính là coding agent
-- `PI_PARENT_SESSION=<session-id>` — khi tiến trình con được sinh từ một session
+- `AI_AGENT=pi` - marker agent chung, được đọc bởi công cụ bên ngoài
+- `PI_CODING_AGENT=true` - thêm khi tiến trình con chính là coding agent
+- `PI_PARENT_SESSION=<session-id>` - khi tiến trình con được sinh từ một session
 
 Tiến trình con có thể tuỳ ý đọc các biến này hoặc bỏ qua. Đọc `PI_PARENT_SESSION` cho phép một sub-agent ghi lại nguồn gốc của nó trong metadata của bất kỳ session nào nó tạo.
 

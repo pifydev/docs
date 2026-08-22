@@ -14,8 +14,6 @@ code_blocks: 30
 code_lines: 187
 mermaid_blocks: 0
 ---
-# Chuong 10: Quan ly phien: Luu tru, phuc hoi va phan nhanh hoi thoai
-
 Khi ban ve thuat toan nen o Chuong 9, ta cu nhac di nhac lai mot khai niem: Session Tree. Ket qua nen (CompactionEntry) duoc luu tren Session Tree; `buildSessionContext()` xay context ma LLM can tu Session Tree.
 
 Chuong nay tra loi: Session Tree rot cung la gi?
@@ -366,7 +364,7 @@ Ví dụ ở §2 đã xuất hiện bốn loại node: `model_change`, `user`, `
 
 | Loại | Sinh ra message gì | Ví dụ |
 | --- | --- | --- |
-| `MessageEntry` | UserMessage / AssistantMessage / ToolResultMessage | Tất cả message hội thoại ở bước 2–5 |
+| `MessageEntry` | UserMessage / AssistantMessage / ToolResultMessage | Tất cả message hội thoại ở bước 2-5 |
 | `CustomMessageEntry` | CustomMessage (message tuỳ biến ở Chương 6) | Message đặc biệt do extension tiêm vào |
 | `CompactionEntry` | CompactionSummaryMessage (thay thế message cũ) | Kết quả nén ở Chương 9 |
 | `BranchSummaryEntry` | BranchSummaryMessage (tóm tắt nhánh bị bỏ) | Trình bày ở §4 phía sau |
@@ -627,7 +625,7 @@ Mảng `messages` kết quả:
 
 ### Định dạng: một Entry một dòng
 
-**Đây chính là cách triển khai cụ thể của "kết quả nén thay thế message cũ" mà Chương 9 đã đề cập**: không thực sự xoá e1 và e2 (append-only cấm xoá); thay vào đó, `buildSessionContext` "nhảy qua" chúng khi duyệt dựa trên `firstKeptEntryId`. Lần sau nếu bạn tua lại trước e4, đường đi của `buildSessionContext` không chứa e4, và e1–e3 lại xuất hiện như message bình thường: nén không phá huỷ, nó chỉ là "góc nhìn trên đường đi hiện tại".
+**Đây chính là cách triển khai cụ thể của "kết quả nén thay thế message cũ" mà Chương 9 đã đề cập**: không thực sự xoá e1 và e2 (append-only cấm xoá); thay vào đó, `buildSessionContext` "nhảy qua" chúng khi duyệt dựa trên `firstKeptEntryId`. Lần sau nếu bạn tua lại trước e4, đường đi của `buildSessionContext` không chứa e4, và e1-e3 lại xuất hiện như message bình thường: nén không phá huỷ, nó chỉ là "góc nhìn trên đường đi hiện tại".
 
 Chú ý `firstKeptEntryId` là trường do chính `CompactionEntry` ghi lại: nó đã được tính ngay khi compaction diễn ra: "giữ lại những message gần đây nào". Logic "tìm điểm cắt" ở Chương 9 chính là để xác định `firstKeptEntryId` này.
 
