@@ -5,19 +5,21 @@ on:
     paths:
       - "content/**"
       - "source/**"
+      - "src/content/docs/**"
       - "scripts/**"
       - "package.json"
       - "package-lock.json"
-      - ".github/workflows/content-quality.yml"
+      - ".github/workflows/**"
   push:
     branches: [main]
     paths:
       - "content/**"
       - "source/**"
+      - "src/content/docs/**"
       - "scripts/**"
       - "package.json"
       - "package-lock.json"
-      - ".github/workflows/content-quality.yml"
+      - ".github/workflows/**"
   workflow_dispatch:
 
 permissions:
@@ -29,6 +31,7 @@ concurrency:
 
 jobs:
   quality:
+    name: Validate GitBook content
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -38,4 +41,6 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run quality:gitbook
+      - run: npm run test:content
+      - run: npm run lint:gitbook
+      - run: npm run lint

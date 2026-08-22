@@ -1,31 +1,60 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import test from "node:test";
+import { parse } from "yaml";
 
 const repositoryRoot = new URL("../", import.meta.url);
 
-test("deploy workflow uses valid expressions and runs its lint dependency on every event", async () => {
-  const workflow = await readFile(
-    new URL(".github/workflows/deploy.yml", repositoryRoot),
+async function readWorkflow(filename) {
+  const source = await readFile(
+    new URL(`.github/workflows/${filename}`, repositoryRoot),
     "utf8",
   );
-  const normalizedWorkflow = workflow.replace(/\r\n/g, "\n");
-  const lintMatch = normalizedWorkflow.match(/  lint:\n(?<body>[\s\S]*?)\n  build:/);
+  return { source, workflow: parse(source) };
+}
 
-  assert.ok(lintMatch, "lint job block must be present");
-  assert.doesNotMatch(normalizedWorkflow, /^\s*if:\s+.*"/gm);
-  assert.doesNotMatch(lintMatch.groups.body, /^\s+if:/m);
+test("content workflow owns the complete validation pipeline", async () => {
+  const { workflow } = await readWorkflow("content-quality.yml");
+  const pullRequestPaths = workflow.on.pull_request.paths;
+  const pushPaths = workflow.on.push.paths;
+  const steps = workflow.jobs.quality.steps;
+  const setupNode = steps.find((step) => step.uses === "actions/setup-node@v4");
+  const commands = steps.filter((step) => step.run).map((step) => step.run);
+
+  assert.equal(workflow.permissions.contents, "read");
+  assert.equal(workflow.jobs.quality["timeout-minutes"], 15);
+  assert.equal(setupNode.with["node-version"], 24);
+  assert.ok(pullRequestPaths.includes(".github/workflows/**"));
+  assert.ok(pushPaths.includes(".github/workflows/**"));
+  assert.ok(pullRequestPaths.includes("src/content/docs/**"));
+  assert.deepEqual(commands, [
+    "npm ci",
+    "npm run test:content",
+    "npm run lint:gitbook",
+    "npm run lint",
+  ]);
 });
 
-test("PR sync workflow uses the repository Node validation pipeline", async () => {
-  const workflow = await readFile(
-    new URL(".github/workflows/sync-check.yml", repositoryRoot),
-    "utf8",
-  );
+test("Astro rollback workflow builds without deploying", async () => {
+  const { source, workflow } = await readWorkflow("deploy.yml");
+  const steps = workflow.jobs.build.steps;
+  const setupNode = steps.find((step) => step.uses === "actions/setup-node@v4");
+  const commands = steps.filter((step) => step.run).map((step) => step.run);
 
-  assert.doesNotMatch(workflow, /microsoft\/powershell/);
-  assert.match(workflow, /run:\s+npm ci/);
-  assert.match(workflow, /run:\s+npm run lint/);
+  assert.equal(workflow.name, "Astro Rollback Build");
+  assert.deepEqual(workflow.permissions, { contents: "read" });
+  assert.equal(workflow.jobs.build["timeout-minutes"], 15);
+  assert.equal(setupNode.with["node-version"], 24);
+  assert.deepEqual(commands, ["npm ci", "npm run build"]);
+  assert.doesNotMatch(source, /deploy-pages|upload-pages-artifact/);
+  assert.doesNotMatch(source, /^\s+(?:pages|id-token):\s+write$/m);
+});
+
+test("duplicate PR sync workflow is absent", async () => {
+  await assert.rejects(
+    access(new URL(".github/workflows/sync-check.yml", repositoryRoot)),
+    { code: "ENOENT" },
+  );
 });
 
 test("Mermaid validation supplies the documented Chromium CI sandbox override", async () => {

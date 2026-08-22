@@ -1,53 +1,46 @@
-name: Deploy
+name: Astro Rollback Build
+
 on:
+  pull_request:
+    paths:
+      - "src/**"
+      - "public/**"
+      - "scripts/build.mjs"
+      - "astro.config.mjs"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig.json"
+      - ".github/workflows/deploy.yml"
   push:
     branches: [main]
-  pull_request:
+    paths:
+      - "src/**"
+      - "public/**"
+      - "scripts/build.mjs"
+      - "astro.config.mjs"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig.json"
+      - ".github/workflows/deploy.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: pages
-  cancel-in-progress: false
+  group: astro-rollback-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  lint:
-    name: Lint (sync, frontmatter, mermaid)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 24, cache: npm }
-      - run: npm ci
-      - run: npm run lint:sync
-      - run: npm run lint:frontmatter
-      - run: npm run lint:mermaid
-
   build:
-    name: Build site
-    needs: lint
+    name: Build Astro rollback
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: 24, cache: npm }
+        with:
+          node-version: 24
+          cache: npm
       - run: npm ci
       - run: npm run build
-      - uses: actions/upload-pages-artifact@v3
-        with: { path: dist }
-
-  deploy:
-    name: Deploy to GitHub Pages
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
