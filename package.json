@@ -1,0 +1,32 @@
+{
+  "name": "pify-docs",
+  "type": "module",
+  "version": "2.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "astro dev",
+    "build": "node scripts/build.mjs",
+    "preview": "astro preview",
+    "check": "astro check",
+    "lint:frontmatter": "node scripts/validate-frontmatter.mjs",
+    "lint:sync": "node scripts/sync-check.mjs",
+    "lint:mermaid": "node scripts/validate-mermaid.mjs",
+    "lint:gitbook": "node scripts/validate-gitbook-content.mjs",
+    "test:content": "node --test scripts/gitbook-content.test.mjs",
+    "quality:gitbook": "npm run test:content && npm run lint:gitbook && npm run lint:mermaid",
+    "lint": "npm run lint:sync && npm run lint:frontmatter && npm run lint:mermaid"
+  },
+  "dependencies": {
+    "@astrojs/rss": "^4.0.19",
+    "@astrojs/starlight": "^0.41.0",
+    "astro": "^7.0.0",
+    "astro-mermaid": "^2.1.0"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.10",
+    "@mermaid-js/mermaid-cli": "^11.0.0",
+    "gray-matter": "^4.0.3",
+    "typescript": "^5.5.0",
+    "yaml": "^2.5.0"
+  }
+}

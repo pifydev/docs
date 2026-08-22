@@ -1,0 +1,394 @@
+/* Pify Agent Book - design system */
+
+/* ---------- Self-hosted Geist + Geist Mono ---------- */
+@font-face {
+  font-family: "Geist";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/Geist-Regular.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Geist";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/fonts/Geist-Medium.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Geist";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/fonts/Geist-SemiBold.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Geist";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/Geist-Bold.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Geist";
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url("/fonts/Geist-ExtraBold.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Geist Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/GeistMono-Regular.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Geist Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/fonts/GeistMono-Medium.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Geist Mono";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/fonts/GeistMono-SemiBold.ttf") format("truetype");
+}
+
+/* ---------- Design tokens (light) ---------- */
+:root {
+  /* Reading column */
+  --sl-content-width: 105rem;
+  --sl-sidebar-width: 17rem;
+  --sl-toc-width: 12rem;
+
+  /* Type stack */
+  --sl-font: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+  --sl-font-mono: "Geist Mono", ui-monospace, "SF Mono", "Cascadia Code",
+    Consolas, "Liberation Mono", monospace;
+
+  /* Single warm accent (replaces purple/violet/pink AI gradient).
+     Inspired by warm graphite + amber - editorial, not "AI-generated". */
+  --pify-accent:        #c2410c;   /* amber-700, deep */
+  --pify-accent-hover:  #9a3412;   /* amber-800 */
+  --pify-accent-soft:   #f5d0a9;   /* tint for light surfaces */
+  --pify-accent-glow:   rgba(194, 65, 12, 0.18);
+
+  /* Off-black for true-dark mode (no pure #000) */
+  --pify-ink:           #0c0a09;   /* stone-950, warm */
+  --pify-ink-2:         #1c1917;   /* stone-900 */
+  --pify-paper:         #fafaf9;   /* stone-50, warm */
+  --pify-paper-2:       #f5f5f4;   /* stone-100 */
+
+  /* Slate grays (warm tinted, one family) */
+  --sl-color-gray-1: #1c1917;
+  --sl-color-gray-2: #44403c;
+  --sl-color-gray-3: #78716c;
+  --sl-color-gray-4: #d6d3d1;
+  --sl-color-gray-5: #e7e5e4;
+  --sl-color-gray-6: #f5f5f4;
+  --sl-color-bg-nav: #ffffff;
+  --sl-color-text: #1c1917;
+
+  --sl-color-accent-low:  #fef3e8;
+  --sl-color-accent:      var(--pify-accent);
+  --sl-color-accent-high: var(--pify-accent-hover);
+
+  /* Spring easing (used in components) */
+  --pify-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --pify-ease:   cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* Border radius scale */
+  --pify-r-sm: 0.5rem;
+  --pify-r-md: 0.75rem;
+  --pify-r-lg: 1rem;
+}
+
+/* ---------- Dark mode ---------- */
+[data-theme="dark"] {
+  --sl-color-accent-low:  #3b1d0a;
+  --sl-color-accent:      #fb923c;   /* amber-400, brighter on dark */
+  --sl-color-accent-high: #fdba74;
+
+  --sl-color-gray-1: #f5f5f4;
+  --sl-color-gray-2: #d6d3d1;
+  --sl-color-gray-3: #a8a29e;
+  --sl-color-gray-4: #44403c;
+  --sl-color-gray-5: #292524;
+  --sl-color-gray-6: #1c1917;
+  --sl-color-bg-nav: #0c0a09;
+  --sl-color-text: #fafaf9;
+
+  --pify-accent-glow: rgba(251, 146, 60, 0.22);
+}
+
+/* ---------- Global typography ---------- */
+html {
+  font-feature-settings: "cv11", "ss01", "ss03";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--sl-font);
+  letter-spacing: -0.025em;
+  font-weight: 700;
+  text-wrap: balance;
+}
+
+h1 {
+  font-size: clamp(1.875rem, 2.2vw + 1rem, 2.75rem);
+  line-height: 1.1;
+  font-weight: 800;
+}
+
+h2 {
+  font-size: clamp(1.45rem, 1.1vw + 1rem, 1.95rem);
+  line-height: 1.2;
+  border-bottom: 1px solid var(--sl-color-gray-5);
+  padding-bottom: 0.4rem;
+  margin-top: 2.5rem;
+  font-weight: 700;
+}
+
+h3 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin-top: 1.75rem;
+}
+
+main p,
+main li {
+  line-height: 1.7;
+  text-wrap: pretty;
+}
+
+/* Tabular numbers for stats / data */
+.hero-stat-value,
+[data-tabular] {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+a {
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+  transition: text-decoration-thickness 0.2s var(--pify-ease);
+}
+
+a:hover {
+  text-decoration-thickness: 2px;
+}
+
+/* ---------- Scrollbar ---------- */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--sl-color-gray-5);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--sl-color-gray-4);
+  background-clip: padding-box;
+}
+
+/* ---------- Code ---------- */
+pre {
+  padding: 1rem 1.1rem;
+  line-height: 1.6;
+  border: 1px solid var(--sl-color-gray-5);
+  border-radius: var(--pify-r-md);
+  font-family: var(--sl-font-mono);
+  font-size: 0.9rem;
+}
+
+:not(pre) > code {
+  font-family: var(--sl-font-mono);
+  font-size: 0.88em;
+  padding: 0.15em 0.45em;
+  border-radius: 0.3rem;
+  background: var(--sl-color-gray-6);
+  border: 1px solid var(--sl-color-gray-5);
+  font-weight: 500;
+}
+
+/* ---------- Tables ---------- */
+table {
+  margin: 1.25rem 0;
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: var(--pify-r-md);
+  overflow: hidden;
+  border: 1px solid var(--sl-color-gray-5);
+}
+
+table th,
+table td {
+  padding: 0.65rem 0.95rem;
+}
+
+table th {
+  background: var(--sl-color-gray-6);
+  font-weight: 600;
+  text-align: left;
+}
+
+table tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--sl-color-gray-6) 50%, transparent);
+}
+
+/* ---------- Blockquote ---------- */
+blockquote {
+  border-left: 3px solid var(--pify-accent);
+  background: color-mix(in srgb, var(--pify-accent) 5%, transparent);
+  padding: 0.85rem 1.1rem;
+  margin: 1.25rem 0;
+  border-radius: 0 var(--pify-r-sm) var(--pify-r-sm) 0;
+  font-style: italic;
+}
+
+blockquote p {
+  margin: 0;
+}
+
+/* ---------- Mermaid ---------- */
+.mermaid {
+  text-align: center;
+  margin: 1.5rem 0;
+  padding: 1.25rem;
+  border-radius: var(--pify-r-md);
+  background: var(--sl-color-bg-nav);
+  border: 1px solid var(--sl-color-gray-5);
+  box-shadow:
+    0 1px 2px color-mix(in srgb, var(--pify-ink) 4%, transparent),
+    0 12px 32px -16px color-mix(in srgb, var(--pify-ink) 10%, transparent);
+}
+
+
+/* ---------- Force aside widths to honor layout variables ---------- */
+.right-sidebar-container,
+starlight-toc {
+  width: var(--sl-toc-width);
+  min-width: var(--sl-toc-width);
+}
+
+.left-sidebar,
+starlight-sidebar > nav,
+[data-pagefind-ignore] nav.sidebar {
+  width: var(--sl-sidebar-width);
+  min-width: var(--sl-sidebar-width);
+}
+
+/* Shrink internal padding so chrome does not eat the panel */
+main .content-panel {
+  padding-inline: 0.5rem;
+}
+
+/* ---------- Slimmer sidebar font so labels fit at narrow widths ---------- */
+.left-sidebar,
+starlight-sidebar nav,
+starlight-sidebar a,
+nav.sidebar a,
+.right-sidebar-container nav a {
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+/* ---------- Site chrome ---------- */
+.site-title {
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+header.header {
+  border-bottom: 1px solid var(--sl-color-gray-5);
+  backdrop-filter: blur(12px);
+  background: color-mix(in srgb, var(--sl-color-bg-nav) 85%, transparent);
+}
+
+starlight-sidebar nav summary {
+  font-weight: 600;
+}
+
+/* ---------- Focus rings (accessible) ---------- */
+:where(a, button, [tabindex]):focus-visible {
+  outline: 2px solid var(--pify-accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ---------- Skip-to-content ---------- */
+.skip-link {
+  position: absolute;
+  top: -100px;
+  left: 1rem;
+  padding: 0.6rem 1rem;
+  background: var(--pify-accent);
+  color: white;
+  border-radius: var(--pify-r-sm);
+  font-weight: 600;
+  text-decoration: none;
+  z-index: 9999;
+  transition: top 0.2s var(--pify-ease);
+}
+
+.skip-link:focus {
+  top: 1rem;
+  text-decoration: none;
+}
+
+/* ---------- Subtle grain overlay (kills flatness) ---------- */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='matrix' values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.6 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  mix-blend-mode: multiply;
+}
+
+[data-theme="dark"] body::after {
+  opacity: 0.04;
+  mix-blend-mode: screen;
+}
+
+/* Ensure content sits above grain */
+main, header, nav, footer {
+  position: relative;
+  z-index: 2;
+}
+
+/* ---------- Splash page: hide duplicate title (Starlight renders frontmatter title above Hero) ---------- */
+main h1[id="_top"] {
+  display: none;
+}
+
+main .content-panel:has(> div > h1[id="_top"]:only-child) {
+  display: none;
+}
+
+/* ---------- Print ---------- */
+@media print {
+  header.header,
+  nav.sl-nav,
+  .sidebar-pane,
+  .right-sidebar-container {
+    display: none !important;
+  }
+  body::after {
+    display: none;
+  }
+}

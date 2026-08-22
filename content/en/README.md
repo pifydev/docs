@@ -1,0 +1,36 @@
+---
+title: Pify Agent Book
+description: 'Source-code reading notes for the Pi Agent SDK, in English and Vietnamese.'
+translation_key: home
+language: en
+---
+Reading notes for the [Pi Agent SDK](https://github.com/earendil-works/pi). The English translation of the [Pi Agent Book](https://www.dgzhuya.com/); Chinese is the canonical source. The English chapters follow the original structure and order.
+
+{% hint style="info" %}
+New here? Start with the [Quickstart](quickstart.md) and you will have a working Pi agent in ten minutes. Skip straight to the chapters if you want the long-form reading.
+{% endhint %}
+
+## How to read
+
+- **New to Pi:** [Quickstart](quickstart.md) first, then chapters in order.
+- **Reading for the architecture:** chapters 1 through 3 are the spine. Chapter 2 sets the three-layer model; chapter 3 is the agent loop. The remaining chapters are reference material you can dip into.
+- **Building on Pi:** the [How-to Guides](how-to/add-custom-tool.md) are short task-oriented recipes.
+- **Looking up an API or env var:** the [Reference](reference/api.md) is structured for lookup, not reading.
+
+Every chapter links to the matching official [pi.dev](https://pi.dev/docs/latest) page for cross-verification. Code samples are runnable against `@pi-ai/core` and `@pi-agent-core`.
+
+## Sections
+
+- [**Quickstart**](quickstart.md) — 10-minute tutorial. Run your first model call.
+- [**Glossary**](glossary.md) — the terms Pi uses for itself, and how this book uses them.
+- [**How-to Guides**](how-to/add-custom-tool.md) — 5 task-oriented recipes: tools, model providers, streaming, sessions, prompts.
+- [**Reference**](reference/api.md) — every public export, the settings schema, and the env var surface.
+- [**Chapters**](ch01-overview.md) — 10 long-form chapters covering the SDK end to end.
+- [**FAQ**](help/faq.md) — common questions about Pi and this book.
+- [**Changelog**](changelog.md) — what changed in this site.
+
+## Feedback
+
+- Report translation errors or missing content in [GitHub Issues](https://github.com/pifydev/docs/issues).
+- Contribute: see [CONTRIBUTING.md](https://github.com/pifydev/docs/blob/main/CONTRIBUTING.md).
+- Discussion and questions: [GitHub Discussions](https://github.com/pifydev/docs/discussions).

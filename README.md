@@ -1,12 +1,11 @@
-﻿# Pify Agent Book
+# Pify Agent Book
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/pify-logo-dark-bg.svg">
-    <img src="assets/pify-logo-light-bg.svg" alt="Pi Docs" width="160">
+    <source media="(prefers-color-scheme: dark)" srcset="src/assets/logo-dark-bg.svg">
+    <img src="src/assets/logo-light-bg.svg" alt="Pify Agent Book" width="160">
   </picture>
 </p>
-
 
 Translations of the [Pi Agent Book](https://www.dgzhuya.com/) source-code reading notes. This site covers the [Pi Agent SDK](https://github.com/earendil-works/pi); Chinese is the canonical source. See also the [pi.dev](https://pi.dev) docs.
 
@@ -14,39 +13,58 @@ Translations of the [Pi Agent Book](https://www.dgzhuya.com/) source-code readin
 
 | Language | Folder | Status |
 |---|---|---|
-| 中文 (canonical) | `zh/` | In progress |
-| English | `en/` | In progress |
-| Tiếng Việt | `vi/` | In progress |
+| 中文 (canonical) | `src/content/docs/zh/` | In progress |
+| English | `src/content/docs/en/` | In progress |
+| Tiếng Việt | `src/content/docs/vi/` | In progress |
 
 ## Tech Stack
 
-- [mdBook](https://rust-lang.github.io/mdBook/): generates static HTML sites from Markdown
-- [mdbook-mermaid](https://github.com/badboy/mdbook-mermaid): renders Mermaid diagrams to SVG
-- Python 3: scripts/lib/strip-frontmatter.py mdBook preprocessor (strips leading YAML frontmatter at build time)
-- GitHub Actions: CI/CD build & deploy to GitHub Pages
-- PowerShell 7+: validation scripts (cross-platform via `pwsh`)
+- [Astro 7](https://astro.build/): static-site generator
+- [Starlight](https://starlight.astro.build/): documentation integration with built-in i18n
+- [astro-mermaid](https://github.com/lin-stephanie/astro-mermaid): renders Mermaid diagrams to SVG
+- Node 24: validation scripts and build
+- GitHub Actions: CI/CD build and deploy to GitHub Pages
 
 ## Repository Layout
 
 ```text
 pi-docs/
-- zh/, en/, vi/: parallel mdBook projects (one per language)
-- scripts/: PowerShell validation + fetch scripts
+- src/content/docs/{zh,en,vi}/: chapters (one folder per language)
+- src/content.config.ts: Zod schema for chapter frontmatter
+- src/styles/custom.css: Starlight theme overrides
+- src/components/Hero.astro: homepage hero
+- scripts/: Node validation scripts (validate-frontmatter, sync-check, validate-mermaid, build)
+- public/: static assets (favicon, OG image)
 - GLOSSARY.md: preserved technical terms (English-only)
 - docs/superpowers/specs/: design specs
 - docs/superpowers/plans/: implementation plans
 ```
 
+## GitBook source directories
+
+- `content/en` is synced to the English GitBook space.
+- `content/vi` is synced to the Vietnamese GitBook space.
+- `source/zh` is reference material and is not published.
+- `src/content/docs` remains the temporary Astro rollback source until the Vercel cutover is accepted.
+
+Run `npm run quality:gitbook` before pushing content changes. Edit Markdown in this repository; do not create divergent edits in the GitBook editor.
+
 ## Local Development
 
-Prerequisites: [`mdbook`](https://rust-lang.github.io/mdBook/), [`mdbook-mermaid`](https://github.com/badboy/mdbook-mermaid), [Python 3](https://www.python.org/), and [`pwsh`](https://learn.microsoft.com/powershell/scripting/install/installing-powershell) (PowerShell 7+). Python must be on `PATH` so mdBook can invoke the preprocessor.
+Prerequisites: [Node 24+](https://nodejs.org/) and [npm](https://www.npmjs.com/).
 
-```powershell
-# Build all three languages
-pwsh scripts/build-all.ps1
+```bash
+# Install dependencies
+npm install
 
-# Serve one language locally for preview
-cd en && mdbook serve --open
+# Start dev server
+npm run dev
+
+# Build the site
+npm run build
+
+# Run validation
+npm run lint
 ```
 
 ## Contributing
