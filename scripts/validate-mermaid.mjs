@@ -11,6 +11,7 @@ let total = 0;
 
 const manifest = JSON.parse(await readFile("content/translation-manifest.json", "utf8"));
 const mmdc = join("node_modules", "@mermaid-js", "mermaid-cli", "src", "cli.js");
+const puppeteerConfig = join("scripts", "puppeteer-ci.json");
 
 const tmpDir = await mkdtemp(join(tmpdir(), "pi-docs-mermaid-"));
 
@@ -25,9 +26,12 @@ try {
         const svgFile = join(tmpDir, `block-${total}.svg`);
         await writeFile(mmdFile, block, "utf8");
         const result = await new Promise((resolve) => {
-          const proc = spawn(process.execPath, [mmdc, "-i", mmdFile, "-o", svgFile, "-q"], {
-            stdio: "inherit",
-          });
+          const browserArgs = process.env.CI ? ["-p", puppeteerConfig] : [];
+          const proc = spawn(
+            process.execPath,
+            [mmdc, ...browserArgs, "-i", mmdFile, "-o", svgFile, "-q"],
+            { stdio: "inherit" },
+          );
           proc.once("error", (error) => resolve({ code: null, error }));
           proc.once("close", (code) => resolve({ code, error: null }));
         });
