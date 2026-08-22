@@ -40,6 +40,15 @@ pi-docs/
 - docs/superpowers/plans/: implementation plans
 ```
 
+## GitBook source directories
+
+- `content/en` is synced to the English GitBook space.
+- `content/vi` is synced to the Vietnamese GitBook space.
+- `source/zh` is reference material and is not published.
+- `src/content/docs` remains the temporary Astro rollback source until the Vercel cutover is accepted.
+
+Run `npm run quality:gitbook` before pushing content changes. Edit Markdown in this repository; do not create divergent edits in the GitBook editor.
+
 ## Local Development
 
 Prerequisites: [Node 24+](https://nodejs.org/) and [npm](https://www.npmjs.com/).

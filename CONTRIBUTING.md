@@ -136,6 +136,16 @@ flowchart LR
 ## Local Development
 
 Prerequisites: [Node 24+](https://nodejs.org/) and [npm](https://www.npmjs.com/).
+
+Before requesting review, run:
+
+```powershell
+npm ci
+npm run quality:gitbook
+```
+
+Every published page must keep the same `translation_key` and relative path in `content/en` and `content/vi`.
+
 ```powershell
 # Build the site
 npm run build
