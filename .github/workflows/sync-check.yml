@@ -10,13 +10,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install PowerShell
-        uses: microsoft/powershell@v1
-      - name: Sync check
-        run: pwsh scripts/sync-check.ps1
-      - name: Frontmatter validate
-        run: pwsh scripts/validate-frontmatter.ps1
-      - name: Install mermaid-cli
-        run: npm install -g @mermaid-js/mermaid-cli
-      - name: Validate mermaid
-        run: pwsh scripts/validate-mermaid.ps1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Validate sync, frontmatter, and Mermaid
+        run: npm run lint

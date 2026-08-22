@@ -17,6 +17,17 @@ test("deploy workflow uses valid expressions and runs its lint dependency on eve
   assert.doesNotMatch(lintMatch.groups.body, /^\s+if:/m);
 });
 
+test("PR sync workflow uses the repository Node validation pipeline", async () => {
+  const workflow = await readFile(
+    new URL(".github/workflows/sync-check.yml", repositoryRoot),
+    "utf8",
+  );
+
+  assert.doesNotMatch(workflow, /microsoft\/powershell/);
+  assert.match(workflow, /run:\s+npm ci/);
+  assert.match(workflow, /run:\s+npm run lint/);
+});
+
 test("Mermaid validation supplies the documented Chromium CI sandbox override", async () => {
   const validator = await readFile(
     new URL("scripts/validate-mermaid.mjs", repositoryRoot),
