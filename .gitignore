@@ -46,3 +46,4 @@ skills-lock.json
 # Codex / skills install location (skills live in ~/.codex/skills)
 .agents/
 
+.vercel
