@@ -1,133 +1,317 @@
 ---
-title: Configuration reference
-description: File setting, quy tắc merge, project trust và các key cấu hình Pi thường dùng ở phiên bản hiện tại.
+title: Tham chiếu cấu hình
+description: File setting, quy tắc merge, ranh giới trust, các nhóm setting và runtime override của Pi hiện tại.
 translation_key: reference-configuration
 language: vi
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-08-24'
+last_updated: '2026-08-25'
 ---
 
-Pi đọc JSON setting từ hai vị trí:
+Pi đọc setting JSON khi khởi động và khi reload resource. Reference này mô tả `@earendil-works/pi-coding-agent` 0.84.2 trên Node.js 22.19 trở lên.
 
-| Vị trí | Phạm vi |
-|---|---|
+## File setting và thứ tự ưu tiên
+
+### Vị trí file
+
+| Path | Vai trò |
+| --- | --- |
 | `~/.pi/agent/settings.json` | Global setting cho mọi project |
-| `.pi/settings.json` | Override cho project hiện tại |
+| `<cwd>/.pi/settings.json` | Setting của project hiện tại, khi project được trust |
+| `~/.pi/agent/trust.json` | Quyết định project trust đã lưu; đây không phải một settings layer |
+| `<cwd>/.pi/SYSTEM.md`, `<cwd>/.pi/APPEND_SYSTEM.md` | Nguồn prompt của trusted project, không phải file setting |
+| `AGENTS.md`, `CLAUDE.md` | Context file tìm từ chuỗi thư mục tổ tiên của working directory, không phải file setting |
 
-Giá trị project ghi đè giá trị global. Object lồng nhau được merge; array và scalar bị thay thế. Các CLI flag thông dụng tiếp tục ghi đè setting đã resolve trong process đó.
+Bạn có thể sửa trực tiếp file JSON hoặc dùng `/settings` cho các lựa chọn interactive thông dụng. `pi config` quản lý package resource nào được bật; nó không phải trình sửa mọi setting. Xem <a href="/vi/how-to/customize-system-prompt">Tùy chỉnh system prompt</a> để biết quy tắc ghép prompt file riêng.
 
-## Model và thinking
+### Merge và thứ tự ưu tiên CLI
 
-| Setting | Type | Mặc định | Mục đích |
-|---|---|---|---|
-| `defaultProvider` | string | chưa đặt | Provider ID mặc định |
-| `defaultModel` | string | chưa đặt | Model ID mặc định |
-| `defaultThinkingLevel` | string | chưa đặt | `off`, `minimal`, `low`, `medium`, `high`, `xhigh` hoặc `max` |
-| `hideThinkingBlock` | boolean | `false` | Ẩn thinking block khỏi output được render |
-| `thinkingBudgets` | object | theo provider | Token budget cho từng thinking level |
+Project setting override global setting theo cách đệ quy. Object lồng nhau merge theo key; array và scalar thay thế giá trị global. Sau đó, CLI argument chỉ override hành vi mà chính argument đó chỉ định trong process hiện tại. Ví dụ gồm `--model`, `--thinking`, `--models`, nhóm `--tools`, `--use-theme`, `--tui-mode`, `--session-dir` và các flag project trust.
 
-Chỉ các level được model đã chọn hỗ trợ mới có hiệu lực.
+:::note[Thứ tự ưu tiên phụ thuộc từng setting]
 
-## UI và terminal
+Không phải CLI flag nào cũng là một field trong `settings.json`. Chẳng hạn, session storage được resolve theo `--session-dir` → `PI_CODING_AGENT_SESSION_DIR` → `sessionDir` → mặc định. Flag resource tường minh thêm path ở runtime, còn `--no-extensions`, `--no-skills`, `--no-prompt-templates` và `--no-themes` tắt discovery của nhóm resource tương ứng.
 
-| Setting | Type | Mặc định | Mục đích |
-|---|---|---|---|
-| `theme` | string | `dark` | Tên theme tích hợp hoặc custom |
-| `externalEditor` | string | theo platform | Command được mở bởi thao tác external editor |
-| `quietStartup` | boolean | `false` | Ẩn startup header |
-| `tuiMode` | string | `regular` | `regular` hoặc `fullscreen` đang thử nghiệm |
-| `fullscreenExitOutput` | string | `transcript` | Output khi thoát fullscreen mode |
-| `fullscreenScrollbar` | string | `auto` | `auto`, `always` hoặc `hidden` |
-| `terminal.showImages` | boolean | `true` | Render image khi terminal hỗ trợ |
-| `images.autoResize` | boolean | `true` | Resize image về tối đa 2000 × 2000 |
-| `images.blockImages` | boolean | `false` | Không cho gửi image tới model |
+:::
 
-Với VS Code, đặt `externalEditor` thành `"code --wait"` để Pi chờ editor process.
+## Hình dạng setting hiện tại
 
-## Compaction và retry
+Package root public export `SettingsManager` và một số setting type, không export full schema validator. Các nhóm JSON hiện tại là:
 
-| Setting | Type | Mặc định | Mục đích |
-|---|---|---|---|
-| `compaction.enabled` | boolean | `true` | Bật automatic compaction |
-| `compaction.reserveTokens` | number | `16384` | Chừa context cho response tiếp theo |
-| `compaction.keepRecentTokens` | number | `20000` | Giữ số recent token này ngoài summary |
-| `branchSummary.reserveTokens` | number | `16384` | Chừa token khi tóm tắt branch đã rời |
-| `retry.enabled` | boolean | `true` | Retry transient failure ở agent layer |
-| `retry.maxRetries` | number | `3` | Số agent-level retry tối đa |
-| `retry.baseDelayMs` | number | `2000` | Delay ban đầu của exponential backoff |
-| `retry.provider.maxRetries` | number | `0` | Số retry ở provider layer |
+| Nhóm | Key |
+| --- | --- |
+| Model | `defaultProvider`, `defaultModel`, `defaultThinkingLevel`, `thinkingBudgets`, `enabledModels` |
+| Tương tác | `steeringMode`, `followUpMode`, `defaultTools`, `doubleEscapeAction`, `treeFilterMode` |
+| Hiển thị | `theme`, `tuiMode`, `fullscreenExitOutput`, `fullscreenScrollbar`, `terminal`, `images`, `markdown` |
+| Vòng đời | `compaction`, `branchSummary`, `retry`, `sessionDir` |
+| Network | `transport`, `httpProxy`, `httpIdleTimeoutMs`, `websocketConnectTimeoutMs` |
+| Resource | `packages`, `extensions`, `skills`, `prompts`, `themes`, `enableSkillCommands` |
 
-Nên giữ provider retry bằng `0` trừ khi tích hợp thực sự cần. Kết hợp provider retry với agent retry có thể nhân số request và làm lỗi hiển thị chậm hơn.
+Host nên dùng public getter khi cần giá trị có hiệu lực. Ví dụ runnable dưới đây cố ý bỏ qua project setting. SDK dùng trực tiếp không đọc CLI trust store; host phải tự resolve trust rồi truyền `projectTrusted`.
 
-## Delivery và transport
+```ts title="inspect-settings.ts"
+import { getAgentDir, SettingsManager } from "@earendil-works/pi-coding-agent";
 
-| Setting | Type | Mặc định | Mục đích |
-|---|---|---|---|
-| `steeringMode` | string | `one-at-a-time` | Gửi steering message trong queue từng message hoặc cùng lúc |
-| `followUpMode` | string | `one-at-a-time` | Gửi follow-up message từng message hoặc cùng lúc |
-| `transport` | string | `auto` | `sse`, `websocket`, `websocket-cached` hoặc tự chọn |
-| `httpIdleTimeoutMs` | number | `300000` | HTTP stream idle timeout; `0` để tắt |
-| `websocketConnectTimeoutMs` | number | `15000` | WebSocket connection timeout; `0` để tắt |
+const settings = SettingsManager.create(process.cwd(), getAgentDir(), {
+  projectTrusted: false,
+});
 
-## Tool và shell
-
-| Setting | Type | Mặc định | Mục đích |
-|---|---|---|---|
-| `defaultTools` | string[] | built-in chuẩn | Bộ built-in tool ban đầu |
-| `shellPath` | string | shell theo platform | Shell executable tùy chỉnh |
-| `shellCommandPrefix` | string | chưa đặt | Prefix áp dụng cho mỗi bash command |
-| `npmCommand` | string[] | npm | Argument vector dùng cho package operation |
-
-Array `defaultTools` rỗng sẽ tắt built-in mặc định nhưng không tắt custom tool từ extension hoặc SDK. `--tools` là allowlist nghiêm ngặt; `--no-tools` tắt mọi tool.
-
-Path Windows trong JSON phải dùng dấu gạch chéo xuôi hoặc escape dấu gạch chéo ngược:
-
-```json
-{
-  "shellPath": "C:/Program Files/Git/bin/bash.exe"
-}
+console.log({
+  model: [settings.getDefaultProvider(), settings.getDefaultModel()],
+  thinking: settings.getDefaultThinkingLevel(),
+  tools: settings.getDefaultTools(),
+  compaction: settings.getCompactionSettings(),
+  retry: settings.getRetrySettings(),
+  diagnostics: settings.drainErrors().map(({ scope, error }) => ({
+    scope,
+    message: error.message,
+  })),
+});
 ```
 
-## Session và resource
+## Model, thinking và tool
 
-| Setting | Type | Mặc định | Mục đích |
-|---|---|---|---|
-| `sessionDir` | string | session directory của Pi | Directory riêng cho persistent session |
-| `enabledModels` | string[] | chưa đặt | Model pattern dùng khi chuyển model |
-| `packages` | array | `[]` | npm hoặc Git package cung cấp resource |
-| `extensions` | string[] | `[]` | File hoặc directory extension cục bộ |
-| `skills` | string[] | `[]` | File hoặc directory skill cục bộ |
-| `prompts` | string[] | `[]` | File hoặc directory prompt template cục bộ |
-| `themes` | string[] | `[]` | File hoặc directory theme cục bộ |
-| `enableSkillCommands` | boolean | `true` | Đăng ký skill đã discover thành slash command |
+### Model và thinking
 
-Path trong global setting được resolve từ `~/.pi/agent`; project path được resolve từ `.pi`. Resource array hỗ trợ glob pattern, exclusion và entry include/exclude tường minh.
+`defaultProvider` và `defaultModel` xác định model mặc định. `--model` được ưu tiên cho một lần chạy; session được resume có thể khôi phục model đã ghi khi không truyền model tường minh qua CLI. `defaultThinkingLevel` nhận `off`, `minimal`, `low`, `medium`, `high`, `xhigh` hoặc `max`. `thinkingBudgets` cung cấp token budget cho provider hoặc compatible model có hỗ trợ.
 
-## Project trust
+`hideThinkingBlock` ẩn thinking khỏi transcript. `showCacheMissNotices` hiện thông báo cho cache miss đáng kể và mức dùng compaction hoặc branch summary. Model vẫn quyết định thinking level và budget nào được hỗ trợ.
 
-`defaultProjectTrust` là setting chỉ dùng ở global với giá trị `ask`, `always` hoặc `never`; mặc định là `ask`. Project trust kiểm soát project-local setting và resource có thể thực thi như extension. Quyết định đã lưu nằm trong `~/.pi/agent/trust.json`.
+`enabledModels` cung cấp pattern cho thao tác chuyển model bằng Ctrl+P; `--models` override scope đó trong một lần chạy. Provider endpoint và credential không nằm trong object setting `providers`. Hãy đặt endpoint được hỗ trợ trong `~/.pi/agent/models.json` hoặc Provider configuration, đồng thời giữ credential trong authentication store hoặc environment được hỗ trợ. Xem <a href="/vi/how-to/plug-new-model">Thêm một nhà cung cấp mô hình</a>.
 
-Chế độ non-interactive không thể hiện trust prompt. Hãy dùng quyết định đã lưu, cấu hình global fallback hoặc truyền `--approve` / `--no-approve` cho một lần chạy.
-
-## Ví dụ
-
-```json title="~/.pi/agent/settings.json"
+```json title="thinking-settings.json"
 {
   "defaultProvider": "anthropic",
   "defaultModel": "claude-sonnet-4-6",
   "defaultThinkingLevel": "medium",
+  "thinkingBudgets": {
+    "minimal": 1024,
+    "low": 4096,
+    "medium": 10240,
+    "high": 32768
+  },
+  "hideThinkingBlock": false,
+  "showCacheMissNotices": true
+}
+```
+
+### Chọn tool
+
+`defaultTools` chọn built-in tool lúc khởi động. Khi bỏ qua setting này, `read`, `bash`, `edit` và `write` là các mặc định được bật; `grep`, `find` và `ls` cũng là built-in và có thể được chọn. Array rỗng bỏ các built-in mặc định nhưng vẫn để extension tool và SDK custom tool hoạt động.
+
+`--tools` là allowlist nghiêm ngặt cho built-in, extension và custom tool. `--no-tools` tắt toàn bộ tool, `--no-builtin-tools` chỉ bỏ built-in, còn `--exclude-tools` lọc kết quả. Array ở project thay thế toàn bộ array global.
+
+```json title="tool-settings.json"
+{
+  "defaultTools": ["read", "bash", "edit", "write"]
+}
+```
+
+## Project trust
+
+### Giá trị fallback và quyết định đã lưu
+
+Project trust kiểm soát việc load `.pi/settings.json`, resource trong project `.pi`, project package và extension thực thi được. `defaultProjectTrust` chỉ dùng ở global: `ask` là mặc định, còn `always` hoặc `never` cung cấp fallback ở non-interactive mode. Interactive startup sẽ hỏi khi có project resource cần trust và chưa có quyết định phù hợp. `/trust` ghi quyết định vào `~/.pi/agent/trust.json`; hãy khởi động lại Pi để áp dụng cho project runtime hiện tại.
+
+CLI resolve trust store trước khi tạo trusted runtime. `SettingsManager.create()` được SDK host gọi trực tiếp mặc định `projectTrusted` là `true` và không bao giờ đọc `trust.json`; host nhạy cảm về security nên truyền quyết định tường minh.
+
+### Override cho một lần chạy
+
+`--approve` (`-a`) trust file cục bộ của project trong một lần chạy. `--no-approve` (`-na`) bỏ qua chúng trong một lần chạy. Print, JSON và RPC mode không thể hiện trust prompt, nên chúng dùng quyết định đã lưu phù hợp, global fallback hoặc một trong hai flag này.
+
+Project trust là ranh giới cho project resource, không phải per-tool approval. Setting hiện tại không có switch `yolo`, `permissions` hoặc `requiresPermission`. Hãy áp dụng chính sách duyệt hoặc chặn tool trong embedding host hay Extension `tool_call`.
+
+## Compaction và retry
+
+### Compaction và branch summary
+
+| Setting | Mặc định | Tác dụng |
+| --- | ---: | --- |
+| `compaction.enabled` | `true` | Bật automatic compaction |
+| `compaction.reserveTokens` | `16384` | Chừa context cho model response kế tiếp |
+| `compaction.keepRecentTokens` | `20000` | Giữ số recent token này ngoài summary |
+| `branchSummary.reserveTokens` | `16384` | Chừa token cho branch summarization |
+| `branchSummary.skipPrompt` | `false` | Khi là `true`, bỏ câu hỏi branch summary và mặc định không tạo summary |
+
+Hai setting cũ `compaction.threshold` theo tỉ lệ và `preserveRecentTurns` theo số turn không còn tồn tại. Compaction hiện dùng token reserve và recent-token budget.
+
+### Retry và message delivery
+
+`retry.enabled`, `maxRetries` (`3`) và `baseDelayMs` (`2000`) điều khiển agent-level retry. `retry.provider.timeoutMs`, `maxRetries` và `maxRetryDelayMs` (`60000`) điều khiển provider layer. Provider retry mặc định bằng 0 trong tích hợp Coding Agent; tăng ở cả hai layer có thể nhân số request và khiến failure xuất hiện chậm.
+
+`steeringMode` và `followUpMode` nhận `one-at-a-time` (mặc định) hoặc `all`. `transport` nhận `auto`, `sse`, `websocket` hoặc `websocket-cached`. `httpIdleTimeoutMs` mặc định `300000`; `0` tắt HTTP idle timeout. `websocketConnectTimeoutMs` điều khiển opening handshake và cũng nhận `0` để tắt.
+
+## Session, terminal và shell
+
+### Session storage
+
+`sessionDir` thay đổi nơi lưu persistent session. Relative path được resolve từ working directory của process, còn `~` được mở rộng thành home directory. Khi không có override, Pi lưu một file JSONL append-only cho mỗi session dưới `~/.pi/agent/sessions/<encoded-cwd>/`.
+
+Không có setting tích hợp `sessions.retention` hoặc `sessions.redactSecrets`. Ứng dụng vận hành Pi chịu trách nhiệm về file permission, backup, retention và deletion; hãy bảo vệ session JSONL vì nó có thể chứa prompt, model output và tool result. Xem <a href="/vi/how-to/persist-sessions">Duy trì session</a>.
+
+### Terminal, image, shell và npm
+
+`terminal.showImages` (`true`) điều khiển inline display, `imageWidthCells` (`60`) đặt chiều rộng ưu tiên, `clearOnShrink` (`false`) xóa hàng không còn dùng, còn `showTerminalProgress` (`false`) phát progress indicator khi terminal hỗ trợ. `images.autoResize` (`true`) resize image gửi tới model về tối đa 2000 × 2000; `images.blockImages` (`false`) chặn mọi image gửi đến provider. Ẩn image trong terminal không chặn upload.
+
+`shellPath` chọn shell, `shellCommandPrefix` thêm prefix vào mọi bash command, còn `npmCommand` là argv array cho package operation. Path Windows trong JSON cần dùng dấu gạch chéo xuôi hoặc escape dấu gạch chéo ngược.
+
+```json title="terminal-and-shell-settings.json"
+{
+  "terminal": {
+    "showImages": true,
+    "imageWidthCells": 60,
+    "clearOnShrink": false,
+    "showTerminalProgress": false
+  },
+  "images": {
+    "autoResize": true,
+    "blockImages": false
+  },
+  "shellPath": "C:/Program Files/Git/bin/bash.exe",
+  "shellCommandPrefix": "shopt -s expand_aliases",
+  "npmCommand": ["mise", "exec", "node@22", "--", "npm"],
+  "sessionDir": ".pi/sessions"
+}
+```
+
+## Interface và output
+
+### UI và display
+
+`theme`, `externalEditor`, `quietStartup` và `collapseChangelog` điều khiển startup và cách trình bày. `externalEditor` override `VISUAL`, rồi `EDITOR`; dùng `code --wait` khi Pi cần chờ VS Code. `doubleEscapeAction` nhận `tree`, `fork` hoặc `none`, còn `treeFilterMode` chọn filter mặc định cho `/tree`.
+
+`editorPaddingX` được clamp từ 0 đến 3, `outputPad` là 0 hoặc 1, còn `autocompleteMaxVisible` được clamp từ 3 đến 20. `showHardwareCursor` hỗ trợ nhập bằng IME. `tuiMode` nhận `regular` hoặc `fullscreen` đang thử nghiệm; các key flat liên quan là `fullscreenExitOutput` (`transcript` hoặc `resume-hint`) và `fullscreenScrollbar` (`auto`, `always` hoặc `hidden`). Hai shape lồng cũ `tui.*` và `fullscreen.*` không còn dùng. Thời gian chờ phím Escape là environment control được mô tả ở <a href="/vi/reference/environment-variables">Biến môi trường</a>.
+
+### Markdown và warning
+
+`markdown.codeBlockIndent` mặc định là hai dấu cách. `markdown.mermaid` nhận `off`, `final` hoặc `streaming` (mặc định). `warnings.anthropicExtraUsage` mặc định `true` và điều khiển cảnh báo extra usage của subscription.
+
+## Network, telemetry và update
+
+`httpProxy` áp dụng `HTTP_PROXY` và `HTTPS_PROXY` cho HTTP client do Pi quản lý và chỉ được đọc từ global setting. Đừng nhúng proxy credential vào project file. Stream timeout và transport setting đã được liệt kê ở phần retry và message delivery.
+
+`enableInstallTelemetry` mặc định `true` cho version ping ẩn danh khi install/update. `enableAnalytics` là opt-in và mặc định `false`; Pi tạo `trackingId` khi opt-in. Các setting này không tắt update check. `collapseChangelog` thay đổi cách hiện changelog, còn `lastChangelogVersion` là state do Pi quản lý và không nên sửa bằng tay. Dùng `PI_SKIP_VERSION_CHECK` hoặc offline mode cho network policy; xem <a href="/vi/reference/environment-variables">Biến môi trường</a> để biết control chính xác.
+
+## Resource, package và glob
+
+### Danh sách resource và package filter
+
+`extensions`, `skills`, `prompts` và `themes` chứa local path hoặc directory. Trong global setting, relative path được resolve từ `~/.pi/agent`; trong project setting, nó được resolve từ `.pi`. Các array này hỗ trợ glob, exclusion `!pattern`, force-include `+path` và force-exclude `-path`. `enableSkillCommands` điều khiển việc đăng ký thành `/skill:name` và mặc định `true`.
+
+Dùng `packages` cho nguồn npm hoặc Git; đừng đặt package name vào `extensions`. Package entry dạng string tự load mọi resource. Dạng object có thể đặt `autoload: false` và lọc `extensions`, `skills`, `prompts` hoặc `themes`. Project resource và thao tác cài project package còn thiếu vẫn chịu project trust.
+
+```json title="resource-settings.json"
+{
+  "packages": [
+    "@org/pi-resources",
+    {
+      "source": "git:github.com/org/team-pi-resources",
+      "autoload": false,
+      "skills": ["review", "release"],
+      "extensions": []
+    }
+  ],
+  "extensions": ["./extensions/*.ts", "!./extensions/legacy.ts"],
+  "skills": ["+./skills/release/SKILL.md", "!./skills/experimental/**"],
+  "prompts": ["./prompts/*.md"],
+  "themes": ["./themes/*.json"],
+  "enableSkillCommands": true
+}
+```
+
+## Ví dụ đầy đủ và project override
+
+Global file này bao quát các nhóm thông dụng mà không chứa provider credential:
+
+```json title="complete-settings.json"
+{
+  "defaultProvider": "anthropic",
+  "defaultModel": "claude-sonnet-4-6",
+  "defaultThinkingLevel": "medium",
+  "thinkingBudgets": {
+    "minimal": 1024,
+    "low": 4096,
+    "medium": 10240,
+    "high": 32768
+  },
+  "hideThinkingBlock": false,
+  "showCacheMissNotices": true,
+  "enabledModels": ["anthropic/*", "openai/gpt-5.2*"],
+  "defaultTools": ["read", "bash", "edit", "write"],
+  "theme": "dark",
+  "quietStartup": true,
+  "tuiMode": "regular",
+  "markdown": {
+    "codeBlockIndent": "  ",
+    "mermaid": "final"
+  },
+  "compaction": {
+    "enabled": true,
+    "reserveTokens": 16384,
+    "keepRecentTokens": 20000
+  },
+  "branchSummary": {
+    "reserveTokens": 16384,
+    "skipPrompt": false
+  },
+  "retry": {
+    "enabled": true,
+    "maxRetries": 3,
+    "baseDelayMs": 2000,
+    "provider": {
+      "maxRetries": 0,
+      "maxRetryDelayMs": 60000
+    }
+  },
+  "steeringMode": "one-at-a-time",
+  "followUpMode": "one-at-a-time",
+  "transport": "auto",
+  "httpIdleTimeoutMs": 300000,
+  "websocketConnectTimeoutMs": 15000,
+  "sessionDir": ".pi/sessions",
+  "terminal": {
+    "showImages": true
+  },
+  "images": {
+    "autoResize": true,
+    "blockImages": false
+  },
+  "warnings": {
+    "anthropicExtraUsage": true
+  },
+  "packages": ["@org/pi-resources"]
+}
+```
+
+Với ví dụ merge, bắt đầu từ global file này:
+
+```json title="settings-global.json"
+{
   "theme": "dark",
   "compaction": {
     "enabled": true,
     "reserveTokens": 16384,
     "keepRecentTokens": 20000
   },
-  "retry": {
-    "enabled": true,
-    "maxRetries": 3
-  },
-  "defaultTools": ["read", "bash", "edit", "write"],
-  "packages": ["@org/pi-resources"]
+  "defaultTools": ["read", "bash", "edit", "write"]
 }
 ```
+
+Sau đó thêm trusted project override:
+
+```json title=".pi/settings.json"
+{
+  "compaction": {
+    "reserveTokens": 8192
+  },
+  "defaultTools": ["read"]
+}
+```
+
+Kết quả giữ `theme`, `compaction.enabled` và `keepRecentTokens`, đổi `reserveTokens`, đồng thời thay toàn bộ array `defaultTools`.
+
+## Kiểm tra và tiếp tục
+
+Pi parse JSON và báo load failure dưới dạng settings warning. Pi không expose command `pi --dry-run` đã ngừng dùng, full-schema validator public hay setting `logPrompts`. Ở lần load đầu, scope lỗi không đóng góp setting; khi reload, `SettingsManager` giữ giá trị hợp lệ gần nhất của scope đó và expose lỗi qua `drainErrors()`. Unknown field không chứng minh config hợp lệ, vì vậy hãy kiểm tra giá trị có hiệu lực bằng public getter và chạy runtime path liên quan. Guide về system prompt trình bày các API inspect prompt hiện tại.
+
+Sau khi sửa trong interactive session, dùng `/reload`; SDK host có thể `await settingsManager.reload()`. Tiếp theo, xem <a href="/vi/reference/api">API reference</a> hoặc <a href="/vi/reference/environment-variables">Biến môi trường</a>.
