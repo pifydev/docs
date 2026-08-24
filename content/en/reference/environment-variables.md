@@ -18,7 +18,7 @@ Most process flags affect startup. Provider authentication is resolved when Pi a
 
 ## Provider credentials
 
-For Pi's built-in providers, the CLI credential order is `--api-key`, a matching `auth.json` API key or OAuth credential, the provider's ambient environment, then a custom key referenced by `models.json`. Extension-defined providers may implement a different contract. Use `/login` to write the protected credential store instead of putting secrets in project files.
+For Pi's built-in providers, credential order is an explicit CLI `--api-key` or runtime override, a matching stored `auth.json` API key or OAuth credential, the configured `models.json` `apiKey` (a literal or `$ENV` reference under that file's contract), then the built-in provider's ambient environment. Extension-defined providers may implement a different contract. Use `/login` to write the protected credential store instead of putting secrets in project files.
 
 | Provider | Environment credential recognized by 0.84.2 |
 |---|---|
@@ -169,7 +169,7 @@ export const isolatedBashTool = createBashTool(process.cwd(), {
 
 - Do not put API keys in committed shell files, `settings.json`, extension source, logs, prompts, or transcripts. Prefer `/login`, a secret manager, or narrowly scoped process injection; remember that child processes inherit exported values.
 - Current names are exact. `PI_HOME`, `PI_LOG_LEVEL`, `PI_PARENT_SESSION`, `GOOGLE_API_KEY`, `GOOGLE_VERTEX_API_KEY`, `GITHUB_TOKEN`, `OPENAI_ORG_ID`, `ANTHROPIC_BASE_URL`, and misspelled `CLOUDflare_*` names are not compatibility aliases in published 0.84.2.
-- A stored provider credential takes precedence over ambient variables. Log out or update the stored entry before expecting a rotated shell key to win.
+- A stored provider credential and a configured `models.json` `apiKey` both take precedence over ambient variables. Log out or update the stored entry, and remove or change the configured key, before expecting a rotated shell key to win.
 - `PI_EXPERIMENTAL` is unrelated to provider authentication and is not a permission or “yolo” switch.
 - Do not print complete environment dumps while debugging. Inspect only non-secret markers or individual metadata fields, and treat `PI_SESSION_FILE` as sensitive local data.
 

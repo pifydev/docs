@@ -18,7 +18,7 @@ Phần lớn process flag có hiệu lực khi khởi động. Provider authenti
 
 ## Provider credential
 
-Với built-in provider của Pi, thứ tự credential trên CLI là `--api-key`, API key hoặc OAuth credential khớp trong `auth.json`, ambient environment của provider, rồi custom key được tham chiếu trong `models.json`. Provider do extension định nghĩa có thể triển khai contract khác. Hãy dùng `/login` để ghi vào credential store được bảo vệ thay vì đưa secret vào file của project.
+Với built-in provider của Pi, thứ tự credential là CLI `--api-key` hoặc runtime override tường minh, API key hoặc OAuth credential khớp được lưu trong `auth.json`, `apiKey` đã cấu hình trong `models.json` (literal hoặc tham chiếu `$ENV` theo contract của file này), rồi ambient environment của built-in provider. Provider do extension định nghĩa có thể triển khai contract khác. Hãy dùng `/login` để ghi vào credential store được bảo vệ thay vì đưa secret vào file của project.
 
 | Provider | Environment credential được 0.84.2 nhận diện |
 |---|---|
@@ -169,7 +169,7 @@ export const isolatedBashTool = createBashTool(process.cwd(), {
 
 - Không đưa API key vào shell file được commit, `settings.json`, mã nguồn extension, log, prompt hoặc transcript. Ưu tiên `/login`, secret manager hoặc process injection có scope hẹp; hãy nhớ child process kế thừa giá trị được export.
 - Tên hiện tại phải chính xác. `PI_HOME`, `PI_LOG_LEVEL`, `PI_PARENT_SESSION`, `GOOGLE_API_KEY`, `GOOGLE_VERTEX_API_KEY`, `GITHUB_TOKEN`, `OPENAI_ORG_ID`, `ANTHROPIC_BASE_URL` và tên `CLOUDflare_*` viết sai không phải compatibility alias trong bản publish 0.84.2.
-- Stored provider credential được ưu tiên hơn ambient variable. Hãy logout hoặc cập nhật stored entry trước khi mong shell key vừa rotate được chọn.
+- Stored provider credential và `apiKey` đã cấu hình trong `models.json` đều được ưu tiên hơn ambient variable. Hãy logout hoặc cập nhật stored entry, đồng thời xóa hoặc đổi configured key, trước khi mong shell key vừa rotate được chọn.
 - `PI_EXPERIMENTAL` không liên quan đến provider authentication và không phải switch permission hay “yolo”.
 - Không in toàn bộ environment dump khi debug. Chỉ kiểm tra non-secret marker hoặc từng metadata field, đồng thời coi `PI_SESSION_FILE` là local data nhạy cảm.
 
