@@ -203,7 +203,7 @@ export function defineTool<
 
 `defineTool()` does not register or wrap anything at runtime. `pi.registerTool()` stores the definition under its name and refreshes the session's Tool registry. Registration and activation are separate when an allowlist is in use: an SDK session created with a `tools` array must include the custom name, and extensions can inspect or change the active names with `pi.getActiveTools()` and `pi.setActiveTools(names)`. Unknown names passed to `setActiveTools()` are ignored.
 
-This complete extension is copyable. It gives `defineTool()` explicit detail typing, registers the result through `pi.registerTool()`, reports one progress update, uses `ctx.cwd`, passes the run signal to `readFile`, and throws a path-specific error for a known failure.
+This complete extension is copyable. It gives `defineTool()` explicit detail typing, registers the result through `pi.registerTool()`, confines an existing target to the canonical project root, reports progress only after that check, passes the run signal to `readFile`, and throws path-specific errors for known failures.
 
 ```typescript
 import { Type } from "@earendil-works/pi-ai";
@@ -211,8 +211,8 @@ import {
   defineTool,
   type ExtensionAPI,
 } from "@earendil-works/pi-coding-agent";
-import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { readFile, realpath } from "node:fs/promises";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 
 const inspectTextParameters = Type.Object({
   path: Type.String({ description: "Project-relative UTF-8 file path" }),
@@ -222,6 +222,16 @@ interface InspectTextDetails {
   path: string;
   phase: "reading" | "done";
   bytes?: number;
+}
+
+function isWithinRoot(root: string, candidate: string): boolean {
+  const pathFromRoot = relative(root, candidate);
+  return (
+    pathFromRoot === "" ||
+    (pathFromRoot !== ".." &&
+      !pathFromRoot.startsWith(`..${sep}`) &&
+      !isAbsolute(pathFromRoot))
+  );
 }
 
 const inspectText = defineTool<
@@ -238,13 +248,29 @@ const inspectText = defineTool<
   parameters: inspectTextParameters,
   executionMode: "parallel",
   async execute(_toolCallId, params, signal, onUpdate, ctx) {
-    const absolutePath = resolve(ctx.cwd, params.path);
-    onUpdate?.({
-      content: [{ type: "text", text: `Reading ${params.path}` }],
-      details: { path: params.path, phase: "reading" },
-    });
+    if (signal?.aborted) throw new Error(`Read cancelled: ${params.path}`);
+    if (isAbsolute(params.path)) {
+      throw new Error(`Path must be project-relative: ${params.path}`);
+    }
+
+    const projectRoot = await realpath(ctx.cwd);
+    const candidatePath = resolve(projectRoot, params.path);
+    if (!isWithinRoot(projectRoot, candidatePath)) {
+      throw new Error(`Path leaves project root: ${params.path}`);
+    }
 
     try {
+      const absolutePath = await realpath(candidatePath);
+      if (!isWithinRoot(projectRoot, absolutePath)) {
+        throw new Error(`Symlink target leaves project root: ${params.path}`);
+      }
+      if (signal?.aborted) throw new Error(`Read cancelled: ${params.path}`);
+
+      onUpdate?.({
+        content: [{ type: "text", text: `Reading ${params.path}` }],
+        details: { path: params.path, phase: "reading" },
+      });
+
       const text = await readFile(absolutePath, { encoding: "utf8", signal });
       return {
         content: [
@@ -276,6 +302,10 @@ export default function register(pi: ExtensionAPI): void {
   pi.registerTool(inspectText);
 }
 ```
+
+The lexical check rejects absolute input, `..` escapes, and different-drive targets. `realpath()` then resolves the existing target: symlinks are allowed only when their canonical target remains below the canonical project root. An `ENOENT` raised while resolving or reading becomes the path-specific missing-file error. The Tool reads the resolved target rather than the original symlink path.
+
+An attacker who can replace directories between `realpath()` and `readFile()` can race this check. A hostile shared filesystem needs an OS sandbox or descriptor-relative filesystem API in addition to canonical-path confinement.
 
 ### The bridge injects `ExtensionContext` without widening Agent core
 
@@ -443,7 +473,9 @@ agent.beforeToolCall = async ({ toolCall, args }, signal) => {
 };
 ```
 
-Coding Agent connects extension `tool_call` events to this hook. The Extension event receives `toolName`, `toolCallId`, and validated `input`; its handler may return `block`, `reason`, and `terminate`. A thrown `tool_call` handler error is caught by Agent preparation and becomes an error result, so extension policy failure does not accidentally allow the effect.
+The general Agent-core `beforeToolCall` API is an inspection-and-blocking contract. `BeforeToolCallResult` can return only `block`, `reason`, and `terminate`; it has no argument-replacement field. Portable Agent-core hooks should therefore treat `args` as read-only and preserve the validated value.
+
+Coding Agent deliberately adds a separate mutation contract when it bridges Extension `tool_call` events into that hook. The handler receives `toolName`, `toolCallId`, and `event.input`, which is the same already-validated argument object. A handler may mutate `event.input` in place, and later `tool_call` handlers see those mutations. The runtime does not revalidate the object before `execute`, so a handler that changes it must preserve the Tool schema's invariants or recheck them itself. The handler may also return `block`, `reason`, and `terminate`. A thrown `tool_call` handler error is caught by Agent preparation and becomes an error result, so extension policy failure does not accidentally allow the effect.
 
 ### Step 4: `execute` owns effects, cancellation, and progress
 
@@ -909,7 +941,7 @@ Current public interfaces remain per-Tool rather than forming one large virtual 
 | Read  | `ReadOperations`     | `readFile(): Promise<Buffer>`, `access(): Promise<void>`, optional async `detectImageMimeType()`                             |
 | Write | `WriteOperations`    | async `writeFile(absolutePath, content)` and `mkdir(dir)`                                                                    |
 | Edit  | `EditOperations`     | async `readFile(): Buffer`, `writeFile(absolutePath, content)`, and `access()`                                                |
-| Bash  | `BashOperations`     | `exec(command, cwd, { onData, signal, timeout, env }): Promise<{ exitCode: number | null }>`                                 |
+| Bash  | `BashOperations`     | `exec(command, cwd, { onData, signal, timeout, env }): Promise<{ exitCode: number \| null }>`                                 |
 | Grep  | `GrepOperations`     | sync or async `isDirectory(absolutePath)` and `readFile(absolutePath): string`                                                |
 | Find  | `FindOperations`     | sync or async `exists(absolutePath)` and `glob(pattern, cwd, { ignore, limit }): string[]`                                   |
 | Ls    | `LsOperations`       | sync or async `exists`, `stat` with `isDirectory()`, and `readdir(): string[]`                                                |

@@ -203,7 +203,7 @@ export function defineTool<
 
 `defineTool()` không register hay wrap bất kỳ thứ gì ở runtime. `pi.registerTool()` lưu definition theo tên và refresh Tool registry của session. Registration và activation tách biệt khi có allowlist: một SDK session được tạo với array `tools` phải chứa tên custom Tool, còn extension có thể đọc hoặc đổi danh sách active bằng `pi.getActiveTools()` và `pi.setActiveTools(names)`. `setActiveTools()` bỏ qua tên chưa được register.
 
-Extension hoàn chỉnh dưới đây có thể sao chép. Code truyền detail type tường minh cho `defineTool()`, register kết quả qua `pi.registerTool()`, báo một progress update, dùng `ctx.cwd`, truyền run signal vào `readFile` và throw lỗi có path cho một failure đã biết.
+Extension hoàn chỉnh dưới đây có thể sao chép. Code truyền detail type tường minh cho `defineTool()`, register kết quả qua `pi.registerTool()`, giới hạn target đang tồn tại trong canonical project root, chỉ báo progress sau bước kiểm tra đó, truyền run signal vào `readFile` và throw lỗi có path cho failure đã biết.
 
 ```typescript
 import { Type } from "@earendil-works/pi-ai";
@@ -211,8 +211,8 @@ import {
   defineTool,
   type ExtensionAPI,
 } from "@earendil-works/pi-coding-agent";
-import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { readFile, realpath } from "node:fs/promises";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 
 const inspectTextParameters = Type.Object({
   path: Type.String({ description: "Project-relative UTF-8 file path" }),
@@ -222,6 +222,16 @@ interface InspectTextDetails {
   path: string;
   phase: "reading" | "done";
   bytes?: number;
+}
+
+function isWithinRoot(root: string, candidate: string): boolean {
+  const pathFromRoot = relative(root, candidate);
+  return (
+    pathFromRoot === "" ||
+    (pathFromRoot !== ".." &&
+      !pathFromRoot.startsWith(`..${sep}`) &&
+      !isAbsolute(pathFromRoot))
+  );
 }
 
 const inspectText = defineTool<
@@ -238,13 +248,29 @@ const inspectText = defineTool<
   parameters: inspectTextParameters,
   executionMode: "parallel",
   async execute(_toolCallId, params, signal, onUpdate, ctx) {
-    const absolutePath = resolve(ctx.cwd, params.path);
-    onUpdate?.({
-      content: [{ type: "text", text: `Reading ${params.path}` }],
-      details: { path: params.path, phase: "reading" },
-    });
+    if (signal?.aborted) throw new Error(`Read cancelled: ${params.path}`);
+    if (isAbsolute(params.path)) {
+      throw new Error(`Path must be project-relative: ${params.path}`);
+    }
+
+    const projectRoot = await realpath(ctx.cwd);
+    const candidatePath = resolve(projectRoot, params.path);
+    if (!isWithinRoot(projectRoot, candidatePath)) {
+      throw new Error(`Path leaves project root: ${params.path}`);
+    }
 
     try {
+      const absolutePath = await realpath(candidatePath);
+      if (!isWithinRoot(projectRoot, absolutePath)) {
+        throw new Error(`Symlink target leaves project root: ${params.path}`);
+      }
+      if (signal?.aborted) throw new Error(`Read cancelled: ${params.path}`);
+
+      onUpdate?.({
+        content: [{ type: "text", text: `Reading ${params.path}` }],
+        details: { path: params.path, phase: "reading" },
+      });
+
       const text = await readFile(absolutePath, { encoding: "utf8", signal });
       return {
         content: [
@@ -276,6 +302,10 @@ export default function register(pi: ExtensionAPI): void {
   pi.registerTool(inspectText);
 }
 ```
+
+Lexical check từ chối input là absolute path, đường dẫn thoát bằng `..` và target nằm trên drive khác. Sau đó `realpath()` resolve target đang tồn tại: symlink chỉ được phép khi canonical target vẫn nằm dưới canonical project root. Lỗi `ENOENT` trong lúc resolve hoặc read được chuyển thành missing-file error có path. Tool đọc target đã resolve thay vì symlink path ban đầu.
+
+Giữa `realpath()` và `readFile()` vẫn có một filesystem race: attacker có quyền thay directory có thể chuyển target sau bước kiểm tra. Filesystem dùng chung với bên không đáng tin cậy cần thêm OS sandbox hoặc descriptor-relative filesystem API bên cạnh canonical-path confinement.
 
 ### Bridge đưa `ExtensionContext` vào mà không mở rộng Agent core
 
@@ -443,7 +473,9 @@ agent.beforeToolCall = async ({ toolCall, args }, signal) => {
 };
 ```
 
-Coding Agent nối Extension event `tool_call` vào hook này. Extension event nhận `toolName`, `toolCallId` cùng `input` đã validate; handler có thể trả `block`, `reason` và `terminate`. Nếu `tool_call` handler throw, Agent preparation bắt error rồi tạo error result, vì vậy failure trong extension policy không vô tình cho phép effect chạy.
+API `beforeToolCall` tổng quát của Agent core là contract để kiểm tra và chặn. `BeforeToolCallResult` chỉ có thể trả `block`, `reason` và `terminate`; nó không có field để thay argument. Vì vậy, Agent-core hook có tính portable cần xem `args` là read-only và giữ nguyên value đã validate.
+
+Coding Agent chủ ý bổ sung một mutation contract riêng khi nối Extension event `tool_call` vào hook đó. Handler nhận `toolName`, `toolCallId` và `event.input`, chính là argument object đã qua validation. Handler có thể mutate `event.input` in place; các `tool_call` handler chạy sau sẽ thấy những thay đổi trước đó. Runtime không validate lại object trước `execute`, nên handler thay đổi input phải giữ nguyên invariant của Tool schema hoặc tự check lại. Handler cũng có thể trả `block`, `reason` và `terminate`. Nếu `tool_call` handler throw, Agent preparation bắt error rồi tạo error result, vì vậy failure trong extension policy không vô tình cho phép effect chạy.
 
 ### Bước 4: `execute` sở hữu effect, cancellation và progress
 
@@ -909,7 +941,7 @@ Public interface hiện tại vẫn tách theo từng Tool thay vì tạo một 
 | Read  | `ReadOperations`     | `readFile(): Promise<Buffer>`, `access(): Promise<void>`, optional async `detectImageMimeType()`                                 |
 | Write | `WriteOperations`    | async `writeFile(absolutePath, content)` và `mkdir(dir)`                                                                         |
 | Edit  | `EditOperations`     | async `readFile(): Buffer`, `writeFile(absolutePath, content)` và `access()`                                                      |
-| Bash  | `BashOperations`     | `exec(command, cwd, { onData, signal, timeout, env }): Promise<{ exitCode: number | null }>`                                     |
+| Bash  | `BashOperations`     | `exec(command, cwd, { onData, signal, timeout, env }): Promise<{ exitCode: number \| null }>`                                     |
 | Grep  | `GrepOperations`     | sync hoặc async `isDirectory(absolutePath)` và `readFile(absolutePath): string`                                                   |
 | Find  | `FindOperations`     | sync hoặc async `exists(absolutePath)` và `glob(pattern, cwd, { ignore, limit }): string[]`                                      |
 | Ls    | `LsOperations`       | sync hoặc async `exists`, `stat` có `isDirectory()`, và `readdir(): string[]`                                                     |
