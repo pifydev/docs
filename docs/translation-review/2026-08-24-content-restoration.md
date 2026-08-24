@@ -267,7 +267,7 @@ The thinner pre-restoration Chapter 2 pages also contained a seven-step request 
 
 This appendix compares the Chapter 3 pair at `b10130f` with the restored English and Vietnamese pages. It records 100 pair-level decisions: 37 baseline H2–H4 headings and 63 unique artifacts or arguments. They reconcile as `83 restored + 1 merged + 16 technically-invalid + 0 duplicate = 100`. No item was deleted for brevity.
 
-The final English page has 2,549 prose words, 83.33% of its 3,059-word baseline. The final Vietnamese page has 2,785 prose words, 84.09% of its 3,312-word baseline. Both pages have H2/H3/H4 `6/25/6`, 42 paired fences with an identical language sequence, 10 tables, and no Mermaid block. The additional fences and tables split dense historical diagrams and distinguish current control states; they do not reduce any baseline artifact. No preservation-manifest deletion allowance is needed.
+The final English page has 2,667 prose words, 87.19% of its 3,059-word baseline. The final Vietnamese page has 2,920 prose words, 88.16% of its 3,312-word baseline. Both pages have H2/H3/H4 `6/25/6`, 42 paired fences with an identical language sequence, 10 tables, and no Mermaid block. The additional fences and tables split dense historical diagrams and distinguish current control states; they do not reduce any baseline artifact. No preservation-manifest deletion allowance is needed.
 
 Technical review used these pinned files:
 
@@ -300,7 +300,7 @@ Every entry applies to the matching English and Vietnamese heading pair. The bas
 - H16 — H3 `What coding-agent layers on top` / `coding-agent phủ lên trên những gì` — `technically-invalid` as an ownership claim; queues, turn hooks, and Tool scheduling now live in Agent Core. The final section preserves the product-layering lesson and separates reusable mechanisms from Coding Agent policy.
 - H17 — H3 `4.1 Entry: what runAgentLoop() receives` / `4.1 Đầu vào: runAgentLoop() nhận gì` — `restored` as the current public entries `Agent`, `agentLoop()`, and `agentLoopContinue()`, followed by the internal snapshots they create.
 - H18 — H3 `4.2 Skeleton of runLoop(): core first, then layering` / `Bộ xương của runLoop(): lõi trước, lớp phủ sau` — `restored`.
-- H19 — H4 `Core: the inner loop` / `Lõi: inner loop` — `restored` with both continuation operands.
+- H19 — H4 `Core: the inner loop` / `Lõi: inner loop` — `restored` with both continuation operands and a source-faithful abridgement that uses only symbols present in pinned `agent-loop.ts`.
 - H20 — H4 `Layering: coding-agent adds two outer shells` / `Lớp phủ: coding-agent thêm hai vỏ ngoài` — `restored` as Agent Core’s outer queue shell plus the stateful `Agent` wrapper, with Coding Agent policy above both.
 - H21 — H3 `4.3 steering message injection` / `4.3 steering message injection` — `restored` with exact poll timing and queue modes.
 - H22 — H3 `4.4 streamAssistantResponse(): calling the LLM` / `4.4 streamAssistantResponse(): gọi LLM` — `restored` as the current model boundary.
@@ -341,7 +341,7 @@ Every entry applies to the matching English and Vietnamese heading pair. The bas
 - A17 — Simplified code/comment saying “any tool terminate then stop” — `technically-invalid`; pinned `shouldTerminateToolBatch()` uses non-empty `every` over finalized results.
 - A18 — Gas/brake diagram driven solely by `stopReason` — `technically-invalid`; replaced by a state diagram spanning Tool blocks, hooks, queues, errors, abort, and deferred ownership.
 - A19 — Minimal-loop rationale and Agent-versus-Workflow distinction — `restored` without claiming Tool presence is the only production signal.
-- A20 — Exit-path table — `restored` and expanded from four to six evidenced paths.
+- A20 — Exit-path table — `restored` and expanded from four to six evidenced paths; the deferred row now distinguishes host-owned `DeferredHandle` polling from the loop's ordinary `turn_end`, next-Turn hook, steering, and follow-up checks.
 - A21 — Simplest-loop pseudocode branching on `response.stopReason !== "toolUse"` — `technically-invalid` for current Pi; replaced by explicitly labeled pseudocode that selects complete Tool calls from content.
 - A22 — Coding Agent layering table assigning steering, follow-up, and turn hooks to Coding Agent — `technically-invalid` at the pin; the final table separates Agent Core mechanism from Coding Agent policy.
 - A23 — Argument that a small Agent can omit coding-product policy — `restored` with `Agent` as the reusable boundary.
@@ -357,11 +357,11 @@ Every entry applies to the matching English and Vietnamese heading pair. The bas
 - A33 — Steering scenario and injection code — `restored` with no claim of mid-Tool interruption.
 - A34 — `transformContext` snippet — `restored` with its no-throw contract and per-request scope.
 - A35 — `convertToLlm` boundary call — `restored`.
-- A36 — Two-layer message-system explanation and coding-specific roles — `restored` against pinned `messages.ts`.
+- A36 — Two-layer message-system explanation and coding-specific roles — `restored` with the pinned inline conversions for `bashExecution`, `custom`, `branchSummary`, and `compactionSummary`; no invented conversion helpers remain.
 - A37 — Default converter code — `restored` in the low-level config and explained against `Agent` defaults.
 - A38 — Before/after message conversion diagram — `restored` with actual `bashExecution`, `custom`, and summary behavior.
 - A39 — Fresh `Context` construction — `restored`.
-- A40 — `streamFn || streamSimple` fallback call — `technically-invalid` as active guidance; replaced by injected `models.streamSimple.bind(models)` and Coding Agent’s `ModelRuntime.streamSimple()` wrapper.
+- A40 — `streamFn || streamSimple` fallback call — `technically-invalid` as active guidance; replaced by injected `models.streamSimple.bind(models)` and a source-faithful Coding Agent `ModelRuntime.streamSimple()` wrapper with inline timeout, retry, attribution-header, and Extension-header settings.
 - A41 — Per-Turn Context wrapper and changing/stable fields — `restored` in a four-row table.
 - A42 — Anthropic cache table tied to obsolete source line numbers — `technically-invalid` as pinned evidence; replaced in place by a provider-neutral stability/cache-ownership table.
 - A43 — Rolling-prefix cache teaching point — `restored` as the rule that provider-visible content and adapter semantics, not JavaScript object identity, determine caching.

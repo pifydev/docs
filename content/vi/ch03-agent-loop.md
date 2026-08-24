@@ -232,12 +232,12 @@ assistant response
 | `toolUse`           | Thực thi `ToolCall` block thật trong content; label này một mình không làm loop tiếp tục  |
 | `stop`              | Khi không có Tool call, đi tới queue check và có thể thoát bình thường                    |
 | `length`            | Không chạy Tool call từ response bị cắt; phát error result cho từng call để model gọi lại |
-| `deferred`          | Xử lý như một boundary không có Tool; loop không poll deferred handle                     |
+| `deferred`          | Đi qua post-Turn path không có Tool bình thường; loop không poll `DeferredHandle`         |
 | `error` / `aborted` | Phát `turn_end` và `agent_end` ngay, bỏ qua turn hook cùng cả hai queue                   |
 
 `pending` là giá trị khởi tạo hoặc tạm thời khi một số provider stream còn chạy. Nó không phải final reason thành công của event `done`. Final message có `deferred` mang một `DeferredHandle`; host phải fetch hoặc cancel qua `Models.fetchDeferred()` hay `Models.cancelDeferred()` bên ngoài Agent Loop này.
 
-Vì vậy báo cáo termination phải nêu cả provider result lẫn runtime state. “Model trả về `stop`” chưa đủ nếu steering instruction đã nằm trong queue. “Một Tool trả `terminate: true`” chưa đủ nếu result khác trong cùng batch không trả. “Stream đã kết thúc” chưa đủ khi final message là deferred và host vẫn phải poll. Điều kiện hoàn tất quan sát được thuộc về toàn bộ run, không thuộc một field trên một message.
+Vì vậy báo cáo termination phải nêu cả provider result lẫn runtime state. “Model trả về `stop`” chưa đủ nếu steering instruction đã nằm trong queue. “Một Tool trả `terminate: true`” chưa đủ nếu result khác trong cùng batch không trả. “Stream đã kết thúc” chưa đủ khi final message là deferred và host vẫn phải xử lý nó. Điều kiện hoàn tất quan sát được thuộc về toàn bộ run, không thuộc một field trên một message.
 
 ### Một rule dẫn dắt automatic continuation
 
@@ -288,8 +288,10 @@ while (true) {
 | Hint terminate của batch     | Mọi Tool result đã finalize có `terminate: true`              | Bỏ automatic Tool continuation, sau đó vẫn kiểm tra steering và follow-up                                |
 | Graceful stop bằng hook      | `shouldStopAfterTurn` trả `true`                              | Thoát trước khi poll steering và follow-up                                                               |
 | Provider hard stop           | Final reason là `error` hoặc `aborted`                        | Bỏ `prepareNextTurn`, stop hook và queue                                                                 |
-| Deferred boundary            | Final reason là `deferred` và không có Tool call              | Không poll; host sở hữu deferred handle                                                                  |
+| Deferred boundary            | Final reason là `deferred` và không có Tool call              | Chạy post-Turn hook và queue check bình thường; host sở hữu việc poll DeferredHandle                     |
 | Callback/runtime throw       | Transform, conversion hoặc hook “không được throw” lại reject | Raw low-level sequence không còn được bảo đảm; `Agent` bắt run failure và phát một failure turn tổng hợp |
+
+Với message `deferred` không có Tool, “không poll” chỉ nói về `DeferredHandle`. Loop vẫn phát `turn_end`, chạy `prepareNextTurn`, áp dụng update của hook, chạy `shouldStopAfterTurn` rồi kiểm tra steering. Nếu không có steering message mở lại inner loop, nó kiểm tra follow-up tại boundary ổn định. Chỉ host mới fetch hoặc cancel deferred operation.
 
 `Agent.abort()` signal provider request và Tool callback đang hoạt động. Cancellation phía provider thường thành một assistant message `aborted`. Nếu signal đến trong Tool processing, Tool đã start nhận signal; sequential preparation dừng sau khi quan sát abort, còn provider boundary tiếp theo nhận signal đã aborted. Tool phải tôn trọng signal thì cancellation mới kịp thời.
 
@@ -425,18 +427,87 @@ const config: AgentLoopConfig = {
 Điều kiện inner loop ở revision đã pin gồm cả automatic Tool continuation và message được inject:
 
 ```typescript
-// Abridged source shape.
+// Faithfully abridged from packages/agent/src/agent-loop.ts.
 while (hasMoreToolCalls || pendingMessages.length > 0) {
-  injectPendingMessages();
-  const message = await streamAssistantResponse();
-  const toolResults = await executeCallsFrom(message);
+  if (pendingMessages.length > 0) {
+    for (const pendingMessage of pendingMessages) {
+      await emit({ type: "message_start", message: pendingMessage });
+      await emit({ type: "message_end", message: pendingMessage });
+      currentContext.messages.push(pendingMessage);
+      newMessages.push(pendingMessage);
+    }
+    pendingMessages = [];
+  }
+
+  const message = await streamAssistantResponse(
+    currentContext,
+    config,
+    signal,
+    emit,
+    streamFunction,
+  );
+  newMessages.push(message);
+
+  if (message.stopReason === "error" || message.stopReason === "aborted") {
+    await emit({ type: "turn_end", message, toolResults: [] });
+    await emit({ type: "agent_end", messages: newMessages });
+    return;
+  }
+
+  const toolCalls = message.content.filter((part) => part.type === "toolCall");
+  const toolResults: ToolResultMessage[] = [];
+  hasMoreToolCalls = false;
+  if (toolCalls.length > 0) {
+    const executedToolBatch =
+      message.stopReason === "length"
+        ? await failToolCallsFromTruncatedMessage(toolCalls, emit)
+        : await executeToolCalls(currentContext, message, config, signal, emit);
+    toolResults.push(...executedToolBatch.messages);
+    hasMoreToolCalls = !executedToolBatch.terminate;
+    for (const result of toolResults) {
+      currentContext.messages.push(result);
+      newMessages.push(result);
+    }
+  }
+
   await emit({ type: "turn_end", message, toolResults });
-  await prepareAndCheckStop();
-  pendingMessages = await getSteeringMessages();
+  const nextTurnSnapshot = await config.prepareNextTurn?.({
+    message,
+    toolResults,
+    context: currentContext,
+    newMessages,
+  });
+  if (nextTurnSnapshot) {
+    currentContext = nextTurnSnapshot.context ?? currentContext;
+    config = {
+      ...config,
+      model: nextTurnSnapshot.model ?? config.model,
+      reasoning:
+        nextTurnSnapshot.thinkingLevel === undefined
+          ? config.reasoning
+          : nextTurnSnapshot.thinkingLevel === "off"
+            ? undefined
+            : nextTurnSnapshot.thinkingLevel,
+    };
+  }
+
+  if (
+    await config.shouldStopAfterTurn?.({
+      message,
+      toolResults,
+      context: currentContext,
+      newMessages,
+    })
+  ) {
+    await emit({ type: "agent_end", messages: newMessages });
+    return;
+  }
+
+  pendingMessages = (await config.getSteeringMessages?.()) || [];
 }
 ```
 
-`hasMoreToolCalls` bắt đầu bằng `true` để assistant response đầu tiên chạy dù không có pending message. Mỗi iteration tiếp theo ứng với một Turn mới.
+`hasMoreToolCalls` bắt đầu bằng `true` để assistant response đầu tiên chạy dù không có pending message. Mỗi iteration tiếp theo ứng với một Turn mới. Bản rút gọn chỉ bỏ bookkeeping `turn_start`; mọi symbol được gọi trong đoạn trên đều tồn tại trong file đã pin.
 
 #### Lớp ngoài: queue shell và stateful wrapper
 
@@ -518,18 +589,53 @@ const llmMessages = await config.convertToLlm(messages);
 Converter mặc định của `Agent` giữ role `user`, `assistant` và `toolResult`. Coding Agent còn map `bashExecution`, `custom`, `branchSummary` và `compactionSummary` thành user message; Bash message bị đánh dấu exclude sẽ bị lọc:
 
 ```typescript
-// Abridged from packages/coding-agent/src/core/messages.ts.
-switch (message.role) {
-  case "compactionSummary":
-    return toSummaryUserMessage(message);
+// Faithfully abridged from packages/coding-agent/src/core/messages.ts.
+switch (m.role) {
   case "bashExecution":
-    return message.excludeFromContext ? undefined : toBashUserMessage(message);
+    if (m.excludeFromContext) return undefined;
+    return {
+      role: "user",
+      content: [{ type: "text", text: bashExecutionToText(m) }],
+      timestamp: m.timestamp,
+    };
+  case "custom": {
+    const content =
+      typeof m.content === "string"
+        ? [{ type: "text" as const, text: m.content }]
+        : m.content;
+    return { role: "user", content, timestamp: m.timestamp };
+  }
+  case "branchSummary":
+    return {
+      role: "user",
+      content: [
+        {
+          type: "text" as const,
+          text: BRANCH_SUMMARY_PREFIX + m.summary + BRANCH_SUMMARY_SUFFIX,
+        },
+      ],
+      timestamp: m.timestamp,
+    };
+  case "compactionSummary":
+    return {
+      role: "user",
+      content: [
+        {
+          type: "text" as const,
+          text:
+            COMPACTION_SUMMARY_PREFIX + m.summary + COMPACTION_SUMMARY_SUFFIX,
+        },
+      ],
+      timestamp: m.timestamp,
+    };
   case "user":
   case "assistant":
   case "toolResult":
-    return message;
+    return m;
 }
 ```
+
+`bashExecutionToText()` cùng hai cặp hằng prefix/suffix cho summary được khai báo trong chính file đã pin. Đoạn trích giữ đủ bốn nhánh role riêng của coding thay vì dùng helper chuyển đổi không tồn tại.
 
 Type transition này cố ý làm mất thông tin:
 
@@ -578,18 +684,42 @@ const streamFn = models.streamSimple.bind(models);
 Coding Agent bọc cùng contract thay vì truyền `Models` trực tiếp:
 
 ```typescript
-// Abridged from packages/coding-agent/src/core/sdk.ts.
-streamFn: async (model, context, options) =>
-  modelRuntime.streamSimple(model, context, {
+// Faithfully abridged from packages/coding-agent/src/core/sdk.ts.
+streamFn: async (model, context, options) => {
+  const providerRetrySettings = settingsManager.getProviderRetrySettings();
+  const httpIdleTimeoutMs = settingsManager.getHttpIdleTimeoutMs();
+  const effectiveTimeoutMs =
+    httpIdleTimeoutMs === 0 ? 2147483647 : httpIdleTimeoutMs;
+  const timeoutMs =
+    options?.timeoutMs ?? providerRetrySettings.timeoutMs ?? effectiveTimeoutMs;
+  const websocketConnectTimeoutMs =
+    options?.websocketConnectTimeoutMs ??
+    settingsManager.getWebSocketConnectTimeoutMs();
+  const headerRunner = extensionRunnerRef.current;
+
+  return modelRuntime.streamSimple(model, context, {
     ...options,
     timeoutMs,
-    maxRetries,
-    maxRetryDelayMs,
-    transformHeaders,
+    websocketConnectTimeoutMs,
+    maxRetries: options?.maxRetries ?? providerRetrySettings.maxRetries,
+    maxRetryDelayMs:
+      options?.maxRetryDelayMs ?? providerRetrySettings.maxRetryDelayMs,
+    transformHeaders: async (requestHeaders) => {
+      const headers = mergeProviderAttributionHeaders(
+        model,
+        settingsManager,
+        options?.sessionId,
+        requestHeaders,
+      );
+      return headerRunner?.hasHandlers("before_provider_headers")
+        ? headerRunner.emitBeforeProviderHeaders(headers ?? {})
+        : (headers ?? {});
+    },
   });
+},
 ```
 
-Wrapper này áp dụng setting, credential handling, retry limit, provider attribution và Extension hook. Loop vẫn chỉ nhìn thấy `StreamFn`.
+Scope bao quanh trong `sdk.ts` cung cấp `settingsManager`, `extensionRunnerRef`, `mergeProviderAttributionHeaders` và `modelRuntime`. Wrapper áp dụng setting timeout và retry, provider attribution cùng Extension header hook. Việc resolve credential vẫn thuộc Agent Loop qua `getApiKey`; loop chỉ nhìn thấy `StreamFn`.
 
 | Thành phần Context | Độ ổn định thường gặp giữa các Turn | Vì sao vẫn có thể đổi                              |
 | ------------------ | ----------------------------------- | -------------------------------------------------- |

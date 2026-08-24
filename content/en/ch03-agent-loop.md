@@ -232,12 +232,12 @@ assistant response
 | `toolUse`           | Executes actual `ToolCall` content blocks; the label alone does not continue the loop                                 |
 | `stop`              | With no Tool calls, reaches queue checks and a possible normal exit                                                   |
 | `length`            | Never executes Tool calls from the truncated response; emits an error result for each and lets the model reissue them |
-| `deferred`          | Treats the response as a no-Tool boundary; the loop does not poll the deferred handle                                 |
+| `deferred`          | Takes the ordinary no-Tool post-Turn path; the loop does not poll the `DeferredHandle`                                |
 | `error` / `aborted` | Emits `turn_end` and `agent_end` immediately, skipping turn hooks and both queues                                     |
 
 `pending` is the initial/partial value while some provider streams are in flight. It is not a successful terminal `done` reason. A final `deferred` message carries a `DeferredHandle`; fetching or cancelling it belongs to the host through `Models.fetchDeferred()` or `Models.cancelDeferred()`, outside this Agent Loop.
 
-This explains why a termination report must name both the provider result and the runtime state. “The model returned `stop`” is incomplete if a steering instruction is already queued. “A Tool returned `terminate: true`” is incomplete if another result in the same batch did not. “The stream ended” is incomplete when the final message is deferred and a host-level poll is still required. The observable finish condition belongs to the whole run, not to one field on one message.
+This explains why a termination report must name both the provider result and the runtime state. “The model returned `stop`” is incomplete if a steering instruction is already queued. “A Tool returned `terminate: true`” is incomplete if another result in the same batch did not. “The stream ended” is incomplete when the final message is deferred and host-level handling remains. The observable finish condition belongs to the whole run, not to one field on one message.
 
 ### One rule drives ordinary continuation
 
@@ -288,8 +288,10 @@ That loop is the ReAct rhythm: the model reasons into an action, the application
 | Batch termination hint | Every finalized Tool result has `terminate: true`         | Skips automatic Tool continuation, then still checks steering and follow-up                                     |
 | Graceful hook stop     | `shouldStopAfterTurn` returns `true`                      | Exits before steering and follow-up polling                                                                     |
 | Provider hard stop     | Final reason is `error` or `aborted`                      | Skips `prepareNextTurn`, stop hook, and queues                                                                  |
-| Deferred boundary      | Final reason is `deferred` and there are no Tool calls    | Does not poll; host owns the deferred handle                                                                    |
+| Deferred boundary      | Final reason is `deferred` and there are no Tool calls    | Runs the ordinary post-Turn hooks and queue checks; the host owns DeferredHandle polling                        |
 | Callback/runtime throw | A “must not throw” transform, conversion, or hook rejects | Raw low-level normal sequence is not guaranteed; `Agent` catches run failure and emits a synthetic failure turn |
+
+For a no-Tool `deferred` message, “does not poll” applies only to the `DeferredHandle`. The loop still emits `turn_end`, runs `prepareNextTurn`, applies its update, runs `shouldStopAfterTurn`, and checks steering. If no steering message reopens the inner loop, it checks follow-up at the stable boundary. The host alone fetches or cancels the deferred operation.
 
 `Agent.abort()` signals the active provider request and Tool callbacks. Provider-side cancellation normally becomes an `aborted` assistant message. If the signal arrives during Tool processing, started Tools receive the signal; sequential preparation stops after the observed abort, and the next provider boundary receives the already-aborted signal. A Tool must honor its signal for cancellation to be prompt.
 
@@ -425,18 +427,87 @@ The public `Agent` creates snapshots of its system prompt, messages, and Tools, 
 The pinned inner condition includes both automatic Tool continuation and injected messages:
 
 ```typescript
-// Abridged source shape.
+// Faithfully abridged from packages/agent/src/agent-loop.ts.
 while (hasMoreToolCalls || pendingMessages.length > 0) {
-  injectPendingMessages();
-  const message = await streamAssistantResponse();
-  const toolResults = await executeCallsFrom(message);
+  if (pendingMessages.length > 0) {
+    for (const pendingMessage of pendingMessages) {
+      await emit({ type: "message_start", message: pendingMessage });
+      await emit({ type: "message_end", message: pendingMessage });
+      currentContext.messages.push(pendingMessage);
+      newMessages.push(pendingMessage);
+    }
+    pendingMessages = [];
+  }
+
+  const message = await streamAssistantResponse(
+    currentContext,
+    config,
+    signal,
+    emit,
+    streamFunction,
+  );
+  newMessages.push(message);
+
+  if (message.stopReason === "error" || message.stopReason === "aborted") {
+    await emit({ type: "turn_end", message, toolResults: [] });
+    await emit({ type: "agent_end", messages: newMessages });
+    return;
+  }
+
+  const toolCalls = message.content.filter((part) => part.type === "toolCall");
+  const toolResults: ToolResultMessage[] = [];
+  hasMoreToolCalls = false;
+  if (toolCalls.length > 0) {
+    const executedToolBatch =
+      message.stopReason === "length"
+        ? await failToolCallsFromTruncatedMessage(toolCalls, emit)
+        : await executeToolCalls(currentContext, message, config, signal, emit);
+    toolResults.push(...executedToolBatch.messages);
+    hasMoreToolCalls = !executedToolBatch.terminate;
+    for (const result of toolResults) {
+      currentContext.messages.push(result);
+      newMessages.push(result);
+    }
+  }
+
   await emit({ type: "turn_end", message, toolResults });
-  await prepareAndCheckStop();
-  pendingMessages = await getSteeringMessages();
+  const nextTurnSnapshot = await config.prepareNextTurn?.({
+    message,
+    toolResults,
+    context: currentContext,
+    newMessages,
+  });
+  if (nextTurnSnapshot) {
+    currentContext = nextTurnSnapshot.context ?? currentContext;
+    config = {
+      ...config,
+      model: nextTurnSnapshot.model ?? config.model,
+      reasoning:
+        nextTurnSnapshot.thinkingLevel === undefined
+          ? config.reasoning
+          : nextTurnSnapshot.thinkingLevel === "off"
+            ? undefined
+            : nextTurnSnapshot.thinkingLevel,
+    };
+  }
+
+  if (
+    await config.shouldStopAfterTurn?.({
+      message,
+      toolResults,
+      context: currentContext,
+      newMessages,
+    })
+  ) {
+    await emit({ type: "agent_end", messages: newMessages });
+    return;
+  }
+
+  pendingMessages = (await config.getSteeringMessages?.()) || [];
 }
 ```
 
-`hasMoreToolCalls` begins `true` so the first assistant response runs even with no pending messages. Each later iteration corresponds to a new Turn.
+`hasMoreToolCalls` begins `true` so the first assistant response runs even with no pending messages. Each later iteration corresponds to a new Turn. The abridgement omits only `turn_start` bookkeeping; every called symbol shown above exists in the pinned file.
 
 #### Layering: the outer queue shell and stateful wrapper
 
@@ -518,18 +589,53 @@ const llmMessages = await config.convertToLlm(messages);
 The default `Agent` converter retains `user`, `assistant`, and `toolResult` roles. Coding Agent instead maps `bashExecution`, `custom`, `branchSummary`, and `compactionSummary` messages into user messages, while excluded Bash messages are filtered out:
 
 ```typescript
-// Abridged from packages/coding-agent/src/core/messages.ts.
-switch (message.role) {
-  case "compactionSummary":
-    return toSummaryUserMessage(message);
+// Faithfully abridged from packages/coding-agent/src/core/messages.ts.
+switch (m.role) {
   case "bashExecution":
-    return message.excludeFromContext ? undefined : toBashUserMessage(message);
+    if (m.excludeFromContext) return undefined;
+    return {
+      role: "user",
+      content: [{ type: "text", text: bashExecutionToText(m) }],
+      timestamp: m.timestamp,
+    };
+  case "custom": {
+    const content =
+      typeof m.content === "string"
+        ? [{ type: "text" as const, text: m.content }]
+        : m.content;
+    return { role: "user", content, timestamp: m.timestamp };
+  }
+  case "branchSummary":
+    return {
+      role: "user",
+      content: [
+        {
+          type: "text" as const,
+          text: BRANCH_SUMMARY_PREFIX + m.summary + BRANCH_SUMMARY_SUFFIX,
+        },
+      ],
+      timestamp: m.timestamp,
+    };
+  case "compactionSummary":
+    return {
+      role: "user",
+      content: [
+        {
+          type: "text" as const,
+          text:
+            COMPACTION_SUMMARY_PREFIX + m.summary + COMPACTION_SUMMARY_SUFFIX,
+        },
+      ],
+      timestamp: m.timestamp,
+    };
   case "user":
   case "assistant":
   case "toolResult":
-    return message;
+    return m;
 }
 ```
+
+`bashExecutionToText()` and the two summary prefix/suffix constants are declared in the same pinned file. The excerpt preserves all four coding-specific role branches instead of standing in invented conversion helpers.
 
 The type transition is intentionally lossy:
 
@@ -578,18 +684,42 @@ const streamFn = models.streamSimple.bind(models);
 Coding Agent wraps the same contract rather than passing `Models` directly:
 
 ```typescript
-// Abridged from packages/coding-agent/src/core/sdk.ts.
-streamFn: async (model, context, options) =>
-  modelRuntime.streamSimple(model, context, {
+// Faithfully abridged from packages/coding-agent/src/core/sdk.ts.
+streamFn: async (model, context, options) => {
+  const providerRetrySettings = settingsManager.getProviderRetrySettings();
+  const httpIdleTimeoutMs = settingsManager.getHttpIdleTimeoutMs();
+  const effectiveTimeoutMs =
+    httpIdleTimeoutMs === 0 ? 2147483647 : httpIdleTimeoutMs;
+  const timeoutMs =
+    options?.timeoutMs ?? providerRetrySettings.timeoutMs ?? effectiveTimeoutMs;
+  const websocketConnectTimeoutMs =
+    options?.websocketConnectTimeoutMs ??
+    settingsManager.getWebSocketConnectTimeoutMs();
+  const headerRunner = extensionRunnerRef.current;
+
+  return modelRuntime.streamSimple(model, context, {
     ...options,
     timeoutMs,
-    maxRetries,
-    maxRetryDelayMs,
-    transformHeaders,
+    websocketConnectTimeoutMs,
+    maxRetries: options?.maxRetries ?? providerRetrySettings.maxRetries,
+    maxRetryDelayMs:
+      options?.maxRetryDelayMs ?? providerRetrySettings.maxRetryDelayMs,
+    transformHeaders: async (requestHeaders) => {
+      const headers = mergeProviderAttributionHeaders(
+        model,
+        settingsManager,
+        options?.sessionId,
+        requestHeaders,
+      );
+      return headerRunner?.hasHandlers("before_provider_headers")
+        ? headerRunner.emitBeforeProviderHeaders(headers ?? {})
+        : (headers ?? {});
+    },
   });
+},
 ```
 
-That wrapper applies settings, credential handling, retry limits, provider attribution, and Extension hooks. The loop still sees only `StreamFn`.
+The surrounding `sdk.ts` scope supplies `settingsManager`, `extensionRunnerRef`, `mergeProviderAttributionHeaders`, and `modelRuntime`. The wrapper applies timeout and retry settings, provider attribution, and the Extension header hook. Credential resolution remains an Agent Loop concern through `getApiKey`; the loop still sees only `StreamFn`.
 
 | Context part   | Typical stability across Turns | Why it can still change                              |
 | -------------- | ------------------------------ | ---------------------------------------------------- |
