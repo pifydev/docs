@@ -471,7 +471,7 @@ export default function protectProduction(pi: ExtensionAPI) {
 }
 ```
 
-`terminate` applies to a blocked call here. A batch stops early only when every finalized Tool result in that batch has `terminate: true`.
+`terminate` applies to the blocked call here. Pinned [`shouldTerminateToolBatch()`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/agent-loop.ts#L582-L584) evaluates termination only after the current batch has produced all of its finalized results. A non-empty result set in which every result has `terminate: true` sets the batch's termination decision; the flag never stops the current batch early.
 
 ### Preprocess model context without changing history
 
@@ -586,14 +586,14 @@ Coding Agent then runs Extension `message_end` handlers. A valid replacement mus
 
 ### One Tool call
 
-The current lifecycle includes preflight and result transformation at precise points:
+For one Tool call that passes preflight, the current lifecycle places preparation and result transformation at precise points:
 
 ```text
 assistant message_end barrier
 tool_execution_start barrier
 prepareArguments -> validate -> beforeToolCall
 Tool execute -> tool_execution_update* -> settle all update deliveries
-afterToolCall / Extension tool_result
+await afterToolCall / Extension tool_result
 tool_execution_end barrier
 message_start ToolResultMessage
 message_end ToolResultMessage
@@ -604,22 +604,26 @@ turn_end
 
 ### Sequential and parallel batches
 
-Sequential mode completes the entire chain above for one call before starting the next call. Parallel mode retains two kinds of order:
+Sequential mode finishes one call's immediate preflight outcome or full prepared pipeline, emits its end event and result-message lifecycle, and only then starts the next call. Pinned [`executeToolCallsParallel()`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/agent-loop.ts#L489-L552) separates a source-order scan from concurrent prepared pipelines:
 
-1. `tool_execution_start` and preflight run sequentially in the assistant message's Tool-call order.
-2. Prepared Tools execute concurrently. Their progress events may interleave, and `tool_execution_end` follows actual completion order.
-3. After every execution settles, `ToolResultMessage` start/end events are emitted in the assistant's original Tool-call order.
-4. `turn_end.toolResults` uses that same source order.
+1. Pi emits `tool_execution_start` and runs preflight sequentially in the assistant message's Tool-call order. A lookup, preparation, validation, hook, or abort failure is an immediate result, so its `tool_execution_end` is also emitted during this scan. Pi then continues scanning later calls unless abort is observed.
+2. After the scan, prepared Tool executions start concurrently. Each normal pipeline awaits Tool execution, every collected progress delivery, and `afterToolCall` finalization before emitting `tool_execution_end`.
+3. Normal end events therefore follow pipeline-finalization timing, not necessarily raw `tool.execute()` completion timing. Progress and end events from prepared calls may interleave.
+4. After every immediate or prepared outcome is finalized, `ToolResultMessage` start/end events are emitted in the assistant message's original Tool-call order.
+5. After those result-message lifecycles, the all-results `terminate` reduction supplies the batch's post-batch continuation decision; it does not cancel work within the batch.
+6. `turn_end.toolResults` then uses the same source order.
 
 ```text
-assistant calls:       A, B
-start/preflight:       start A -> start B
-parallel execution:    update B -> update A -> end B -> end A   (one possible order)
-result messages:       result A -> result B
-turn_end.toolResults:  [A, B]
+assistant calls:         A (preflight error), B, C
+source-order scan:       start A -> end A(error) -> start B -> start C
+prepared pipelines:      update C -> B execute returns -> C execute returns
+finalization events:     end C -> end B   (B's awaited afterToolCall finished later)
+result messages:         result A -> result B -> result C
+batch terminate:         reduce all finalized results (post-batch decision)
+turn_end.toolResults:    [A, B, C]
 ```
 
-Correlate all three Tool event types with `toolCallId`. Array position and wall-clock end order are different contracts.
+Correlate all three Tool event types with `toolCallId`. Array position, raw Tool completion, and finalized end-event order are different contracts.
 
 ## 8. Design decisions and transfer lessons
 

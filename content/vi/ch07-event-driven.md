@@ -471,7 +471,7 @@ export default function protectProduction(pi: ExtensionAPI) {
 }
 ```
 
-Ở đây, `terminate` áp dụng cho call bị block. Batch chỉ dừng sớm khi mọi Tool result đã hoàn tất trong batch đều có `terminate: true`.
+Ở đây, `terminate` áp dụng cho call bị block. Theo [`shouldTerminateToolBatch()`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/agent-loop.ts#L582-L584) ở bản source đã pin, Pi chỉ đánh giá việc kết thúc sau khi batch hiện tại đã tạo xong mọi kết quả cuối. Nếu batch có ít nhất một kết quả và mọi kết quả đều có `terminate: true`, quyết định kết thúc của batch nhận giá trị true; flag này không bao giờ dừng sớm chính batch hiện tại.
 
 ### Tiền xử lý model context mà không đổi history
 
@@ -586,14 +586,14 @@ Sau đó Coding Agent chạy Extension handler `message_end`. Replacement hợp 
 
 ### Một Tool call
 
-Vòng đời hiện tại đặt preflight và bước đổi result vào các vị trí chính xác:
+Với một Tool call vượt qua preflight, vòng đời hiện tại đặt khâu chuẩn bị và bước đổi result vào các vị trí chính xác:
 
 ```text
 assistant message_end barrier
 tool_execution_start barrier
 prepareArguments -> validate -> beforeToolCall
 Tool execute -> tool_execution_update* -> settle all update deliveries
-afterToolCall / Extension tool_result
+await afterToolCall / Extension tool_result
 tool_execution_end barrier
 message_start ToolResultMessage
 message_end ToolResultMessage
@@ -604,22 +604,26 @@ turn_end
 
 ### Batch tuần tự và song song
 
-Sequential mode hoàn tất toàn bộ chuỗi trên cho một call rồi mới bắt đầu call tiếp theo. Parallel mode giữ hai kiểu thứ tự:
+Sequential mode hoàn tất kết quả preflight tức thời hoặc toàn bộ pipeline đã chuẩn bị của một call, phát end event và vòng đời result message, rồi mới bắt đầu call tiếp theo. Ở bản source đã pin, [`executeToolCallsParallel()`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/agent-loop.ts#L489-L552) tách lượt quét theo thứ tự nguồn khỏi các pipeline đã chuẩn bị chạy đồng thời:
 
-1. `tool_execution_start` và preflight chạy tuần tự theo thứ tự Tool call trong assistant message.
-2. Các Tool đã qua preflight chạy đồng thời. Progress event có thể xen kẽ; `tool_execution_end` theo thứ tự hoàn tất thực tế.
-3. Sau khi mọi lần thực thi settle, event start/end của `ToolResultMessage` được phát theo thứ tự Tool call ban đầu trong assistant message.
-4. `turn_end.toolResults` dùng cùng thứ tự nguồn đó.
+1. Pi phát `tool_execution_start` và chạy preflight tuần tự theo thứ tự Tool call trong assistant message. Lỗi lookup, chuẩn bị, validation, hook hoặc abort trở thành kết quả tức thời, nên `tool_execution_end` của lỗi đó cũng được phát ngay trong lượt quét. Pi vẫn quét các call phía sau trừ khi phát hiện abort.
+2. Sau lượt quét, các Tool đã chuẩn bị bắt đầu chạy đồng thời. Mỗi pipeline bình thường phải chờ `tool.execute()`, mọi lần phân phối tiến độ đã thu thập và bước hoàn tất `afterToolCall` trước khi phát `tool_execution_end`.
+3. Vì vậy, end event bình thường đi theo thời điểm toàn pipeline hoàn tất, không nhất thiết theo thời điểm `tool.execute()` trả về. Progress event và end event của các call đã chuẩn bị có thể xen kẽ.
+4. Sau khi mọi kết quả tức thời hoặc đã chuẩn bị đều hoàn tất, event start/end của `ToolResultMessage` được phát theo thứ tự Tool call ban đầu trong assistant message.
+5. Sau các vòng đời result message đó, phép gộp `terminate` trên mọi kết quả mới cung cấp quyết định tiếp tục sau batch; nó không hủy công việc bên trong batch.
+6. Sau đó, `turn_end.toolResults` dùng cùng thứ tự nguồn.
 
 ```text
-assistant calls:       A, B
-start/preflight:       start A -> start B
-parallel execution:    update B -> update A -> end B -> end A   (one possible order)
-result messages:       result A -> result B
-turn_end.toolResults:  [A, B]
+assistant calls:         A (preflight error), B, C
+source-order scan:       start A -> end A(error) -> start B -> start C
+prepared pipelines:      update C -> B execute returns -> C execute returns
+finalization events:     end C -> end B   (B's awaited afterToolCall finished later)
+result messages:         result A -> result B -> result C
+batch terminate:         reduce all finalized results (post-batch decision)
+turn_end.toolResults:    [A, B, C]
 ```
 
-Hãy liên kết cả ba loại Tool event bằng `toolCallId`. Vị trí trong array và thứ tự kết thúc theo thời gian là hai contract khác nhau.
+Hãy liên kết cả ba loại Tool event bằng `toolCallId`. Vị trí trong array, thời điểm `tool.execute()` hoàn tất và thứ tự end event sau finalization là ba contract khác nhau.
 
 ## 8. Quyết định thiết kế và bài học áp dụng
 
