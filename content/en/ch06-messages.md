@@ -471,7 +471,7 @@ case "bashExecution":
   };
 ```
 
-The message stays in `agent.state.messages`, renders as a Bash execution, and is stored by `SessionManager.appendMessage()` when the session persists. If a Bash command finishes while the Agent is streaming, Coding Agent delays inserting and persisting it until `agent_end`; that prevents a product action from splitting the provider-required assistant Tool-call/Tool-result ordering.
+Once inserted, the message stays in `agent.state.messages`, renders as a Bash execution, and is stored by `SessionManager.appendMessage()` when the session persists. Coding Agent inserts and persists it immediately when no Agent run is active. If the command finishes while the Agent is streaming, `recordBashResult()` instead queues it in `_pendingBashMessages`. The `agent_end` listener does not flush that queue. `_runAgentPrompt()` first awaits `agent.prompt()` and any post-run continuations; only its `finally` block, after the final Agent run has settled and emitted `agent_end`, calls `_flushPendingBashMessages()` to insert and persist the queued records. This boundary prevents a product action from splitting the provider-required assistant Tool-call/Tool-result ordering.
 
 Filtering model context is not a secrecy boundary by itself. The output can still appear on screen and in the session JSONL file, and extensions can observe product events. Do not put a secret into a message merely because `convertToLlm` omits it.
 
@@ -479,15 +479,15 @@ Filtering model context is not a secrecy boundary by itself. The output can stil
 
 The current Coding Agent behavior makes the separation concrete:
 
-| Record                                          | Agent/runtime context              | Model after conversion | TUI conversation                   | Persisted session                                  |
-| ----------------------------------------------- | ---------------------------------- | ---------------------- | ---------------------------------- | -------------------------------------------------- |
-| Standard `Message`                              | Yes                                | Yes                    | Yes                                | `SessionMessageEntry` after settled message events |
-| Normal `BashExecutionMessage`                   | Yes                                | As one `UserMessage`   | Yes                                | `SessionMessageEntry`                              |
-| Bash with `excludeFromContext`                  | Yes                                | No                     | Yes                                | `SessionMessageEntry`                              |
-| `CustomMessage`, `display: true`                | Yes                                | As one `UserMessage`   | Yes, with custom rendering         | `CustomMessageEntry`                               |
-| `CustomMessage`, `display: false`               | Yes                                | As one `UserMessage`   | Hidden                             | `CustomMessageEntry`                               |
-| Extension `CustomEntry` from `pi.appendEntry()` | No message projection              | No                     | No default conversation message    | `CustomEntry` for extension state                  |
-| Branch or compaction entry on the active path   | Reconstructed as a summary message | As one `UserMessage`   | Product-specific summary rendering | `BranchSummaryEntry` or `CompactionEntry`          |
+| Record                                          | Agent/runtime context                   | Model after conversion | TUI conversation                   | Persisted session                                    |
+| ----------------------------------------------- | --------------------------------------- | ---------------------- | ---------------------------------- | ---------------------------------------------------- |
+| Standard `Message`                              | Yes                                     | Yes                    | Yes                                | `SessionMessageEntry` after settled message events   |
+| Normal `BashExecutionMessage`                   | Yes; after the post-run flush if queued | As one `UserMessage`   | Yes                                | `SessionMessageEntry` at the same insertion boundary |
+| Bash with `excludeFromContext`                  | Yes; after the post-run flush if queued | No                     | Yes                                | `SessionMessageEntry` at the same insertion boundary |
+| `CustomMessage`, `display: true`                | Yes                                     | As one `UserMessage`   | Yes, with custom rendering         | `CustomMessageEntry`                                 |
+| `CustomMessage`, `display: false`               | Yes                                     | As one `UserMessage`   | Hidden                             | `CustomMessageEntry`                                 |
+| Extension `CustomEntry` from `pi.appendEntry()` | No message projection                   | No                     | No default conversation message    | `CustomEntry` for extension state                    |
+| Branch or compaction entry on the active path   | Reconstructed as a summary message      | As one `UserMessage`   | Product-specific summary rendering | `BranchSummaryEntry` or `CompactionEntry`            |
 
 `display: false` does not mean “exclude from the model.” It hides a Coding Agent `CustomMessage` in the TUI while `buildSessionContext()` reconstructs it and `convertToLlm()` turns it into `user` content. Use `pi.appendEntry()` for extension state that must persist without entering model context, or define and filter an explicit custom `AgentMessage` in an application that owns its own runtime.
 
@@ -542,8 +542,14 @@ LIVE INPUT
   user enters !ls -la
     -> Coding Agent executes Bash
     -> BashExecutionMessage
-    -> agent.state.messages
-    -> SessionManager.appendMessage() when persistence is enabled
+    -> if no Agent run is active:
+         insert into agent.state.messages
+         persist with SessionManager.appendMessage()
+    -> if the Agent is streaming:
+         queue in _pendingBashMessages
+         -> final Agent run settles and emits agent_end
+         -> _runAgentPrompt() finally calls _flushPendingBashMessages()
+         -> insert into agent.state.messages and persist
 
 RESUME INPUT
   JSONL SessionEntry tree

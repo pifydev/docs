@@ -471,7 +471,7 @@ case "bashExecution":
   };
 ```
 
-Message vẫn nằm trong `agent.state.messages`, được hiển thị như một lượt chạy Bash và được `SessionManager.appendMessage()` lưu nếu session có persistence. Nếu lệnh Bash hoàn tất trong khi Agent đang stream, Coding Agent trì hoãn việc chèn và lưu nó tới `agent_end`; thao tác của sản phẩm vì thế không chen giữa cặp Tool call/Tool result mà provider yêu cầu.
+Sau khi được chèn, message nằm trong `agent.state.messages`, được hiển thị như một lượt chạy Bash và được `SessionManager.appendMessage()` lưu nếu session có persistence. Coding Agent chèn và lưu ngay khi không có lượt Agent nào đang chạy. Nếu lệnh hoàn tất trong lúc Agent đang stream, `recordBashResult()` đưa nó vào `_pendingBashMessages`. Listener `agent_end` không flush hàng đợi này. Trước hết, `_runAgentPrompt()` chờ `agent.prompt()` và mọi lượt chạy tiếp nối sau đó; chỉ tới khối `finally`, sau khi lượt Agent cuối đã kết thúc và phát `agent_end`, hàm mới gọi `_flushPendingBashMessages()` để chèn và lưu các bản ghi đang chờ. Ranh giới này ngăn thao tác của sản phẩm chen giữa thứ tự assistant Tool-call/Tool-result mà provider yêu cầu.
 
 Lọc khỏi model context không tự tạo ranh giới bảo mật. Output vẫn có thể xuất hiện trên màn hình và trong tệp JSONL của session; extension cũng có thể quan sát sự kiện của sản phẩm. Không đưa secret vào message chỉ vì `convertToLlm` sẽ bỏ message đó.
 
@@ -479,15 +479,15 @@ Lọc khỏi model context không tự tạo ranh giới bảo mật. Output v�
 
 Hành vi hiện tại của Coding Agent cho thấy rõ sự tách biệt:
 
-| Bản ghi                                                | Agent/runtime context          | Model sau chuyển đổi | Hội thoại trên TUI                  | Session được lưu                                  |
-| ------------------------------------------------------ | ------------------------------ | -------------------- | ----------------------------------- | ------------------------------------------------- |
-| `Message` chuẩn                                        | Có                             | Có                   | Có                                  | `SessionMessageEntry` sau sự kiện message đã chốt |
-| `BashExecutionMessage` thông thường                    | Có                             | Một `UserMessage`    | Có                                  | `SessionMessageEntry`                             |
-| Bash có `excludeFromContext`                           | Có                             | Không                | Có                                  | `SessionMessageEntry`                             |
-| `CustomMessage`, `display: true`                       | Có                             | Một `UserMessage`    | Có, với cách hiển thị riêng         | `CustomMessageEntry`                              |
-| `CustomMessage`, `display: false`                      | Có                             | Một `UserMessage`    | Ẩn                                  | `CustomMessageEntry`                              |
-| Extension `CustomEntry` từ `pi.appendEntry()`          | Không tạo message              | Không                | Không có message hội thoại mặc định | `CustomEntry` dành cho trạng thái extension       |
-| Branch hoặc compaction entry trên nhánh đang hoạt động | Dựng lại thành summary message | Một `UserMessage`    | Hiển thị summary theo sản phẩm      | `BranchSummaryEntry` hoặc `CompactionEntry`       |
+| Bản ghi                                                | Agent/runtime context                         | Model sau chuyển đổi | Hội thoại trên TUI                  | Session được lưu                                  |
+| ------------------------------------------------------ | --------------------------------------------- | -------------------- | ----------------------------------- | ------------------------------------------------- |
+| `Message` chuẩn                                        | Có                                            | Có                   | Có                                  | `SessionMessageEntry` sau sự kiện message đã chốt |
+| `BashExecutionMessage` thông thường                    | Có; nếu đang chờ thì sau bước flush cuối lượt | Một `UserMessage`    | Có                                  | `SessionMessageEntry` tại cùng ranh giới chèn     |
+| Bash có `excludeFromContext`                           | Có; nếu đang chờ thì sau bước flush cuối lượt | Không                | Có                                  | `SessionMessageEntry` tại cùng ranh giới chèn     |
+| `CustomMessage`, `display: true`                       | Có                                            | Một `UserMessage`    | Có, với cách hiển thị riêng         | `CustomMessageEntry`                              |
+| `CustomMessage`, `display: false`                      | Có                                            | Một `UserMessage`    | Ẩn                                  | `CustomMessageEntry`                              |
+| Extension `CustomEntry` từ `pi.appendEntry()`          | Không tạo message                             | Không                | Không có message hội thoại mặc định | `CustomEntry` dành cho trạng thái extension       |
+| Branch hoặc compaction entry trên nhánh đang hoạt động | Dựng lại thành summary message                | Một `UserMessage`    | Hiển thị summary theo sản phẩm      | `BranchSummaryEntry` hoặc `CompactionEntry`       |
 
 `display: false` không có nghĩa là “loại khỏi model”. Cờ này ẩn `CustomMessage` của Coding Agent trên TUI, trong khi `buildSessionContext()` vẫn dựng lại message và `convertToLlm()` vẫn chuyển nó thành content `user`. Dùng `pi.appendEntry()` cho trạng thái extension cần lưu nhưng không đi vào model context. Với ứng dụng tự sở hữu runtime, có thể định nghĩa một custom `AgentMessage` rõ ràng rồi lọc nó trong converter.
 
@@ -542,8 +542,14 @@ LIVE INPUT
   user enters !ls -la
     -> Coding Agent executes Bash
     -> BashExecutionMessage
-    -> agent.state.messages
-    -> SessionManager.appendMessage() when persistence is enabled
+    -> if no Agent run is active:
+         insert into agent.state.messages
+         persist with SessionManager.appendMessage()
+    -> if the Agent is streaming:
+         queue in _pendingBashMessages
+         -> final Agent run settles and emits agent_end
+         -> _runAgentPrompt() finally calls _flushPendingBashMessages()
+         -> insert into agent.state.messages and persist
 
 RESUME INPUT
   JSONL SessionEntry tree
