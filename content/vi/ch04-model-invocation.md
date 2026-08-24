@@ -161,6 +161,19 @@ Ba nhóm content khớp với discriminator chính xác của block trong Pi: `t
 
 Terminal event có shape khác theo chủ ý. `done` mang `message`, còn `error` mang `error`; cả hai terminal variant đều không có `partial`. Vì vậy claim cũ rằng mọi event đều mang `partial` sẽ làm discriminated-union consumer không an toàn. `stream.result()` resolve thành terminal `AssistantMessage` trong cả hai trường hợp.
 
+Provider có capability tương ứng có thể kết thúc submission phase bằng `done(reason: "deferred")`. `AssistantMessage` của event đó có `stopReason: "deferred"` cùng durable `deferred` handle chứa `provider`, `modelId`, `api`, `id` và dữ liệu tùy chọn về expiry, polling hoặc reconstruction. Hãy persist message hoặc toàn bộ handle nếu công việc phải sống qua lần process restart. Pseudocode: public collection flow là:
+
+```text
+streamSimple(..., { deferred: true })
+  -> done(message.stopReason = deferred, message.deferred = DeferredHandle)
+  -> persist message hoặc toàn bộ handle
+  -> models.fetchDeferred(model, handle)
+  -> một deferred message khác, hoặc AssistantMessage cuối
+  -> models.cancelDeferred(model, handle) khi không còn cần kết quả
+```
+
+`ProviderStreams.fetchDeferred?()` và `cancelDeferred?()` là optional vì API implementation sở hữu capability này. `Models.fetchDeferred()` resolve qua `lazyStream()`: nếu provider không implement fetch, promise trả về normalized error `AssistantMessage`. `Models.cancelDeferred()` không có result stream, nên provider không hỗ trợ sẽ làm method reject bằng `ModelsError`. Caller thực hiện polling nên dùng `pollAfterMs` để lên lịch và không giả định handle còn hiệu lực sau `expiresAt` khi có các field đó.
+
 Provider có thể xen kẽ update của nhiều block. UI có thể nhận `text_delta`, rồi `toolcall_start`, rồi một `text_delta` khác. Consumer phải dùng `contentIndex`, update block tương ứng từ `event.partial`, và không giả định mỗi chuỗi start/delta/end luôn liền mạch.
 
 ### Boundary 3: trách nhiệm của provider và API adapter
@@ -177,10 +190,11 @@ Provider và API implementation chia một model call thành năm giai đoạn. 
 
 Giai đoạn 3 và 5 chứa phần lớn logic riêng theo provider. Request conversion chuẩn hóa content không được hỗ trợ hoặc đến từ provider khác trước khi tạo wire body. Response conversion dựng Pi block, parse partial Tool argument, ghi usage và diagnostic, ánh xạ raw stop reason, đồng thời giữ opaque continuity data như thinking signature và response ID trên normalized message type.
 
-Path Anthropic cho thấy phép ánh xạ hai chiều. Pseudocode: source-derived map này dùng tên SSE và Pi event hiện tại nhưng lược bỏ intermediate state update:
+Path Anthropic cho thấy phép ánh xạ hai chiều. Pseudocode: source-derived map này dùng tên response, SSE và Pi event hiện tại nhưng lược bỏ chi tiết content state:
 
 ```text
-message_start                                      -> start
+HTTP response accepted; onResponse completes      -> start
+message_start                                      -> responseId, model, initial usage and cost state
 content_block_start(type: text)                    -> text_start
 content_block_delta(type: text_delta)              -> text_delta
 content_block_start(type: thinking)                -> thinking_start
@@ -188,14 +202,15 @@ content_block_delta(type: thinking_delta)          -> thinking_delta
 content_block_start(type: tool_use)                -> toolcall_start
 content_block_delta(type: input_json_delta)        -> toolcall_delta
 content_block_stop                                 -> matching *_end
-message_delta(stop_reason: end_turn | tool_use)    -> done(stop | toolUse)
+message_delta                                      -> stop reason, final usage and cost state
+message_stop, then validated SSE exhaustion        -> done
 ```
 
-Phép ánh xạ còn sanitize text, normalize Tool-call ID khi API yêu cầu và tính cost từ normalized usage. Đây là trách nhiệm của adapter; Agent Loop không nên cài lại chúng.
+Pi phát `start` trước khi bắt đầu iterate SSE body. `message_start` khởi tạo response metadata và usage; event này không phát Pi `start`. `message_delta` update normalized stop reason cùng usage state nhưng không phát `done`. Adapter chỉ phát `done` sau khi iteration đi qua một `message_stop` hợp lệ, body kết thúc và terminal stop reason vượt qua validation. Phép ánh xạ còn sanitize text, normalize Tool-call ID khi API yêu cầu và tính cost từ normalized usage. Đây là trách nhiệm của adapter; Agent Loop không nên cài lại chúng.
 
 ### Contract mà API implementation phải tuân theo
 
-Đoạn source-faithful abridgement không self-contained sau chứa chính xác các stream member từ `packages/ai/src/types.ts` tại commit `a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c`. Type được import và các deferred method tùy chọn nằm ngoài excerpt này.
+Đoạn source-faithful abridgement không self-contained sau chứa chính xác các stream member bắt buộc từ `packages/ai/src/types.ts` tại commit `a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c`. Type được import và các deferred method tùy chọn đã mô tả ở trên nằm ngoài excerpt này.
 
 ```typescript
 export interface ProviderStreams {
@@ -329,7 +344,10 @@ const localProvider = createProvider({
   auth: {
     apiKey: {
       name: "Local server",
-      resolve: async () => ({ auth: {} }),
+      resolve: async () => ({
+        auth: { apiKey: "local-placeholder" },
+        source: "non-secret local placeholder",
+      }),
     },
   },
   models: [localModel],
@@ -344,7 +362,7 @@ if (!configured) throw new Error("Local model registration failed");
 console.log(configured.name);
 ```
 
-Mọi provider đều khai báo auth semantics, kể cả keyless local provider. Keyed proxy có thể dùng public helper `envApiKeyAuth()`. Mixed provider truyền một map từ giá trị `model.api` đến `ProviderStreams`; `createProvider()` dispatch mỗi model qua entry tương ứng và tạo stream error nếu không có entry.
+Mọi provider đều khai báo auth semantics. `openAICompletionsApi()` còn validate rằng request đã resolve có API key hoặc authorization header trước khi dựng OpenAI client, kể cả với local URL. Vì vậy ví dụ truyền giá trị không bí mật `local-placeholder`; hãy cấu hình local endpoint để chấp nhận hoặc bỏ qua bearer value đó. Adapter chỉ dùng placeholder này để vượt qua credential guard, và giá trị không cấp quyền truy cập. Keyed proxy có thể dùng public helper `envApiKeyAuth()` thay thế. Mixed provider truyền một map từ giá trị `model.api` đến `ProviderStreams`; `createProvider()` dispatch mỗi model qua entry tương ứng và tạo stream error nếu không có entry.
 
 Wire protocol hoàn toàn mới đòi hỏi nhiều việc hơn đăng ký model. Pseudocode: integration sequence này không chứa exported helper call.
 
@@ -425,14 +443,14 @@ Các turn của Agent thường gửi lại một conversation prefix ngày càn
 export type CacheRetention = "none" | "short" | "long";
 ```
 
-Declaration source-faithful này nằm trong `packages/ai/src/types.ts` tại commit `a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c`. Adapter mặc định dùng `short` khi caller bỏ `cacheRetention`; `long` chỉ được giữ khi model và API compatibility metadata hỗ trợ.
+Declaration source-faithful này nằm trong `packages/ai/src/types.ts` tại commit `a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c`. Resolution có ba bước: option `cacheRetention` tường minh có độ ưu tiên cao nhất; nếu thiếu option, compatibility override `PI_CACHE_RETENTION=long` chọn `long`; nếu cả hai đều thiếu, adapter dùng `short`. Giá trị provider-scoped trong `options.env` có độ ưu tiên cao hơn `process.env`. Preference `long` sau khi resolve chỉ được giữ khi model và API compatibility metadata hỗ trợ.
 
-| Adapter family                     | `none`                                                                      | `short`                                                                                                          | `long` và vị trí                                                                                                                 |
-| ---------------------------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| Anthropic Messages                 | Không có `cache_control`                                                    | `cache_control: { type: "ephemeral" }`                                                                           | Thêm `ttl: "1h"` cho model hỗ trợ long retention; đánh dấu system prompt, Tool definition cuối và user block phù hợp cuối cùng   |
-| Bedrock Converse                   | Không có explicit `cachePoint`                                              | Chèn `cachePoint: { type: DEFAULT }` cho model Claude được hỗ trợ                                                | Thêm `ttl: ONE_HOUR`; cache point nằm sau system block và sau conversation message cuối khi đã conversion                        |
-| OpenAI Responses                   | Bỏ prompt cache key và có thể yêu cầu explicit no-cache mode nếu API hỗ trợ | Dùng `sessionId` đã clamp làm `prompt_cache_key` khi có                                                          | Thêm `prompt_cache_retention: "24h"` nếu compatibility metadata cho phép                                                         |
-| OpenAI-compatible Chat Completions | Bỏ `prompt_cache_key` và marker kiểu Anthropic                              | Dùng `sessionId` đã truyền làm `prompt_cache_key` trên OpenAI; endpoint tương thích có thể dùng marker Anthropic | Thêm `prompt_cache_retention: "24h"` khi được hỗ trợ, hoặc `ttl: "1h"` trong Anthropic-marker mode; vị trí marker theo hàng trên |
+| Adapter family                     | `none`                                                                      | `short`                                                                                                                                             | `long` và vị trí                                                                                                                 |
+| ---------------------------------- | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Anthropic Messages                 | Không có `cache_control`                                                    | `cache_control: { type: "ephemeral" }`                                                                                                              | Thêm `ttl: "1h"` cho model hỗ trợ long retention; đánh dấu system prompt, Tool definition cuối và user block phù hợp cuối cùng   |
+| Bedrock Converse                   | Không có explicit `cachePoint`                                              | Chỉ chèn `cachePoint: { type: DEFAULT }` cho cấu hình Claude được hỗ trợ hoặc có force-cache, và khi converted message cuối là user message phù hợp | Thêm `ttl: ONE_HOUR`; cache point nằm sau system block và converted user message phù hợp cuối đó                                 |
+| OpenAI Responses                   | Bỏ prompt cache key và có thể yêu cầu explicit no-cache mode nếu API hỗ trợ | Dùng `sessionId` đã clamp làm `prompt_cache_key` khi có                                                                                             | Thêm `prompt_cache_retention: "24h"` nếu compatibility metadata cho phép                                                         |
+| OpenAI-compatible Chat Completions | Bỏ `prompt_cache_key` và marker kiểu Anthropic                              | Dùng `sessionId` đã truyền làm `prompt_cache_key` trên OpenAI; endpoint tương thích có thể dùng marker Anthropic                                    | Thêm `prompt_cache_retention: "24h"` khi được hỗ trợ, hoặc `ttl: "1h"` trong Anthropic-marker mode; vị trí marker theo hàng trên |
 
 Bảng này mô tả adapter behavior, không bảo đảm provider sẽ trả cache hit. Hit phụ thuộc serialized prefix mà provider nhìn thấy cùng eligibility rule của service. Việc dựng lại object `Context` trong JavaScript tự nó không phá content-prefix cache. Thay system prompt, Tool definition, converted message block, compatibility mode hoặc session key có thể làm dữ liệu provider nhận được thay đổi.
 
@@ -462,7 +480,7 @@ Request-level retry này tách biệt với Agent policy ở layer cao hơn. `Mo
 
 Context overflow cũng cần normalized test. Hàm export `isContextOverflow()` kiểm tra error-message pattern theo provider, response thành công có input usage vượt context window được truyền vào, và kết quả `length` có output bằng zero trong khi input lấp ít nhất 99% context window. Hai phép kiểm tra sau bao quát service truncate hoặc nhận input quá lớn mà không trả error thông thường. Custom provider vẫn có thể cần pattern hoặc host-side check bổ sung.
 
-`onPayload` có thể inspect hoặc thay provider payload, còn `onResponse` có thể inspect status và header đã được redact. Cả hai hook chạy trong request path, nên lỗi do hook ném ra trở thành stream error. Không log API key, authorization header, prompt chưa redact hoặc private Tool data từ hai callback này.
+`onPayload` có thể inspect hoặc thay provider payload. `onResponse` nhận response status cùng raw response header đã được copy vào string record; Pi không redact các value đó trước. Cả hai hook chạy trong request path, nên lỗi do hook ném ra trở thành stream error. Hãy coi input của callback là dữ liệu nhạy cảm: chỉ allowlist field cần log hoặc persist, đồng thời redact credential, cookie, request token, prompt và private Tool data thay vì giả định có thể ghi lại toàn bộ input.
 
 ## 6. Điều gì xảy ra sau model call một dòng
 

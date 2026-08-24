@@ -161,6 +161,19 @@ The three content families correspond to Pi's exact block discriminators: `text`
 
 Terminal events differ on purpose. `done` carries `message`, and `error` carries `error`; neither terminal variant has `partial`. The old claim that every event carries `partial` is therefore unsafe for a discriminated-union consumer. `stream.result()` resolves to the terminal `AssistantMessage` in either case.
 
+A capable provider may finish the submission phase with `done(reason: "deferred")`. Its `AssistantMessage` has `stopReason: "deferred"` and a durable `deferred` handle containing `provider`, `modelId`, `api`, `id`, and optional expiry, polling, or reconstruction data. Persist that message or its complete handle when work must survive a process restart. Pseudocode: the public collection flow is:
+
+```text
+streamSimple(..., { deferred: true })
+  -> done(message.stopReason = deferred, message.deferred = DeferredHandle)
+  -> persist the message or complete handle
+  -> models.fetchDeferred(model, handle)
+  -> another deferred message, or a final AssistantMessage
+  -> models.cancelDeferred(model, handle) when the result is no longer needed
+```
+
+`ProviderStreams.fetchDeferred?()` and `cancelDeferred?()` are optional because the API implementation owns this capability. `Models.fetchDeferred()` resolves through `lazyStream()`: when the provider does not implement fetching, the returned promise resolves to a normalized error `AssistantMessage`. `Models.cancelDeferred()` has no result stream, so an unsupported provider rejects with `ModelsError`. A caller that polls should use `pollAfterMs` for scheduling and avoid assuming that the handle remains valid beyond `expiresAt` when those fields are present.
+
 Providers may interleave updates from different blocks. A UI can see `text_delta`, then `toolcall_start`, then another `text_delta`. Consumers must use `contentIndex`, update the corresponding block from `event.partial`, and avoid assuming that each start/delta/end family is contiguous.
 
 ### Boundary 3: provider and API-adapter responsibilities
@@ -177,10 +190,11 @@ The provider and API implementation divide a model call into five stages. Pseudo
 
 Stages 3 and 5 contain most provider-specific logic. Request conversion normalizes unsupported or cross-provider content before producing the wire body. Response conversion builds Pi blocks, parses partial Tool arguments, records usage and diagnostics, maps raw stop reasons, and preserves opaque continuation data such as thinking signatures and response IDs on the normalized message types.
 
-The Anthropic path exposes the bidirectional mapping. Pseudocode: this source-derived map uses current SSE and Pi event names while omitting intermediate state updates:
+The Anthropic path exposes the bidirectional mapping. Pseudocode: this source-derived map uses current response, SSE, and Pi event names while omitting content-state details:
 
 ```text
-message_start                                      -> start
+HTTP response accepted; onResponse completes      -> start
+message_start                                      -> responseId, model, initial usage and cost state
 content_block_start(type: text)                    -> text_start
 content_block_delta(type: text_delta)              -> text_delta
 content_block_start(type: thinking)                -> thinking_start
@@ -188,14 +202,15 @@ content_block_delta(type: thinking_delta)          -> thinking_delta
 content_block_start(type: tool_use)                -> toolcall_start
 content_block_delta(type: input_json_delta)        -> toolcall_delta
 content_block_stop                                 -> matching *_end
-message_delta(stop_reason: end_turn | tool_use)    -> done(stop | toolUse)
+message_delta                                      -> stop reason, final usage and cost state
+message_stop, then validated SSE exhaustion        -> done
 ```
 
-The mapping also sanitizes text, normalizes Tool-call IDs where an API requires it, and calculates cost from normalized usage. These are adapter duties; the Agent Loop should not reproduce them.
+Pi emits `start` before it begins iterating the SSE body. `message_start` initializes response metadata and usage; it does not emit Pi `start`. `message_delta` updates the normalized stop reason and usage state but does not emit `done`. The adapter emits `done` only after iteration has reached a valid `message_stop`, the body has ended, and the terminal stop reason has passed validation. The mapping also sanitizes text, normalizes Tool-call IDs where an API requires it, and calculates cost from normalized usage. These are adapter duties; the Agent Loop should not reproduce them.
 
 ### The contracts an API implementation must satisfy
 
-The following non-self-contained, source-faithful abridgement contains the exact stream members from `packages/ai/src/types.ts` at `a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c`. Imported types and the optional deferred methods are outside this excerpt.
+The following non-self-contained, source-faithful abridgement contains the exact required stream members from `packages/ai/src/types.ts` at `a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c`. Imported types and the optional deferred methods described above are outside this excerpt.
 
 ```typescript
 export interface ProviderStreams {
@@ -329,7 +344,10 @@ const localProvider = createProvider({
   auth: {
     apiKey: {
       name: "Local server",
-      resolve: async () => ({ auth: {} }),
+      resolve: async () => ({
+        auth: { apiKey: "local-placeholder" },
+        source: "non-secret local placeholder",
+      }),
     },
   },
   models: [localModel],
@@ -344,7 +362,7 @@ if (!configured) throw new Error("Local model registration failed");
 console.log(configured.name);
 ```
 
-Every provider declares auth semantics, including a keyless local provider. A keyed proxy can use the public `envApiKeyAuth()` helper. A mixed provider passes a map of `model.api` values to `ProviderStreams`; `createProvider()` dispatches each model through the matching entry and produces a stream error if no entry exists.
+Every provider declares auth semantics. `openAICompletionsApi()` also validates that the resolved request has an API key or authorization header before it constructs the OpenAI client, even for a local URL. This example therefore supplies the non-secret value `local-placeholder`; configure the local endpoint to accept or ignore that bearer value. The adapter uses this placeholder only to pass its credential guard, and the value grants no access. A keyed proxy can use the public `envApiKeyAuth()` helper instead. A mixed provider passes a map of `model.api` values to `ProviderStreams`; `createProvider()` dispatches each model through the matching entry and produces a stream error if no entry exists.
 
 A genuinely new wire protocol requires more work than registering a model. Pseudocode: this integration sequence contains no exported helper calls.
 
@@ -425,14 +443,14 @@ Agent turns normally resend a growing conversation prefix. Prompt caching can av
 export type CacheRetention = "none" | "short" | "long";
 ```
 
-This source-faithful declaration is from `packages/ai/src/types.ts` at `a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c`. The adapters default to `short` when the caller omits `cacheRetention`; `long` is honored only where model and API compatibility metadata support it.
+This source-faithful declaration is from `packages/ai/src/types.ts` at `a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c`. Resolution has three steps: an explicit `cacheRetention` option wins; otherwise the compatibility override `PI_CACHE_RETENTION=long` selects `long`; otherwise the adapter uses `short`. A provider-scoped value in `options.env` takes precedence over `process.env`. The resolved `long` preference is honored only where model and API compatibility metadata support it.
 
-| Adapter family                     | `none`                                                                            | `short`                                                                                                             | `long` and placement                                                                                                                  |
-| ---------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| Anthropic Messages                 | No `cache_control`                                                                | `cache_control: { type: "ephemeral" }`                                                                              | Adds `ttl: "1h"` for models with long-retention support; marks the system prompt, final Tool definition, and last eligible user block |
-| Bedrock Converse                   | No explicit `cachePoint`                                                          | Inserts `cachePoint: { type: DEFAULT }` for supported Claude models                                                 | Adds `ttl: ONE_HOUR`; cache points follow the system block and the last converted conversation message                                |
-| OpenAI Responses                   | Omits the prompt cache key and may request explicit no-cache mode where supported | Uses a clamped `sessionId` as `prompt_cache_key` when supplied                                                      | Adds `prompt_cache_retention: "24h"` when compatibility metadata permits it                                                           |
-| OpenAI-compatible Chat Completions | Omits `prompt_cache_key` and Anthropic-style markers                              | Uses a supplied `sessionId` as `prompt_cache_key` on OpenAI; compatible endpoints may instead use Anthropic markers | Adds `prompt_cache_retention: "24h"` when supported, or `ttl: "1h"` in Anthropic-marker mode; marker placement follows the row above  |
+| Adapter family                     | `none`                                                                            | `short`                                                                                                                                                                   | `long` and placement                                                                                                                  |
+| ---------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Anthropic Messages                 | No `cache_control`                                                                | `cache_control: { type: "ephemeral" }`                                                                                                                                    | Adds `ttl: "1h"` for models with long-retention support; marks the system prompt, final Tool definition, and last eligible user block |
+| Bedrock Converse                   | No explicit `cachePoint`                                                          | Inserts `cachePoint: { type: DEFAULT }` only for a supported Claude or force-cache configuration, and only when the final converted message is an eligible `user` message | Adds `ttl: ONE_HOUR`; cache points follow the system block and that final eligible converted user message                             |
+| OpenAI Responses                   | Omits the prompt cache key and may request explicit no-cache mode where supported | Uses a clamped `sessionId` as `prompt_cache_key` when supplied                                                                                                            | Adds `prompt_cache_retention: "24h"` when compatibility metadata permits it                                                           |
+| OpenAI-compatible Chat Completions | Omits `prompt_cache_key` and Anthropic-style markers                              | Uses a supplied `sessionId` as `prompt_cache_key` on OpenAI; compatible endpoints may instead use Anthropic markers                                                       | Adds `prompt_cache_retention: "24h"` when supported, or `ttl: "1h"` in Anthropic-marker mode; marker placement follows the row above  |
 
 The table describes adapter behavior, not a guarantee that a provider will produce a cache hit. Hits depend on the provider-visible serialized prefix and the service's own eligibility rules. Rebuilding a JavaScript `Context` object does not by itself break a content-prefix cache. Changing the system prompt, Tool definitions, converted message blocks, compatibility mode, or session key can change what the provider sees.
 
@@ -462,7 +480,7 @@ This request-level retry is separate from higher-level Agent policy. `Models` do
 
 Context overflow also needs a normalized test. The exported `isContextOverflow()` checks provider error-message patterns, successful responses whose input usage exceeds a supplied context window, and a `length` result with zero output whose input fills at least 99% of that window. The last two checks cover services that truncate or accept oversized input without a conventional error. Custom providers may still need an additional pattern or host-side check.
 
-`onPayload` can inspect or replace a provider payload, and `onResponse` can inspect status and redacted headers. Both hooks run inside the request path, so thrown hook errors become stream errors. Do not log API keys, authorization headers, unredacted prompts, or private Tool data from either callback.
+`onPayload` can inspect or replace the provider payload. `onResponse` receives the response status and raw response headers copied into a string record; Pi does not redact those values first. Both hooks run inside the request path, so thrown hook errors become stream errors. Treat callback inputs as sensitive: allowlist fields before logging or persistence, and redact credentials, cookies, request tokens, prompts, and private Tool data rather than assuming either callback is safe to record wholesale.
 
 ## 6. What happens behind the one-line call
 
