@@ -7,7 +7,6 @@ chapter: 10
 source_url: "https://www.dgzhuya.com/modules/ch10-session"
 official_refs:
   - "https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/docs/sessions.md"
-  - "https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/docs/session-format.md"
 terms_used:
   - Session
   - Session Tree
