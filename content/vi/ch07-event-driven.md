@@ -1,6 +1,6 @@
 ---
-title: 'Chương 7: Runtime hướng sự kiện'
-description: Vòng đời Agent, subscriber barrier, tiến độ Tool, sự kiện cấp sản phẩm, Extension hook và tích hợp UI.
+title: 'Chương 7: Hệ thống chạy theo sự kiện'
+description: Vòng đời Agent, điểm chờ khi báo sự kiện cho bên đăng ký, tiến độ Tool, sự kiện cấp sản phẩm, hook Extension và tích hợp UI.
 translation_key: ch07-event-driven
 language: vi
 chapter: 7
@@ -18,27 +18,27 @@ last_updated: '2026-08-24'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
-Sáu chương đầu đã theo dõi dữ liệu qua model, vòng lặp Agent, Tool và các biên message. Sự kiện xuất hiện ở mọi bước, nhưng vẫn còn ba câu hỏi: một chuyển đổi trạng thái đi tới code bên ngoài bằng cách nào, consumer nào nhận được nó và khi nào Agent phải chờ consumer xử lý xong?
+Sáu chương đầu đã lần theo dữ liệu qua model, vòng lặp Agent, Tool và các ranh giới của message. Sự kiện xuất hiện ở mọi bước, nhưng còn ba câu hỏi: thay đổi trạng thái được chuyển tới mã bên ngoài ra sao, thành phần nào nhận thay đổi đó, và khi nào Agent phải chờ thành phần nhận xử lý xong?
 
-Chương này trả lời các câu hỏi đó trên ba bề mặt của Pi 0.84.2:
+Chương này trả lời các câu hỏi đó qua ba lớp API của Pi 0.84.2:
 
-- `AgentEvent` trong `@earendil-works/pi-agent-core` mô tả một run cấp thấp;
-- `AgentSessionEvent` trong `@earendil-works/pi-coding-agent` bổ sung các mối quan tâm cấp sản phẩm như retry và compaction;
-- Extension event vừa cho phép quan sát, vừa cung cấp hook riêng để chặn hoặc tiền xử lý dữ liệu.
+- `AgentEvent` trong `@earendil-works/pi-agent-core` mô tả một lượt chạy ở cấp thấp;
+- `AgentSessionEvent` trong `@earendil-works/pi-coding-agent` bổ sung trạng thái cấp sản phẩm như retry và compaction;
+- sự kiện Extension cho phép quan sát và cung cấp hook riêng để chặn hoặc tiền xử lý dữ liệu.
 
-Chương 1–6 tạo thành tuyến chính giải thích runtime. Chương 7 mở đầu phần kỹ thuật nâng cao, vì vậy nội dung đi sâu vào quá trình hoàn tất, mutation và biên xử lý lỗi mà một UI dùng trong production cần nắm rõ.
+Chương 1–6 giải thích cách hệ thống vận hành. Chương 7 mở đầu phần kỹ thuật nâng cao, đi sâu vào thời điểm công việc được xem là hoàn tất, thay đổi tại chỗ và ranh giới xử lý lỗi mà UI ở môi trường vận hành phải nắm rõ.
 
 ## 1. Vì sao cần hệ thống sự kiện
 
 ### Trực giác từ việc theo dõi đơn giao hàng
 
-Ứng dụng giao hàng không bắt khách liên tục hỏi nhà hàng, tài xế và dịch vụ thanh toán. Ứng dụng phát các thay đổi trạng thái: nhà hàng đã nhận đơn, tài xế đã lấy hàng và đơn đã được giao. Mỗi consumer chỉ phản ứng với thay đổi mà nó cần.
+Ứng dụng giao hàng không bắt khách liên tục hỏi nhà hàng, tài xế và dịch vụ thanh toán. Ứng dụng phát các thay đổi trạng thái: nhà hàng đã nhận đơn, tài xế đã lấy hàng và đơn đã được giao. Mỗi bên nhận chỉ phản ứng với thay đổi mà mình cần.
 
-Một Agent run có hình dạng tương tự. Provider trả response theo luồng, nhiều Tool call có thể chạy, và một prompt có thể kéo dài qua nhiều turn. Chỉ trả về chuỗi cuối cùng sẽ che mất thông tin cần để hiển thị text chưa hoàn tất, Tool đang chờ, lỗi hoặc lần retry. Sự kiện công bố các thay đổi đó khi run còn hoạt động. Đây là giao thức trực tiếp của runtime, không phải định dạng session được lưu bền vững.
+Một lượt chạy của Agent cũng có dạng đó. Provider trả phản hồi theo luồng, nhiều lời gọi Tool có thể chạy, và một prompt có thể kéo dài qua nhiều turn. Nếu chỉ trả về chuỗi cuối cùng, UI không thể hiện văn bản đang tạo, Tool đang chờ, lỗi hoặc lần retry. Sự kiện phát các thay đổi này khi lượt chạy còn hoạt động. Đây là giao thức trực tiếp khi hệ thống vận hành, không phải định dạng session để lưu bền vững.
 
-### Thêm consumer mà không sửa Agent core
+### Thêm bên nhận mà không sửa lõi Agent
 
-Giả sử ứng dụng cần ghi một dòng audit cho mỗi Tool. Nếu sửa Agent quanh mọi lời gọi `tool.execute()`, tính năng audit sẽ phụ thuộc vào chi tiết thực thi và dễ xung đột khi Pi thay đổi. Subscriber có thể nằm hoàn toàn bên ngoài phần code đó:
+Giả sử ứng dụng cần ghi một dòng kiểm toán cho mỗi Tool. Nếu chèn mã quanh mọi lời gọi `tool.execute()` trong Agent, tính năng này sẽ phụ thuộc vào chi tiết thực thi và dễ xung đột khi Pi thay đổi. Bên đăng ký nhận sự kiện có thể nằm hoàn toàn ngoài đoạn mã đó:
 
 ```typescript
 import type { Agent } from "@earendil-works/pi-agent-core";
@@ -53,37 +53,37 @@ export function logToolResults(agent: Agent): () => void {
 }
 ```
 
-Hàm trả về sẽ gỡ listener vừa đăng ký. Hãy giữ hàm đó và gọi khi view, request hoặc integration bị hủy.
+Hàm trả về sẽ gỡ listener vừa đăng ký. Hãy giữ hàm đó và gọi khi giao diện, yêu cầu hoặc tích hợp kết thúc.
 
 ### So sánh pub/sub với lời gọi trực tiếp
 
-Thiết kế gọi trực tiếp buộc producer phải biết tên mọi consumer. Với pub/sub, event contract trở thành dependency chung:
+Cách gọi trực tiếp buộc bên phát phải biết mọi bên nhận. Với pub/sub, hợp đồng sự kiện trở thành phần phụ thuộc chung:
 
 ```text
-direct calls
-Agent ──> terminal renderer
-      ├─> persistence adapter
-      └─> telemetry exporter
+lời gọi trực tiếp
+Agent ──> bộ hiển thị terminal
+      ├─> bộ lưu bền vững
+      └─> bộ xuất telemetry
 
-publish/subscribe
-Agent ──> AgentEvent ──> terminal subscriber
-                     ├─> persistence subscriber
-                     ├─> telemetry subscriber
-                     └─> a later subscriber the Agent does not know
+phát/đăng ký
+Agent ──> AgentEvent ──> bộ hiển thị terminal
+                     ├─> bộ lưu bền vững
+                     ├─> bộ xuất telemetry
+                     └─> bên nhận thêm sau này mà Agent không cần biết
 ```
 
-Bên trong, Pi vẫn gọi các hàm listener. Sự tách rời đến từ quyền sở hữu: Agent core sở hữu event type và vòng lặp phân phối, còn ứng dụng sở hữu tập listener. Thêm một observer không làm core package phụ thuộc vào terminal, database hoặc hệ thống analytics.
+Bên trong, Pi vẫn gọi listener. Sự tách rời nằm ở quyền sở hữu: lõi Agent sở hữu kiểu sự kiện và vòng lặp phân phối, còn ứng dụng sở hữu tập listener. Thêm một bên quan sát không khiến package lõi phụ thuộc vào terminal, cơ sở dữ liệu hay hệ thống phân tích.
 
-## 2. Giao thức sự kiện và biên package
+## 2. Giao thức sự kiện và ranh giới package
 
 ### Mười discriminant của `AgentEvent`
 
-`AgentEvent` có mười giá trị `type`. Vòng đời Agent và turn là các cặp start/end; vòng đời message và thực thi Tool có thêm event update.
+`AgentEvent` có mười giá trị `type`. Vòng đời Agent và turn chỉ có cặp `start`/`end`; vòng đời message và thực thi Tool có thêm `update`.
 
-| Nhóm | Discriminant | Payload sau `type` |
+| Nhóm | Discriminant | Payload ngoài trường `type` |
 | --- | --- | --- |
-| Run | `agent_start` | không có |
-| Run | `agent_end` | `messages: AgentMessage[]` |
+| Lượt chạy | `agent_start` | không có |
+| Lượt chạy | `agent_end` | `messages: AgentMessage[]` |
 | Turn | `turn_start` | không có |
 | Turn | `turn_end` | `message: AgentMessage`, `toolResults: ToolResultMessage[]` |
 | Message | `message_start` | `message: AgentMessage` |
@@ -93,7 +93,7 @@ Bên trong, Pi vẫn gọi các hàm listener. Sự tách rời đến từ quy�
 | Tool | `tool_execution_update` | `toolCallId`, `toolName`, `args`, `partialResult` |
 | Tool | `tool_execution_end` | `toolCallId`, `toolName`, `result`, `isError` |
 
-Đoạn dưới đây bám sát source [`packages/agent/src/types.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/types.ts#L428). Đoạn trích chỉ được dàn thành nhiều dòng hơn, không lược bỏ field:
+Đoạn dưới đây bám sát mã nguồn [`packages/agent/src/types.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/types.ts#L428). Đoạn trích chỉ dàn lại thành nhiều dòng, không lược bỏ trường nào:
 
 ```typescript
 export type AgentEvent =
@@ -134,34 +134,45 @@ export type AgentEvent =
     };
 ```
 
-Một turn gồm một assistant response cùng các Tool call và kết quả do response đó tạo ra. Một run có thể gồm nhiều turn khi Tool, steering message hoặc follow-up message giữ cho vòng lặp tiếp tục.
+Một turn gồm phản hồi của assistant cùng các lời gọi Tool và kết quả do phản hồi đó tạo ra. Một lượt chạy có thể gồm nhiều turn khi Tool, steering message hoặc follow-up message khiến vòng lặp tiếp tục. Ví dụ dưới đây là một lượt chạy có một message người dùng trong prompt, một lời gọi Tool, rồi một lần gọi model cuối:
 
 ```text
 agent_start
-└─ turn_start
-   ├─ message_start/update*/end   assistant response
-   ├─ tool_execution_start/update*/end
-   ├─ message_start/end           ToolResultMessage
-   └─ turn_end
-└─ turn_start ...                 next model call, when needed
-agent_end
+├─ turn_start
+│  ├─ message_start                 message người dùng trong prompt
+│  ├─ message_end                   message người dùng trong prompt
+│  ├─ message_start                 phản hồi của assistant
+│  ├─ message_update*               phản hồi assistant truyền theo luồng
+│  ├─ message_end                   phản hồi của assistant
+│  ├─ tool_execution_start          Tool được yêu cầu
+│  ├─ tool_execution_update*        tiến độ của Tool được yêu cầu
+│  ├─ tool_execution_end            Tool được yêu cầu
+│  ├─ message_start                 ToolResultMessage
+│  ├─ message_end                   ToolResultMessage
+│  └─ turn_end
+├─ turn_start                       lần gọi model tiếp theo
+│  ├─ message_start                 phản hồi của assistant
+│  ├─ message_update*               phản hồi assistant truyền theo luồng
+│  ├─ message_end                   phản hồi của assistant
+│  └─ turn_end
+└─ agent_end
 ```
 
-User message và message được inject cũng nhận `message_start` và `message_end`. Chỉ assistant message đang streaming mới nhận `message_update`.
+Mỗi message người dùng có trong prompt hoặc được chèn vào đều có `message_start` và `message_end` riêng. Chỉ message của assistant được truyền theo luồng mới có `message_update`. Phần 7 sẽ trình bày chi tiết thứ tự Tool khi có nhiều lời gọi tuần tự hoặc song song.
 
 ### `AssistantMessageEvent` lồng bên trong
 
-`message_update` giữ lại Pi AI event đã gây ra lần cập nhật. Các discriminant chính xác từ `@earendil-works/pi-ai` gồm:
+`message_update` giữ lại sự kiện Pi AI làm phát sinh lần cập nhật. Các discriminant chính xác từ `@earendil-works/pi-ai` gồm:
 
-| Giai đoạn | Event và payload |
+| Giai đoạn | Sự kiện và payload |
 | --- | --- |
-| Stream | `start { partial }` |
-| Text | `text_start { contentIndex, partial }`, `text_delta { contentIndex, delta, partial }`, `text_end { contentIndex, content, partial }` |
-| Thinking | `thinking_start { contentIndex, partial }`, `thinking_delta { contentIndex, delta, partial }`, `thinking_end { contentIndex, content, partial }` |
-| Tool call | `toolcall_start { contentIndex, partial }`, `toolcall_delta { contentIndex, delta, partial }`, `toolcall_end { contentIndex, toolCall, partial }` |
+| Luồng | `start { partial }` |
+| Văn bản | `text_start { contentIndex, partial }`, `text_delta { contentIndex, delta, partial }`, `text_end { contentIndex, content, partial }` |
+| Suy luận | `thinking_start { contentIndex, partial }`, `thinking_delta { contentIndex, delta, partial }`, `thinking_end { contentIndex, content, partial }` |
+| Lời gọi Tool | `toolcall_start { contentIndex, partial }`, `toolcall_delta { contentIndex, delta, partial }`, `toolcall_end { contentIndex, toolCall, partial }` |
 | Kết thúc | `done { reason, message }`, `error { reason, error }` |
 
-Agent core ánh xạ chín biến thể start/update/end của text, thinking và Tool call thành `message_update`. `start` ở lớp ngoài của Pi AI trở thành `message_start`; `done` hoặc `error` trở thành `message_end`. `done.reason` nhận `stop`, `length`, `toolUse` hoặc `deferred`; `error.reason` nhận `aborted` hoặc `error`.
+Lõi Agent ánh xạ chín biến thể start/update/end của văn bản, suy luận và lời gọi Tool thành `message_update`. `start` ở lớp ngoài của Pi AI trở thành `message_start`; `done` hoặc `error` trở thành `message_end`. `done.reason` nhận `stop`, `length`, `toolUse` hoặc `deferred`; `error.reason` nhận `aborted` hoặc `error`.
 
 ```typescript
 import type { AgentEvent } from "@earendil-works/pi-agent-core";
@@ -177,13 +188,13 @@ export function logTextDelta(event: AgentEvent): void {
 }
 ```
 
-Hãy thu hẹp theo discriminant lồng bên trong trước khi đọc `delta`. Không phải `text_start`, `text_end` hay các biến thể thinking và Tool call đều có field đó.
+Hãy kiểm tra discriminant lồng bên trong trước khi đọc `delta`. Không phải `text_start`, `text_end` hay mọi biến thể suy luận và lời gọi Tool đều có trường này.
 
-### `AgentSessionEvent`: vòng đời core cộng với trạng thái sản phẩm
+### `AgentSessionEvent`: vòng đời lõi và trạng thái sản phẩm
 
-`AgentSession` chuyển tiếp mười discriminant của core, đổi `agent_end` để thêm `willRetry: boolean`, rồi bổ sung 13 discriminant cấp sản phẩm. Nếu đếm theo discriminant thay vì union arm bị lặp, session có tổng cộng 23 event type.
+`AgentSession` chuyển tiếp mười discriminant của lõi, đổi `agent_end` để thêm `willRetry: boolean`, rồi bổ sung 13 discriminant cấp sản phẩm. Union ở bản mã nguồn đã pin lặp hai nhánh `auto_retry_end` giống hệt nhau tại dòng 169 và 184. Khi bỏ nhánh trùng và chỉ đếm các giá trị `type` khác nhau, session có 23 loại sự kiện.
 
-| Product event | Payload chính xác |
+| Sự kiện sản phẩm | Payload chính xác |
 | --- | --- |
 | `agent_settled` | không có |
 | `queue_update` | `steering: readonly string[]`, `followUp: readonly string[]` |
@@ -199,7 +210,7 @@ Hãy thu hẹp theo discriminant lồng bên trong trước khi đọc `delta`. 
 | `summarization_retry_finished` | không có |
 | `bash_execution_update` | `id` không bắt buộc, `delta: string` |
 
-Đoạn dưới đây bám sát [`packages/coding-agent/src/core/agent-session.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/agent-session.ts#L142). Phần lược duy nhất là tham chiếu lại core union và gộp cách xuống dòng:
+Danh sách chuẩn hóa dưới đây dựa trên [`packages/coding-agent/src/core/agent-session.ts`, dòng 142–185](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/agent-session.ts#L142-L185). Danh sách tham chiếu lại union lõi, gộp cách xuống dòng và chủ động bỏ nhánh `auto_retry_end` thứ hai giống hệt nhánh trước. Đây không phải đoạn trích nguyên văn:
 
 ```typescript
 type AgentSessionEvent =
@@ -221,27 +232,27 @@ type AgentSessionEvent =
   | { type: "bash_execution_update"; id?: string; delta: string };
 ```
 
-`agent_end` đóng một Agent run cấp thấp. Coding Agent vẫn có thể retry, compact hoặc tiếp tục công việc đang chờ. `agent_settled` đánh dấu biên cấp sản phẩm sau khi các bước tiếp tục tự động đã dừng. `bash_execution_update` mô tả lệnh `!` hoặc `!!` do session thực thi trực tiếp; event này khác với `tool_execution_update` của Tool do LLM yêu cầu.
+`agent_end` kết thúc một lượt chạy Agent ở cấp thấp. Coding Agent vẫn có thể thử lại, compact hoặc tiếp tục công việc trong hàng đợi. `agent_settled` đánh dấu ranh giới cấp sản phẩm sau khi mọi bước tiếp diễn tự động đã dừng. `bash_execution_update` mô tả lệnh `!` hoặc `!!` do session thực thi trực tiếp; sự kiện này khác với `tool_execution_update` của Tool do LLM yêu cầu.
 
-### Extension event là một contract riêng
+### Sự kiện Extension có hợp đồng riêng
 
-`pi.on()` không nhận trực tiếp `AgentSessionEvent`. `ExtensionEvent` là contract rộng hơn của Coding Agent:
+`pi.on()` không nhận trực tiếp `AgentSessionEvent`. `ExtensionEvent` là hợp đồng rộng hơn của Coding Agent:
 
 | Nhóm | Discriminant chính xác |
 | --- | --- |
-| Khởi động và resource | `project_trust`, `resources_discover` |
-| Session | `session_start`, `session_info_changed`, `session_before_switch`, `session_before_fork`, `session_before_compact`, `session_compact`, `session_compact_failed`, `session_before_tree`, `session_tree`, `session_shutdown` |
+| Khởi động và tài nguyên | `project_trust`, `resources_discover` |
+| Phiên | `session_start`, `session_info_changed`, `session_before_switch`, `session_before_fork`, `session_before_compact`, `session_compact`, `session_compact_failed`, `session_before_tree`, `session_tree`, `session_shutdown` |
 | Agent và provider | `before_agent_start`, `agent_start`, `agent_end`, `agent_settled`, `turn_start`, `turn_end`, `message_start`, `message_update`, `message_end`, `tool_execution_start`, `tool_execution_update`, `tool_execution_end`, `context`, `before_provider_request`, `before_provider_headers`, `after_provider_response` |
 | Model | `model_select`, `thinking_level_select` |
-| Tool, Bash và input | `tool_call`, `tool_result`, `user_bash`, `input` |
+| Tool, Bash và dữ liệu vào | `tool_call`, `tool_result`, `user_bash`, `input` |
 
-Một số tên trùng với core event, nhưng payload và bảo đảm thuộc về Extension API. Chẳng hạn, `turn_start` của Extension thêm `turnIndex` và `timestamp`; `agent_end` của Extension không có `willRetry` như session subscriber; `tool_call` và `context` có thể thay đổi quá trình thực thi, còn `tool_execution_start` và `message_update` chỉ báo trạng thái vòng đời.
+Một số tên trùng với sự kiện lõi, nhưng payload và bảo đảm do Extension API định nghĩa. Chẳng hạn, `turn_start` của Extension thêm `turnIndex` và `timestamp`; `agent_end` của Extension không có `willRetry` như sự kiện mà session gửi tới bên đăng ký; `tool_call` và `context` có thể thay đổi quá trình thực thi, còn `tool_execution_start` và `message_update` chỉ thông báo trạng thái vòng đời.
 
-## 3. Phân phối, thứ tự listener và quá trình hoàn tất
+## 3. Phân phối, thứ tự listener và thời điểm hoàn tất
 
-### `Agent.subscribe()` là subscription có chờ
+### `Agent.subscribe()` là đăng ký có chờ
 
-Core API trực tiếp nhận listener đồng bộ hoặc bất đồng bộ rồi trả về hàm unsubscribe:
+API lõi nhận listener đồng bộ hoặc bất đồng bộ rồi trả về hàm unsubscribe:
 
 ```typescript
 import type { Agent } from "@earendil-works/pi-agent-core";
@@ -258,11 +269,11 @@ export function attachFinalFlush(
 }
 ```
 
-Pi duyệt `Set` listener theo thứ tự đăng ký. Pi chờ một listener xong rồi mới gọi listener kế tiếp cho cùng event. Vì vậy, listener chậm sẽ trì hoãn cả listener phía sau lẫn giai đoạn producer nằm sau event.
+Pi duyệt tập `Set` chứa các listener theo thứ tự đăng ký. Pi chờ một listener xong rồi mới gọi listener kế tiếp cho cùng sự kiện. Vì vậy, listener chậm sẽ trì hoãn cả listener phía sau lẫn giai đoạn phát sự kiện tiếp theo.
 
-### State được cập nhật trước khi subscriber chạy
+### Trạng thái được cập nhật trước khi bên đăng ký nhận sự kiện
 
-`Agent.processEvents()` thay đổi runtime state công khai trước, rồi mới gọi listener. Đoạn dưới là pseudocode rút gọn từ [`packages/agent/src/agent.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/agent.ts#L538):
+`Agent.processEvents()` cập nhật trạng thái công khai của Agent trước, rồi mới gọi listener. Đoạn dưới là pseudocode rút gọn từ [`packages/agent/src/agent.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/agent.ts#L538):
 
 ```typescript
 // Pseudocode: omitted cases retain the same state-before-delivery order.
@@ -281,29 +292,29 @@ async function processEvents(event: AgentEvent) {
 }
 ```
 
-Implementation thật thay `pendingToolCalls` bằng một `Set` mới ở event start và end. Listener nhận `message_end` có thể đọc completed message từ `agent.state.messages`; listener nhận `tool_execution_start` sẽ thấy call ID trong `agent.state.pendingToolCalls`.
+Mã nguồn thực tế thay `pendingToolCalls` bằng một `Set` mới ở sự kiện bắt đầu và kết thúc. Listener nhận `message_end` có thể đọc message hoàn chỉnh từ `agent.state.messages`; listener nhận `tool_execution_start` sẽ thấy ID của lời gọi trong `agent.state.pendingToolCalls`.
 
-### Event vòng đời tạo thành barrier
+### Sự kiện vòng đời tạo thành điểm chờ
 
-Phần lớn lời gọi emit trong vòng lặp đều được await tại chỗ:
+Phần lớn sự kiện trong vòng lặp được phát và chờ ngay tại chỗ:
 
 ```text
-update Agent state
-  -> listener 1 settles
-  -> listener 2 settles
-  -> emit resolves
-  -> next producer phase starts
+cập nhật trạng thái Agent
+  -> listener 1 hoàn tất
+  -> listener 2 hoàn tất
+  -> lời gọi emit hoàn tất
+  -> giai đoạn phát tiếp theo bắt đầu
 ```
 
-Thứ tự này tạo ra các barrier cụ thể. Việc phân phối `message_end` của assistant phải xong trước khi bắt đầu preflight Tool. Mỗi `tool_execution_start` phải xong trước khâu chuẩn bị đối số, validation và `beforeToolCall`. `tool_execution_end` phải xong trước khi bắt đầu vòng đời của `ToolResultMessage` tương ứng.
+Thứ tự này tạo ra các điểm chờ cụ thể. Việc phân phối `message_end` của assistant phải xong trước khi bắt đầu khâu preflight của Tool. Mỗi `tool_execution_start` phải xong trước khi chuẩn bị đối số, kiểm tra tính hợp lệ và chạy `beforeToolCall`. `tool_execution_end` phải xong trước khi bắt đầu vòng đời của `ToolResultMessage` tương ứng.
 
-`agent_end` là event cuối của vòng lặp, nhưng listener của nó vẫn nằm trong active run. `await agent.prompt(...)` và `await agent.waitForIdle()` chỉ resolve sau khi các listener đó settle và `finishRun()` dọn streaming state do runtime sở hữu.
+`agent_end` là sự kiện cuối của vòng lặp, nhưng listener của nó vẫn thuộc lượt chạy đang hoạt động. `await agent.prompt(...)` và `await agent.waitForIdle()` chỉ hoàn tất sau khi các listener này xử lý xong và `finishRun()` dọn trạng thái truyền luồng do hệ thống quản lý.
 
-### Tiến độ Tool được phân phối đồng thời rồi chờ tại barrier
+### Tiến độ Tool có thể phân phối chồng lấp rồi hội tụ tại điểm chờ
 
-Tài liệu Pi cũ mô tả listener của `tool_execution_update` là không bao giờ được await. Pi 0.84.2 dùng quy tắc hai phần. Callback `onUpdate` đồng bộ của Tool bắt đầu phân phối mà không await, nên Tool có thể báo update tiếp theo khi subscriber vẫn đang xử lý update trước. Mọi promise phân phối đều được thu lại và phải settle hết trước khi bước hậu xử lý kết quả tiếp tục.
+Tài liệu Pi cũ nói listener của `tool_execution_update` không bao giờ được chờ. Pi 0.84.2 xử lý theo hai giai đoạn. Callback đồng bộ `onUpdate` của Tool khởi chạy việc phân phối nhưng không chờ, nên Tool có thể báo cập nhật tiếp theo khi bên đăng ký còn xử lý cập nhật trước. Pi giữ lại mọi promise phân phối và chờ tất cả hoàn tất trước khi hậu xử lý kết quả.
 
-Đoạn dưới là pseudocode bám sát thứ tự trong [`executePreparedToolCall()`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/agent-loop.ts#L670):
+Đoạn dưới là pseudocode theo đúng thứ tự trong [`executePreparedToolCall()`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/agent-loop.ts#L670):
 
 ```typescript
 // Pseudocode: exact ordering, abbreviated payload construction.
@@ -326,18 +337,18 @@ await Promise.all(updateEvents);
 // afterToolCall -> tool_execution_end -> ToolResultMessage comes later
 ```
 
-Trong một update, các listener trực tiếp của `Agent.subscribe()` vẫn chạy theo thứ tự đăng ký. Những lần phân phối update riêng biệt có thể chồng lên nhau, nên không có bảo đảm update N sẽ xử lý xong trước update N+1. Cổng `acceptingUpdates` bỏ callback đến sau khi `tool.execute()` đã settle. Nếu việc phân phối tiến độ bị reject, `Promise.all` sẽ quan sát lỗi đó; lỗi không biến mất trong background.
+Trong một lần cập nhật, các listener trực tiếp của `Agent.subscribe()` vẫn chạy theo thứ tự đăng ký. Những lần phân phối riêng biệt có thể chồng lên nhau, nên cập nhật N có thể hoàn tất sau cập nhật N+1. Cờ `acceptingUpdates` bỏ callback đến sau khi `tool.execute()` đã hoàn tất. Nếu promise phân phối tiến độ bị reject, `Promise.all` sẽ nhận lỗi đó; lỗi không bị bỏ quên trong tác vụ nền.
 
-### Low-level stream, `Agent` và `AgentSession` hoàn tất khác nhau
+### Luồng cấp thấp, `Agent` và `AgentSession` có mốc hoàn tất khác nhau
 
-| Bề mặt | Dạng listener | Cách hoàn tất công việc async |
+| Giao diện | Dạng listener | Cách xử lý công việc bất đồng bộ |
 | --- | --- | --- |
-| `agentLoop()` / `agentLoopContinue()` | async iterator của `AgentEvent` | Việc consumer đọc stream chỉ để quan sát, không tạo producer barrier |
-| `Agent.subscribe()` | `(event, signal) => void \| Promise<void>` | Promise của listener được await theo thứ tự đăng ký |
-| `AgentSession.subscribe()` | `(event) => void` | Listener chạy đồng bộ theo thứ tự trong array; promise trả về bị bỏ qua |
-| `pi.on()` | Extension handler có `ExtensionContext` | Settlement và ý nghĩa return value phụ thuộc vào hook cụ thể |
+| `agentLoop()` / `agentLoopContinue()` | async iterator của `AgentEvent` | Phía nhận đọc luồng để quan sát; việc đọc không tạo điểm chờ cho bên phát |
+| `Agent.subscribe()` | `(event, signal) => void \| Promise<void>` | Promise của listener được chờ theo thứ tự đăng ký |
+| `AgentSession.subscribe()` | `(event) => void` | Listener chạy đồng bộ theo thứ tự trong mảng; promise trả về không được theo dõi |
+| `pi.on()` | Extension handler có `ExtensionContext` | Quy tắc chờ và ý nghĩa của giá trị trả về tùy từng hook |
 
-`AgentSession` đăng ký một listener nội bộ bất đồng bộ lên `Agent`. Với core event được bridge qua session, handler này chờ Extension lifecycle handler trước, gọi session subscriber theo cách đồng bộ, rồi persist completed message tại `message_end`. Toàn bộ handler nội bộ là một `Agent` listener được await, nhưng hàm `async` truyền vào `AgentSession.subscribe()` nằm ngoài barrier vì session listener type trả về `void`.
+`AgentSession` đăng ký một listener nội bộ bất đồng bộ với `Agent`. Với sự kiện lõi được chuyển qua session, handler này chờ handler vòng đời của Extension, gọi các bên đăng ký với session theo cách đồng bộ, rồi lưu bền vững message hoàn chỉnh tại `message_end`. Toàn bộ handler nội bộ là một listener của `Agent` và được chờ; tuy nhiên, hàm `async` truyền vào `AgentSession.subscribe()` nằm ngoài điểm chờ vì kiểu listener của session trả về `void`.
 
 ```typescript
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
@@ -354,15 +365,15 @@ export function observeSession(session: AgentSession): () => void {
 }
 ```
 
-Hãy dùng `Agent.subscribe()` cho công việc bắt buộc phải được await trong một low-level run. Dùng `AgentSession.waitForIdle()` hoặc product event `agent_settled` nếu khái niệm hoàn tất phải bao gồm retry, compaction và chính sách tiếp tục queue. Khi session listener khởi động công việc bất đồng bộ, chính ứng dụng phải theo dõi và await công việc đó.
+Hãy dùng `Agent.subscribe()` cho công việc bắt buộc phải hoàn tất trong một lượt chạy ở cấp thấp. Dùng `AgentSession.waitForIdle()` hoặc sự kiện cấp sản phẩm `agent_settled` nếu mốc hoàn tất phải bao gồm retry, compaction và chính sách tiếp tục hàng đợi. Khi listener của session khởi động công việc bất đồng bộ, ứng dụng phải tự theo dõi và chờ công việc đó.
 
 ## 4. Lỗi, cô lập và hủy tác vụ
 
-### Lỗi từ subscriber trực tiếp ảnh hưởng đến run
+### Lỗi từ bên đăng ký trực tiếp ảnh hưởng đến lượt chạy
 
-`Agent.processEvents()` không bọc catch quanh từng listener. Khi listener 1 throw hoặc reject, các listener phía sau không nhận event đó. Lỗi đi tới `runWithLifecycle()`, nơi thông thường sẽ chuyển lỗi của run thành assistant failure message rồi phát `message_start`, `message_end`, `turn_end` và `agent_end` cho message ấy. Nếu listener tiếp tục lỗi trong chuỗi failure event nhân tạo này, `prompt()` có thể reject.
+`Agent.processEvents()` không bọc `catch` quanh từng listener. Khi listener 1 ném lỗi hoặc promise của nó bị reject, các listener phía sau không nhận sự kiện đó. Lỗi đi tới `runWithLifecycle()`, nơi thường chuyển lỗi của lượt chạy thành message lỗi của assistant rồi phát `message_start`, `message_end`, `turn_end` và `agent_end` cho message ấy. Nếu listener tiếp tục lỗi trong chuỗi sự kiện lỗi tổng hợp này, `prompt()` có thể reject.
 
-Hãy bắt lỗi ứng dụng có thể phục hồi ngay trong subscriber. Chỉ throw tiếp nếu việc thiếu audit, persistence hoặc policy action phải khiến run thất bại rõ ràng:
+Hãy bắt lỗi mà ứng dụng có thể phục hồi ngay trong hàm đăng ký nhận sự kiện. Chỉ ném lỗi tiếp nếu mất bản ghi kiểm toán, dữ liệu lưu bền vững hoặc hành động chính sách phải khiến lượt chạy thất bại rõ ràng:
 
 ```typescript
 import type { Agent, AgentMessage } from "@earendil-works/pi-agent-core";
@@ -388,34 +399,34 @@ export function attachAudit(
 }
 ```
 
-Các hàm trong ví dụ này đại diện cho code của ứng dụng. Dạng event và cách dùng `AbortSignal` có thể sao chép; chính sách lỗi phải do ứng dụng quyết định.
+Các hàm trong ví dụ này đại diện cho mã ứng dụng. Có thể sao chép kiểu sự kiện và cách dùng `AbortSignal`; ứng dụng phải tự quyết định chính sách lỗi.
 
-### Kết quả của provider, Tool và abort giữ đúng phạm vi
+### Lỗi provider, Tool và yêu cầu hủy giữ đúng phạm vi
 
-Pi AI kết thúc provider stream bị lỗi bằng `AssistantMessageEvent.error`. Agent core hoàn tất assistant message với `stopReason: "error"` hoặc `"aborted"`, rồi phát các event kết thúc message, turn và run như bình thường. Lỗi khi tìm Tool, validate đối số, chạy `beforeToolCall`, thực thi hoặc chạy `afterToolCall` sẽ trở thành error Tool result tại nơi core bắt lỗi. Vòng đời Tool vẫn kết thúc với `isError: true`, sau đó là `ToolResultMessage` để model ở turn tiếp theo có thể đọc.
+Pi AI kết thúc luồng provider bị lỗi bằng `AssistantMessageEvent.error`. Lõi Agent hoàn tất message của assistant với `stopReason: "error"` hoặc `"aborted"`, rồi phát các sự kiện kết thúc message, turn và lượt chạy như bình thường. Lỗi khi tìm Tool, kiểm tra đối số, chạy `beforeToolCall`, thực thi Tool hoặc chạy `afterToolCall` sẽ trở thành kết quả Tool báo lỗi tại nơi lõi bắt lỗi. Vòng đời Tool vẫn kết thúc với `isError: true`, sau đó là `ToolResultMessage` để model ở turn tiếp theo đọc.
 
 ```text
-provider failure: message_end(error/aborted) -> turn_end -> agent_end
-Tool failure:     tool_execution_end(isError=true)
-               -> message_start/end(ToolResultMessage)
-               -> turn_end
+lỗi provider: message_end(error/aborted) -> turn_end -> agent_end
+lỗi Tool:     tool_execution_end(isError=true)
+           -> message_start/end(ToolResultMessage)
+           -> turn_end
 ```
 
-Mỗi Agent subscriber trực tiếp nhận `AbortSignal` của active run. `agent.abort()` hủy signal đó. Provider, Tool và công việc trong subscriber chỉ dừng nhanh nếu chúng tuân theo signal. Sau abort, producer cũng không được phát tiến độ vô hạn: cổng `acceptingUpdates` nói trên sẽ bỏ update đến muộn.
+Mỗi bên đăng ký trực tiếp với Agent nhận `AbortSignal` của lượt chạy đang hoạt động. `agent.abort()` hủy signal đó. Provider, Tool và công việc của bên đăng ký chỉ dừng nhanh nếu tuân theo signal. Sau khi hủy, Tool cũng không thể phát tiến độ vô hạn: cờ `acceptingUpdates` nói trên sẽ bỏ các cập nhật đến muộn.
 
-### Extension handler có chính sách cô lập theo từng hook
+### Mỗi hook Extension có cách cô lập lỗi riêng
 
-Extension runner của Coding Agent bắt và báo lỗi cho hoạt động quan sát vòng đời thông thường, cũng như các handler dạng chuỗi như `context`, `input`, `message_end` và `tool_result`. Một observer lỗi không chặn các Extension observer phía sau. Return value có thể thay đổi hành vi sẽ được await theo thứ tự nạp Extension.
+Bộ chạy Extension của Coding Agent bắt và báo lỗi cho hoạt động quan sát vòng đời thông thường, cũng như các handler nối tiếp như `context`, `input`, `message_end` và `tool_result`. Một handler quan sát bị lỗi không chặn các handler Extension phía sau. Giá trị trả về có thể thay đổi hành vi sẽ được chờ theo thứ tự nạp Extension.
 
-`tool_call` được nối vào `beforeToolCall` của Agent core. Nếu handler này throw, core preflight bắt lỗi và tạo error Tool result thay vì thực thi Tool. Lỗi session subscriber đi theo đường khác: `_emit()` không catch, vì vậy một synchronous throw trong core event được bridge sẽ làm listener nội bộ của Agent reject và ảnh hưởng đến run.
+`tool_call` được nối vào `beforeToolCall` của lõi Agent. Nếu handler này ném lỗi, khâu preflight của lõi bắt lỗi và tạo kết quả Tool báo lỗi thay vì thực thi Tool. Lỗi từ bên đăng ký với session đi theo đường khác: `_emit()` không `catch`, nên lỗi đồng bộ trong sự kiện lõi được chuyển qua session sẽ làm listener nội bộ của Agent reject và ảnh hưởng đến lượt chạy.
 
-Các biên này được định nghĩa riêng theo từng event. Code không nên giả định mọi thứ có tên “listener” đều dùng cùng một chính sách lỗi.
+Mỗi sự kiện định nghĩa ranh giới này riêng. Không nên mặc định mọi thứ mang tên “listener” đều dùng cùng một chính sách lỗi.
 
 ## 5. Quan sát, chặn, tiền xử lý và UI
 
-### Quan sát một run
+### Quan sát một lượt chạy
 
-Subscriber chỉ đọc có thể thu thập timing, telemetry hoặc Tool trace ngắn. Hãy liên kết Tool bằng `toolCallId`; chỉ dùng Tool name thì không đủ để phân biệt từng call.
+Bên đăng ký chỉ đọc có thể thu thập thời gian, telemetry hoặc dấu vết Tool ngắn. Hãy liên kết Tool bằng `toolCallId`; chỉ dùng tên Tool thì không đủ để phân biệt từng lời gọi.
 
 ```typescript
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
@@ -443,11 +454,11 @@ export function logToolTimings(session: AgentSession): () => void {
 }
 ```
 
-Không ghi API key, prompt chưa redact, Tool secret hoặc credential thô vào event log dùng chung. Identifier của run, turn, provider, model và Tool call thường đã đủ để liên kết dữ liệu.
+Không ghi API key, prompt chưa che dữ liệu nhạy cảm, bí mật của Tool hoặc thông tin xác thực dạng thô vào log sự kiện dùng chung. Định danh của lượt chạy, turn, provider, model và lời gọi Tool thường đã đủ để liên kết dữ liệu.
 
-### Chặn Tool call qua Extension API
+### Chặn lời gọi Tool qua Extension API
 
-Lifecycle event dùng để quan sát không có return value để chặn thực thi. Hook `tool_call` có contract đó. Hook chạy sau `tool_execution_start` và sau khi đối số đã được validate, nhưng trước khi Tool thực thi. Handler trước có thể mutate `event.input` tại chỗ; handler sau nhìn thấy mutation ấy, và Pi không validate lại.
+Sự kiện vòng đời dùng để quan sát không trả về giá trị để chặn thực thi. Hợp đồng này nằm ở hook `tool_call`. Hook chạy sau `tool_execution_start` và sau khi đối số được kiểm tra hợp lệ, nhưng trước khi Tool thực thi. Handler trước có thể sửa `event.input` tại chỗ; handler sau nhìn thấy giá trị đã sửa, và Pi không kiểm tra lại.
 
 ```typescript
 import {
@@ -471,11 +482,11 @@ export default function protectProduction(pi: ExtensionAPI) {
 }
 ```
 
-Ở đây, `terminate` áp dụng cho call bị block. Theo [`shouldTerminateToolBatch()`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/agent-loop.ts#L582-L584) ở bản source đã pin, Pi chỉ đánh giá việc kết thúc sau khi batch hiện tại đã tạo xong mọi kết quả cuối. Nếu batch có ít nhất một kết quả và mọi kết quả đều có `terminate: true`, quyết định kết thúc của batch nhận giá trị true; flag này không bao giờ dừng sớm chính batch hiện tại.
+Ở đây, `terminate` áp dụng cho lời gọi bị chặn. Theo [`shouldTerminateToolBatch()`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/agent-loop.ts#L582-L584) ở bản mã nguồn đã pin, Pi chỉ quyết định kết thúc sau khi đã hoàn tất mọi kết quả của nhóm hiện tại. Nếu nhóm có kết quả và mọi kết quả đều có `terminate: true`, quyết định `terminate` cho nhóm nhận giá trị `true`; cờ này không dừng sớm công việc đang chạy trong nhóm.
 
-### Tiền xử lý model context mà không đổi history
+### Tiền xử lý ngữ cảnh model mà không đổi lịch sử
 
-Extension event `context` chạy trước mỗi model call. Event bắt đầu từ một deep clone, nối các message array được trả về theo thứ tự nạp Extension và giữ nguyên session history có thẩm quyền.
+Sự kiện Extension `context` chạy trước mỗi lần gọi model. Pi bắt đầu bằng một bản sao sâu, lần lượt truyền mảng `messages` được trả về theo thứ tự nạp Extension và không sửa lịch sử gốc của session.
 
 ```typescript
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -491,11 +502,11 @@ export default function hideEphemeralStatus(pi: ExtensionAPI) {
 }
 ```
 
-Các hook chuyển đổi khác nằm ở những biên riêng: `input` có thể transform hoặc tự xử lý raw input; `before_agent_start` có thể inject message hoặc thay system prompt của turn; `before_provider_request` có thể thay provider payload đã serialize; `before_provider_headers` mutate header; `message_end` có thể thay finalized message nhưng phải giữ nguyên role; `tool_result` có thể sửa result trước end event.
+Các hook chuyển đổi khác nằm ở những ranh giới riêng: `input` có thể biến đổi hoặc tự xử lý dữ liệu đầu vào thô; `before_agent_start` có thể chèn message hoặc thay system prompt của turn; `before_provider_request` có thể thay payload đã tuần tự hóa cho provider; `before_provider_headers` sửa header tại chỗ; `message_end` có thể thay message hoàn chỉnh nhưng phải giữ nguyên role; `tool_result` có thể sửa kết quả trước sự kiện kết thúc.
 
-### Chuyển text tới UI trên trình duyệt
+### Chuyển văn bản tới UI trên trình duyệt
 
-Server có thể chuyển session event thành SSE contract nhỏ hơn. Nếu trình duyệt cần giữ kết nối qua auto-retry hoặc compaction, hãy kết thúc HTTP stream tại `agent_settled` thay vì `agent_end`.
+Máy chủ có thể ánh xạ sự kiện session thành một hợp đồng SSE nhỏ hơn. Nếu trình duyệt cần giữ kết nối qua lần retry tự động hoặc compaction, hãy kết thúc luồng HTTP tại `agent_settled` thay vì `agent_end`.
 
 ```typescript
 import type { ServerResponse } from "node:http";
@@ -522,32 +533,32 @@ export function forwardText(
 }
 ```
 
-Browser renderer nên gom các lần vẽ theo refresh rate của màn hình khi provider delta đến nhanh hơn khả năng render của UI. Việc gom đó thuộc phía sau session subscriber; nếu đổi cách Agent phân phối, ngữ nghĩa hoàn tất của mọi consumer khác cũng thay đổi.
+Bộ hiển thị trên trình duyệt nên gom các lần vẽ theo tần số quét của màn hình khi delta từ provider đến nhanh hơn khả năng vẽ của UI. Việc gom này nằm sau bên đăng ký với session; nếu đổi cách Agent phân phối, quy tắc hoàn tất của mọi bên nhận khác cũng thay đổi.
 
 ## 6. Hành trình đầy đủ của `text_delta`
 
-### Năm chuyển đổi từ provider tới UI
+### Từ provider tới UI
 
-Giả sử adapter nhận một chunk chứa `"Hel"`. Hành trình đi qua các biên package mà không làm phẳng event ở lớp dưới:
+Giả sử adapter nhận một mảnh dữ liệu chứa `"Hel"`. Chuỗi xử lý đi qua các ranh giới package mà không làm phẳng sự kiện ở lớp dưới:
 
 ```text
-provider response bytes
-  -> @earendil-works/pi-ai adapter updates cumulative AssistantMessage
+byte phản hồi từ provider
+  -> bộ điều hợp @earendil-works/pi-ai cập nhật AssistantMessage tích lũy
   -> AssistantMessageEvent { type: "text_delta", contentIndex, delta: "Hel", partial }
-  -> agent-loop replaces the current context partial
+  -> agent-loop thay `partial` hiện tại trong ngữ cảnh
   -> AgentEvent { type: "message_update", message, assistantMessageEvent }
-  -> Agent.processEvents sets state.streamingMessage
-  -> awaited Agent listeners in registration order
-  -> AgentSession awaits Extension message_update handlers
-  -> synchronous AgentSession subscribers
-  -> TUI redraw, JSON/RPC projection, or application transport
+  -> Agent.processEvents gán state.streamingMessage
+  -> chờ các listener của Agent theo thứ tự đăng ký
+  -> AgentSession chờ handler Extension message_update
+  -> các bên đăng ký đồng bộ với AgentSession
+  -> TUI vẽ lại, phép chiếu JSON/RPC hoặc tầng truyền dữ liệu của ứng dụng
 ```
 
-`AgentSession` không persist `message_update`. Persistence diễn ra tại `message_end`, sau khi finalized assistant message đã thay partial.
+`AgentSession` không lưu bền vững `message_update`. Việc lưu diễn ra tại `message_end`, sau khi message hoàn chỉnh của assistant đã thay partial.
 
-### Delta và cumulative partial phục vụ consumer khác nhau
+### Delta và partial tích lũy phục vụ các mục đích khác nhau
 
-`assistantMessageEvent.delta` chứa mảnh text mới. `event.message` và `assistantMessageEvent.partial` chứa trạng thái assistant tích lũy tại thời điểm đó. Terminal có thể append `delta`; renderer có cấu trúc có thể thay block hiện tại bằng cumulative state.
+`assistantMessageEvent.delta` chứa mảnh văn bản mới. `event.message` và `assistantMessageEvent.partial` chứa trạng thái tích lũy của assistant tại thời điểm đó. Terminal có thể nối thêm `delta`; bộ hiển thị có cấu trúc có thể thay khối hiện tại bằng trạng thái tích lũy.
 
 ```typescript
 import type { AssistantMessage } from "@earendil-works/pi-ai";
@@ -574,83 +585,86 @@ export function renderAssistantStream(
 }
 ```
 
-Pi AI provider thường tạo cumulative `AssistantMessage` bằng cách mutate content khi chunk mới đến. Agent loop chỉ shallow-copy object message ở cấp ngoài khi emit, không sao chép sâu mọi content block. Vì vậy, event object không có bảo đảm deep immutability. Hãy đọc dữ liệu cần thiết ngay trong callback, hoặc deep-clone snapshot phải giữ nguyên sau các delta tiếp theo.
+Provider Pi AI thường tạo `AssistantMessage` tích lũy bằng cách sửa `content` tại chỗ khi có mảnh dữ liệu mới. Vòng lặp Agent chỉ sao chép nông object biểu diễn message ở cấp ngoài cùng khi phát sự kiện, không sao chép sâu mọi khối nội dung. Vì vậy, object sự kiện không có bảo đảm bất biến sâu. Hãy đọc dữ liệu cần thiết ngay trong callback, hoặc tạo bản sao sâu cho dữ liệu phải giữ nguyên qua các delta tiếp theo.
 
-### Finalization có thể giữ nguyên object identity
+### Bước hoàn tất có thể giữ nguyên định danh của object
 
-Khi Pi AI phát `done` hoặc `error`, Agent loop lấy `response.result()`, thay partial trong context rồi emit `message_end`. `Agent.processEvents()` xóa `streamingMessage` và append object cuối vào `state.messages` trước khi subscriber chạy.
+Khi Pi AI phát `done` hoặc `error`, vòng lặp Agent lấy `response.result()`, thay partial trong ngữ cảnh rồi phát `message_end`. `Agent.processEvents()` xóa `streamingMessage` và thêm object cuối vào `state.messages` trước khi bên đăng ký nhận sự kiện.
 
-Sau đó Coding Agent chạy Extension handler `message_end`. Replacement hợp lệ phải giữ cùng message `role`. `AgentSession` mutate tại chỗ object đã được lưu để Agent state, payload `turn_end` và `agent_end` về sau, session subscriber cùng persistence đều giữ một object identity và nội dung replacement giống nhau. Đây là biên mutation có chủ ý; observer không nên freeze event object hoặc giữ nó như một historical snapshot bất biến.
+Sau đó Coding Agent chạy handler Extension `message_end`. Giá trị thay thế hợp lệ phải giữ nguyên `role` của message. `AgentSession` sửa tại chỗ object đã lưu, nhờ vậy trạng thái Agent, payload `turn_end` và `agent_end` về sau, các bên đăng ký với session và dữ liệu lưu bền vững đều trỏ tới cùng một object và thấy cùng nội dung. Đây là thay đổi có chủ ý; bên quan sát không nên coi object sự kiện là bất biến hoặc giữ nó như một bản chụp lịch sử không đổi.
 
 ## 7. Tiến độ Tool và thứ tự kết quả
 
-### Một Tool call
+### Một lời gọi Tool
 
-Với một Tool call vượt qua preflight, vòng đời hiện tại đặt khâu chuẩn bị và bước đổi result vào các vị trí chính xác:
+Với một lời gọi Tool vượt qua preflight, vòng đời hiện tại đặt bước chuẩn bị và biến đổi kết quả vào các vị trí chính xác:
 
 ```text
-assistant message_end barrier
-tool_execution_start barrier
-prepareArguments -> validate -> beforeToolCall
-Tool execute -> tool_execution_update* -> settle all update deliveries
-await afterToolCall / Extension tool_result
-tool_execution_end barrier
-message_start ToolResultMessage
-message_end ToolResultMessage
+điểm chờ message_end của assistant
+điểm chờ tool_execution_start
+prepareArguments -> kiểm tra hợp lệ -> beforeToolCall
+Tool thực thi -> tool_execution_update* -> chờ mọi lần phân phối tiến độ
+chờ afterToolCall / Extension tool_result
+điểm chờ tool_execution_end
+message_start của ToolResultMessage
+message_end của ToolResultMessage
 turn_end
 ```
 
-`tool_execution_start.args` là object đối số gốc của Tool call. `prepareArguments` hoặc Extension `tool_call` có thể đổi đối số dùng để thực thi sau đó. Tool tự định nghĩa `tool_execution_update.partialResult`; các Tool streaming tích hợp sẵn thường phát cumulative display result, còn custom Tool phải tự ghi rõ contract cho `details`.
+`tool_execution_start.args` là object đối số gốc của lời gọi Tool. `prepareArguments` hoặc Extension `tool_call` có thể đổi đối số dùng để thực thi sau đó. Tool tự định nghĩa `tool_execution_update.partialResult`; các Tool tích hợp sẵn có streaming thường phát kết quả hiển thị tích lũy, còn Tool tùy chỉnh phải ghi rõ hợp đồng cho `details`.
 
-### Batch tuần tự và song song
+### Thực thi tuần tự và song song trong một nhóm lời gọi
 
-Sequential mode hoàn tất kết quả preflight tức thời hoặc toàn bộ pipeline đã chuẩn bị của một call, phát end event và vòng đời result message, rồi mới bắt đầu call tiếp theo. Ở bản source đã pin, [`executeToolCallsParallel()`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/agent-loop.ts#L489-L552) tách lượt quét theo thứ tự nguồn khỏi các pipeline đã chuẩn bị chạy đồng thời:
+Ở chế độ tuần tự, Pi xử lý xong kết quả preflight tức thời hoặc toàn bộ pipeline đã chuẩn bị của một lời gọi, phát sự kiện kết thúc và vòng đời của message kết quả, rồi mới bắt đầu lời gọi tiếp theo. Trong bản mã nguồn đã pin, [`executeToolCallsParallel()`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/agent-loop.ts#L489-L552) tách lượt quét theo thứ tự xuất hiện khỏi các pipeline đã chuẩn bị chạy đồng thời:
 
-1. Pi phát `tool_execution_start` và chạy preflight tuần tự theo thứ tự Tool call trong assistant message. Lỗi lookup, chuẩn bị, validation, hook hoặc abort trở thành kết quả tức thời, nên `tool_execution_end` của lỗi đó cũng được phát ngay trong lượt quét. Pi vẫn quét các call phía sau trừ khi phát hiện abort.
+1. Pi phát `tool_execution_start` và chạy preflight tuần tự theo thứ tự lời gọi Tool trong message của assistant. Lỗi tra cứu, chuẩn bị, kiểm tra hợp lệ, hook hoặc abort trở thành kết quả tức thời, nên `tool_execution_end` của lỗi đó cũng được phát ngay trong lượt quét. Pi vẫn quét các lời gọi phía sau trừ khi phát hiện abort.
 2. Sau lượt quét, các Tool đã chuẩn bị bắt đầu chạy đồng thời. Mỗi pipeline bình thường phải chờ `tool.execute()`, mọi lần phân phối tiến độ đã thu thập và bước hoàn tất `afterToolCall` trước khi phát `tool_execution_end`.
-3. Vì vậy, end event bình thường đi theo thời điểm toàn pipeline hoàn tất, không nhất thiết theo thời điểm `tool.execute()` trả về. Progress event và end event của các call đã chuẩn bị có thể xen kẽ.
-4. Sau khi mọi kết quả tức thời hoặc đã chuẩn bị đều hoàn tất, event start/end của `ToolResultMessage` được phát theo thứ tự Tool call ban đầu trong assistant message.
-5. Sau các vòng đời result message đó, phép gộp `terminate` trên mọi kết quả mới cung cấp quyết định tiếp tục sau batch; nó không hủy công việc bên trong batch.
-6. Sau đó, `turn_end.toolResults` dùng cùng thứ tự nguồn.
+3. Vì vậy, `tool_execution_end` bình thường đi theo thời điểm toàn pipeline hoàn tất, không nhất thiết theo thời điểm `tool.execute()` trả về. Sự kiện tiến độ và `tool_execution_end` của các lời gọi đã chuẩn bị có thể xen kẽ.
+4. Sau khi mọi kết quả tức thời hoặc đã chuẩn bị đều hoàn tất, các cặp `message_start`/`message_end` của `ToolResultMessage` được phát theo thứ tự lời gọi Tool ban đầu trong message của assistant.
+5. Sau các vòng đời của message kết quả đó, Pi mới tổng hợp `terminate` từ mọi kết quả để quyết định có tiếp tục sau nhóm hay không; quyết định này không hủy công việc bên trong nhóm.
+6. Sau đó, `turn_end.toolResults` dùng cùng thứ tự xuất hiện ban đầu.
 
 ```text
-assistant calls:         A (preflight error), B, C
-source-order scan:       start A -> end A(error) -> start B -> start C
-prepared pipelines:      update C -> B execute returns -> C execute returns
-finalization events:     end C -> end B   (B's awaited afterToolCall finished later)
-result messages:         result A -> result B -> result C
-batch terminate:         reduce all finalized results (post-batch decision)
-turn_end.toolResults:    [A, B, C]
+lời gọi từ assistant:       A (lỗi preflight), B, C
+quét theo thứ tự xuất hiện: tool_execution_start A -> tool_execution_end A(error)
+                            -> tool_execution_start B -> tool_execution_start C
+pipeline đã chuẩn bị:       tool_execution_update C -> tool.execute() B trả về
+                            -> tool.execute() C trả về
+sự kiện hoàn tất:           tool_execution_end C -> tool_execution_end B
+                            (afterToolCall của B hoàn tất muộn hơn)
+ToolResultMessage kết quả:  A -> B -> C
+terminate của nhóm:         gộp mọi kết quả đã hoàn tất (quyết định sau nhóm)
+turn_end.toolResults:       [A, B, C]
 ```
 
-Hãy liên kết cả ba loại Tool event bằng `toolCallId`. Vị trí trong array, thời điểm `tool.execute()` hoàn tất và thứ tự end event sau finalization là ba contract khác nhau.
+Hãy liên kết cả ba loại sự kiện Tool bằng `toolCallId`. Vị trí trong mảng, thời điểm `tool.execute()` hoàn tất và thứ tự `tool_execution_end` sau bước hoàn tất là ba quy tắc khác nhau.
 
 ## 8. Quyết định thiết kế và bài học áp dụng
 
 ### Tách quan sát khỏi điều khiển
 
-Dùng lifecycle event để quan sát state đã được cập nhật. Dùng hook có tên rõ ràng để đổi hành vi: `beforeToolCall` hoặc Extension `tool_call` để block; `afterToolCall` hoặc `tool_result` để đổi result; `transformContext` hoặc Extension `context` để chuẩn bị model input; `message_end` để thay message cuối nhưng giữ nguyên role. Cách tách này làm cho return value có ý nghĩa, tránh để observer bất kỳ âm thầm điều khiển run.
+Dùng sự kiện vòng đời để quan sát trạng thái sau khi cập nhật. Dùng hook có tên rõ ràng để đổi hành vi: `beforeToolCall` hoặc Extension `tool_call` để chặn; `afterToolCall` hoặc `tool_result` để đổi kết quả; `transformContext` hoặc Extension `context` để chuẩn bị dữ liệu cho model; `message_end` để thay message cuối nhưng giữ nguyên role. Cách tách này làm rõ ý nghĩa của giá trị trả về, tránh để một bên quan sát bất kỳ âm thầm điều khiển lượt chạy.
 
-### Đặt barrier ở biên nhất quán cần thiết
+### Đặt điểm chờ tại ranh giới cần bảo đảm tính nhất quán
 
-Agent core await việc phân phối lifecycle vì Tool preflight, state reader và công việc flush bắt buộc cần một chuyển đổi nhất quán. Tiến độ Tool bắt đầu nhiều lần phân phối đồng thời để callback của Tool không bị chặn, rồi join tất cả trước khi hoàn tất result. Public session subscriber của Coding Agent chạy đồng bộ để dispatch UI, còn Extension hook được await tại nơi return value thay đổi thực thi.
+Lõi Agent chờ việc phân phối sự kiện vòng đời vì khâu preflight của Tool, bên đọc trạng thái và thao tác flush bắt buộc cần thấy một chuyển đổi nhất quán. Tiến độ Tool khởi chạy nhiều lượt phân phối đồng thời để không chặn callback, rồi chờ tất cả trước khi hoàn tất kết quả. Các bên đăng ký qua API công khai của Coding Agent chạy đồng bộ để điều phối UI, còn hook Extension được chờ tại nơi giá trị trả về có thể thay đổi quá trình thực thi.
 
-Khi thiết kế hệ thống khác, hãy xác định giai đoạn cuối cùng phải nhìn thấy công việc của consumer và đặt điểm join rõ ràng tại đó. Background work không có owner dễ trở thành unhandled rejection, lần ghi sai thứ tự hoặc process thoát trước khi flush xong.
+Khi thiết kế hệ thống khác, hãy xác định giai đoạn muộn nhất cần nhìn thấy công việc của bên nhận và đặt điểm hội tụ rõ ràng tại đó. Công việc nền không có thành phần chịu trách nhiệm dễ gây lỗi promise không được xử lý, ghi sai thứ tự hoặc khiến tiến trình thoát trước khi flush xong.
 
-### Giữ policy cấp sản phẩm bên ngoài kernel
+### Giữ chính sách cấp sản phẩm bên ngoài lõi
 
-Mười core event mô tả mọi Agent run. Retry, compaction, tên session, retry cho summarization, output Bash trực tiếp và final settlement của sản phẩm thuộc Coding Agent. Project trust, resource discovery, provider payload và interactive input thuộc Extension contract. Biên package này giúp Agent cấp thấp hoạt động mà không cần import sản phẩm CLI.
+Mười sự kiện lõi mô tả mọi lượt chạy Agent. Retry, compaction, tên session, các lần retry khi tóm tắt, đầu ra Bash trực tiếp và mốc hoàn tất cuối của sản phẩm thuộc Coding Agent. Mức tin cậy của dự án, khám phá tài nguyên, payload của provider và dữ liệu người dùng nhập trong phiên tương tác thuộc hợp đồng Extension. Ranh giới package này giúp Agent cấp thấp hoạt động mà không cần import sản phẩm CLI.
 
 Khi áp dụng thiết kế hướng sự kiện cho hệ thống khác, hãy kiểm tra năm điểm:
 
-1. Mỗi discriminant có đúng một owner và payload được ghi rõ.
-2. Thời điểm state trở nên khả kiến trước khi phân phối được xác định rõ.
-3. Thứ tự listener, async settlement và cách unsubscribe được mô tả riêng cho từng bề mặt.
-4. Update tần suất cao có điểm join được đặt tên trước finalization.
-5. Quan sát, can thiệp, mutation, persistence, lỗi và abort là các contract riêng.
+1. Mỗi discriminant có đúng một thành phần sở hữu và payload được ghi rõ.
+2. Thời điểm trạng thái trở nên khả kiến trước khi phân phối được xác định rõ.
+3. Thứ tự listener, cách hoàn tất công việc bất đồng bộ và cách unsubscribe được mô tả riêng cho từng giao diện.
+4. Sự kiện cập nhật tần suất cao có điểm hội tụ rõ ràng trước bước hoàn tất.
+5. Quan sát, can thiệp, thay đổi tại chỗ, lưu bền vững, lỗi và hủy là các hợp đồng riêng.
 
 ## 9. Chương tiếp theo
 
-Sự kiện cho biết khi nào context được chuẩn bị, message đang streaming và Tool result đã trở về. Sự kiện không quyết định instruction, history, resource hay Tool output nào đi vào model call kế tiếp. [Chương 8](ch08-context-engineering.md) sẽ đi theo pipeline kỹ thuật ngữ cảnh đó, từ lắp ráp system prompt và giới hạn Tool output tới compaction và branch summary.
+Sự kiện cho biết khi nào ngữ cảnh được chuẩn bị, message đang truyền theo luồng và kết quả Tool đã trở về. Sự kiện không quyết định chỉ dẫn, lịch sử, tài nguyên hay đầu ra Tool nào đi vào lần gọi model kế tiếp. [Chương 8](ch08-context-engineering.md) sẽ đi theo quy trình kỹ thuật ngữ cảnh đó, từ xây dựng system prompt và giới hạn đầu ra Tool tới compaction và branch summary.
 
-> **Chỉ mục source đã pin:** Pi `0.84.2`, commit `a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c`: [`packages/ai/src/types.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/ai/src/types.ts#L527), [`packages/agent/src/types.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/types.ts#L421), [`packages/agent/src/agent-loop.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/agent-loop.ts#L281), [`packages/agent/src/agent.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/agent.ts#L240), [`packages/coding-agent/src/core/agent-session.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/agent-session.ts#L142), và [`packages/coding-agent/src/core/extensions/runner.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/extensions/runner.ts#L801).
+> **Chỉ mục mã nguồn đã pin:** Pi `0.84.2`, commit `a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c`: [`packages/ai/src/types.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/ai/src/types.ts#L527), [`packages/agent/src/types.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/types.ts#L421), [`packages/agent/src/agent-loop.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/agent-loop.ts#L281), [`packages/agent/src/agent.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/agent.ts#L240), [`packages/coding-agent/src/core/agent-session.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/agent-session.ts#L142), và [`packages/coding-agent/src/core/extensions/runner.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/extensions/runner.ts#L801).

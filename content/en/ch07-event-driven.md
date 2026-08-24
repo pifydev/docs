@@ -134,20 +134,31 @@ export type AgentEvent =
     };
 ```
 
-One turn contains one assistant response and any Tool calls and results produced by that response. A run contains one or more turns when Tools, steering, or follow-up messages keep the loop active.
+One turn contains one assistant response and any Tool calls and results produced by that response. A run contains one or more turns when Tools, steering, or follow-up messages keep the loop active. A prompted run with one Tool call followed by one final model response has this event order:
 
 ```text
 agent_start
-└─ turn_start
-   ├─ message_start/update*/end   assistant response
-   ├─ tool_execution_start/update*/end
-   ├─ message_start/end           ToolResultMessage
-   └─ turn_end
-└─ turn_start ...                 next model call, when needed
-agent_end
+├─ turn_start
+│  ├─ message_start                 prompted user message
+│  ├─ message_end                   prompted user message
+│  ├─ message_start                 assistant response
+│  ├─ message_update*               streamed assistant response
+│  ├─ message_end                   assistant response
+│  ├─ tool_execution_start          requested Tool
+│  ├─ tool_execution_update*        requested Tool progress
+│  ├─ tool_execution_end            requested Tool
+│  ├─ message_start                 ToolResultMessage
+│  ├─ message_end                   ToolResultMessage
+│  └─ turn_end
+├─ turn_start                       next model call
+│  ├─ message_start                 assistant response
+│  ├─ message_update*               streamed assistant response
+│  ├─ message_end                   assistant response
+│  └─ turn_end
+└─ agent_end
 ```
 
-User and injected messages also receive `message_start` and `message_end`. Only streamed assistant messages receive `message_update`.
+Every prompted or injected user message receives its own `message_start` and `message_end`. Only streamed assistant messages receive `message_update`. Section 7 refines the Tool portion for multiple sequential or parallel calls.
 
 ### The nested `AssistantMessageEvent`
 
@@ -181,7 +192,7 @@ Use the nested discriminant before reading `delta`. `text_start`, `text_end`, an
 
 ### `AgentSessionEvent`: core lifecycle plus product state
 
-`AgentSession` forwards the ten core discriminants, changes `agent_end` to add `willRetry: boolean`, and adds 13 distinct product discriminants. Counting discriminants rather than repeated union arms gives 23 session event types.
+`AgentSession` forwards the ten core discriminants, changes `agent_end` to add `willRetry: boolean`, and adds 13 distinct product discriminants. The pinned union contains two identical `auto_retry_end` arms at lines 169 and 184. Deduplicating that repeated arm and counting distinct `type` values gives 23 session event types.
 
 | Product event | Exact payload |
 | --- | --- |
@@ -199,7 +210,7 @@ Use the nested discriminant before reading `delta`. `text_start`, `text_end`, an
 | `summarization_retry_finished` | none |
 | `bash_execution_update` | optional `id`, `delta: string` |
 
-This source-faithful excerpt from [`packages/coding-agent/src/core/agent-session.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/agent-session.ts#L142) is abridged only by referring back to the core union and by collapsing multiline formatting:
+The normalized inventory below is based on [`packages/coding-agent/src/core/agent-session.ts`, lines 142–185](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/agent-session.ts#L142-L185). It refers back to the core union, collapses multiline formatting, and deliberately removes the second identical `auto_retry_end` arm. It is not a verbatim source excerpt:
 
 ```typescript
 type AgentSessionEvent =
@@ -526,7 +537,7 @@ Browser renderers should batch redraws to the display refresh rate when provider
 
 ## 6. The complete `text_delta` journey
 
-### Five transitions from provider to UI
+### From provider to UI
 
 Assume an adapter receives a chunk containing `"Hel"`. The journey crosses package boundaries without flattening the lower-level event:
 
