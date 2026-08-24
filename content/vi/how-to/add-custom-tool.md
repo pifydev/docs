@@ -16,7 +16,7 @@ reviewed_by: Pify maintainers
 last_updated: "2026-08-24"
 ---
 
-Hướng dẫn này tạo Tool `get_weather` có type để model gọi trong một turn. Ví dụ dùng một tập dữ liệu nhỏ trong bộ nhớ, nên bạn có thể kiểm thử Tool mà không cần dịch vụ bên ngoài. Cùng contract thực thi này dùng được với database hoặc HTTP client nếu mã chuyển tiếp tín hiệu hủy và không đưa credential vào output mà model nhìn thấy.
+Hướng dẫn này tạo Tool `get_weather` có type để model gọi trong một turn. Ví dụ dùng một tập dữ liệu nhỏ trong bộ nhớ, nên bạn có thể kiểm thử Tool mà không cần dịch vụ bên ngoài. Contract thực thi này cũng dùng được với database hoặc HTTP client, miễn là bạn chuyển tiếp tín hiệu hủy và không đưa credential vào output mà model nhìn thấy.
 
 :::tip[Kết quả sau khi hoàn thành]
 
@@ -36,7 +36,7 @@ Chỉ chọn một cách đăng ký ở tầng sản phẩm. Coding Agent sessio
 
 ## Điều kiện cần
 
-Pi `0.84.2` yêu cầu Node.js `>=22.19.0`. Tạo project TypeScript dùng ESM và cài từng package được import trực tiếp trong ví dụ:
+Pi `0.84.2` yêu cầu Node.js `>=22.19.0`. Tạo một dự án TypeScript dùng ESM và cài từng package được import trực tiếp trong ví dụ:
 
 ```bash
 npm init -y
@@ -60,11 +60,11 @@ npm install --save-dev typescript tsx @types/node
 }
 ```
 
-Thiết lập credential của provider theo [Quickstart](../quickstart.md) trước khi chạy một trong hai agent. `@earendil-works/pi-ai` re-export `Type` và `Static` từ TypeBox, vì vậy các file này không cần thêm một import path khác cho schema.
+Thiết lập credential của provider theo [Quickstart](../quickstart.md) trước khi chạy bất kỳ cách nào có gọi model. `@earendil-works/pi-ai` re-export `Type` và `Static` từ TypeBox, vì vậy các file này không cần thêm một import path khác cho schema.
 
-## 1. Mô tả Tool
+## 1. Định nghĩa Tool và handler
 
-Model nhìn thấy `name`, `description` và `parameters`. Runtime cùng UI còn dùng `label`. Giữ tên protocol ổn định và cụ thể. Viết description như một quy tắc lựa chọn: nêu khi nào cần gọi Tool, Tool nhận gì và trả gì.
+Định nghĩa các field mà model nhìn thấy cùng handler thực thi trong một object có type. Model nhìn thấy `name`, `description` và `parameters`; runtime và UI còn dùng `label`. Giữ tên protocol ổn định và cụ thể. Viết description như một quy tắc lựa chọn: nêu khi nào cần gọi Tool, Tool nhận gì và trả gì.
 
 ```ts title="tools/get-weather-core.ts"
 import { Type, type Static } from "@earendil-works/pi-ai";
@@ -141,13 +141,13 @@ export const getWeatherTool: AgentTool<
 };
 ```
 
-TypeBox có hai nhiệm vụ ở đây. `Static<typeof weatherParameters>` tạo type cho parameters của handler khi biên dịch. Pi còn kiểm tra từng object đối số do model tạo theo schema trước khi chạy `execute`. Quy tắc nghiệp vụ vẫn thuộc về mã ứng dụng: một chuỗi hợp lệ vẫn có thể chứa tên thành phố mà dịch vụ không hỗ trợ.
+TypeBox có hai nhiệm vụ ở đây. `Static<typeof weatherParameters>` tạo type cho parameters của handler khi biên dịch. Pi còn kiểm tra từng object chứa đối số do model tạo theo schema trước khi chạy `execute`. Quy tắc nghiệp vụ vẫn thuộc về mã ứng dụng: một chuỗi hợp lệ vẫn có thể chứa tên thành phố mà dịch vụ không hỗ trợ. Tool này đã triển khai `execute`; bước tiếp theo tách riêng contract của handler để giải thích trước khi đăng ký.
 
-## 2. Viết handler
+## 2. Hiểu contract thực thi của handler
 
-Contract `AgentTool.execute` ở tầng thấp có đúng bốn đối số. Đoạn trích giữ nguyên chữ ký dưới đây lấy từ `packages/agent/src/types.ts` tại commit đã ghim:
+Contract cấp thấp của `AgentTool.execute` có đúng bốn đối số. Đoạn trích giữ nguyên chữ ký dưới đây lấy từ `packages/agent/src/types.ts` tại commit đã ghim:
 
-```ts
+```ts title="Chữ ký AgentTool.execute (tham khảo; không phải file hoàn chỉnh)"
 execute: (
   toolCallId: string,
   params: Static<TParameters>,
@@ -430,12 +430,40 @@ test("get_weather observes cancellation", async () => {
 });
 ```
 
+Hai lệnh kiểm tra dùng chung dưới đây không gọi provider:
+
 ```bash
 npx tsc --noEmit
 npx tsx --test test/get-weather.test.ts
+```
+
+Sau khi hai lệnh này chạy thành công, chỉ chọn một cách đăng ký. Cả ba cách đều đăng ký tên `get_weather`, vì vậy không cần chạy tất cả.
+
+### Cách dùng Agent core
+
+Chạy `AgentTool` bốn đối số qua host `Agent` ở tầng thấp:
+
+```bash
 node --env-file=.env --import tsx agent-core.ts
+```
+
+### Cách dùng AgentSession với `customTools`
+
+Chạy `ToolDefinition` năm đối số được truyền qua `customTools`:
+
+```bash
 node --env-file=.env --import tsx agent-session.ts
 ```
+
+### Cách dùng Extension
+
+Không chạy `agent-session.ts` cho cách này. Từ thư mục gốc của dự án, trước hết hãy review `.pi/extensions/weather.ts` vì Extension chạy với quyền của process Pi. Coding Agent CLI tạo một `DefaultResourceLoader`, và loader này chỉ phát hiện file cục bộ sau khi dự án được trust. Package `@earendil-works/pi-coding-agent` đã cài khai báo executable `pi` tại `dist/bundle/cli.js`; hãy chạy local bin đó đồng thời nạp `.env`:
+
+```bash
+node --env-file=.env ./node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js "What is the weather in Tokyo?"
+```
+
+Khi CLI khởi động ở chế độ interactive, chỉ chấp nhận project-trust prompt sau khi review các resource của dự án; nếu từ chối, Pi sẽ bỏ qua Extension cục bộ. [Hướng dẫn Extensions](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/docs/extensions.md#extension-locations) đã ghim mô tả các vị trí được phát hiện, cách reload và ranh giới trust đó.
 
 Khi debug toàn bộ loop, hãy subscribe trước khi gọi `prompt()`. Ghi log `tool_execution_start`, `tool_execution_update` và `tool_execution_end`; che payload nếu chúng có thể chứa dữ liệu người dùng hoặc credential.
 

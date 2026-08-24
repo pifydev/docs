@@ -60,11 +60,11 @@ npm install --save-dev typescript tsx @types/node
 }
 ```
 
-Configure provider credentials as described in [Quickstart](../quickstart.md) before running either agent. `@earendil-works/pi-ai` re-exports `Type` and `Static` from TypeBox, so these files do not need a second schema import path.
+Configure provider credentials as described in [Quickstart](../quickstart.md) before running any route that calls a model. `@earendil-works/pi-ai` re-exports `Type` and `Static` from TypeBox, so these files do not need a second schema import path.
 
-## 1. Describe the Tool
+## 1. Define the Tool and handler
 
-The model sees `name`, `description`, and `parameters`. The runtime and UI also use `label`. Keep the protocol name stable and specific. Write the description as a selection rule: say when to call the Tool, what it accepts, and what it returns.
+Define the model-facing fields and executable handler together in one typed object. The model sees `name`, `description`, and `parameters`. The runtime and UI also use `label`. Keep the protocol name stable and specific. Write the description as a selection rule: say when to call the Tool, what it accepts, and what it returns.
 
 ```ts title="tools/get-weather-core.ts"
 import { Type, type Static } from "@earendil-works/pi-ai";
@@ -141,13 +141,13 @@ export const getWeatherTool: AgentTool<
 };
 ```
 
-TypeBox has two jobs here. `Static<typeof weatherParameters>` gives the handler a compile-time parameter type. Pi also validates each model-produced argument object against the schema before `execute` runs. Business rules still belong in application code: a valid string can name a city that the service does not support.
+TypeBox has two jobs here. `Static<typeof weatherParameters>` gives the handler a compile-time parameter type. Pi also validates each model-produced argument object against the schema before `execute` runs. Business rules still belong in application code: a valid string can name a city that the service does not support. This Tool already implements `execute`; the next step isolates that handler's contract before registration.
 
-## 2. Write the handler
+## 2. Understand the handler contract
 
 The low-level `AgentTool.execute` contract has exactly four arguments. This source-faithful excerpt is from `packages/agent/src/types.ts` at the pinned commit:
 
-```ts
+```ts title="AgentTool.execute signature (reference; not a complete file)"
 execute: (
   toolCallId: string,
   params: Static<TParameters>,
@@ -430,12 +430,40 @@ test("get_weather observes cancellation", async () => {
 });
 ```
 
+The shared checks below do not contact a provider:
+
 ```bash
 npx tsc --noEmit
 npx tsx --test test/get-weather.test.ts
+```
+
+After they pass, run exactly one registration route. Each route exposes the same `get_weather` name, so running all three is unnecessary.
+
+### Agent core route
+
+Run the four-argument `AgentTool` through the low-level `Agent` host:
+
+```bash
 node --env-file=.env --import tsx agent-core.ts
+```
+
+### AgentSession `customTools` route
+
+Run the five-argument `ToolDefinition` passed through `customTools`:
+
+```bash
 node --env-file=.env --import tsx agent-session.ts
 ```
+
+### Extension route
+
+Do not run `agent-session.ts` for this route. From the project root, first review `.pi/extensions/weather.ts` because Extensions execute with the Pi process's permissions. The Coding Agent CLI creates a `DefaultResourceLoader`, which discovers that project-local file only after the project is trusted. The installed `@earendil-works/pi-coding-agent` package declares its `pi` executable at `dist/bundle/cli.js`, so launch that local bin while loading `.env`:
+
+```bash
+node --env-file=.env ./node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js "What is the weather in Tokyo?"
+```
+
+At interactive startup, approve the project-trust prompt only after reviewing the project resources; declining trust skips the project-local Extension. The pinned [Extensions guide](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/docs/extensions.md#extension-locations) documents discovery locations, reload behavior, and the same trust boundary.
 
 Subscribe before calling `prompt()` when debugging the full loop. Log `tool_execution_start`, `tool_execution_update`, and `tool_execution_end`; redact the payloads if they can contain user data or credentials.
 
