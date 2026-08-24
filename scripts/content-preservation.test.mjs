@@ -145,28 +145,162 @@ test("approved word deletions can lower the word minimum explicitly", () => {
   );
 });
 
+test("heading allowances must be scoped to a valid depth", () => {
+  const errors = preservationErrors(
+    "en/reference/api.md",
+    {
+      words: 100,
+      headings: [],
+      codeFences: [],
+      mermaidBlocks: 0,
+      tables: 0,
+    },
+    {
+      baselineWords: 100,
+      minimumWordRatio: 0,
+      minimumHeadingCounts: { 2: 1, 3: 1 },
+      approvedDeletions: [{ metric: "headings", amount: 1 }],
+    },
+  );
+
+  assert.deepEqual(errors, [
+    "en/reference/api.md: H2 headings 0 below minimum 1",
+    "en/reference/api.md: H3 headings 0 below minimum 1",
+  ]);
+});
+
+function validRule(path) {
+  return {
+    path,
+    baselineWords: 0,
+    minimumWordRatio: 0,
+    minimumHeadingCounts: {},
+    minimumCodeFences: 0,
+    minimumMermaidBlocks: 0,
+    minimumTables: 0,
+    approvedDeletions: [],
+  };
+}
+
+test("validatePreservation resolves locale paths below the content root", async () => {
+  const rule = validRule("en/index.mdx");
+  const errors = await validatePreservation(new URL("../", import.meta.url), {
+    version: 1,
+    pages: [rule],
+  });
+
+  assert.deepEqual(errors, []);
+});
+
+test("validatePreservation rejects paths outside the content root", async () => {
+  const root = new URL("../", import.meta.url);
+  const manifest = {
+    version: 1,
+    pages: [
+      validRule("../package.json"),
+      validRule("/package.json"),
+      validRule("https://example.com/page.md"),
+    ],
+  };
+
+  const errors = await validatePreservation(root, manifest);
+  assert.deepEqual(errors, [
+    "preservation-manifest.json: pages[0].path must be a locale-relative Markdown path",
+    "preservation-manifest.json: pages[1].path must be a locale-relative Markdown path",
+    "preservation-manifest.json: pages[2].path must be a locale-relative Markdown path",
+  ]);
+});
+
+test("validatePreservation reports malformed manifest schema deterministically", async () => {
+  const root = new URL("../", import.meta.url);
+  assert.deepEqual(await validatePreservation(root, {}), [
+    "preservation-manifest.json: version must be 1",
+    "preservation-manifest.json: pages must be a non-empty array",
+  ]);
+  assert.deepEqual(
+    await validatePreservation(root, { version: 1, pages: [] }),
+    ["preservation-manifest.json: pages must be a non-empty array"],
+  );
+
+  const malformed = validRule("en/index.mdx");
+  malformed.baselineWords = -1;
+  malformed.minimumWordRatio = 2;
+  malformed.minimumHeadingCounts = { 1: 1, 2: -1 };
+  malformed.minimumCodeFences = "one";
+  malformed.approvedDeletions = [{ metric: "headings", amount: 1 }];
+  const errors = await validatePreservation(root, {
+    version: 2,
+    pages: [malformed, { ...validRule("en/index.mdx"), path: undefined }],
+  });
+
+  assert.deepEqual(errors, [
+    "preservation-manifest.json: version must be 1",
+    "preservation-manifest.json: pages[0].baselineWords must be a finite nonnegative number",
+    "preservation-manifest.json: pages[0].minimumWordRatio must be a number from 0 through 1",
+    "preservation-manifest.json: pages[0].minimumHeadingCounts.1 must use heading depth 2, 3, or 4",
+    "preservation-manifest.json: pages[0].minimumHeadingCounts.2 must be a finite nonnegative number",
+    "preservation-manifest.json: pages[0].minimumCodeFences must be a finite nonnegative number",
+    "preservation-manifest.json: pages[0].approvedDeletions[0].section is required",
+    "preservation-manifest.json: pages[0].approvedDeletions[0].reason is required",
+    "preservation-manifest.json: pages[0].approvedDeletions[0].evidence is required",
+    "preservation-manifest.json: pages[0].approvedDeletions[0].depth must be 2, 3, or 4 for heading allowances",
+    "preservation-manifest.json: pages[1].path is required",
+  ]);
+
+  assert.deepEqual(
+    await validatePreservation(root, {
+      version: 1,
+      pages: [validRule("en/index.mdx"), validRule("en/index.mdx")],
+    }),
+    ["preservation-manifest.json: pages[1].path duplicates pages[0].path"],
+  );
+
+  assert.deepEqual(
+    await validatePreservation(root, {
+      version: 1,
+      pages: [{ path: "en/index.mdx" }],
+    }),
+    [
+      "preservation-manifest.json: pages[0].baselineWords must be a finite nonnegative number",
+      "preservation-manifest.json: pages[0].minimumWordRatio must be a number from 0 through 1",
+      "preservation-manifest.json: pages[0].minimumHeadingCounts must be an object",
+      "preservation-manifest.json: pages[0].minimumCodeFences must be a finite nonnegative number",
+      "preservation-manifest.json: pages[0].minimumMermaidBlocks must be a finite nonnegative number",
+      "preservation-manifest.json: pages[0].minimumTables must be a finite nonnegative number",
+      "preservation-manifest.json: pages[0].approvedDeletions must be an array",
+    ],
+  );
+});
+
 test("validatePreservation reads every manifest page and combines diagnostics", async () => {
   const rootURL = new URL("../", import.meta.url);
   const manifest = {
+    version: 1,
     pages: [
       {
-        path: "scripts/content-preservation.test.mjs",
+        path: "en/index.mdx",
         baselineWords: 1,
         minimumWordRatio: 0,
         minimumHeadingCounts: {},
         minimumCodeFences: 0,
         minimumMermaidBlocks: 0,
         minimumTables: 0,
+        approvedDeletions: [],
       },
       {
-        path: "scripts/does-not-exist.md",
+        path: "en/does-not-exist.md",
         baselineWords: 1,
         minimumWordRatio: 0,
+        minimumHeadingCounts: {},
+        minimumCodeFences: 0,
+        minimumMermaidBlocks: 0,
+        minimumTables: 0,
+        approvedDeletions: [],
       },
     ],
   };
 
   const errors = await validatePreservation(rootURL, manifest);
   assert.equal(errors.length, 1);
-  assert.match(errors[0], /^scripts\/does-not-exist\.md:/);
+  assert.match(errors[0], /^en\/does-not-exist\.md:/);
 });

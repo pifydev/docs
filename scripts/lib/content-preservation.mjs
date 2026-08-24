@@ -6,6 +6,16 @@ const FRONTMATTER_END = /^(?:---|\.\.\.)\s*$/;
 const HEADING_PATTERN = /^\s{0,3}(#{2,4})(?:\s+|$)/;
 const FENCE_PATTERN = /^\s{0,3}(`{3,}|~{3,})(.*)$/;
 const FENCE_END_PATTERN = /^\s{0,3}([`~]{3,})\s*$/;
+const MANIFEST_LABEL = "preservation-manifest.json";
+const VALID_HEADING_DEPTHS = new Set([2, 3, 4]);
+const VALID_HEADING_KEYS = new Set(["2", "3", "4"]);
+const VALID_DELETION_METRICS = new Set([
+  "words",
+  "headings",
+  "codeFences",
+  "mermaidBlocks",
+  "tables",
+]);
 
 function withoutFrontmatter(source) {
   const lines = source.replace(/\r\n?/g, "\n").split("\n");
@@ -100,10 +110,13 @@ export function contentMetrics(source) {
 function approvedAmount(rule, metric, depth) {
   return (rule.approvedDeletions ?? []).reduce((total, deletion) => {
     if (!deletion || deletion.metric !== metric) return total;
+    if (metric === "headings" && !VALID_HEADING_DEPTHS.has(deletion.depth)) {
+      return total;
+    }
     if (
       depth !== undefined &&
       deletion.depth !== undefined &&
-      Number(deletion.depth) !== depth
+      deletion.depth !== depth
     ) {
       return total;
     }
@@ -187,17 +200,205 @@ export function preservationErrors(relativePath, actual, rule) {
   return errors;
 }
 
-export async function validatePreservation(rootURL, manifest) {
-  const pages = Array.isArray(manifest) ? manifest : (manifest?.pages ?? []);
+function finiteNonnegative(value) {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
+
+function requiredFiniteNonnegative(errors, field, value) {
+  if (!finiteNonnegative(value)) {
+    errors.push(
+      `${MANIFEST_LABEL}: ${field} must be a finite nonnegative number`,
+    );
+  }
+}
+
+function isLocaleRelativePath(path) {
+  if (
+    typeof path !== "string" ||
+    !path ||
+    path.includes("\\") ||
+    path.includes("%")
+  ) {
+    return false;
+  }
+  if (!/^(?:en|vi)\/(?:[^/]+\/)*[^/]+\.(?:md|mdx)$/.test(path)) {
+    return false;
+  }
+  return !path
+    .split("/")
+    .some((segment) => segment === "." || segment === "..");
+}
+
+function validateApprovedDeletions(errors, field, deletions) {
+  if (!Array.isArray(deletions)) {
+    errors.push(`${MANIFEST_LABEL}: ${field} must be an array`);
+    return;
+  }
+
+  deletions.forEach((deletion, index) => {
+    const prefix = `${field}[${index}]`;
+    if (!deletion || typeof deletion !== "object" || Array.isArray(deletion)) {
+      errors.push(`${MANIFEST_LABEL}: ${prefix} must be an object`);
+      return;
+    }
+    for (const required of ["section", "reason", "evidence"]) {
+      if (
+        typeof deletion[required] !== "string" ||
+        !deletion[required].trim()
+      ) {
+        errors.push(`${MANIFEST_LABEL}: ${prefix}.${required} is required`);
+      }
+    }
+    if (!VALID_DELETION_METRICS.has(deletion.metric)) {
+      errors.push(
+        `${MANIFEST_LABEL}: ${prefix}.metric must be one of ${[...VALID_DELETION_METRICS].join(", ")}`,
+      );
+    }
+    if (!finiteNonnegative(deletion.amount) || deletion.amount === 0) {
+      errors.push(
+        `${MANIFEST_LABEL}: ${prefix}.amount must be a finite positive number`,
+      );
+    }
+    if (deletion.metric === "headings") {
+      if (!VALID_HEADING_DEPTHS.has(deletion.depth)) {
+        errors.push(
+          `${MANIFEST_LABEL}: ${prefix}.depth must be 2, 3, or 4 for heading allowances`,
+        );
+      }
+    } else if (deletion.depth !== undefined) {
+      errors.push(
+        `${MANIFEST_LABEL}: ${prefix}.depth is only valid for heading allowances`,
+      );
+    }
+  });
+}
+
+function validateManifest(manifest) {
   const errors = [];
-  for (const rule of pages) {
+  const validIndices = new Set();
+  if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)) {
+    return {
+      errors: [`${MANIFEST_LABEL}: manifest must be an object`],
+      validIndices,
+    };
+  }
+  if (manifest.version !== 1) {
+    errors.push(`${MANIFEST_LABEL}: version must be 1`);
+  }
+  if (!Array.isArray(manifest.pages) || manifest.pages.length === 0) {
+    errors.push(`${MANIFEST_LABEL}: pages must be a non-empty array`);
+    return { errors, validIndices };
+  }
+
+  const paths = new Map();
+  manifest.pages.forEach((rule, index) => {
+    const prefix = `pages[${index}]`;
+    const pageStart = errors.length;
+    const pageErrors = [];
+    const path = rule?.path;
+    if (typeof path !== "string" || !path) {
+      pageErrors.push(`${prefix}.path is required`);
+    } else if (!isLocaleRelativePath(path)) {
+      pageErrors.push(`${prefix}.path must be a locale-relative Markdown path`);
+    } else if (paths.has(path)) {
+      pageErrors.push(
+        `${prefix}.path duplicates pages[${paths.get(path)}].path`,
+      );
+    } else {
+      paths.set(path, index);
+    }
+
+    if (!rule || typeof rule !== "object" || Array.isArray(rule)) {
+      errors.push(
+        ...pageErrors.map((error) => `${MANIFEST_LABEL}: ${error}`),
+        `${MANIFEST_LABEL}: ${prefix} must be an object`,
+      );
+      return;
+    }
+    requiredFiniteNonnegative(
+      errors,
+      `${prefix}.baselineWords`,
+      rule.baselineWords,
+    );
+    if (
+      typeof rule.minimumWordRatio !== "number" ||
+      !Number.isFinite(rule.minimumWordRatio) ||
+      rule.minimumWordRatio < 0 ||
+      rule.minimumWordRatio > 1
+    ) {
+      errors.push(
+        `${MANIFEST_LABEL}: ${prefix}.minimumWordRatio must be a number from 0 through 1`,
+      );
+    }
+
+    const headingField = `${prefix}.minimumHeadingCounts`;
+    if (
+      !rule.minimumHeadingCounts ||
+      typeof rule.minimumHeadingCounts !== "object" ||
+      Array.isArray(rule.minimumHeadingCounts)
+    ) {
+      errors.push(`${MANIFEST_LABEL}: ${headingField} must be an object`);
+    } else {
+      for (const [depth, minimum] of Object.entries(
+        rule.minimumHeadingCounts,
+      )) {
+        if (!VALID_HEADING_KEYS.has(depth)) {
+          errors.push(
+            `${MANIFEST_LABEL}: ${headingField}.${depth} must use heading depth 2, 3, or 4`,
+          );
+        } else if (!finiteNonnegative(minimum)) {
+          errors.push(
+            `${MANIFEST_LABEL}: ${headingField}.${depth} must be a finite nonnegative number`,
+          );
+        }
+      }
+    }
+
+    for (const field of [
+      "minimumCodeFences",
+      "minimumMermaidBlocks",
+      "minimumTables",
+    ]) {
+      requiredFiniteNonnegative(errors, `${prefix}.${field}`, rule[field]);
+    }
+    validateApprovedDeletions(
+      errors,
+      `${prefix}.approvedDeletions`,
+      rule.approvedDeletions,
+    );
+    errors.push(...pageErrors.map((error) => `${MANIFEST_LABEL}: ${error}`));
+    if (errors.length === pageStart && pageErrors.length === 0) {
+      validIndices.add(index);
+    }
+  });
+  return { errors, validIndices };
+}
+
+export async function validatePreservation(rootURL, manifest) {
+  const validation = validateManifest(manifest);
+  const errors = validation.errors;
+  if (
+    !manifest ||
+    typeof manifest !== "object" ||
+    !Array.isArray(manifest.pages)
+  ) {
+    return errors;
+  }
+  const contentRoot = new URL("content/", rootURL);
+  const pages = manifest.pages;
+  const seen = new Set();
+  for (const [index, rule] of pages.entries()) {
     const relativePath = rule?.path;
-    if (!relativePath) {
-      errors.push(": manifest entry is missing path");
+    if (
+      !validation.validIndices.has(index) ||
+      !isLocaleRelativePath(relativePath) ||
+      seen.has(relativePath)
+    ) {
       continue;
     }
+    seen.add(relativePath);
     try {
-      const source = await readFile(new URL(relativePath, rootURL), "utf8");
+      const source = await readFile(new URL(relativePath, contentRoot), "utf8");
       errors.push(
         ...preservationErrors(relativePath, contentMetrics(source), rule),
       );
