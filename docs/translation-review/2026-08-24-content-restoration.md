@@ -30,7 +30,7 @@ Metric format: `words; H2/H3/H4; fences; tables; Mermaid`. Outcome counts track 
 | ch04-model-invocation           | 3418 words; H2/H3/H4 7/13/0; fences 22; tables 2; Mermaid 0  | 3915 words; H2/H3/H4 7/13/0; fences 22; tables 2; Mermaid 0  |       61 |      1 |                  20 |         0 | reviewed | reviewed   | checked |
 | ch05-tool-system                | 4564 words; H2/H3/H4 7/28/0; fences 29; tables 5; Mermaid 0  | 5048 words; H2/H3/H4 7/28/0; fences 29; tables 5; Mermaid 0  |       77 |      2 |                  21 |         0 | reviewed | reviewed   | checked |
 | ch06-messages                   | 3192 words; H2/H3/H4 10/12/0; fences 17; tables 3; Mermaid 0 | 3475 words; H2/H3/H4 10/12/0; fences 17; tables 3; Mermaid 0 |       70 |      1 |                  16 |         0 | reviewed | reviewed   | checked |
-| ch07-event-driven               | 2339 words; H2/H3/H4 9/16/0; fences 15; tables 0; Mermaid 0  | 2672 words; H2/H3/H4 9/16/0; fences 15; tables 0; Mermaid 0  |        0 |      0 |                   0 |         0 | pending  | pending    | pending |
+| ch07-event-driven               | 2339 words; H2/H3/H4 9/16/0; fences 15; tables 0; Mermaid 0  | 2672 words; H2/H3/H4 9/16/0; fences 15; tables 0; Mermaid 0  |       65 |      4 |                  14 |         0 | reviewed | reviewed   | checked |
 | ch08-context-engineering        | 3524 words; H2/H3/H4 9/21/0; fences 16; tables 5; Mermaid 0  | 4043 words; H2/H3/H4 9/21/0; fences 16; tables 5; Mermaid 0  |        0 |      0 |                   0 |         0 | pending  | pending    | pending |
 | ch09-compaction                 | 2846 words; H2/H3/H4 9/20/0; fences 20; tables 1; Mermaid 0  | 3237 words; H2/H3/H4 9/20/0; fences 20; tables 1; Mermaid 0  |        0 |      0 |                   0 |         0 | pending  | pending    | pending |
 | ch10-session                    | 3972 words; H2/H3/H4 9/28/0; fences 30; tables 8; Mermaid 0  | 4617 words; H2/H3/H4 9/28/0; fences 30; tables 8; Mermaid 0  |        0 |      0 |                   0 |         0 | pending  | pending    | pending |
@@ -732,3 +732,98 @@ Chapter 6 has 22 baseline H2–H3 decisions and 65 unique artifact or argument d
 - A65 — `Next up` link to Chapter 7 — `restored` in both locale files.
 
 The thinner pre-restoration Chapter 6 pages contained a compact content-block table, provider-conversion boundary, identity/time/opaque-metadata rules, persistence warning, and validation checklist. Their useful current material remains across Sections 2, 5, 7, 8, and 9 and is expanded with the baseline journey. Current additions include the public/default converter distinction, hook failure contracts, Extension handler settlement, image-block wrapper ownership, session-entry projection, the pending Bash flush after the final run's `agent_end`, `display: false` warning, settled-message persistence boundary, and package-ownership map. These additions do not change the 87 baseline decisions above.
+
+## Reviewed mapping appendix: Chapter 7
+
+Chapter 7 has 25 baseline H2–H3 decisions and 58 unique artifact or argument decisions: 83 total. The reconciliation is exact: 65 `restored` + 4 `merged` + 14 `technically-invalid` + 0 `duplicate` = 83. Final-to-baseline semantic-word preservation measured by `contentMetrics()` is EN 2,621 / 2,339 = 112.1% and VI 3,180 / 2,672 = 119.0%; each ratio compares one locale only. The final pair has mirrored H2/H3/H4 counts 9/27/0, 21 aligned fences, five aligned tables, and no Mermaid block. Every invalid historical claim is replaced in place with current Pi `0.84.2` behavior, so `content/preservation-manifest.json` keeps its original 80% word threshold and has no Chapter 7 deletion allowance.
+
+### Heading outcomes
+
+- H01 — H2 `1. Why do we need an event system?` / `1. Tại sao cần hệ thống sự kiện?` — `restored` as the motivation, live-state protocol, and persistence-boundary introduction.
+- H02 — H3 `An intuition: starting from food delivery tracking` / `Một trực giác: bắt đầu từ theo dõi đơn giao hàng` — `restored` as the delivery-status analogy without the baseline's locale-specific product reference.
+- H03 — H3 `What happens without events?` / `Không dùng event thì sao?` — `restored` as the Tool-audit change-isolation scenario and a copyable `Agent.subscribe()` example.
+- H04 — H3 `Pub-sub vs direct call` / `Pub-sub (đăng-nhận) so với gọi trực tiếp` — `restored` as an aligned producer/consumer diagram and package-ownership explanation.
+- H05 — H2 `2. 10 kinds of events, 4 layers of nesting` / `2. 10 loại sự kiện, 4 lớp lồng nhau` — `restored` as the exact ten `AgentEvent` discriminants and nested run/turn/message/Tool progression. The final wording corrects the claim that every layer has an update event.
+- H06 — H2 `3. emit is not "notification", it's "synchronization barrier"` / `3. emit không phải "thông báo", mà là "rào chắn đồng bộ"` — `restored` as delivery, ordering, settlement, and the comparison between raw loops, `Agent`, `AgentSession`, and Extension handlers.
+- H07 — H3 `Every event emit carries an await` / `Mỗi lần phát sự kiện đều có await` — `technically-invalid` as a universal statement. Current [`executePreparedToolCall()`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/agent-loop.ts#L670) starts progress deliveries from a synchronous callback, collects their promises, and joins all of them before result postprocessing.
+- H08 — H3 `processEvents: first update state, then wait for listeners` / `processEvents: cập nhật state trước, rồi chờ listener` — `restored` with exact current `streamingMessage`, `messages`, `pendingToolCalls`, active-signal, and registration-order behavior.
+- H09 — H3 `Why do we insist on await?` / `Tại sao nhất định phải await?` — `restored` through concrete state-visibility, Tool-preflight, Tool-result, final-flush, and idle barriers.
+- H10 — H3 `One exception: tool_execution_update does not wait` / `Một ngoại lệ: tool_execution_update không chờ` — `technically-invalid`; the final section distinguishes non-blocking callback delivery from the mandatory `Promise.all(updateEvents)` settlement barrier.
+- H11 — H2 `4. Error handling: listener exceptions bubble up directly` / `4. Xử lý lỗi: listener ném ngoại lệ thẳng lên trên` — `restored` with the current synthetic failure lifecycle, repeated-listener-failure edge case, session-listener behavior, abort propagation, and Extension-hook isolation.
+- H12 — H2 `5. What can you do with the event system?` / `5. Bạn có thể làm gì với hệ thống sự kiện?` — `restored` as observation, interception, preprocessing, and browser UI integration.
+- H13 — H3 `Scenario 1: real-time observe what the Agent is doing` / `Kịch bản 1: quan sát real-time Agent đang làm gì` — `restored` as a copyable `toolCallId`-correlated timing subscriber and telemetry safety guidance.
+- H14 — H3 `Scenario 2: tool call interception` / `Kịch bản 2: chặn lời gọi tool` — `restored` with current `isToolCallEventType()`, mutable post-validation input, block reason, and batch `terminate` semantics.
+- H15 — H3 `Scenario 3: context pre-processing` / `Kịch bản 3: tiền xử lý context` — `restored` with the current deep-cloned, chained Extension `context` hook and its non-destructive history boundary.
+- H16 — H3 `Scenario 4: stream forwarding to the Web frontend` / `Kịch bản 4: chuyển tiếp stream về frontend Web` — `restored` as a copyable SSE adapter that cleans up its subscription and ends on product-level `agent_settled`.
+- H17 — H3 `Summary` / `Tóm tắt nhỏ` — `merged` into Sections 5 and 8, which connect the four scenarios to explicit observation/control contracts and package ownership.
+- H18 — H2 `6. Case study: tracking the complete journey of a text_delta` / `6. Case study: hành trình hoàn chỉnh của một text_delta` — `restored` as the provider-to-Pi-AI-to-loop-to-Agent-to-session-to-UI journey, including delta/cumulative-state and persistence rules.
+- H19 — H2 `7. What the Session layer extends` / `7. Tầng Session mở rộng gì` — `restored` in the event-protocol section with the complete current `AgentSessionEvent` surface.
+- H20 — H3 `Kernel 10 + Session 7` / `Kernel 10 + Session 7` — `technically-invalid`; pinned [`AgentSessionEvent`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/agent-session.ts#L142) adds 13 distinct product discriminants and augments `agent_end`, for 23 distinct session discriminants in total.
+- H21 — H2 `8. Summary: three design decisions` / `8. Tóm tắt: ba quyết định thiết kế` — `restored` as design decisions plus five transferable verification questions rather than a repeated chapter recap.
+- H22 — H3 `Decision 1: synchronization barrier` / `Quyết định 1: rào chắn đồng bộ` — `restored` with the current split between awaited lifecycle delivery and concurrent-then-joined Tool progress.
+- H23 — H3 `Decision 2: expose exceptions directly` / `Quyết định 2: phơi bày ngoại lệ trực tiếp` — `restored` with separate policies for direct Agent subscribers, synchronous session subscribers, Tool preflight, and isolated Extension handlers.
+- H24 — H3 `Decision 3: two-layer events` / `Quyết định 3: event hai lớp` — `technically-invalid` only in its fixed “10 + 7” inventory. The final package-ownership lesson covers ten core events, 13 product additions, and the wider Extension contract.
+- H25 — H2 `9. Next stop` / `9. Trạm tiếp theo` — `restored` as the hand-off from event timing to Chapter 8's system-prompt, Tool-output, compaction, and branch-summary pipeline.
+
+### Unique artifact and argument outcomes
+
+- A01 — Chapter 3/5/6 event references and the opening questions about transmission, listeners, and waiting — `restored` as the three-surface problem statement.
+- A02 — Advanced-chapters reading note — `restored` with Chapters 1–6 identified as the runtime walkthrough and Chapter 7 as the settlement/failure transition.
+- A03 — Delivery-status analogy — `restored` without relying on a regional application name.
+- A04 — Message-start, message-update, and Tool-start state snapshots — `restored` and expanded to the complete current discriminants.
+- A05 — Source-editing and upstream-conflict cost of adding Tool logging — `restored` as the change-isolation motivation.
+- A06 — Minimal Tool logging subscription — `restored` as a typed, copyable `Agent` helper that returns its unsubscribe function.
+- A07 — Separation of “what happened” from consumers that care — `restored` as producer, event-contract, and consumer ownership.
+- A08 — Direct-call versus pub/sub diagram — `restored` as an aligned plain-text diagram safe for Fumadocs.
+- A09 — `emit(event)` and `subscribe(listener)` vocabulary — `restored` without the baseline's shouting metaphor.
+- A10 — Ten core events organized across run, turn, message, and Tool-execution families — `restored` as an exact payload table.
+- A11 — Claim that all four layers have `start -> update -> end` — `technically-invalid`; current run and turn families are start/end pairs, while message and Tool execution have update events.
+- A12 — Full `AgentEvent` union artifact — `restored` as a precisely attributed source-faithful excerpt with every current field.
+- A13 — Nested lifecycle tree — `restored`, including user/injected message events and repeated turns.
+- A14 — Turn definition as one assistant response plus Tool calls/results — `restored` from current source wording.
+- A15 — Claim that SessionManager only watches `turn_end` — `technically-invalid`; current [`_handleAgentEvent()`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/agent-session.ts#L620) persists supported messages on `message_end` after Extension and public session delivery.
+- A16 — `AgentEventSink` synchronous-or-promise signature — `restored` through the direct Agent signature and the delivery-surface comparison.
+- A17 — Node-style fire-and-forget comparison — `restored` as a producer-barrier contrast without implying raw `agentLoop()` consumers are awaited.
+- A18 — Awaited lifecycle-emission sequence — `restored` as state/listener/emit/producer ordering plus concrete call-site barriers.
+- A19 — Synchronization negotiation rather than passive notification — `restored` in direct settlement language.
+- A20 — `processEvents()` reducer/listener-loop artifact — `restored` as attributed pseudocode, with copied `Set` behavior called out separately.
+- A21 — State-before-listener guarantee — `restored` for completed messages, streaming partials, and pending Tool calls.
+- A22 — Externally controlled listener `Set` and registration order — `restored`, including unsubscribe ownership.
+- A23 — Separate fire-and-forget inconsistency diagram — `merged` into the lifecycle barrier diagram and the cross-surface settlement table, which carry the same ordering argument.
+- A24 — Awaited barrier diagram — `restored` as the exact state-to-listener-to-producer sequence.
+- A25 — Slow-consumer performance versus consistency trade-off — `restored` and scoped to each event surface.
+- A26 — Claim that Tool progress listeners are never awaited — `technically-invalid`; current code joins every collected update-delivery promise before `afterToolCall` and `tool_execution_end`.
+- A27 — `updateEvents` batching artifact — `restored` as attributed pseudocode with exact collection and `Promise.all` order.
+- A28 — `acceptingUpdates` late-callback gate — `restored`, including its close-before-join behavior.
+- A29 — No per-listener catch in `Agent.processEvents()` — `restored` from current `agent.ts`.
+- A30 — Direct listener failure affects the run — `restored` with synthetic failure lifecycle and repeated-failure behavior.
+- A31 — Fuse analogy for visible listener failures — `merged` into the concrete failure sequence and application-policy example; the mechanism and consequence remain.
+- A32 — Application-level catch recommendation — `restored` as a copyable audit subscriber whose rethrow policy is explicit.
+- A33 — Blanket claim that the Extension framework isolates every third-party callback — `technically-invalid`; the final page records generic/chained-handler isolation and the separate `tool_call` preflight error path.
+- A34 — Four representative event-system scenarios — `restored` in the same observation-to-control-to-context-to-UI progression.
+- A35 — Real-time Tool observation code — `restored` with unique call correlation, duration, error status, unsubscribe, and secret-redaction guidance.
+- A36 — TUI as an event consumer — `restored` in the `text_delta` endpoint and browser/UI batching discussion.
+- A37 — Extension `tool_call` blocking scenario — `restored` with exact current mutable-input and `terminate` rules.
+- A38 — Context preprocessing scenario — `restored` with the current Extension event, deep-clone boundary, and chained results.
+- A39 — Server-to-browser SSE forwarding artifact — `restored` as a typed `AgentSession`/`ServerResponse` helper.
+- A40 — New observers do not require Agent-core changes — `restored` through the package-dependency and design-decision sections.
+- A41 — End-to-end `text_delta` case-study framing — `restored` with Pi AI, Agent core, Coding Agent, Extension, and UI boundaries.
+- A42 — Five-layer `text_delta` diagram caption — `restored` as an eight-transition plain-text flow that names every current bridge.
+- A43 — Character/chunk journey artifact — `restored` with `"Hel"`, `contentIndex`, `delta`, and cumulative `partial` instead of corrupted historical sample text.
+- A44 — Claim that events are the only cross-layer communication and no layer calls another layer's internals — `technically-invalid`; current `AgentSession` owns an `Agent`, installs hooks, mutates same-role `message_end` replacements in place, and separately dispatches events.
+- A45 — Mapping text/thinking/Tool-call stream updates into `message_update` while retaining `assistantMessageEvent` — `restored` with all nine exact discriminants.
+- A46 — Compaction, retry, queue, and other product responsibilities above Agent core — `restored` with the complete current event families.
+- A47 — Linux-kernel/Bluetooth analogy — `merged` into the concrete package-ownership test; the core-versus-product placement rule remains without the unrelated platform metaphor.
+- A48 — Historical `AgentSessionEvent = core 10 + session 7` artifact — `technically-invalid`; replaced by the exact current augmented core union and 13 product discriminants.
+- A49 — Product-level events belong outside reusable Agent core — `restored` and extended to project trust, resource, provider, and input Extension events.
+- A50 — Decision that lifecycle delivery forms a consistency barrier — `restored` with precise settlement points.
+- A51 — Claim that a direct listener exception simply bubbles out as immediate run failure — `technically-invalid`; `Agent.runWithLifecycle()` normally emits a synthetic assistant failure lifecycle, while failure during that sequence can still reject `prompt()`.
+- A52 — Layered core/product event ownership — `restored` after correcting the product inventory and separating Extension events.
+- A53 — Closing decoupling argument for UI, logs, persistence, and extensions — `restored` as explicit observation/control and ownership rules.
+- A54 — Claim that Coding Agent compaction is an aggressive operation performed by `transformContext` — `technically-invalid`; the final transition leaves compaction to the Chapter 8/9 session pipeline and describes `transformContext`/Extension `context` only as per-call projection hooks.
+- A55 — Transition from the event system to context engineering and compaction — `restored` with current system-prompt, Tool-output, compaction, and branch-summary terms.
+- A56 — Historical source index with obsolete line ranges — `technically-invalid`; replaced by commit-pinned Pi `0.84.2` links to Pi AI types, Agent types/loop/class, AgentSession, and Extension runner.
+- A57 — Pi `v0.80.2` version note — `technically-invalid`; current package manifests report `0.84.2`, pinned to full commit `a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c`.
+- A58 — `Next up` link to Chapter 8 — `restored` in both locales.
+
+The thinner pre-restoration Chapter 7 pages already contained the ten core event names, no-Tool and Tool lifecycle sketches, an `Agent.subscribe()` sample, state visibility, awaited `agent_end` guidance, partial-message rendering, persistence/telemetry advice, and a failure checklist. Those verified corrections remain and are expanded through the baseline progression. Current-source additions include all Pi AI stream discriminants, the complete 13-event product extension, the full Extension family inventory, raw-loop versus Agent versus AgentSession settlement, in-place final-message replacement, exact parallel Tool ordering, `agent_settled`, direct Bash progress, abort scope, and copyable UI/hook examples. These additions do not change the 83 baseline decisions above.

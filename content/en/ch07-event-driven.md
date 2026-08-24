@@ -1,12 +1,13 @@
 ---
 title: 'Chapter 7: Event-driven runtime'
-description: The Agent event sequence, state visibility, subscriber barriers, and UI integration.
+description: Agent lifecycle events, subscriber barriers, Tool progress, product events, Extension hooks, and UI integration.
 translation_key: ch07-event-driven
 language: en
 chapter: 7
 source_url: 'https://www.dgzhuya.com/modules/ch07-event-driven'
 official_refs:
-  - 'https://github.com/badlogic/pi-mono/blob/main/packages/agent/README.md#event-flow'
+  - 'https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/README.md#event-flow'
+  - 'https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/docs/extensions.md#events'
 terms_used:
   - Event
   - Agent
@@ -17,141 +18,635 @@ last_updated: '2026-08-24'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
-Agent core reports progress through typed events. The loop owns state transitions; subscribers observe those transitions and update a UI, persist data, or collect telemetry without becoming part of provider or Tool logic.
+The first six chapters followed data through the model, Agent loop, Tools, and message boundaries. Events were present at every step, but three questions remained: how does a transition reach outside code, which consumers receive it, and when must the Agent wait for them?
 
-## 1. Why events are the public boundary
+This chapter answers those questions across three surfaces in Pi 0.84.2:
 
-A model response arrives incrementally, Tool calls may run concurrently, and one prompt may span several turns. Returning only the final string would hide the information an interactive application needs.
+- `AgentEvent` from `@earendil-works/pi-agent-core` describes one low-level run;
+- `AgentSessionEvent` from `@earendil-works/pi-coding-agent` adds product concerns such as retries and compaction;
+- Extension events expose observation plus explicit interception and preprocessing hooks.
 
-Events expose:
+Chapters 1–6 form the main runtime walkthrough. Chapter 7 begins the advanced engineering topics, so the discussion now includes settlement, mutation, and failure boundaries that a production UI must handle.
 
-- when a run and turn start or end;
-- when a message is created, updated, and completed;
-- when a Tool starts, reports progress, and completes;
-- the normalized assistant stream event behind each update.
+## 1. Why an event system exists
 
-The event stream is a state-change log for the active process, not a replacement for persisted session data.
+### A delivery-tracking intuition
 
-## 2. Event families
+A delivery app does not make the customer poll the restaurant, courier, and payment service continuously. It publishes state changes: the restaurant accepted the order, the courier collected it, and delivery finished. Each consumer reacts only to the changes it needs.
 
-| Scope | Events |
-| --- | --- |
-| Run | `agent_start`, `agent_end` |
-| Turn | `turn_start`, `turn_end` |
-| Message | `message_start`, `message_update`, `message_end` |
-| Tool | `tool_execution_start`, `tool_execution_update`, `tool_execution_end` |
+An Agent run has the same shape. A provider streams a response, several Tool calls may execute, and one prompt may span multiple turns. A final string hides the information needed to show partial text, a pending Tool, an error, or a retry. Events expose those state changes while the run is active. They are a live protocol, not the persisted session format.
 
-`message_update` is emitted for assistant messages and includes the underlying `assistantMessageEvent`, such as `text_delta` or `toolcall_delta`.
+### Adding a consumer without editing Agent core
 
-## 3. A run without tools
+Suppose an application needs a Tool audit line. Editing the Agent around every `tool.execute()` call couples the audit feature to execution internals and creates conflicts when Pi changes. A subscriber stays outside that code:
 
-Calling `prompt("Hello")` produces the following high-level order:
+```typescript
+import type { Agent } from "@earendil-works/pi-agent-core";
+
+export function logToolResults(agent: Agent): () => void {
+  return agent.subscribe((event) => {
+    if (event.type === "tool_execution_end") {
+      const status = event.isError ? "failed" : "succeeded";
+      console.log(`[tool] ${event.toolName}: ${status}`);
+    }
+  });
+}
+```
+
+The returned function removes that listener. Keep it and call it when a view, request, or integration is disposed.
+
+### Pub/sub compared with direct calls
+
+A direct-call design makes the producer name every consumer. Pub/sub makes the event contract the dependency:
+
+```text
+direct calls
+Agent ──> terminal renderer
+      ├─> persistence adapter
+      └─> telemetry exporter
+
+publish/subscribe
+Agent ──> AgentEvent ──> terminal subscriber
+                     ├─> persistence subscriber
+                     ├─> telemetry subscriber
+                     └─> a later subscriber the Agent does not know
+```
+
+Pi still calls listener functions internally. Decoupling comes from ownership: Agent core owns the event type and delivery loop, while the application owns the listener set. Adding an observer does not add a terminal, database, or analytics dependency to the core package.
+
+## 2. Event protocols and package boundaries
+
+### The ten `AgentEvent` discriminants
+
+`AgentEvent` has ten `type` values. Agent and turn lifecycles are start/end pairs; message and Tool-execution lifecycles also have an update event.
+
+| Family | Discriminant | Payload after `type` |
+| --- | --- | --- |
+| Run | `agent_start` | none |
+| Run | `agent_end` | `messages: AgentMessage[]` |
+| Turn | `turn_start` | none |
+| Turn | `turn_end` | `message: AgentMessage`, `toolResults: ToolResultMessage[]` |
+| Message | `message_start` | `message: AgentMessage` |
+| Message | `message_update` | `message: AgentMessage`, `assistantMessageEvent: AssistantMessageEvent` |
+| Message | `message_end` | `message: AgentMessage` |
+| Tool | `tool_execution_start` | `toolCallId`, `toolName`, `args` |
+| Tool | `tool_execution_update` | `toolCallId`, `toolName`, `args`, `partialResult` |
+| Tool | `tool_execution_end` | `toolCallId`, `toolName`, `result`, `isError` |
+
+The following is a source-faithful excerpt from [`packages/agent/src/types.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/types.ts#L428), formatted over more lines but not simplified:
+
+```typescript
+export type AgentEvent =
+  | { type: "agent_start" }
+  | { type: "agent_end"; messages: AgentMessage[] }
+  | { type: "turn_start" }
+  | {
+      type: "turn_end";
+      message: AgentMessage;
+      toolResults: ToolResultMessage[];
+    }
+  | { type: "message_start"; message: AgentMessage }
+  | {
+      type: "message_update";
+      message: AgentMessage;
+      assistantMessageEvent: AssistantMessageEvent;
+    }
+  | { type: "message_end"; message: AgentMessage }
+  | {
+      type: "tool_execution_start";
+      toolCallId: string;
+      toolName: string;
+      args: any;
+    }
+  | {
+      type: "tool_execution_update";
+      toolCallId: string;
+      toolName: string;
+      args: any;
+      partialResult: any;
+    }
+  | {
+      type: "tool_execution_end";
+      toolCallId: string;
+      toolName: string;
+      result: any;
+      isError: boolean;
+    };
+```
+
+One turn contains one assistant response and any Tool calls and results produced by that response. A run contains one or more turns when Tools, steering, or follow-up messages keep the loop active.
 
 ```text
 agent_start
-turn_start
-message_start   user
-message_end     user
-message_start   assistant
-message_update  assistant delta
-message_update  assistant delta
-message_end     assistant
-turn_end
+└─ turn_start
+   ├─ message_start/update*/end   assistant response
+   ├─ tool_execution_start/update*/end
+   ├─ message_start/end           ToolResultMessage
+   └─ turn_end
+└─ turn_start ...                 next model call, when needed
 agent_end
 ```
 
-The exact number of `message_update` events depends on the provider stream. Consumers must not assume one event per token or one event per text block.
+User and injected messages also receive `message_start` and `message_end`. Only streamed assistant messages receive `message_update`.
 
-## 4. A run with tools
+### The nested `AssistantMessageEvent`
 
-Tool calls add an execution phase after the assistant message settles:
+`message_update` preserves the Pi AI event that caused the update. The exact discriminants from `@earendil-works/pi-ai` are:
 
-```text
-message_end              assistant with ToolCall
-tool_execution_start
-tool_execution_update*   optional progress
-tool_execution_end
-message_start
-message_end              ToolResultMessage
-turn_end
-turn_start               next model call
-```
+| Phase | Events and payloads |
+| --- | --- |
+| Stream | `start { partial }` |
+| Text | `text_start { contentIndex, partial }`, `text_delta { contentIndex, delta, partial }`, `text_end { contentIndex, content, partial }` |
+| Thinking | `thinking_start { contentIndex, partial }`, `thinking_delta { contentIndex, delta, partial }`, `thinking_end { contentIndex, content, partial }` |
+| Tool call | `toolcall_start { contentIndex, partial }`, `toolcall_delta { contentIndex, delta, partial }`, `toolcall_end { contentIndex, toolCall, partial }` |
+| Terminal | `done { reason, message }`, `error { reason, error }` |
 
-In parallel mode, completion events may follow wall-clock completion order. Tool result messages remain in the source order of the assistant's calls.
-
-## 5. Subscribe to events
-
-`Agent.subscribe()` returns an unsubscribe function:
+Agent core maps the nine text, thinking, and Tool-call start/update/end variants to `message_update`. Pi AI's outer `start` becomes `message_start`; `done` or `error` becomes `message_end`. `done.reason` is `stop`, `length`, `toolUse`, or `deferred`; `error.reason` is `aborted` or `error`.
 
 ```typescript
-const unsubscribe = agent.subscribe(async (event, signal) => {
-  switch (event.type) {
-    case "message_update":
-      if (event.assistantMessageEvent.type === "text_delta") {
-        process.stdout.write(event.assistantMessageEvent.delta);
-      }
-      break;
-    case "tool_execution_start":
-      console.log(`Running ${event.toolName}`);
-      break;
-    case "agent_end":
-      await flushSessionState(signal);
-      break;
-  }
-});
+import type { AgentEvent } from "@earendil-works/pi-agent-core";
 
-unsubscribe();
+export function logTextDelta(event: AgentEvent): void {
+  if (
+    event.type === "message_update" &&
+    event.assistantMessageEvent.type === "text_delta"
+  ) {
+    const { contentIndex, delta } = event.assistantMessageEvent;
+    console.log(contentIndex, delta);
+  }
+}
 ```
 
-Subscribers are awaited in registration order. Keep high-frequency handlers small; move expensive rendering or telemetry aggregation behind a bounded queue when necessary.
+Use the nested discriminant before reading `delta`. `text_start`, `text_end`, and the thinking or Tool-call variants do not all carry that field.
 
-## 6. State visibility and barriers
+### `AgentSessionEvent`: core lifecycle plus product state
 
-Event timing has two important guarantees:
+`AgentSession` forwards the ten core discriminants, changes `agent_end` to add `willRetry: boolean`, and adds 13 distinct product discriminants. Counting discriminants rather than repeated union arms gives 23 session event types.
 
-1. The agent updates its in-memory state before publishing the corresponding event.
-2. Assistant `message_end` subscribers finish before Tool preflight begins.
+| Product event | Exact payload |
+| --- | --- |
+| `agent_settled` | none |
+| `queue_update` | `steering: readonly string[]`, `followUp: readonly string[]` |
+| `compaction_start` | `reason: "manual" \| "threshold" \| "overflow"` |
+| `compaction_end` | `reason`, `result`, `aborted`, `willRetry`, optional `errorMessage` |
+| `entry_appended` | `entry: SessionEntry` |
+| `session_info_changed` | `name: string \| undefined` |
+| `thinking_level_changed` | `level: ThinkingLevel` |
+| `auto_retry_start` | `attempt`, `maxAttempts`, `delayMs`, `errorMessage` |
+| `auto_retry_end` | `success`, `attempt`, optional `finalError` |
+| `summarization_retry_scheduled` | `attempt`, `maxAttempts`, `delayMs`, `errorMessage` |
+| `summarization_retry_attempt_start` | `source: "branchSummary"`, or `source: "compaction"` plus `reason` |
+| `summarization_retry_finished` | none |
+| `bash_execution_update` | optional `id`, `delta: string` |
 
-The second guarantee means `beforeToolCall` and UI subscribers see the assistant message that requested the Tool in current state.
+This source-faithful excerpt from [`packages/coding-agent/src/core/agent-session.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/agent-session.ts#L142) is abridged only by referring back to the core union and by collapsing multiline formatting:
 
-`agent_end` is the final event for a run, but run settlement includes awaited `agent_end` subscribers. `await agent.prompt()` and `await agent.waitForIdle()` therefore resolve after final barrier work completes.
+```typescript
+type AgentSessionEvent =
+  | Exclude<AgentEvent, { type: "agent_end" }>
+  | { type: "agent_end"; messages: AgentMessage[]; willRetry: boolean }
+  | { type: "agent_settled" }
+  | { type: "queue_update"; steering: readonly string[]; followUp: readonly string[] }
+  | { type: "compaction_start"; reason: "manual" | "threshold" | "overflow" }
+  | { type: "entry_appended"; entry: SessionEntry }
+  | { type: "session_info_changed"; name: string | undefined }
+  | { type: "thinking_level_changed"; level: ThinkingLevel }
+  | { type: "compaction_end"; reason: "manual" | "threshold" | "overflow"; result: CompactionResult | undefined; aborted: boolean; willRetry: boolean; errorMessage?: string }
+  | { type: "auto_retry_start"; attempt: number; maxAttempts: number; delayMs: number; errorMessage: string }
+  | { type: "auto_retry_end"; success: boolean; attempt: number; finalError?: string }
+  | { type: "summarization_retry_scheduled"; attempt: number; maxAttempts: number; delayMs: number; errorMessage: string }
+  | { type: "summarization_retry_attempt_start"; source: "branchSummary" }
+  | { type: "summarization_retry_attempt_start"; source: "compaction"; reason: "manual" | "threshold" | "overflow" }
+  | { type: "summarization_retry_finished" }
+  | { type: "bash_execution_update"; id?: string; delta: string };
+```
 
-## 7. Rendering incremental output
+`agent_end` closes one low-level Agent run. Coding Agent may still retry, compact, or continue queued work. `agent_settled` marks the product boundary after those automatic continuations have stopped. `bash_execution_update` describes a user `!` or `!!` command executed by the session; it is separate from an LLM-requested Tool's `tool_execution_update`.
 
-Treat `message_update` as a patch to the current partial assistant message. Do not append every delta as an independent persisted message.
+### Extension events form a separate contract
 
-A renderer commonly keeps:
+`pi.on()` does not consume `AgentSessionEvent` directly. `ExtensionEvent` is a wider Coding Agent contract:
 
-- completed messages from `agent.state.messages`;
-- `agent.state.streamingMessage` for the active assistant response;
-- `agent.state.pendingToolCalls` for spinners or progress rows;
-- Tool update details for transient status.
+| Family | Exact discriminants |
+| --- | --- |
+| Startup and resources | `project_trust`, `resources_discover` |
+| Session | `session_start`, `session_info_changed`, `session_before_switch`, `session_before_fork`, `session_before_compact`, `session_compact`, `session_compact_failed`, `session_before_tree`, `session_tree`, `session_shutdown` |
+| Agent and provider | `before_agent_start`, `agent_start`, `agent_end`, `agent_settled`, `turn_start`, `turn_end`, `message_start`, `message_update`, `message_end`, `tool_execution_start`, `tool_execution_update`, `tool_execution_end`, `context`, `before_provider_request`, `before_provider_headers`, `after_provider_response` |
+| Model | `model_select`, `thinking_level_select` |
+| Tool, Bash, and input | `tool_call`, `tool_result`, `user_bash`, `input` |
 
-On `message_end`, replace the partial view with the completed message already stored in agent state.
+Several names overlap with core events, but the payloads and guarantees belong to the Extension API. For example, Extension `turn_start` adds `turnIndex` and `timestamp`; Extension `agent_end` does not add the session subscriber's `willRetry`; `tool_call` and `context` can change execution, while `tool_execution_start` and `message_update` report lifecycle state.
 
-## 8. Persistence and telemetry
+## 3. Delivery, listener order, and settlement
 
-Persist at stable boundaries such as `message_end`, `turn_end`, or `agent_end`, depending on the storage model. High-frequency deltas are usually unsuitable as durable records because replaying them is more complex than storing the completed message.
+### `Agent.subscribe()` is an awaited subscription
 
-Telemetry consumers should attach identifiers for the run, turn, Tool call, provider, and model. Never copy API keys, unredacted prompts, or Tool secrets into generic event logs.
+The direct core API accepts a synchronous or asynchronous listener and returns an unsubscribe function:
 
-## 9. Failure handling
+```typescript
+import type { Agent } from "@earendil-works/pi-agent-core";
 
-Handle failures by scope:
+export function attachFinalFlush(
+  agent: Agent,
+  flush: (signal: AbortSignal) => Promise<void>,
+): () => void {
+  return agent.subscribe(async (event, signal) => {
+    if (event.type === "agent_end") {
+      await flush(signal);
+    }
+  });
+}
+```
 
-- provider failures appear in the normalized assistant outcome and stream events;
-- Tool exceptions become error Tool results and Tool completion events;
-- application subscriber failures belong to the application and should be isolated or surfaced according to its reliability policy;
-- cancellation is coordinated through the supplied `AbortSignal`.
+The `Set` of listeners is traversed in registration order. Pi awaits one listener before calling the next listener for that event. A slow listener therefore delays later listeners and the producer phase behind the event.
 
-Avoid mutating agent state from multiple event handlers. Use the Agent API for state changes and treat events as observations.
+### State is reduced before subscribers run
 
-## 10. Integration rules
+`Agent.processEvents()` changes public runtime state first, then calls listeners. This excerpt is pseudocode, condensed from [`packages/agent/src/agent.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/agent.ts#L538):
 
-1. Switch on the discriminated `event.type` field.
-2. Ignore unknown future event types only when forward compatibility is intentional.
-3. Keep delta handlers idempotent or process them exactly once.
-4. Use completed messages as the durable source of truth.
-5. Finish critical flush work in an awaited final subscriber.
+```typescript
+// Pseudocode: omitted cases retain the same state-before-delivery order.
+async function processEvents(event: AgentEvent) {
+  if (event.type === "message_update") state.streamingMessage = event.message;
+  if (event.type === "message_end") {
+    state.streamingMessage = undefined;
+    state.messages.push(event.message);
+  }
+  if (event.type === "tool_execution_start") pending.add(event.toolCallId);
+  if (event.type === "tool_execution_end") pending.delete(event.toolCallId);
 
-[Chapter 8](ch08-context-engineering.md) explains how the application chooses the instructions, messages, Tool definitions, and history included in each model call.
+  for (const listener of listeners) {
+    await listener(event, activeAbortSignal);
+  }
+}
+```
+
+The real implementation replaces `pendingToolCalls` with a new `Set` on start and end. A listener that receives `message_end` can read the completed message from `agent.state.messages`; a listener that receives `tool_execution_start` finds the call ID in `agent.state.pendingToolCalls`.
+
+### Lifecycle events act as barriers
+
+Most loop emissions are awaited at the call site:
+
+```text
+update Agent state
+  -> listener 1 settles
+  -> listener 2 settles
+  -> emit resolves
+  -> next producer phase starts
+```
+
+This ordering creates concrete barriers. Assistant `message_end` delivery finishes before Tool preflight begins. Each `tool_execution_start` finishes before argument preparation, validation, and `beforeToolCall`. `tool_execution_end` finishes before the corresponding `ToolResultMessage` lifecycle starts.
+
+`agent_end` is the last loop event, but its listeners remain inside the active run. `await agent.prompt(...)` and `await agent.waitForIdle()` resolve after those listeners settle and `finishRun()` clears runtime-owned streaming state.
+
+### Tool progress is concurrent delivery followed by a barrier
+
+Historical Pi documentation described `tool_execution_update` listeners as never awaited. Pi 0.84.2 uses a two-part rule. The Tool's synchronous `onUpdate` callback starts delivery without awaiting it, so a Tool may report another update while subscribers process the previous one. Every delivery promise is collected, and all of them must settle before result postprocessing continues.
+
+The following is source-faithful pseudocode derived from [`executePreparedToolCall()`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/agent-loop.ts#L670):
+
+```typescript
+// Pseudocode: exact ordering, abbreviated payload construction.
+const updateEvents: Promise<void>[] = [];
+let acceptingUpdates = true;
+
+const result = await tool.execute(id, args, signal, (partialResult) => {
+  if (!acceptingUpdates) return;
+  updateEvents.push(Promise.resolve(emit({
+    type: "tool_execution_update",
+    toolCallId: id,
+    toolName,
+    args: originalArgs,
+    partialResult,
+  })));
+});
+
+acceptingUpdates = false;
+await Promise.all(updateEvents);
+// afterToolCall -> tool_execution_end -> ToolResultMessage comes later
+```
+
+Within one update, direct `Agent.subscribe()` listeners still run in registration order. Separate update deliveries can overlap, so global completion order between update N and update N+1 is not guaranteed. The `acceptingUpdates` gate drops callbacks made after `tool.execute()` has settled. A rejected progress delivery is observed at `Promise.all`; it does not disappear in the background.
+
+### Low-level streams, `Agent`, and `AgentSession` settle differently
+
+| Surface | Listener shape | Async settlement |
+| --- | --- | --- |
+| `agentLoop()` / `agentLoopContinue()` | async iterator over `AgentEvent` | Observational stream consumption is not a producer barrier |
+| `Agent.subscribe()` | `(event, signal) => void \| Promise<void>` | Listener promises are awaited in registration order |
+| `AgentSession.subscribe()` | `(event) => void` | Listeners run synchronously in array order; returned promises are ignored |
+| `pi.on()` | Extension handler with `ExtensionContext` | Handler settlement and result semantics depend on the named hook |
+
+`AgentSession` registers an internal async listener on its `Agent`. For a bridged core event, that handler awaits Extension lifecycle handlers first, calls session subscribers synchronously, then persists completed messages on `message_end`. The whole internal handler is one awaited `Agent` listener, but an `async` function passed to `AgentSession.subscribe()` is outside that barrier because the session listener type returns `void`.
+
+```typescript
+import type { AgentSession } from "@earendil-works/pi-coding-agent";
+
+export function observeSession(session: AgentSession): () => void {
+  return session.subscribe((event) => {
+    if (event.type === "agent_end" && event.willRetry) {
+      console.log("The low-level run ended; Coding Agent will retry.");
+    }
+    if (event.type === "agent_settled") {
+      console.log("No automatic continuation remains.");
+    }
+  });
+}
+```
+
+Use `Agent.subscribe()` for critical awaited work tied to a single low-level run. Use `AgentSession.waitForIdle()` or the `agent_settled` product event when completion must include retry, compaction, and queued-continuation policy. If a session listener starts asynchronous work, track and await that work in the application itself.
+
+## 4. Failure, isolation, and cancellation
+
+### Direct subscriber failures affect the run
+
+`Agent.processEvents()` has no catch around each listener. When listener 1 throws or rejects, later listeners do not receive that event. The error reaches `runWithLifecycle()`, which normally converts a run failure into an assistant failure message and emits `message_start`, `message_end`, `turn_end`, and `agent_end` for it. A listener that also fails during this synthetic failure sequence can make `prompt()` reject.
+
+Catch recoverable application errors inside the subscriber. Rethrow when an incomplete audit, persistence, or policy action should make the run fail visibly:
+
+```typescript
+import type { Agent, AgentMessage } from "@earendil-works/pi-agent-core";
+
+export function attachAudit(
+  agent: Agent,
+  writeAuditRecord: (
+    message: AgentMessage,
+    signal: AbortSignal,
+  ) => Promise<void>,
+  reportAuditFailure: (error: unknown) => void,
+): () => void {
+  return agent.subscribe(async (event, signal) => {
+    if (event.type !== "message_end") return;
+
+    try {
+      await writeAuditRecord(event.message, signal);
+    } catch (error) {
+      reportAuditFailure(error);
+      // Add `throw error` when losing this record must fail the run.
+    }
+  });
+}
+```
+
+The functions in this example represent application code. The event shape and `AbortSignal` usage are copyable; the failure policy must come from the application.
+
+### Provider, Tool, and abort outcomes stay scoped
+
+Pi AI terminates a failed provider stream with `AssistantMessageEvent.error`. Agent core finalizes the assistant message with `stopReason: "error"` or `"aborted"`, then emits normal message, turn, and run end events. Tool lookup, argument validation, `beforeToolCall`, execution, and `afterToolCall` failures become an error Tool result where the core catches them. The Tool lifecycle still ends with `isError: true`, followed by a `ToolResultMessage` that the next model turn can inspect.
+
+```text
+provider failure: message_end(error/aborted) -> turn_end -> agent_end
+Tool failure:     tool_execution_end(isError=true)
+               -> message_start/end(ToolResultMessage)
+               -> turn_end
+```
+
+Every direct Agent subscriber receives the active run's `AbortSignal`. `agent.abort()` aborts that signal. Providers, Tools, and subscriber work only stop promptly when they honor it. Aborting does not license a producer to emit progress forever: late Tool updates are rejected by the `acceptingUpdates` gate described above.
+
+### Extension handlers have hook-specific isolation
+
+Coding Agent's Extension runner catches and reports failures for ordinary lifecycle observation and for chained handlers such as `context`, `input`, `message_end`, and `tool_result`. One faulty observer does not prevent later Extension observers from running. Results that can change behavior are awaited in Extension load order.
+
+`tool_call` is routed through Agent core's `beforeToolCall`. If that handler throws, core preflight catches the error and produces an error Tool result instead of executing the Tool. Session subscriber errors follow another path: `_emit()` does not catch them, so a synchronous throw during a bridged Agent event rejects the internal Agent listener and affects the run.
+
+The boundaries are deliberate and event-specific. Code should not assume every object named “listener” has the same failure policy.
+
+## 5. Observation, interception, preprocessing, and UI
+
+### Observe a run
+
+A read-only subscriber can collect timing, telemetry, or a compact Tool trace. Correlate Tools by `toolCallId`; Tool names alone are not unique.
+
+```typescript
+import type { AgentSession } from "@earendil-works/pi-coding-agent";
+
+export function logToolTimings(session: AgentSession): () => void {
+  const started = new Map<string, number>();
+
+  return session.subscribe((event) => {
+    if (event.type === "tool_execution_start") {
+      started.set(event.toolCallId, Date.now());
+    }
+    if (event.type === "tool_execution_end") {
+      const beganAt = started.get(event.toolCallId);
+      const elapsedMs =
+        beganAt === undefined ? undefined : Date.now() - beganAt;
+      console.log({
+        toolCallId: event.toolCallId,
+        toolName: event.toolName,
+        elapsedMs,
+        isError: event.isError,
+      });
+      started.delete(event.toolCallId);
+    }
+  });
+}
+```
+
+Do not put API keys, unredacted prompts, Tool secrets, or raw credentials into a generic event log. Run, turn, provider, model, and Tool-call identifiers usually give enough correlation.
+
+### Intercept a Tool call through the Extension API
+
+Lifecycle observation does not define a return value that blocks execution. The `tool_call` hook does. It runs after `tool_execution_start` and validated argument parsing, before Tool execution. Earlier handlers may mutate `event.input` in place; later handlers see that mutation, and Pi does not revalidate it.
+
+```typescript
+import {
+  isToolCallEventType,
+  type ExtensionAPI,
+} from "@earendil-works/pi-coding-agent";
+
+export default function protectProduction(pi: ExtensionAPI) {
+  pi.on("tool_call", (event) => {
+    if (
+      isToolCallEventType("bash", event) &&
+      event.input.command.includes("rm -rf")
+    ) {
+      return {
+        block: true,
+        reason: "Recursive deletion is disabled by this extension.",
+        terminate: true,
+      };
+    }
+  });
+}
+```
+
+`terminate` applies to a blocked call here. A batch stops early only when every finalized Tool result in that batch has `terminate: true`.
+
+### Preprocess model context without changing history
+
+The `context` Extension event runs before each model call. It starts from a deep clone, chains returned message arrays in Extension load order, and leaves the authoritative session history intact.
+
+```typescript
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+
+export default function hideEphemeralStatus(pi: ExtensionAPI) {
+  pi.on("context", (event) => ({
+    messages: event.messages.filter(
+      (message) =>
+        message.role !== "custom" ||
+        message.customType !== "ephemeral-status",
+    ),
+  }));
+}
+```
+
+Other explicit transformation hooks operate at different boundaries: `input` can transform or handle raw input, `before_agent_start` can inject a message or replace the per-turn system prompt, `before_provider_request` can replace the serialized provider payload, `before_provider_headers` mutates headers, `message_end` can replace a finalized message while retaining its role, and `tool_result` can patch the result before its end event.
+
+### Forward text to a browser UI
+
+A server can translate session events into a smaller SSE contract. End the HTTP stream on `agent_settled`, not `agent_end`, if the browser should remain connected through automatic retry or compaction.
+
+```typescript
+import type { ServerResponse } from "node:http";
+import type { AgentSession } from "@earendil-works/pi-coding-agent";
+
+export function forwardText(
+  session: AgentSession,
+  response: ServerResponse,
+): () => void {
+  const unsubscribe = session.subscribe((event) => {
+    if (
+      event.type === "message_update" &&
+      event.assistantMessageEvent.type === "text_delta"
+    ) {
+      response.write(
+        `data: ${JSON.stringify({ type: "text_delta", delta: event.assistantMessageEvent.delta })}\n\n`,
+      );
+    }
+    if (event.type === "agent_settled") response.end();
+  });
+
+  response.on("close", unsubscribe);
+  return unsubscribe;
+}
+```
+
+Browser renderers should batch redraws to the display refresh rate when provider deltas arrive faster than the UI can paint. That batching belongs behind the session subscriber; changing Agent delivery would also change settlement semantics for every other consumer.
+
+## 6. The complete `text_delta` journey
+
+### Five transitions from provider to UI
+
+Assume an adapter receives a chunk containing `"Hel"`. The journey crosses package boundaries without flattening the lower-level event:
+
+```text
+provider response bytes
+  -> @earendil-works/pi-ai adapter updates cumulative AssistantMessage
+  -> AssistantMessageEvent { type: "text_delta", contentIndex, delta: "Hel", partial }
+  -> agent-loop replaces the current context partial
+  -> AgentEvent { type: "message_update", message, assistantMessageEvent }
+  -> Agent.processEvents sets state.streamingMessage
+  -> awaited Agent listeners in registration order
+  -> AgentSession awaits Extension message_update handlers
+  -> synchronous AgentSession subscribers
+  -> TUI redraw, JSON/RPC projection, or application transport
+```
+
+AgentSession does not persist `message_update`. Persistence happens on `message_end`, after the final assistant message has replaced the partial.
+
+### Delta and cumulative partial serve different consumers
+
+`assistantMessageEvent.delta` contains the new text fragment. `event.message` and `assistantMessageEvent.partial` contain the cumulative assistant state at that point. A terminal can append `delta`; a structured renderer can replace its current block with the cumulative state.
+
+```typescript
+import type { AssistantMessage } from "@earendil-works/pi-ai";
+import type { AgentSession } from "@earendil-works/pi-coding-agent";
+
+export function renderAssistantStream(
+  session: AgentSession,
+  appendText: (contentIndex: number, delta: string) => void,
+  renderPartialToolCall: (
+    contentIndex: number,
+    partial: AssistantMessage,
+  ) => void,
+): () => void {
+  return session.subscribe((event) => {
+    if (event.type !== "message_update") return;
+
+    const update = event.assistantMessageEvent;
+    if (update.type === "text_delta") {
+      appendText(update.contentIndex, update.delta);
+    } else if (update.type === "toolcall_delta") {
+      renderPartialToolCall(update.contentIndex, update.partial);
+    }
+  });
+}
+```
+
+Pi AI providers commonly build the cumulative `AssistantMessage` by mutating its content as chunks arrive. Agent loop shallow-copies the top-level message when emitting, not every nested content block. Event objects therefore carry no deep-immutability guarantee. Read what you need during the callback, or deep-clone a snapshot that must remain unchanged after later deltas.
+
+### Finalization can preserve object identity
+
+On Pi AI `done` or `error`, Agent loop obtains `response.result()`, replaces the partial in its context, and emits `message_end`. `Agent.processEvents()` clears `streamingMessage` and appends that final object to `state.messages` before subscribers run.
+
+Coding Agent then runs Extension `message_end` handlers. A valid replacement must keep the same message `role`. `AgentSession` mutates the already-stored message object in place so Agent state, later `turn_end` and `agent_end` payloads, session subscribers, and persistence all keep the same object identity and the same replacement content. This is an intentional mutation boundary; observers should not freeze the event object or retain it as an immutable historical snapshot.
+
+## 7. Tool progress and result ordering
+
+### One Tool call
+
+The current lifecycle includes preflight and result transformation at precise points:
+
+```text
+assistant message_end barrier
+tool_execution_start barrier
+prepareArguments -> validate -> beforeToolCall
+Tool execute -> tool_execution_update* -> settle all update deliveries
+afterToolCall / Extension tool_result
+tool_execution_end barrier
+message_start ToolResultMessage
+message_end ToolResultMessage
+turn_end
+```
+
+`tool_execution_start.args` is the original Tool-call argument object. A `prepareArguments` function or `tool_call` Extension may change the arguments used by execution afterward. `tool_execution_update.partialResult` is defined by the Tool; built-in streaming Tools generally publish a cumulative display result, while a custom Tool must document its own `details` contract.
+
+### Sequential and parallel batches
+
+Sequential mode completes the entire chain above for one call before starting the next call. Parallel mode retains two kinds of order:
+
+1. `tool_execution_start` and preflight run sequentially in the assistant message's Tool-call order.
+2. Prepared Tools execute concurrently. Their progress events may interleave, and `tool_execution_end` follows actual completion order.
+3. After every execution settles, `ToolResultMessage` start/end events are emitted in the assistant's original Tool-call order.
+4. `turn_end.toolResults` uses that same source order.
+
+```text
+assistant calls:       A, B
+start/preflight:       start A -> start B
+parallel execution:    update B -> update A -> end B -> end A   (one possible order)
+result messages:       result A -> result B
+turn_end.toolResults:  [A, B]
+```
+
+Correlate all three Tool event types with `toolCallId`. Array position and wall-clock end order are different contracts.
+
+## 8. Design decisions and transfer lessons
+
+### Separate observation from control
+
+Use lifecycle events to observe settled state. Use named hooks to change behavior: `beforeToolCall` or Extension `tool_call` for blocking, `afterToolCall` or `tool_result` for result changes, `transformContext` or Extension `context` for model input, and `message_end` for a same-role final replacement. This split makes a return value meaningful instead of letting an arbitrary observer silently steer the run.
+
+### Put the barrier at the required consistency boundary
+
+Agent core awaits lifecycle delivery because Tool preflight, state readers, and critical flush work require a coherent transition. Tool progress starts deliveries concurrently to avoid blocking the Tool callback, then joins them before result finalization. Coding Agent's public session subscribers stay synchronous for UI dispatch, while Extension hooks are awaited where their results alter execution.
+
+The practical rule is to identify the last phase that must see a consumer's work. Place an explicit join there. Background work without an owner becomes an unhandled rejection, a reordered write, or a process that exits before its final flush.
+
+### Keep product policy outside the kernel
+
+The ten core events describe any Agent run. Retry, compaction, session naming, summarization retry, direct Bash output, and final product settlement live in Coding Agent. Project trust, resource discovery, provider payloads, and interactive input live in the Extension contract. Package ownership keeps the low-level Agent usable without importing the CLI product.
+
+For another event-driven system, carry over five tests:
+
+1. Every discriminant has one documented owner and payload.
+2. State visibility before delivery is explicit.
+3. Listener order, async settlement, and unsubscribe behavior are explicit per surface.
+4. High-frequency updates have a named join before finalization.
+5. Observation, interception, mutation, persistence, error, and abort policies are separate contracts.
+
+## 9. Next chapter
+
+Events reveal when context is prepared, messages stream, and Tool results return. They do not decide which instructions, history, resources, or Tool outputs enter the next model call. [Chapter 8](ch08-context-engineering.md) follows that context-engineering pipeline, from system-prompt assembly and Tool-output limits to compaction and branch summaries.
+
+> **Pinned source index:** Pi `0.84.2`, commit `a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c`: [`packages/ai/src/types.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/ai/src/types.ts#L527), [`packages/agent/src/types.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/types.ts#L421), [`packages/agent/src/agent-loop.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/agent-loop.ts#L281), [`packages/agent/src/agent.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/agent.ts#L240), [`packages/coding-agent/src/core/agent-session.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/agent-session.ts#L142), and [`packages/coding-agent/src/core/extensions/runner.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/extensions/runner.ts#L801).
