@@ -355,9 +355,9 @@ try {
 
 ### Persistence, setting và resource
 
-- `SessionManager.create(cwd, sessionDir?)`, `continueRecent()`, `open()`, `inMemory()`, `forkFrom()`, `list()` và `listAll()` quản lý session JSONL append-only cùng cây session.
+- `SessionManager.create(cwd, sessionDir?, options?)`, `continueRecent(cwd, sessionDir?)`, `open(path, sessionDir?, cwdOverride?)`, `inMemory(cwd?, options?)`, `forkFrom(sourcePath, targetCwd, sessionDir?, options?)` và `list(cwd, sessionDir?, onProgress?)` quản lý session JSONL append-only cùng cây session. Dùng `listAll(onProgress?)` hoặc `listAll(sessionDir?, onProgress?)` để liệt kê trên nhiều project.
 - `SettingsManager.create(cwd, agentDir?)` merge global setting với project setting đã tin cậy; `SettingsManager.inMemory()` phù hợp với embedded host và test.
-- `DefaultResourceLoader({ cwd, agentDir, settingsManager? })` discover context file, system prompt, extension, skill, prompt template và theme sau `reload()`.
+- `new DefaultResourceLoader({ cwd, agentDir, settingsManager? })` tạo loader để discover context file, system prompt, extension, skill, prompt template và theme sau `reload()`.
 - `ModelRuntime.create()` sở hữu provider catalog và credential được đồng bộ mà Coding Agent sử dụng.
 
 SDK host trực tiếp phải tự quản lý cwd, trust, storage và cleanup policy. Không sửa session JSONL khi manager đang active, và không giả định `SettingsManager.create()` tự tái hiện trust resolution của CLI nếu host chưa cung cấp quyết định đó.
@@ -396,7 +396,7 @@ export default extension;
 | `grep`, `find`, `ls` | Được tích hợp; active qua `tools` hoặc dùng factory đã export |
 | Entry từ extension hoặc `customTools` | Do host đăng ký; vẫn được lọc bởi `tools`, `excludeTools` và `noTools` |
 
-Quyền truy cập tool là policy của ứng dụng. SDK hiện tại không cung cấp các switch `--permission` hoặc `--yolo` trong baseline.
+Quyền truy cập tool là policy của ứng dụng. SDK hiện tại không cung cấp switch `--yolo` trong baseline.
 
 ### Tích hợp runtime và CLI
 
@@ -406,6 +406,8 @@ Với một session cố định, dùng `createAgentSession()`. Với flow new, 
 |---|---|
 | `--provider`, `--model`, `--models` | Chọn một model hoặc phạm vi model để cycle |
 | `--thinking` | Chọn `off`, `minimal`, `low`, `medium`, `high`, `xhigh` hoặc `max` |
+| `--system-prompt <text>` | Thay base prompt source bằng text literal hoặc nội dung của một file có sẵn |
+| `--append-system-prompt <text>` | Thêm text literal hoặc file có sẵn làm append source có thứ tự; lặp lại flag để thêm source |
 | `--tools`, `--exclude-tools`, `--no-tools`, `--no-builtin-tools` | Chọn tool surface ban đầu |
 | `--session`, `--session-id`, `--session-dir`, `--continue`, `--resume`, `--fork`, `--no-session` | Chọn cách persist hoặc restore session |
 | `--extension`, `--no-extensions`, `--skill`, `--no-skills`, `--no-context-files` | Kiểm soát resource được discover hoặc chỉ định rõ |

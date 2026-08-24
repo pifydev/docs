@@ -355,9 +355,9 @@ An `AgentSession` adds synchronous subscriptions, persistence, compaction, retri
 
 ### Persistence, settings, and resources
 
-- `SessionManager.create(cwd, sessionDir?)`, `continueRecent()`, `open()`, `inMemory()`, `forkFrom()`, `list()`, and `listAll()` manage append-only JSONL sessions and their trees.
+- `SessionManager.create(cwd, sessionDir?, options?)`, `continueRecent(cwd, sessionDir?)`, `open(path, sessionDir?, cwdOverride?)`, `inMemory(cwd?, options?)`, `forkFrom(sourcePath, targetCwd, sessionDir?, options?)`, and `list(cwd, sessionDir?, onProgress?)` manage append-only JSONL sessions and their trees. Use `listAll(onProgress?)` or `listAll(sessionDir?, onProgress?)` across projects.
 - `SettingsManager.create(cwd, agentDir?)` merges global and trusted project settings; `SettingsManager.inMemory()` is useful for embedded hosts and tests.
-- `DefaultResourceLoader({ cwd, agentDir, settingsManager? })` discovers context files, system prompts, extensions, skills, prompt templates, and themes after `reload()`.
+- `new DefaultResourceLoader({ cwd, agentDir, settingsManager? })` constructs a loader that discovers context files, system prompts, extensions, skills, prompt templates, and themes after `reload()`.
 - `ModelRuntime.create()` owns the provider catalog and synchronized credentials used by Coding Agent.
 
 Direct SDK hosts own cwd, trust, storage, and cleanup policy. Do not mutate session JSONL while a manager is active, and do not assume that `SettingsManager.create()` reproduces CLI trust resolution without the host supplying that decision.
@@ -396,7 +396,7 @@ export default extension;
 | `grep`, `find`, `ls` | Built in; activate through `tools` or use their exported factories |
 | Extension or `customTools` entries | Registered by the host; still filtered by `tools`, `excludeTools`, and `noTools` |
 
-Tool access is an application policy. The current SDK does not expose the baseline `--permission` or `--yolo` switches.
+Tool access is an application policy. The current SDK does not expose the baseline `--yolo` switch.
 
 ### Runtime and CLI integration
 
@@ -406,6 +406,8 @@ For one fixed session, use `createAgentSession()`. For new, switch, fork, clone,
 |---|---|
 | `--provider`, `--model`, `--models` | Select one model or a model-cycle scope |
 | `--thinking` | Select `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max` |
+| `--system-prompt <text>` | Replace the base prompt source with literal text or the contents of an existing file path |
+| `--append-system-prompt <text>` | Add literal text or an existing file as an ordered append source; repeat the flag to add more sources |
 | `--tools`, `--exclude-tools`, `--no-tools`, `--no-builtin-tools` | Select the initial tool surface |
 | `--session`, `--session-id`, `--session-dir`, `--continue`, `--resume`, `--fork`, `--no-session` | Choose persistence or restoration behavior |
 | `--extension`, `--no-extensions`, `--skill`, `--no-skills`, `--no-context-files` | Control discovered or explicit resources |
