@@ -1,0 +1,695 @@
+{
+  "version": 1,
+  "pages": [
+    {
+      "key": "home",
+      "path": "en/index.mdx",
+      "baselineWords": 297,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 3,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 0,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 0,
+      "approvedDeletions": []
+    },
+    {
+      "key": "home",
+      "path": "vi/index.mdx",
+      "baselineWords": 349,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 3,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 0,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 0,
+      "approvedDeletions": []
+    },
+    {
+      "key": "quickstart",
+      "path": "en/quickstart.md",
+      "baselineWords": 484,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 8,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 8,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 1,
+      "approvedDeletions": []
+    },
+    {
+      "key": "quickstart",
+      "path": "vi/quickstart.md",
+      "baselineWords": 494,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 8,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 8,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 1,
+      "approvedDeletions": []
+    },
+    {
+      "key": "glossary",
+      "path": "en/glossary.md",
+      "baselineWords": 799,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 22,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 0,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 0,
+      "approvedDeletions": []
+    },
+    {
+      "key": "glossary",
+      "path": "vi/glossary.md",
+      "baselineWords": 851,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 22,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 0,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 0,
+      "approvedDeletions": []
+    },
+    {
+      "key": "how-to-add-custom-tool",
+      "path": "en/how-to/add-custom-tool.md",
+      "baselineWords": 403,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 6,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 4,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 0,
+      "approvedDeletions": []
+    },
+    {
+      "key": "how-to-add-custom-tool",
+      "path": "vi/how-to/add-custom-tool.md",
+      "baselineWords": 413,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 6,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 4,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 0,
+      "approvedDeletions": []
+    },
+    {
+      "key": "how-to-plug-new-model",
+      "path": "en/how-to/plug-new-model.md",
+      "baselineWords": 388,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 8,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 5,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 0,
+      "approvedDeletions": []
+    },
+    {
+      "key": "how-to-plug-new-model",
+      "path": "vi/how-to/plug-new-model.md",
+      "baselineWords": 377,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 8,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 5,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 0,
+      "approvedDeletions": []
+    },
+    {
+      "key": "how-to-stream-output",
+      "path": "en/how-to/stream-output.md",
+      "baselineWords": 441,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 8,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 5,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 1,
+      "approvedDeletions": []
+    },
+    {
+      "key": "how-to-stream-output",
+      "path": "vi/how-to/stream-output.md",
+      "baselineWords": 444,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 8,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 5,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 1,
+      "approvedDeletions": []
+    },
+    {
+      "key": "how-to-persist-sessions",
+      "path": "en/how-to/persist-sessions.md",
+      "baselineWords": 485,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 8,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 5,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 0,
+      "approvedDeletions": []
+    },
+    {
+      "key": "how-to-persist-sessions",
+      "path": "vi/how-to/persist-sessions.md",
+      "baselineWords": 489,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 8,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 5,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 0,
+      "approvedDeletions": []
+    },
+    {
+      "key": "how-to-customize-system-prompt",
+      "path": "en/how-to/customize-system-prompt.md",
+      "baselineWords": 536,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 9,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 6,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 0,
+      "approvedDeletions": []
+    },
+    {
+      "key": "how-to-customize-system-prompt",
+      "path": "vi/how-to/customize-system-prompt.md",
+      "baselineWords": 565,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 9,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 6,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 0,
+      "approvedDeletions": []
+    },
+    {
+      "key": "reference-api",
+      "path": "en/reference/api.md",
+      "baselineWords": 239,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 4,
+        "3": 16,
+        "4": 0
+      },
+      "minimumCodeFences": 13,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 3,
+      "approvedDeletions": []
+    },
+    {
+      "key": "reference-api",
+      "path": "vi/reference/api.md",
+      "baselineWords": 271,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 4,
+        "3": 16,
+        "4": 0
+      },
+      "minimumCodeFences": 13,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 3,
+      "approvedDeletions": []
+    },
+    {
+      "key": "reference-configuration",
+      "path": "en/reference/configuration.md",
+      "baselineWords": 382,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 11,
+        "3": 13,
+        "4": 0
+      },
+      "minimumCodeFences": 7,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 2,
+      "approvedDeletions": []
+    },
+    {
+      "key": "reference-configuration",
+      "path": "vi/reference/configuration.md",
+      "baselineWords": 432,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 11,
+        "3": 13,
+        "4": 0
+      },
+      "minimumCodeFences": 7,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 2,
+      "approvedDeletions": []
+    },
+    {
+      "key": "reference-environment-variables",
+      "path": "en/reference/environment-variables.md",
+      "baselineWords": 525,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 7,
+        "3": 10,
+        "4": 0
+      },
+      "minimumCodeFences": 4,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 2,
+      "approvedDeletions": []
+    },
+    {
+      "key": "reference-environment-variables",
+      "path": "vi/reference/environment-variables.md",
+      "baselineWords": 601,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 7,
+        "3": 10,
+        "4": 0
+      },
+      "minimumCodeFences": 4,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 2,
+      "approvedDeletions": []
+    },
+    {
+      "key": "ch01-overview",
+      "path": "en/ch01-overview.md",
+      "baselineWords": 3941,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 7,
+        "3": 15,
+        "4": 0
+      },
+      "minimumCodeFences": 8,
+      "minimumMermaidBlocks": 1,
+      "minimumTables": 4,
+      "approvedDeletions": []
+    },
+    {
+      "key": "ch01-overview",
+      "path": "vi/ch01-overview.md",
+      "baselineWords": 4791,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 7,
+        "3": 15,
+        "4": 0
+      },
+      "minimumCodeFences": 8,
+      "minimumMermaidBlocks": 1,
+      "minimumTables": 4,
+      "approvedDeletions": []
+    },
+    {
+      "key": "ch02-three-layer-arch",
+      "path": "en/ch02-three-layer-arch.md",
+      "baselineWords": 2489,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 8,
+        "3": 18,
+        "4": 0
+      },
+      "minimumCodeFences": 16,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 1,
+      "approvedDeletions": []
+    },
+    {
+      "key": "ch02-three-layer-arch",
+      "path": "vi/ch02-three-layer-arch.md",
+      "baselineWords": 3062,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 8,
+        "3": 18,
+        "4": 0
+      },
+      "minimumCodeFences": 16,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 1,
+      "approvedDeletions": []
+    },
+    {
+      "key": "ch03-agent-loop",
+      "path": "en/ch03-agent-loop.md",
+      "baselineWords": 3059,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 6,
+        "3": 25,
+        "4": 6
+      },
+      "minimumCodeFences": 37,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 7,
+      "approvedDeletions": []
+    },
+    {
+      "key": "ch03-agent-loop",
+      "path": "vi/ch03-agent-loop.md",
+      "baselineWords": 3312,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 6,
+        "3": 25,
+        "4": 6
+      },
+      "minimumCodeFences": 37,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 7,
+      "approvedDeletions": []
+    },
+    {
+      "key": "ch04-model-invocation",
+      "path": "en/ch04-model-invocation.md",
+      "baselineWords": 3418,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 7,
+        "3": 13,
+        "4": 0
+      },
+      "minimumCodeFences": 22,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 2,
+      "approvedDeletions": []
+    },
+    {
+      "key": "ch04-model-invocation",
+      "path": "vi/ch04-model-invocation.md",
+      "baselineWords": 3915,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 7,
+        "3": 13,
+        "4": 0
+      },
+      "minimumCodeFences": 22,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 2,
+      "approvedDeletions": []
+    },
+    {
+      "key": "ch05-tool-system",
+      "path": "en/ch05-tool-system.md",
+      "baselineWords": 4564,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 7,
+        "3": 28,
+        "4": 0
+      },
+      "minimumCodeFences": 29,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 5,
+      "approvedDeletions": []
+    },
+    {
+      "key": "ch05-tool-system",
+      "path": "vi/ch05-tool-system.md",
+      "baselineWords": 5048,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 7,
+        "3": 28,
+        "4": 0
+      },
+      "minimumCodeFences": 29,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 5,
+      "approvedDeletions": []
+    },
+    {
+      "key": "ch06-messages",
+      "path": "en/ch06-messages.md",
+      "baselineWords": 3192,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 10,
+        "3": 12,
+        "4": 0
+      },
+      "minimumCodeFences": 17,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 3,
+      "approvedDeletions": []
+    },
+    {
+      "key": "ch06-messages",
+      "path": "vi/ch06-messages.md",
+      "baselineWords": 3475,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 10,
+        "3": 12,
+        "4": 0
+      },
+      "minimumCodeFences": 17,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 3,
+      "approvedDeletions": []
+    },
+    {
+      "key": "ch07-event-driven",
+      "path": "en/ch07-event-driven.md",
+      "baselineWords": 2339,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 9,
+        "3": 16,
+        "4": 0
+      },
+      "minimumCodeFences": 15,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 0,
+      "approvedDeletions": []
+    },
+    {
+      "key": "ch07-event-driven",
+      "path": "vi/ch07-event-driven.md",
+      "baselineWords": 2672,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 9,
+        "3": 16,
+        "4": 0
+      },
+      "minimumCodeFences": 15,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 0,
+      "approvedDeletions": []
+    },
+    {
+      "key": "ch08-context-engineering",
+      "path": "en/ch08-context-engineering.md",
+      "baselineWords": 3524,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 9,
+        "3": 21,
+        "4": 0
+      },
+      "minimumCodeFences": 16,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 5,
+      "approvedDeletions": []
+    },
+    {
+      "key": "ch08-context-engineering",
+      "path": "vi/ch08-context-engineering.md",
+      "baselineWords": 4043,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 9,
+        "3": 21,
+        "4": 0
+      },
+      "minimumCodeFences": 16,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 5,
+      "approvedDeletions": []
+    },
+    {
+      "key": "ch09-compaction",
+      "path": "en/ch09-compaction.md",
+      "baselineWords": 2846,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 9,
+        "3": 20,
+        "4": 0
+      },
+      "minimumCodeFences": 20,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 1,
+      "approvedDeletions": []
+    },
+    {
+      "key": "ch09-compaction",
+      "path": "vi/ch09-compaction.md",
+      "baselineWords": 3237,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 9,
+        "3": 20,
+        "4": 0
+      },
+      "minimumCodeFences": 20,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 1,
+      "approvedDeletions": []
+    },
+    {
+      "key": "ch10-session",
+      "path": "en/ch10-session.md",
+      "baselineWords": 3972,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 9,
+        "3": 28,
+        "4": 0
+      },
+      "minimumCodeFences": 30,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 8,
+      "approvedDeletions": []
+    },
+    {
+      "key": "ch10-session",
+      "path": "vi/ch10-session.md",
+      "baselineWords": 4617,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 9,
+        "3": 28,
+        "4": 0
+      },
+      "minimumCodeFences": 30,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 8,
+      "approvedDeletions": []
+    },
+    {
+      "key": "faq",
+      "path": "en/help/faq.md",
+      "baselineWords": 498,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 4,
+        "3": 15,
+        "4": 0
+      },
+      "minimumCodeFences": 0,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 0,
+      "approvedDeletions": []
+    },
+    {
+      "key": "faq",
+      "path": "vi/help/faq.md",
+      "baselineWords": 555,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 4,
+        "3": 15,
+        "4": 0
+      },
+      "minimumCodeFences": 0,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 0,
+      "approvedDeletions": []
+    },
+    {
+      "key": "changelog",
+      "path": "en/changelog.md",
+      "baselineWords": 139,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 2,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 0,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 0,
+      "approvedDeletions": []
+    },
+    {
+      "key": "changelog",
+      "path": "vi/changelog.md",
+      "baselineWords": 162,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 2,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 0,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 0,
+      "approvedDeletions": []
+    }
+  ]
+}

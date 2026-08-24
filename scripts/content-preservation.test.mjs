@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
@@ -303,4 +304,18 @@ test("validatePreservation reads every manifest page and combines diagnostics", 
   const errors = await validatePreservation(rootURL, manifest);
   assert.equal(errors.length, 1);
   assert.match(errors[0], /^en\/does-not-exist\.md:/);
+});
+
+test("the repository content satisfies the historical preservation baseline", async () => {
+  const manifest = JSON.parse(
+    await readFile(
+      new URL("../content/preservation-manifest.json", import.meta.url),
+      "utf8",
+    ),
+  );
+
+  assert.deepEqual(
+    await validatePreservation(new URL("../", import.meta.url), manifest),
+    [],
+  );
 });
