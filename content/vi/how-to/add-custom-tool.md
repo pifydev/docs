@@ -433,8 +433,8 @@ test("get_weather observes cancellation", async () => {
 ```bash
 npx tsc --noEmit
 npx tsx --test test/get-weather.test.ts
-npx tsx agent-core.ts
-npx tsx agent-session.ts
+node --env-file=.env --import tsx agent-core.ts
+node --env-file=.env --import tsx agent-session.ts
 ```
 
 Khi debug toàn bộ loop, hãy subscribe trước khi gọi `prompt()`. Ghi log `tool_execution_start`, `tool_execution_update` và `tool_execution_end`; che payload nếu chúng có thể chứa dữ liệu người dùng hoặc credential.
