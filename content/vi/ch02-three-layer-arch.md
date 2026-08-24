@@ -346,7 +346,7 @@ interface AgentTool<
 
 Coding Agent lắp các type quanh một workflow hoàn chỉnh cho người dùng. `AgentSession` điều phối Agent đang chạy với setting, model runtime, resource loading, Extension và `SessionManager`. Session entry giữ message cùng model change, thinking-level change, compaction record, branch summary và custom entry. `ResolvedResource` cùng diagnostic liên quan ghi lại Skill, prompt template, theme và file chỉ dẫn đến từ đâu.
 
-Với Tool, `ToolDefinition` hướng sản phẩm tương thích về cấu trúc với `AgentTool` và thêm các product hook. Đây là một interface độc lập, không kế thừa bằng `extends AgentTool`:
+Với Tool, `ToolDefinition` hướng sản phẩm được tách hẳn khỏi `AgentTool`. Metadata dành cho model của hai type có phần trùng nhau, nhưng execution signature thì khác: `ToolDefinition.execute` bắt buộc có tham số thứ năm `ctx: ExtensionContext`. Vì vậy không thể truyền trực tiếp một `ToolDefinition` cho Agent Core dưới dạng `AgentTool`.
 
 ```typescript
 // Lược từ packages/coding-agent/src/core/extensions/types.ts.
@@ -371,7 +371,64 @@ interface ToolDefinition<TParams extends TSchema, TDetails = unknown> {
 }
 ```
 
-`ExtensionContext`, các đoạn prompt và rendering hook bổ sung thuộc boundary sản phẩm và Extension. Factory tích hợp tạo bảy coding Tool: `read`, `bash`, `edit`, `write`, `grep`, `find` và `ls`. Dạng runtime sau khi wrap vẫn thỏa điều Agent Core cần.
+Product boundary trở thành runtime Tool qua adapter tường minh trong `packages/coding-agent/src/core/tools/tool-definition-wrapper.ts`:
+
+```typescript
+// Trích từ tool-definition-wrapper.ts tại a470b121.
+export function wrapToolDefinition<TDetails = unknown>(
+  definition: ToolDefinition<any, TDetails>,
+  ctxFactory?: () => ExtensionContext,
+): AgentTool<any, TDetails> {
+  return {
+    name: definition.name,
+    label: definition.label,
+    description: definition.description,
+    parameters: definition.parameters,
+    constrainedSampling: definition.constrainedSampling,
+    prepareArguments: definition.prepareArguments,
+    executionMode: definition.executionMode,
+    execute: (toolCallId, params, signal, onUpdate, ctx?: ExtensionContext) =>
+      definition.execute(
+        toolCallId,
+        params,
+        signal,
+        onUpdate,
+        ctx ?? (ctxFactory?.() as ExtensionContext),
+      ),
+  };
+}
+
+// extensions/wrapper.ts, bên trong wrapRegisteredTool():
+const tool = wrapToolDefinition(registeredTool.definition, () =>
+  runner.createContext(),
+);
+```
+
+Adapter sao chép các field của `AgentTool` rồi thay `execute` bằng function có nhiệm vụ cung cấp `ExtensionContext`. `wrapRegisteredTool()` truyền `runner.createContext()` cho Extension Tool; `wrapRegisteredTools()` áp dụng phép chuyển ấy cho cả danh sách. `AgentSession._refreshToolRegistry()` thu thập Tool definition từ Extension và SDK, wrap chúng rồi đặt các `AgentTool` thu được vào runtime registry. Factory tích hợp cũng dùng wrapper này cho bảy coding Tool: `read`, `bash`, `edit`, `write`, `grep`, `find` và `ls`.
+
+Loader còn giữ các registration của từng Extension đã nạp trong một aggregate. Đây là interface hiện hành, không lược bỏ field nào:
+
+```typescript
+// packages/coding-agent/src/core/extensions/types.ts tại a470b121.
+export interface Extension {
+  path: string;
+  resolvedPath: string;
+  hidden?: boolean;
+  sourceInfo: SourceInfo;
+  handlers: Map<string, HandlerFn[]>;
+  tools: Map<string, RegisteredTool>;
+  messageRenderers: Map<string, MessageRenderer>;
+  markdownTransformer?: MarkdownTransformer;
+  entryRenderers?: Map<string, EntryRenderer>;
+  commands: Map<string, RegisteredCommand>;
+  flags: Map<string, ExtensionFlag>;
+  shortcuts: Map<KeyId, ExtensionShortcut>;
+}
+```
+
+`createExtension()` khởi tạo các map ấy trước khi gọi Extension factory. Sau đó, các method của `ExtensionAPI` ghi từng registration vào collection tương ứng: `pi.on()` thêm handler, `pi.registerTool()` thêm `RegisteredTool`, còn các method đăng ký renderer, command, flag và shortcut điền vào map cùng tên. Nếu factory chạy xong, `commit()` áp dụng các runtime change đang chờ rồi loader trả về aggregate. Nếu factory ném lỗi, `discard()` vô hiệu loading API và không có `Extension` nào được trả về.
+
+Ở runtime, `ExtensionRunner` gọi event handler với context mới, resolve message renderer cùng entry renderer, cung cấp command và flag, đồng thời xử lý xung đột shortcut. Với Tool, runner trả về registration đầu tiên của mỗi tên; `AgentSession` đưa các definition ấy qua adapter vừa mô tả. Registration được tạo khi runtime đang hoạt động sẽ gọi `refreshTools()`, nhờ vậy runtime registry và active Tool set có thể được build lại mà không coi chính object `Extension` đã load là một `AgentTool`.
 
 Không có nấc `CodingAgentMessage` trong chiếc thang này. Coding Agent dùng `AgentMessage` cho transcript đang chạy và định nghĩa các biến thể `SessionEntry` cho lịch sử sản phẩm cần lưu bền. Tách hai khái niệm giúp một storage record không bị hiểu nhầm là dữ liệu LLM có thể nhận.
 
@@ -390,16 +447,22 @@ After, trong pi-agent-core: AgentTool có thể chạy
 ────────────────────────────────────────────────────────
 field của Tool + label + prepareArguments + execute + executionMode
 
-            ↓ Coding Agent chuyển nó sang product policy
+            ↓ Coding Agent định nghĩa execution và rendering của sản phẩm
 
-After, trong pi-coding-agent: ToolDefinition tham gia sản phẩm
+After, trong pi-coding-agent: ToolDefinition mô tả Tool của sản phẩm
 ────────────────────────────────────────────────────────
-field tương thích với Tool/AgentTool
-+ promptSnippet + promptGuidelines + ExtensionContext
+metadata Tool dùng chung + ExtensionContext bắt buộc
++ promptSnippet + promptGuidelines
 + renderCall + renderResult
+
+            ↓ wrapToolDefinition() cung cấp context và chuyển execute
+
+Bàn giao cho runtime: AgentTool đi vào Agent Core
+────────────────────────────────────────────────────────
+execute bốn tham số + metadata Tool dùng chung
 ```
 
-Đường đi của message khác một chút: `Message` trở thành union `AgentMessage` rộng hơn, sau đó Coding Agent lưu nó trong session entry và render biến thể tùy chỉnh. Mở rộng dần có thể dùng inheritance, union, composition hoặc structural compatibility. Invariant nằm ở quyền sở hữu: mỗi lớp chỉ thêm thông tin cần cho trách nhiệm của lớp đó.
+Đường đi của message khác một chút: `Message` trở thành union `AgentMessage` rộng hơn, sau đó Coding Agent lưu nó trong session entry và render biến thể tùy chỉnh. Type có thể tiến hóa bằng inheritance, union, composition hoặc adapter tường minh. Invariant nằm ở quyền sở hữu: mỗi lớp chỉ thêm thông tin cần cho trách nhiệm của nó, rồi chuyển dữ liệu về contract mà lớp dưới yêu cầu.
 
 ---
 
@@ -516,12 +579,12 @@ Câu hỏi kiểm chứng nhanh là: nếu ứng dụng lớp trên biến mất
 
 ### Phương pháp 2: pattern “mở rộng type từng bước”
 
-Bắt đầu bằng type nhỏ nhất mà owner ở lớp thấp nhất có thể bảo vệ. Cho lớp cao hơn thêm năng lực bằng union, `extends`, composition hoặc structural adaptation.
+Bắt đầu bằng type nhỏ nhất mà owner ở lớp thấp nhất có thể bảo vệ. Cho lớp cao hơn thêm năng lực bằng union, `extends`, composition hoặc adapter tường minh.
 
 1. Transport layer định nghĩa nguyên tử như `Message`, `Model` và `Tool` chỉ có schema.
 2. Runtime mở rộng `Message` thành `AgentMessage` rồi thêm execution để tạo `AgentTool`.
-3. Sản phẩm lưu Agent message trong session record và chuyển Tool sang dạng có prompt, context cùng renderer.
-4. Trước khi truyền dữ liệu xuống dưới, hãy chuyển nó về contract của lớp thấp hơn. `convertToLlm` là ví dụ dễ thấy.
+3. Sản phẩm lưu Agent message trong session record và định nghĩa Tool có prompt, `ExtensionContext` bắt buộc cùng renderer.
+4. Trước khi truyền dữ liệu xuống dưới, hãy chuyển nó về contract của lớp thấp hơn. `convertToLlm` xử lý message; `wrapToolDefinition()` xử lý product Tool definition.
 
 Cách này giữ package lớp dưới ở trạng thái có thể publish và tái sử dụng. Nó cũng đặt tên cho boundary có thể làm mất thông tin. Một application message tùy chỉnh không thể âm thầm đi tới provider; bước chuyển đổi phải lọc hoặc dịch nó.
 

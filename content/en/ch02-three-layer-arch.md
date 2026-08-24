@@ -346,7 +346,7 @@ interface AgentTool<
 
 Coding Agent assembles types around a complete user workflow. `AgentSession` coordinates the live Agent with settings, model runtime, resource loading, Extensions, and `SessionManager`. Session entries preserve messages plus model changes, thinking-level changes, compaction records, branch summaries, and custom entries. `ResolvedResource` and related diagnostics record where Skills, prompt templates, themes, and instruction files came from.
 
-For Tools, the product-facing `ToolDefinition` is structurally compatible with `AgentTool` and adds product hooks. It is an independent interface, not `extends AgentTool` inheritance:
+For Tools, the product-facing `ToolDefinition` is deliberately separate from `AgentTool`. Their model-facing metadata overlaps, but their execution signatures do not: `ToolDefinition.execute` requires a fifth `ctx: ExtensionContext` parameter. A `ToolDefinition` therefore cannot be passed directly to Agent Core as an `AgentTool`.
 
 ```typescript
 // Abridged from packages/coding-agent/src/core/extensions/types.ts.
@@ -371,7 +371,64 @@ interface ToolDefinition<TParams extends TSchema, TDetails = unknown> {
 }
 ```
 
-The extra `ExtensionContext`, prompt fragments, and rendering hooks belong to the product and Extension boundary. Built-in factories create the seven coding Tools: `read`, `bash`, `edit`, `write`, `grep`, `find`, and `ls`. Their wrapped runtime form still satisfies what Agent Core needs.
+The product boundary becomes a runtime Tool through an explicit adapter in `packages/coding-agent/src/core/tools/tool-definition-wrapper.ts`:
+
+```typescript
+// Selected from tool-definition-wrapper.ts at a470b121.
+export function wrapToolDefinition<TDetails = unknown>(
+  definition: ToolDefinition<any, TDetails>,
+  ctxFactory?: () => ExtensionContext,
+): AgentTool<any, TDetails> {
+  return {
+    name: definition.name,
+    label: definition.label,
+    description: definition.description,
+    parameters: definition.parameters,
+    constrainedSampling: definition.constrainedSampling,
+    prepareArguments: definition.prepareArguments,
+    executionMode: definition.executionMode,
+    execute: (toolCallId, params, signal, onUpdate, ctx?: ExtensionContext) =>
+      definition.execute(
+        toolCallId,
+        params,
+        signal,
+        onUpdate,
+        ctx ?? (ctxFactory?.() as ExtensionContext),
+      ),
+  };
+}
+
+// extensions/wrapper.ts, inside wrapRegisteredTool():
+const tool = wrapToolDefinition(registeredTool.definition, () =>
+  runner.createContext(),
+);
+```
+
+The adapter copies the `AgentTool` fields and replaces `execute` with a function that supplies `ExtensionContext`. `wrapRegisteredTool()` provides `runner.createContext()` for Extension Tools; `wrapRegisteredTools()` applies that conversion to a list. `AgentSession._refreshToolRegistry()` collects registered and SDK Tool definitions, wraps them, and places the resulting `AgentTool`s in the runtime registry. Built-in factories use the same wrapper for the seven coding Tools: `read`, `bash`, `edit`, `write`, `grep`, `find`, and `ls`.
+
+The loader also preserves the registrations from each loaded Extension as one aggregate. This is the current interface, with no fields omitted:
+
+```typescript
+// packages/coding-agent/src/core/extensions/types.ts at a470b121.
+export interface Extension {
+  path: string;
+  resolvedPath: string;
+  hidden?: boolean;
+  sourceInfo: SourceInfo;
+  handlers: Map<string, HandlerFn[]>;
+  tools: Map<string, RegisteredTool>;
+  messageRenderers: Map<string, MessageRenderer>;
+  markdownTransformer?: MarkdownTransformer;
+  entryRenderers?: Map<string, EntryRenderer>;
+  commands: Map<string, RegisteredCommand>;
+  flags: Map<string, ExtensionFlag>;
+  shortcuts: Map<KeyId, ExtensionShortcut>;
+}
+```
+
+`createExtension()` initializes those maps before it calls the Extension factory. Methods on `ExtensionAPI` then write each registration into the matching collection: `pi.on()` adds handlers, `pi.registerTool()` adds a `RegisteredTool`, and the renderer, command, flag, and shortcut methods fill their corresponding maps. If the factory finishes, `commit()` applies pending runtime changes and the loader returns the aggregate. If the factory throws, `discard()` invalidates the loading API and no `Extension` is returned.
+
+At runtime, `ExtensionRunner` dispatches event handlers with a fresh context, resolves message and entry renderers, exposes commands and flags, and resolves shortcut conflicts. For Tools, it returns the first registration for each name; `AgentSession` sends those definitions through the adapter described above. A registration made while the runtime is active calls `refreshTools()`, so the runtime registry and active Tool set can be rebuilt without treating the loaded `Extension` object itself as an `AgentTool`.
 
 There is no `CodingAgentMessage` rung in this ladder. Coding Agent uses `AgentMessage` for the live transcript and defines `SessionEntry` variants for durable product history. Keeping those concepts separate prevents a storage record from masquerading as something an LLM can consume.
 
@@ -390,16 +447,22 @@ After, in pi-agent-core: AgentTool can run
 ────────────────────────────────────────────────────────
 Tool fields + label + prepareArguments + execute + executionMode
 
-            ↓ Coding Agent adapts it to product policy
+            ↓ Coding Agent defines product execution and rendering
 
-After, in pi-coding-agent: ToolDefinition can join the product
+After, in pi-coding-agent: ToolDefinition describes the product Tool
 ────────────────────────────────────────────────────────
-compatible Tool/AgentTool fields
-+ promptSnippet + promptGuidelines + ExtensionContext
+shared Tool metadata + required ExtensionContext
++ promptSnippet + promptGuidelines
 + renderCall + renderResult
+
+            ↓ wrapToolDefinition() supplies context and adapts execute
+
+Runtime handoff: AgentTool enters Agent Core
+────────────────────────────────────────────────────────
+four-argument execute + the shared Tool metadata
 ```
 
-The message path progresses differently: `Message` becomes the wider `AgentMessage` union, then Coding Agent stores it inside session entries and renders custom variants. Progressive extension may use inheritance, unions, composition, or structural compatibility. The invariant is ownership: each layer adds only the information needed for its responsibility.
+The message path progresses differently: `Message` becomes the wider `AgentMessage` union, then Coding Agent stores it inside session entries and renders custom variants. Type progression may use inheritance, unions, composition, or an explicit adapter. The invariant is ownership: each layer adds only the information needed for its responsibility, then converts back to the contract required by the lower layer.
 
 ---
 
@@ -516,12 +579,12 @@ The quick verification question is: if the upper application disappears, can the
 
 ### Method 2: the “progressive type extension” pattern
 
-Start with the smallest type that the lowest owner can defend. Let a higher layer add capability through a union, `extends`, composition, or structural adaptation.
+Start with the smallest type that the lowest owner can defend. Let a higher layer add capability through a union, `extends`, composition, or an explicit adapter.
 
 1. The transport layer defines atoms such as `Message`, `Model`, and schema-only `Tool`.
 2. The runtime broadens `Message` to `AgentMessage` and adds execution to form `AgentTool`.
-3. The product stores Agent messages in session records and adapts Tools with prompts, context, and renderers.
-4. Before passing data downward, convert it back to the lower contract. `convertToLlm` is the visible example.
+3. The product stores Agent messages in session records and defines Tools with prompts, a required `ExtensionContext`, and renderers.
+4. Before passing data downward, convert it back to the lower contract. `convertToLlm` handles messages; `wrapToolDefinition()` handles product Tool definitions.
 
 This keeps the lower package publishable and reusable. It also names lossy boundaries. A custom application message cannot silently reach a provider; the conversion step must filter or translate it.
 
