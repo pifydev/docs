@@ -1,115 +1,330 @@
 ---
-title: API reference
-description: Các entry point công khai chính của Pi AI, Agent Core và Coding Agent tại upstream revision đã kiểm duyệt.
+title: Tham chiếu API
+description: Bản đồ chọn lọc các entry point công khai của Pi AI, Agent Core và Coding Agent ở phiên bản 0.84.2.
 translation_key: reference-api
 language: vi
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-08-24'
+last_updated: '2026-08-25'
 ---
 
-Reference này mô tả các entry point ổn định mà đa số tích hợp cần dùng. Nội dung bám theo upstream commit `a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c`, package version `0.84.2`.
+Tài liệu tham chiếu tích hợp có chọn lọc này lược bỏ các export chuyên biệt và UI. Nội dung áp dụng cho upstream commit `a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c`, ba package `@earendil-works/*` phiên bản `0.84.2` và Node.js `22.19` trở lên.
 
-## Các package
+- `@earendil-works/pi-ai` quản lý provider collection, metadata của model, authentication, message và LLM stream.
+- `@earendil-works/pi-agent-core` bổ sung agent loop, thực thi tool, state, queue và lifecycle event.
+- `@earendil-works/pi-coding-agent` kết hợp session, setting, resource, extension, coding tool cùng runtime CLI hoặc SDK.
 
-| Package | Trách nhiệm |
-|---|---|
-| `@earendil-works/pi-ai` | Provider, model catalog, authentication, message và LLM stream |
-| `@earendil-works/pi-agent-core` | Stateful agent loop, tool, event, queue, compaction và harness primitive |
-| `@earendil-works/pi-coding-agent` | Session, setting, extension, resource, coding tool, CLI và SDK |
+Root của `pi-ai` không có side effect. Provider factory nằm dưới `providers/*`, implementation của wire protocol nằm dưới `api/*`, còn các global catalog helper đã ngừng dùng nằm dưới `compat`. Tích hợp mới không nên dùng `compat`.
 
-Global catalog API cũ vẫn còn trong `@earendil-works/pi-ai/compat`. Code mới nên dùng collection `Models` và provider factory.
+## `@earendil-works/pi-ai`
 
-## Pi AI
+### Provider collection
 
-### `createModels(options?)`
+`createModels()` trả về một collection `Models` rỗng và có thể thay đổi. Chỉ thêm các provider ứng dụng thực sự phân phối, hoặc dùng `builtinModels()` từ `providers/all` khi bundle size không phải vấn đề.
 
-Tạo collection provider rỗng và có thể thay đổi.
-
-```ts
+```ts title="catalog.ts"
 import { createModels } from "@earendil-works/pi-ai";
 import { anthropicProvider } from "@earendil-works/pi-ai/providers/anthropic";
 
 const models = createModels();
 models.setProvider(anthropicProvider());
+
+const model = models.getModel("anthropic", "claude-sonnet-4-6");
+if (!model) throw new Error("Model is not in the registered catalog");
 ```
 
-Dùng `builtinModels()` từ `@earendil-works/pi-ai/providers/all` khi ứng dụng cần toàn bộ provider tích hợp.
+`MutableModels` bổ sung `setProvider()`, `deleteProvider()` và `clearProviders()` vào các method đọc và gửi request của `Models`. Provider sở hữu catalog và request routing; không còn process-wide registry.
 
-### `Models`
+### Tra cứu catalog và authentication
 
-Các method quan trọng:
+`getProviders()`, `getProvider()`, `getModels()` và `getModel()` đọc đồng bộ last-known catalog. `refresh()` khôi phục hoặc làm mới dynamic provider rồi trả về `{ aborted, errors }`; method này không reject chỉ vì một provider lỗi. `checkAuth()`, `getAuth()` và `getAvailable()` xác định availability theo provider. `login()` và `logout()` dùng credential store của collection.
 
-```ts
-interface Models {
-  getProviders(): readonly Provider[];
-  getProvider(id: string): Provider | undefined;
-  getModels(provider?: string): readonly Model[];
-  getModel(provider: string, id: string): Model | undefined;
-  getAvailable(provider?: string): Promise<readonly Model[]>;
-  refresh(options?: ModelsRefreshOptions): Promise<ModelsRefreshResult>;
-  stream(model: Model, context: Context, options?: StreamOptions): AssistantMessageEventStream;
-  complete(model: Model, context: Context, options?: StreamOptions): Promise<AssistantMessage>;
-  streamSimple(model: Model, context: Context, options?: SimpleStreamOptions): AssistantMessageEventStream;
-  completeSimple(model: Model, context: Context, options?: SimpleStreamOptions): Promise<AssistantMessage>;
+```ts title="lookup.ts"
+import type { Api, Model } from "@earendil-works/pi-ai";
+import { builtinModels } from "@earendil-works/pi-ai/providers/all";
+
+const models = builtinModels();
+const cached: readonly Model<Api>[] = models.getModels("anthropic");
+const refresh = await models.refresh({
+  providers: ["radius"],
+  allowNetwork: false,
+});
+const available = await models.getAvailable("anthropic");
+
+console.log(cached.length, refresh.errors.size, available.length);
+```
+
+Provider factory thường resolve credential đã lưu trước, sau đó mới xét environment variable của provider hoặc ambient credential. Ứng dụng cần persistence phải truyền `CredentialStore` và, với dynamic catalog, `ModelsStore` vào `createModels()`.
+
+### Provider factory và adapter
+
+Dùng factory trong `providers/*` để thêm provider có sẵn. Chỉ dùng `createProvider()` khi định nghĩa provider hoặc ghép catalog với implementation của wire protocol. Provider tương thích OpenAI chạy local dưới đây dùng lazy API subpath công khai và environment-key resolver chuẩn.
+
+```ts title="custom-provider.ts"
+import {
+  createModels,
+  createProvider,
+  envApiKeyAuth,
+  type Model,
+} from "@earendil-works/pi-ai";
+import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
+
+const localModel = {
+  id: "local-chat",
+  name: "Local Chat",
+  api: "openai-completions",
+  provider: "local",
+  baseUrl: "http://127.0.0.1:8080/v1",
+  reasoning: false,
+  input: ["text"],
+  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+  contextWindow: 32_768,
+  maxTokens: 4_096,
+} satisfies Model<"openai-completions">;
+
+const local = createProvider({
+  id: "local",
+  auth: { apiKey: envApiKeyAuth("Local API key", ["LOCAL_API_KEY"]) },
+  models: [localModel],
+  api: openAICompletionsApi(),
+});
+
+const models = createModels();
+models.setProvider(local);
+```
+
+Một `Provider` native cung cấp identity, auth, `getModels()`, `refreshModels()` tùy chọn và các stream method. `createProvider({ fetchModels })` quản lý dynamic overlay. Adapter cho protocol mới phải trả về `AssistantMessageEventStream` và tuân thủ terminal-event contract.
+
+### Streaming và completion
+
+`stream()` và `complete()` nhận option riêng của từng API. `streamSimple()` và `completeSimple()` nhận các option portable cho reasoning, retry, transport, abort cùng payload/response hook, rồi chuyển chúng sang API được chọn.
+
+```ts title="stream.ts"
+import type { Context } from "@earendil-works/pi-ai";
+import { builtinModels } from "@earendil-works/pi-ai/providers/all";
+
+const models = builtinModels();
+const model = models.getModel("openai", "gpt-4o-mini");
+if (!model) throw new Error("Model not found");
+
+const context: Context = {
+  messages: [{ role: "user", content: "Reply in one sentence.", timestamp: Date.now() }],
+};
+const stream = models.streamSimple(model, context);
+
+for await (const event of stream) {
+  if (event.type === "text_delta") process.stdout.write(event.delta);
 }
+const finalMessage = await stream.result();
+console.log(finalMessage.stopReason, finalMessage.usage.cost.total);
 ```
 
-`getModel()` là synchronous và trả về `undefined` khi không tìm thấy cặp tương ứng. `refresh()` cập nhật các dynamic provider đã cấu hình mà không reject toàn bộ thao tác chỉ vì một provider lỗi.
+Chính stream mã hóa request failure: kiểm tra event `error` cuối hoặc `stopReason` và `errorMessage` của message đã resolve. Truyền `AbortSignal` trong options để hủy request.
 
-### `createProvider(options)`
+### Metadata của model
 
-Tạo native `Provider`. Provider sở hữu model list, authentication policy, streaming implementation và tùy chọn dynamic refresh.
+`Model<TApi>` là request descriptor. Các field bắt buộc gồm `id`, `name`, `api`, `provider`, `baseUrl`, `reasoning`, `input` được hỗ trợ, `cost` trên một triệu token, `contextWindow` và `maxTokens`. Metadata tùy chọn gồm `thinkingLevelMap`, `samplingParams`, `headers` và flag `compat` riêng cho từng API.
 
-### Message và stream
+```ts title="model.ts"
+import type { Model } from "@earendil-works/pi-ai";
 
-`Context` chứa system prompt, `Message[]` và tool tùy chọn. `Message` là union hướng tới provider gồm user message, assistant message và tool-result message. `AssistantMessageEventStream` phát incremental event của assistant và resolve thành assistant message hoàn chỉnh.
+const model = {
+  id: "local-chat",
+  name: "Local Chat",
+  api: "openai-completions",
+  provider: "local",
+  baseUrl: "http://127.0.0.1:8080/v1",
+  reasoning: false,
+  input: ["text", "image"],
+  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+  contextWindow: 32_768,
+  maxTokens: 4_096,
+  compat: { supportsDeveloperRole: false },
+} satisfies Model<"openai-completions">;
 
-## Agent Core
+console.log(model.provider, model.contextWindow);
+```
 
-### `new Agent(options)`
+Khi có cost tier, hệ thống so sánh `input + cacheRead + cacheWrite` với `inputTokensAbove`; threshold khớp cao nhất định giá toàn bộ request.
 
-```ts
+### Context, message và tool
+
+`Context` chứa `systemPrompt` tùy chọn, `Message[]` và `Tool[]` tùy chọn. `Message` là provider-facing union của user message, assistant message và tool-result message. Parameter của tool là schema TypeBox; khi làm việc bên dưới Agent Core, hãy validate argument trước khi chạy tool.
+
+```ts title="context.ts"
+import { Type, type Context, type Tool } from "@earendil-works/pi-ai";
+
+const search = {
+  name: "search",
+  description: "Search indexed documents",
+  parameters: Type.Object({ query: Type.String() }),
+} satisfies Tool;
+
+const context: Context = {
+  systemPrompt: "Cite the matching document.",
+  messages: [{ role: "user", content: "Find the release note.", timestamp: Date.now() }],
+  tools: [search],
+};
+
+console.log(context.tools?.[0]?.name);
+```
+
+Content của `AssistantMessage` gồm text, thinking hoặc tool-call block, kèm usage, cost, stop reason và metadata tùy chọn cho error hoặc deferred response. Khi replay conversation, hãy persist opaque signature nguyên vẹn.
+
+### Stream event
+
+`AssistantMessageEventStream` vừa là async iterable vừa giữ `result()`. Một stream hợp lệ chỉ start một lần và terminate một lần.
+
+| Event | Payload và cách dùng |
+|---|---|
+| `start` | Partial assistant message ban đầu |
+| `text_start` / `text_delta` / `text_end` | Lifecycle của text block và text tăng dần |
+| `thinking_start` / `thinking_delta` / `thinking_end` | Lifecycle của thinking block khi model phát thinking |
+| `toolcall_start` / `toolcall_delta` / `toolcall_end` | Partial argument và tool call cuối đã validate |
+| `done` | Terminal event thành công với reason `stop`, `length`, `toolUse` hoặc `deferred` |
+| `error` | Assistant message cuối ở trạng thái `error` hoặc `aborted` |
+
+## `@earendil-works/pi-agent-core`
+
+### `Agent`
+
+`Agent` là stateful wrapper quanh low-level loop. Nó sở hữu transcript, việc thực thi tool, steering và follow-up queue cùng event delivery. `streamFn` có thể là `models.streamSimple.bind(models)`.
+
+```ts title="agent.ts"
 import { Agent } from "@earendil-works/pi-agent-core";
+import { builtinModels } from "@earendil-works/pi-ai/providers/all";
+
+const models = builtinModels();
+const model = models.getModel("anthropic", "claude-sonnet-4-6");
+if (!model) throw new Error("Model not found");
 
 const agent = new Agent({
   initialState: { systemPrompt: "Be concise.", model },
   streamFn: models.streamSimple.bind(models),
 });
 
-const unsubscribe = agent.subscribe((event) => {
-  // Handle lifecycle and streaming events.
-});
-
-await agent.prompt("Explain the current module.");
+await agent.prompt("Explain this module.");
 ```
 
-Core state nằm trong `agent.state`: `systemPrompt`, `model`, `thinkingLevel`, `tools`, `messages`, `streamingMessage` và `errorMessage`.
+`prompt()` bắt đầu một run; `continue()` tiếp tục khi message cuối là user hoặc tool-result. Dùng `steer()` cho turn kế tiếp và `followUp()` sau thời điểm loop lẽ ra đã dừng.
 
-Các method chính gồm `prompt()`, `continue()`, `steer()`, `followUp()`, `abort()`, `subscribe()` và `waitForIdle()`.
+### `agentLoop()`
+
+`agentLoop(prompts, context, config, signal, streamFn)` không giữ state của ứng dụng. Nó trả về `EventStream<AgentEvent, AgentMessage[]>`; hãy iterate event rồi await `result()` để lấy message mới. `agentLoopContinue()` dùng lại context có message cuối hợp lệ để tiếp tục.
+
+```ts title="agent-loop.ts"
+import { agentLoop, type AgentContext } from "@earendil-works/pi-agent-core";
+import type { Message } from "@earendil-works/pi-ai";
+import { builtinModels } from "@earendil-works/pi-ai/providers/all";
+
+const models = builtinModels();
+const model = models.getModel("openai", "gpt-4o-mini");
+if (!model) throw new Error("Model not found");
+
+const context: AgentContext = { systemPrompt: "Be exact.", messages: [], tools: [] };
+const prompt = { role: "user" as const, content: "Summarize the API.", timestamp: Date.now() };
+const events = agentLoop(
+  [prompt],
+  context,
+  {
+    model,
+    convertToLlm: (messages) =>
+      messages.filter(
+        (message): message is Message =>
+          message.role === "user" || message.role === "assistant" || message.role === "toolResult",
+      ),
+  },
+  undefined,
+  models.streamSimple.bind(models),
+);
+
+for await (const event of events) console.log(event.type);
+const newMessages = await events.result();
+```
+
+### `AgentLoopConfig`
+
+Hai field bắt buộc là `model` và `convertToLlm`. Hook tùy chọn có thể transform context, resolve key, chuẩn bị turn tiếp theo, dừng sau một turn đã hoàn tất hoặc chặn tool call. Config cũng nhận portable stream option, nguồn queue, retry limit và `toolExecution: "parallel" | "sequential"`.
+
+```ts title="loop-config.ts"
+import type { AgentLoopConfig } from "@earendil-works/pi-agent-core";
+import type { Message } from "@earendil-works/pi-ai";
+import { builtinModels } from "@earendil-works/pi-ai/providers/all";
+
+const models = builtinModels();
+const model = models.getModel("openai", "gpt-4o-mini");
+if (!model) throw new Error("Model not found");
+
+const config = {
+  model,
+  convertToLlm: (messages) =>
+    messages.filter(
+      (message): message is Message =>
+        message.role === "user" || message.role === "assistant" || message.role === "toolResult",
+    ),
+  toolExecution: "parallel",
+  shouldStopAfterTurn: ({ toolResults }) => toolResults.some((result) => result.isError),
+} satisfies AgentLoopConfig;
+
+console.log(config.toolExecution);
+```
+
+`convertToLlm` phải lọc hoặc chuyển đổi custom variant của `AgentMessage` và không được reject. `transformContext` cùng dynamic key resolution cũng phải có safe fallback.
 
 ### `AgentTool`
 
-Một tool cung cấp `name`, `label`, `description`, schema TypeBox `parameters` và `execute(toolCallId, params, signal, onUpdate)`. Handler thành công trả về `content`, `details` tùy chọn và `terminate` tùy chọn. Hãy throw để báo tool failure.
+`AgentTool` mở rộng schema tool của Pi AI bằng UI label và `execute(toolCallId, params, signal, onUpdate)`. Trả về `content` cho model cùng `details` có cấu trúc; throw để tạo error tool result. `onUpdate` phát partial progress.
 
-### Event
+```ts title="tool.ts"
+import { Type } from "@earendil-works/pi-ai";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
 
-| Event | Ý nghĩa |
-|---|---|
-| `agent_start` / `agent_end` | Một agent run bắt đầu hoặc kết thúc hoàn toàn |
-| `turn_start` / `turn_end` | Một LLM call cùng tool batch bắt đầu hoặc hoàn tất |
-| `message_start` / `message_update` / `message_end` | Lifecycle của message; chỉ assistant message được cập nhật tăng dần |
-| `tool_execution_start` / `tool_execution_update` / `tool_execution_end` | Tool preflight, tiến trình và kết quả cuối |
+const parameters = Type.Object({ path: Type.String() });
 
-Khi thực thi song song, các tool có thể hoàn tất khác thứ tự trong source. Tool-result message được persist vẫn giữ thứ tự source của assistant.
+const inspectFile: AgentTool<typeof parameters, { path: string }> = {
+  name: "inspect_file",
+  label: "Inspect file",
+  description: "Inspect one file",
+  parameters,
+  async execute(_toolCallId, { path }, signal, onUpdate) {
+    signal?.throwIfAborted();
+    onUpdate?.({ content: [{ type: "text", text: `Opening ${path}` }], details: { path } });
+    return { content: [{ type: "text", text: `Inspected ${path}` }], details: { path } };
+  },
+};
 
-## Coding Agent
+console.log(inspectFile.name);
+```
 
-### `createAgentSession(options?)`
+Mặc định, nhiều call chạy song song; từng tool có thể yêu cầu chạy tuần tự. Completion event có thể đến khác source order, nhưng tool-result message cuối vẫn giữ source order của assistant.
 
-Tạo `AgentSession` cùng các runtime dependency đã resolve.
+### State, điều khiển và event
 
-```ts
+`agent.state` cung cấp system prompt, model, thinking level, tool, message, streaming message, ID của pending tool call và error mới nhất. `subscribe()` nhận listener sync hoặc async rồi trả về hàm unsubscribe; Agent await listener theo thứ tự đăng ký.
+
+```ts title="agent-events.ts"
+import type { Agent } from "@earendil-works/pi-agent-core";
+
+export function observe(agent: Agent): () => void {
+  return agent.subscribe(async (event, signal) => {
+    if (signal.aborted) return;
+    if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
+      process.stdout.write(event.assistantMessageEvent.delta);
+    }
+    if (event.type === "tool_execution_end") console.log(event.toolCallId, event.isError);
+  });
+}
+```
+
+Mỗi run phát `agent_start`/`agent_end`; từng model turn phát `turn_start`/`turn_end`; message phát start/update/end; tool phát execution start/update/end. `abort()` báo hủy active run. `waitForIdle()` chỉ settle sau listener cuối đã được await. Agent Core cũng export harness và session primitive; dùng `SessionManager` của Coding Agent khi cần định dạng coding session JSONL của Pi.
+
+## `@earendil-works/pi-coding-agent`
+
+### `createAgentSession()` và `AgentSession`
+
+`createAgentSession(options?)` resolve `ModelRuntime`, `SessionManager`, `SettingsManager`, `ResourceLoader`, tool và extension, rồi trả về `{ session, extensionsResult, modelFallbackMessage? }`. Prompt cần model và credential đã cấu hình.
+
+```ts title="session.ts"
 import {
   createAgentSession,
   ModelRuntime,
@@ -117,50 +332,92 @@ import {
 } from "@earendil-works/pi-coding-agent";
 
 const modelRuntime = await ModelRuntime.create();
-const { session } = await createAgentSession({
+const { session, modelFallbackMessage } = await createAgentSession({
   modelRuntime,
-  sessionManager: SessionManager.inMemory(),
+  sessionManager: SessionManager.inMemory(process.cwd()),
+  tools: ["read"],
 });
-```
 
-Các option thường dùng gồm `cwd`, `model`, `modelRuntime`, `sessionManager`, `settingsManager`, `resourceLoader`, `tools`, `excludeTools`, `customTools` và `noTools`.
-
-### `AgentSession`
-
-Các member quan trọng:
-
-```ts
-interface AgentSession {
-  prompt(text: string, options?: PromptOptions): Promise<void>;
-  steer(text: string): Promise<void>;
-  followUp(text: string): Promise<void>;
-  subscribe(listener: (event: AgentSessionEvent) => void): () => void;
-  compact(customInstructions?: string): Promise<CompactionResult>;
-  abort(): Promise<void>;
-  dispose(): void;
-
-  readonly sessionId: string;
-  readonly sessionFile: string | undefined;
-  readonly agent: Agent;
-  readonly messages: AgentMessage[];
-  readonly isStreaming: boolean;
+const unsubscribe = session.subscribe((event) => {
+  if (event.type === "agent_settled") console.log("idle");
+});
+try {
+  if (modelFallbackMessage) console.warn(modelFallbackMessage);
+  await session.prompt("Describe the current directory.");
+} finally {
+  await session.abort();
+  unsubscribe();
+  session.dispose();
 }
 ```
 
-### Helper cho session và setting
+`AgentSession` bổ sung synchronous subscription, persistence, compaction, retry, chạy bash, chọn model, reload và extension dispatch quanh `Agent`. Hãy await `abort()` để hủy retry lẫn agent work và chờ idle; gọi `dispose()` khi host dùng xong.
 
-- `SessionManager.create(cwd)`, `.inMemory(cwd)`, `.continueRecent(cwd)` và `.open(path)` xác định cơ chế persistence.
-- `SettingsManager.create()` đọc global setting và project setting; `applyOverrides()` thêm runtime override.
-- `DefaultResourceLoader` discover context file, extension, skill, prompt template và theme.
-- `defineTool()` giữ type inference của tham số cho standalone tool được truyền qua `customTools`.
-- `ModelRuntime.create()` kết hợp model catalog, credential, provider configuration và runtime refresh.
+### Persistence, setting và resource
 
-### Thay thế runtime
+- `SessionManager.create(cwd, sessionDir?)`, `continueRecent()`, `open()`, `inMemory()`, `forkFrom()`, `list()` và `listAll()` quản lý session JSONL append-only cùng cây session.
+- `SettingsManager.create(cwd, agentDir?)` merge global setting với project setting đã tin cậy; `SettingsManager.inMemory()` phù hợp với embedded host và test.
+- `DefaultResourceLoader({ cwd, agentDir, settingsManager? })` discover context file, system prompt, extension, skill, prompt template và theme sau `reload()`.
+- `ModelRuntime.create()` sở hữu provider catalog và credential được đồng bộ mà Coding Agent sử dụng.
 
-Dùng `createAgentSessionRuntime()` khi ứng dụng phải thay active session qua các flow new, switch, fork, clone hoặc import. Sau khi thay, hãy đọc lại `runtime.session` và gắn subscription mới.
+SDK host trực tiếp phải tự quản lý cwd, trust, storage và cleanup policy. Không sửa session JSONL khi manager đang active, và không giả định `SettingsManager.create()` tự tái hiện trust resolution của CLI nếu host chưa cung cấp quyết định đó.
 
-## Lưu ý tương thích
+### Extension và managed tool
 
-- Import provider factory từ `@earendil-works/pi-ai/providers/*` và API implementation từ `@earendil-works/pi-ai/api/*`.
-- Không dùng package name đã bị loại bỏ như `@pi-ai/core` hoặc `@pi-agent-core`.
-- Ưu tiên type trực tiếp từ package thay vì tạo lại interface theo trang này; release sau có thể bổ sung optional field.
+Một extension là `ExtensionFactory` nhận `ExtensionAPI` đã export. Đăng ký tool, command, shortcut, flag, provider và event handler qua object này; không có global `registerExtension()`.
+
+```ts title="extension.ts"
+import { Type } from "@earendil-works/pi-ai";
+import { defineTool, type ExtensionFactory } from "@earendil-works/pi-coding-agent";
+
+const inspectPath = defineTool({
+  name: "inspect_path",
+  label: "Inspect path",
+  description: "Return the requested path",
+  parameters: Type.Object({ path: Type.String() }),
+  async execute(_toolCallId, { path }) {
+    return { content: [{ type: "text", text: path }], details: { path } };
+  },
+});
+
+const extension: ExtensionFactory = (pi) => {
+  pi.registerTool(inspectPath);
+  pi.on("before_agent_start", (event) => ({
+    systemPrompt: `${event.systemPrompt}\nKeep file paths exact.`,
+  }));
+};
+
+export default extension;
+```
+
+| Managed tool | Availability |
+|---|---|
+| `read`, `bash`, `edit`, `write` | Được tích hợp và active mặc định, trừ khi setting hoặc SDK option thay đổi lựa chọn |
+| `grep`, `find`, `ls` | Được tích hợp; active qua `tools` hoặc dùng factory đã export |
+| Entry từ extension hoặc `customTools` | Do host đăng ký; vẫn được lọc bởi `tools`, `excludeTools` và `noTools` |
+
+Quyền truy cập tool là policy của ứng dụng. SDK hiện tại không cung cấp các switch `--permission` hoặc `--yolo` trong baseline.
+
+### Tích hợp runtime và CLI
+
+Với một session cố định, dùng `createAgentSession()`. Với flow new, switch, fork, clone hoặc import, dùng `createAgentSessionRuntime()` và đọc lại `runtime.session` sau khi thay thế; subscription thuộc về session cũ. Host cấp thấp hơn có thể dùng `createAgentSessionServices()`, `createAgentSessionFromServices()`, `runPrintMode()`, `runRpcMode()`, `RpcClient`, `parseArgs()` hoặc `main()`.
+
+| CLI flag | Mục đích hiện tại |
+|---|---|
+| `--provider`, `--model`, `--models` | Chọn một model hoặc phạm vi model để cycle |
+| `--thinking` | Chọn `off`, `minimal`, `low`, `medium`, `high`, `xhigh` hoặc `max` |
+| `--tools`, `--exclude-tools`, `--no-tools`, `--no-builtin-tools` | Chọn tool surface ban đầu |
+| `--session`, `--session-id`, `--session-dir`, `--continue`, `--resume`, `--fork`, `--no-session` | Chọn cách persist hoặc restore session |
+| `--extension`, `--no-extensions`, `--skill`, `--no-skills`, `--no-context-files` | Kiểm soát resource được discover hoặc chỉ định rõ |
+| `--mode text|json|rpc`, `--print` | Chọn host protocol hoặc output non-interactive |
+
+Extension có thể đăng ký thêm flag, vì vậy `parseArgs()` giữ unknown flag cho bước extension resolution. Dùng `--help` từ binary `pi` đã cài để xem toàn bộ CLI inventory của đúng phiên bản đó.
+
+## Tiếp theo
+
+- Xem runtime setting: <a href="/vi/reference/configuration">Tham chiếu cấu hình</a>
+- Xem credential và path: <a href="/vi/reference/environment-variables">Biến môi trường</a>
+- Thêm provider hoặc protocol adapter: <a href="/vi/how-to/plug-new-model">Tích hợp model mới</a>
+- Xây dựng tool cho Agent Core: <a href="/vi/how-to/add-custom-tool">Thêm custom tool</a>
+- Render event stream: <a href="/vi/how-to/stream-output">Stream output</a>
+- Lưu và branch coding session: <a href="/vi/how-to/persist-sessions">Persist session</a>
