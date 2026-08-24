@@ -957,7 +957,7 @@ The thinner pre-restoration Chapter 8 pages already contained the Pi AI `Context
 
 ## Reviewed mapping appendix: Chapter 9
 
-Chapter 9 has 29 baseline H2–H3 decisions and 70 unique artifact or argument decisions: 99 total. The reconciliation is exact: 72 `restored` + 1 `merged` + 24 `technically-invalid` + 2 `duplicate` = 99. Final-to-baseline semantic-word preservation measured by `contentMetrics()` is EN 3,332 / 2,846 = 117.1% and VI 4,743 / 3,237 = 146.5%; each ratio compares one locale only. The final pair has mirrored H2/H3/H4 counts 9/20/0, 24 aligned fences, one aligned table, and no Mermaid block. The six main-summary labels and three turn-prefix labels remain inside fenced `markdown` templates, so they do not create page-navigation headings. No Chapter 9 deletion allowance is present in `content/preservation-manifest.json`.
+Chapter 9 has 29 baseline H2–H3 decisions and 70 unique artifact or argument decisions: 99 total. The reconciliation is exact: 72 `restored` + 1 `merged` + 24 `technically-invalid` + 2 `duplicate` = 99. Final-to-baseline semantic-word preservation measured by `contentMetrics()` is EN 3,332 / 2,846 = 117.1% and VI 4,744 / 3,237 = 146.6%; each ratio compares one locale only. The final pair has mirrored H2/H3/H4 counts 9/20/0, 24 aligned fences, one aligned table, and no Mermaid block. The six main-summary labels and three turn-prefix labels remain inside fenced `markdown` templates, so they do not create page-navigation headings. No Chapter 9 deletion allowance is present in `content/preservation-manifest.json`.
 
 ### Heading outcomes
 

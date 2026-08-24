@@ -124,7 +124,7 @@ Sau khi nén, mức sử dụng của trợ lý có trước điểm kiểm tra 
 
 ### Ba trường hợp tự động và một đường thủ công
 
-Bộ phân luồng tự động xử lý bốn trường hợp sau:
+Pi có ba trường hợp tự động và một đường thủ công:
 
 | Đường | Cách phát hiện | Pi làm gì sau khi nén |
 | --- | --- | --- |
