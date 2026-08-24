@@ -274,3 +274,19 @@ test("renders every internal Markdown source link as a clean public route", asyn
     page.locator('.pify-docs-body a[href="/vi/reference/api"]').first(),
   ).toBeVisible();
 });
+
+test("redirects legacy Markdown URLs to clean localized routes", async ({
+  request,
+}) => {
+  const cases = [
+    ["/quickstart.md", "/en/quickstart"],
+    ["/en/how-to/add-custom-tool.md", "/en/how-to/add-custom-tool"],
+    ["/vi/reference/api.mdx", "/vi/reference/api"],
+  ] as const;
+
+  for (const [legacyPath, cleanPath] of cases) {
+    const response = await request.get(legacyPath, { maxRedirects: 0 });
+    expect(response.status(), legacyPath).toBe(307);
+    expect(response.headers().location, legacyPath).toBe(cleanPath);
+  }
+});

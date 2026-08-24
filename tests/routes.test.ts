@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  cleanLegacyMarkdownPath,
   isLocale,
   resolveContentHref,
   selectLocale,
@@ -9,6 +10,23 @@ import {
 } from "@/lib/routes";
 
 describe("locale routing", () => {
+  it("maps legacy Markdown URLs to clean localized routes", () => {
+    expect(cleanLegacyMarkdownPath("/quickstart.md", "en")).toBe(
+      "/en/quickstart",
+    );
+    expect(cleanLegacyMarkdownPath("/how-to/add-custom-tool.mdx", "vi")).toBe(
+      "/vi/how-to/add-custom-tool",
+    );
+    expect(cleanLegacyMarkdownPath("/vi/reference/api.md", "en")).toBe(
+      "/vi/reference/api",
+    );
+    expect(cleanLegacyMarkdownPath("/index.mdx", "vi")).toBe("/vi");
+    expect(cleanLegacyMarkdownPath("/zh/reference/api.md", "en")).toBe(
+      "/zh/reference/api",
+    );
+    expect(cleanLegacyMarkdownPath("/en/quickstart", "vi")).toBeUndefined();
+  });
+
   it("accepts only public locales", () => {
     expect(isLocale("en")).toBe(true);
     expect(isLocale("vi")).toBe(true);

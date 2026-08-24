@@ -1,5 +1,5 @@
 import { i18n } from "@/lib/i18n";
-import { isLocale, selectLocale } from "@/lib/routes";
+import { cleanLegacyMarkdownPath, isLocale, selectLocale } from "@/lib/routes";
 import { createI18nMiddleware } from "fumadocs-core/i18n/middleware";
 import type { NextFetchEvent, NextRequest } from "next/server";
 import { NextResponse } from "next/server";
@@ -9,6 +9,19 @@ const fumadocsI18n = createI18nMiddleware(i18n);
 export default function proxy(request: NextRequest, event: NextFetchEvent) {
   const { pathname } = request.nextUrl;
   const firstSegment = pathname.split("/").filter(Boolean)[0];
+  const legacyPath = cleanLegacyMarkdownPath(
+    pathname,
+    selectLocale(
+      request.cookies.get("pify-locale")?.value,
+      request.headers.get("accept-language") ?? undefined,
+    ),
+  );
+
+  if (legacyPath) {
+    const target = request.nextUrl.clone();
+    target.pathname = legacyPath;
+    return NextResponse.redirect(target);
+  }
 
   if (pathname === "/") {
     const locale = selectLocale(

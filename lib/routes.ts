@@ -48,6 +48,26 @@ export function selectLocale(
   return negotiatedLocale(acceptLanguage);
 }
 
+export function cleanLegacyMarkdownPath(
+  pathname: string,
+  fallbackLocale: Locale,
+): string | undefined {
+  if (!/\.(?:md|mdx)$/i.test(pathname)) return undefined;
+
+  const normalized = pathname.replaceAll("\\", "/").replace(/^\/+/, "");
+  const [firstSegment, ...remainingSegments] = normalized.split("/");
+
+  if (isLocale(firstSegment)) {
+    return toPublicPath(firstSegment, remainingSegments.join("/"));
+  }
+
+  if (/^[a-z]{2}$/i.test(firstSegment)) {
+    return `/${normalized.replace(/\.(?:md|mdx)$/i, "")}`;
+  }
+
+  return toPublicPath(fallbackLocale, normalized);
+}
+
 export function toPublicPath(locale: Locale, sourcePath: string): string {
   const normalized = sourcePath.replaceAll("\\", "/").replace(/^\/+/, "");
   const withoutExtension = normalized.replace(/\.(?:md|mdx)$/i, "");
