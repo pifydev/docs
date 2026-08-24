@@ -22,7 +22,7 @@ Một file TypeScript gọi model qua `Models.streamSimple()`. Từ đây, bạn
 Bạn cần:
 
 - **Node.js 22.19 trở lên** - kiểm tra bằng `node --version`
-- **API key của một provider** - ví dụ Anthropic, OpenAI hoặc Google. Ví dụ dưới đây dùng Anthropic.
+- **API key của một provider** - ví dụ Anthropic, OpenAI, Google hoặc local proxy tương thích với OpenAI Chat Completions. Ví dụ dưới đây dùng Anthropic.
 - **Terminal** đang mở tại một thư mục rỗng
 
 :::caution[Chi phí và an toàn]
@@ -163,9 +163,9 @@ Bạn đã có một lệnh `Models.streamSimple()` hoạt động. Chọn nội
 
 | Mục tiêu | Đọc |
 |---|---|
-| Hiểu toàn bộ vòng lặp Agent | [Chương 3: Vòng lặp Agent](ch03-agent-loop.md) |
+| Hiểu toàn bộ vòng lặp Agent, không chỉ một model call | [Chương 3: Vòng lặp Agent](ch03-agent-loop.md) |
 | Thêm một Tool mà model có thể gọi | [Thêm Tool tùy chỉnh](how-to/add-custom-tool.md) |
-| Tích hợp provider mới | [Tích hợp model mới](how-to/plug-new-model.md) |
+| Tích hợp model provider không có sẵn trong SDK | [Tích hợp model mới](how-to/plug-new-model.md) |
 | Lưu cuộc hội thoại qua nhiều lần chạy | [Lưu phiên làm việc](how-to/persist-sessions.md) |
 
 ## Khắc phục sự cố
