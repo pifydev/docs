@@ -29,7 +29,7 @@ Metric format: `words; H2/H3/H4; fences; tables; Mermaid`. Outcome counts track 
 | ch03-agent-loop                 | 3059 words; H2/H3/H4 6/25/6; fences 37; tables 7; Mermaid 0  | 3312 words; H2/H3/H4 6/25/6; fences 37; tables 7; Mermaid 0  |       83 |      1 |                  16 |         0 | reviewed | reviewed   | checked |
 | ch04-model-invocation           | 3418 words; H2/H3/H4 7/13/0; fences 22; tables 2; Mermaid 0  | 3915 words; H2/H3/H4 7/13/0; fences 22; tables 2; Mermaid 0  |       61 |      1 |                  20 |         0 | reviewed | reviewed   | checked |
 | ch05-tool-system                | 4564 words; H2/H3/H4 7/28/0; fences 29; tables 5; Mermaid 0  | 5048 words; H2/H3/H4 7/28/0; fences 29; tables 5; Mermaid 0  |       77 |      2 |                  21 |         0 | reviewed | reviewed   | checked |
-| ch06-messages                   | 3192 words; H2/H3/H4 10/12/0; fences 17; tables 3; Mermaid 0 | 3475 words; H2/H3/H4 10/12/0; fences 17; tables 3; Mermaid 0 |        0 |      0 |                   0 |         0 | pending  | pending    | pending |
+| ch06-messages                   | 3192 words; H2/H3/H4 10/12/0; fences 17; tables 3; Mermaid 0 | 3475 words; H2/H3/H4 10/12/0; fences 17; tables 3; Mermaid 0 |       70 |      1 |                  16 |         0 | reviewed | reviewed   | checked |
 | ch07-event-driven               | 2339 words; H2/H3/H4 9/16/0; fences 15; tables 0; Mermaid 0  | 2672 words; H2/H3/H4 9/16/0; fences 15; tables 0; Mermaid 0  |        0 |      0 |                   0 |         0 | pending  | pending    | pending |
 | ch08-context-engineering        | 3524 words; H2/H3/H4 9/21/0; fences 16; tables 5; Mermaid 0  | 4043 words; H2/H3/H4 9/21/0; fences 16; tables 5; Mermaid 0  |        0 |      0 |                   0 |         0 | pending  | pending    | pending |
 | ch09-compaction                 | 2846 words; H2/H3/H4 9/20/0; fences 20; tables 1; Mermaid 0  | 3237 words; H2/H3/H4 9/20/0; fences 20; tables 1; Mermaid 0  |        0 |      0 |                   0 |         0 | pending  | pending    | pending |
@@ -633,3 +633,102 @@ The additional current H3 isolates `defineTool()` from `pi.registerTool()` and i
 - A65 — `Next up` link to Chapter 6 — `restored` in both locale files.
 
 The thinner pre-restoration Chapter 5 pages contained a concise low-level `AgentTool`, a core hook example, an active security checklist, and a short result contract. Their useful current material remains across Sections 1, 2, 4, and 5 and is expanded with the baseline progression. The standalone `defineTool()`/`pi.registerTool()` H3, active-Tool allowlist rules, dynamic `addedToolNames` behavior, truncated-response safeguard, and copyable typed examples are current-source additions, so they do not alter the 100 baseline decisions above.
+
+## Reviewed mapping appendix: Chapter 6
+
+Chapter 6 has 22 baseline H2–H3 decisions and 65 unique artifact or argument decisions: 87 total. The reconciliation is exact: 70 `restored` + 1 `merged` + 16 `technically-invalid` + 0 `duplicate` = 87. Every technically invalid item is replaced in place with current Pi `0.84.2` behavior, so `content/preservation-manifest.json` keeps its original 80% word threshold and has no Chapter 6 deletion allowance.
+
+### Heading outcomes
+
+- H01 — H2 `1. Opening: the journey of a Bash command's message` / `1. Mở đầu: hành trình message của một lệnh Bash` — `restored` as the `!ls -la` journey through runtime state, session persistence, model conversion, and provider serialization.
+- H02 — H2 `2. Layer one: the LLM only knows three kinds of messages` / `2. Lớp một: LLM chỉ biết ba loại message` — `restored` as provider-facing `Message`, with the distinction between Pi's normalized contract and a provider wire payload.
+- H03 — H3 `The specific data structure of each kind` / `Cấu trúc dữ liệu cụ thể của mỗi loại` — `technically-invalid` only in the historical field lists. Current [`packages/ai/src/types.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/ai/src/types.ts) adds response, diagnostics, deferred, usage, dynamic-Tool, namespace, redaction, and replay fields; the final pages reproduce the current discriminants and complete or labeled abridged interfaces.
+- H04 — H3 `A complete dialog example` / `Một ví dụ hội thoại hoàn chỉnh` — `restored` as a copyable, fully populated `Message[]` Tool exchange with stable call/result identity.
+- H05 — H2 `3. The contradiction: messages in the Agent are more than three kinds` / `3. Nghịch lý: message trong Agent không chỉ có ba loại` — `restored` with runtime, TUI, storage, compaction, branch, and extension readers.
+- H06 — H2 `4. Layer two: AgentMessage: rich inside, strict outside, the double-layer design` / `4. Lớp hai: AgentMessage: trong giàu ngoài nghiêm, thiết kế hai lớp` — `restored` in natural prose as the richer Agent layer and its open extension slot.
+- H07 — H3 `The AgentMessage union type` / `Kiểu union AgentMessage` — `restored` with the exact indexed-access union from [`packages/agent/src/types.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/types.ts).
+- H08 — H3 `CustomAgentMessages: the empty-by-default extension point` / `CustomAgentMessages: extension point mặc định rỗng` — `restored` with its compile-time scope and runtime limits.
+- H09 — H3 `Declaration merging: type-safe extension magic` / `Declaration merging: phép mở rộng type-safe` — `restored` without the “magic” framing as a copyable notification augmentation plus collision and persistence guidance.
+- H10 — H2 `5. Translation boundary: convertToLlm: every custom message eventually becomes User` / `5. Biên giới dịch: convertToLlm: mọi custom message rốt cuộc đều thành User` — `technically-invalid` in its universal claim. [`AgentLoopConfig`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/types.ts) permits conversion or filtering to any valid `Message[]`; only Coding Agent's current four-role converter maps each retained custom role to `user`.
+- H11 — H3 `When does the translation happen?` / `Dịch xảy ra lúc nào?` — `restored` with exact per-call order, awaited hook behavior, and low-level versus `Agent` error boundaries.
+- H12 — H3 `Translation rules: all custom messages become User` / `Quy tắc dịch: mọi custom message đều thành User` — `technically-invalid` as a general rule and replaced by the exhaustive current Coding Agent role table and source-faithful switch.
+- H13 — H3 `Specific example: BashExecutionMessage translation` / `Ví dụ cụ thể: dịch BashExecutionMessage` — `restored` with aligned before/after records and the exact cancellation, exit-code, and truncation text behavior.
+- H14 — H2 `6. Two-stage pipeline: why are transformContext and convertToLlm separated?` / `6. Pipeline hai giai đoạn: tại sao tách transformContext và convertToLlm?` — `restored` with the exact async signatures, sequencing, fallback contract, Coding Agent Extension handler behavior, and provider boundary.
+- H15 — H2 `7. Filtering mechanism: some messages the LLM should not see` / `7. Cơ chế lọc: có những message LLM không nên thấy` — `restored` and expanded to distinguish model, TUI, runtime, and storage policies.
+- H16 — H3 `excludeFromContext: the filtering power of a boolean field` / `excludeFromContext: lực lọc của một trường boolean` — `restored` with the current `!`/`!!` input rule, converter branch, persisted record, and deferred insertion during streaming.
+- H17 — H3 `Three message visibility levels` / `Ba mức khả năng hiển thị message` — `technically-invalid` only in its unsupported Web UI `ArtifactMessage` row and one-dimensional framing. The final matrix uses current `Message`, Bash, `CustomMessage`, session-only `CustomEntry`, `BranchSummaryEntry`, and `CompactionEntry` behavior from [`session-manager.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/session-manager.ts).
+- H18 — H2 `8. Complete data flow: from user action to messages seen by the LLM` / `8. Luồng dữ liệu hoàn chỉnh: từ thao tác người dùng đến message LLM thấy` — `restored` as aligned live-input, resume, per-call, provider, Tool-result, and persistence paths.
+- H19 — H2 `9. Summary` / `9. Tóm tắt` — `restored` as direct transfer lessons rather than a repeated recap.
+- H20 — H3 `One main line: data structures must serve two readers at the same time` / `Một tuyến chính: cấu trúc dữ liệu phải cùng lúc chiều hai người đọc` — `restored` and updated to the three concrete session/runtime/model views in `0.84.2`.
+- H21 — H3 `Apply this main line to your own project` / `Áp dụng tuyến chính này vào dự án của bạn` — `restored` as consumer inventory, authoritative-source, conversion, runtime-pair, ordering, and failure guidance.
+- H22 — H2 `10. Next stop` / `10. Trạm tiếp theo` — `restored` with the six-chapter route, a concrete self-check, and the hand-off to Chapter 7 events.
+
+### Unique artifact and argument outcomes
+
+- A01 — Chapter 5 hand-off from `ToolResultMessage` to the unresolved meaning of “message” — `restored` and tied to the model, runtime, TUI, and session boundaries.
+- A02 — Repeated `UserMessage`/`AssistantMessage`/`ToolResultMessage` questions from earlier chapters — `restored` as the opening boundary problem.
+- A03 — Two-layer “rich inside, strict outside” thesis — `restored` with the session projection added as a separate storage boundary.
+- A04 — `!ls -la` terminal scenario — `restored` as the chapter's end-to-end running example.
+- A05 — Bash `command`, `output`, `exitCode`, cancellation, truncation, and UI-rendering rationale — `restored` with the current complete interface.
+- A06 — Provider rejection of `bashExecution` and acceptance of only shared roles — `restored`, while clarifying that Pi `Message` is normalized input to a provider implementation rather than its raw wire object.
+- A07 — Structured `BashExecutionMessage` object/interface artifact — `restored` as a source-faithful current TypeScript interface.
+- A08 — Three-role `Message` tree diagram — `restored` within the wider aligned boundary diagrams.
+- A09 — `UserMessage` object artifact — `restored` as the complete current interface.
+- A10 — String or text/image-array user content and multimodal explanation — `restored` with exact content-position rules.
+- A11 — Historical `AssistantMessage` object with incomplete fields and a five-value stop-reason claim — `technically-invalid`; replaced by every current field and the seven exact `StopReason` values from [`types.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/ai/src/types.ts).
+- A12 — Assistant text/thinking/Tool-call block tree — `restored` as exact discriminants and allowed-position table.
+- A13 — One assistant message containing both explanatory text and a Tool call — `restored` in the copyable Tool exchange.
+- A14 — Historical “signature IDs required by OpenAI and Google” aside — `technically-invalid` in attribution and field coverage; replaced by opaque `textSignature`, `thinkingSignature`, `thoughtSignature`, and `responseId` continuity rules evidenced across current Pi AI provider implementations.
+- A15 — Historical `ToolResultMessage` object without `usage` or `addedToolNames` — `technically-invalid`; replaced by the complete current interface and dynamic-Tool semantics.
+- A16 — `ToolCall.id` to `toolCallId` linkage and UI-oriented `details` argument — `restored` with provider serialization ownership.
+- A17 — Complete user/assistant/Tool-result dialog tree — `restored` as a fully typed `Message[]` example with no omitted required metadata.
+- A18 — Functional-data inventory: Bash, compaction, branch, and attachment/extension metadata — `restored` with supported current session and extension records.
+- A19 — UI and model as independent readers with conflicting field needs — `restored` and expanded to storage/resume.
+- A20 — Early flattening makes structured UI recovery impossible — `restored` as the source-versus-projection rule.
+- A21 — Late, one-way, lossy model projection — `restored`; the final pages state explicitly that the stored/runtime source is not mutated.
+- A22 — Agent core extension slot gives the core zero application dependencies and the consumer type safety — `restored` with exact package ownership.
+- A23 — Four-role Coding Agent custom-message tree — `restored` as the pinned `bashExecution`, `custom`, `branchSummary`, and `compactionSummary` snapshot.
+- A24 — Full Bash record fields including `excludeFromContext` — `restored` from current `core/messages.ts`.
+- A25 — Claim that custom messages alone provide UI, persistence, and visibility, while standard messages have no filtering option — `technically-invalid`; declaration merging supplies only type membership, and `transformContext` or `convertToLlm` can filter shared or custom messages. Runtime and persistence policies are now separated.
+- A26 — Exact `AgentMessage = Message | CustomAgentMessages[keyof CustomAgentMessages]` artifact — `restored`.
+- A27 — Fixed seven-member `AgentMessage` diagram — `technically-invalid` as a general definition; restored as a scoped Coding Agent augmentation snapshot.
+- A28 — `context.messages: AgentMessage[]` mixing shared and custom discriminants — `restored` as `agent.state.messages` and the per-call context snapshot.
+- A29 — Empty `CustomAgentMessages` interface artifact — `restored` with its exact source comment.
+- A30 — Coding Agent `declare module` artifact with four message registrations — `restored` in explanation and evidenced by pinned `core/messages.ts`; the copyable public example registers an application-owned notification instead of asking users to import internal interfaces.
+- A31 — Compiler adds augmented values to `AgentMessage` and checks narrowing — `restored` with compilation-wide scope.
+- A32 — Inheritance and generic-propagation trade-off argument — `restored` in direct language.
+- A33 — Unverified Web UI roles `user-with-attachments` and `artifact` — `technically-invalid`; removed from active guidance and replaced with the public Coding Agent Extension `CustomMessageEntry` and `CustomEntry` paths.
+- A34 — Per-call `transformContext -> convertToLlm -> Message[] -> streamFunction` diagram — `restored` and expanded with session projection and Pi AI provider conversion.
+- A35 — `transformContext` before `convertToLlm` sequencing — `restored` with both `await` operations from [`agent-loop.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/agent-loop.ts).
+- A36 — Seven-role Coding Agent conversion table — `restored` with exact retained, converted, and filtered outcomes.
+- A37 — Universal “all custom messages become user because providers require strict alternation” claim — `technically-invalid`; scoped to Coding Agent's converter, while Agent core permits filtering or any valid `Message[]` projection and Pi AI adapters own provider ordering repair.
+- A38 — Before-conversion Bash JSON artifact — `restored`.
+- A39 — After-conversion `UserMessage` JSON artifact — `restored` with the exact `Ran ...` formatter output.
+- A40 — Claim that cancellation and truncation facts disappear during Bash conversion — `technically-invalid`; current `bashExecutionToText()` preserves cancellation, nonzero exit code, and recorded full-output path as text while the original typed fields remain in runtime/session data.
+- A41 — Branch and compaction summaries wrapped in explanatory text and `<summary>` tags — `restored` with the current prefix/suffix constants.
+- A42 — Two-stage pipeline diagram/caption argument — `restored` as the exact same-type then cross-type sequence.
+- A43 — Separation of context policy from message-role conversion — `restored`.
+- A44 — Replacing pruning with summary-based context management without changing the role converter — `restored`, while locating Coding Agent compaction in session reconstruction rather than claiming its Agent hook triggers compaction.
+- A45 — Replacing coding roles with domain roles without changing context policy — `restored` through the notification example and application-owned converter discussion.
+- A46 — Provider switches do not change `convertToLlm` because Pi AI owns the next boundary — `restored` with current API-implementation terminology instead of retired translators.
+- A47 — `!!secret_cmd`/`!!command` no-context behavior — `restored` with the current interactive input parser and `excludeFromContext` field.
+- A48 — `bashExecution` filter switch artifact — `restored` as a source-faithful current branch.
+- A49 — Filtered Bash record remains available to UI/runtime — `restored` and expanded to persisted JSONL and extension-observation consequences.
+- A50 — Three-level visibility table containing an unsupported Web UI `ArtifactMessage` — `technically-invalid`; replaced with a four-boundary matrix of current public/runtime records, including the counterintuitive model-visible `display: false` custom message.
+- A51 — Complete seven-step user-action-to-next-turn data-flow diagram — `restored` and expanded with live/resume inputs, session projection, provider conversion, settled assistant state, ordered Tool results, and persistence.
+- A52 — “Rich inside, strict outside” conclusion — `restored` without the unbounded-extension claim.
+- A53 — Model-side versus functional-side needs list — `restored` as provider, TUI/runtime, and storage consumer requirements.
+- A54 — Two-layer summary table fixed at seven inner message types — `technically-invalid`; replaced with the session history, live Agent transcript, and model-context table whose shapes remain extensible where the APIs allow.
+- A55 — Cross-reference to Chapter 5's `Tool -> AgentTool -> ToolDefinition` layering — `restored` as a direct package-ownership comparison.
+- A56 — Transfer step 1: identify the readers and their fixed versus application-owned needs — `restored` as the consumer/field inventory.
+- A57 — Transfer step 2: retain structured source data and translate once at the protocol boundary — `restored` with the disposable per-call projection rule.
+- A58 — Transfer step 3: pair a closed core contract with an application extension point — `restored` and extended with converter, renderer, validation, serialization, and migration counterparts.
+- A59 — Six-chapter core-mechanism completion statement — `restored` as a concrete route from provider output through Tools and into the next message projection.
+- A60 — Pre-advanced-section review suggestion — `restored` as a specific `ToolCall`/`ToolResultMessage`/session/hook trace in both locales.
+- A61 — Questions leading from message and Tool state into events — `restored` through exact current event names and the Chapter 7 hand-off.
+- A62 — Agent “nervous system” metaphor — `merged` into the concrete event-data-path hand-off; no separate metaphor is needed to teach the same transition.
+- A63 — Historical source index with stale line ranges and retired repository links — `technically-invalid`; replaced by commit-pinned public and internal-glue paths, with source-faithful excerpts labeled at their actual files.
+- A64 — Pi `v0.80.2` version note — `technically-invalid`; current package manifests identify `0.84.2`, and both pages pin the full `a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c` revision.
+- A65 — `Next up` link to Chapter 7 — `restored` in both locale files.
+
+The thinner pre-restoration Chapter 6 pages contained a compact content-block table, provider-conversion boundary, identity/time/opaque-metadata rules, persistence warning, and validation checklist. Their useful current material remains across Sections 2, 5, 7, 8, and 9 and is expanded with the baseline journey. Current additions include the public/default converter distinction, hook failure contracts, Extension handler settlement, image-block wrapper ownership, session-entry projection, Bash insertion deferral, `display: false` warning, settled-message persistence boundary, and package-ownership map. These additions do not change the 87 baseline decisions above.
