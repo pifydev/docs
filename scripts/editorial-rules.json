@@ -1,0 +1,24 @@
+{
+  "englishBannedPatterns": [
+    "Provider private format",
+    "Return directly AsyncIterable",
+    "inheritance Tool The three fields of",
+    "Compatibility spacer",
+    "Which model to use Find out who to contact",
+    "one line code harness",
+    "recognize-father-not-child",
+    "followUp life-extension",
+    "No await! First emit"
+  ],
+  "vietnameseBannedPatterns": [
+    "Agent lớp học",
+    "Provider định dạng riêng tư",
+    "cơ chế kéo dài thở",
+    "móc tiền xử lý",
+    "Mỗi dịch giả thành thạo",
+    "cái nàymodelTìm ai",
+    "nhận cha không nhận con"
+  ],
+  "mojibakePatterns": ["Ã", "Â", "â€", "�"],
+  "minimumVietnameseParagraphWords": 24
+}
