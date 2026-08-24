@@ -181,7 +181,7 @@ Protocol, client, telemetry, evaluation, and SQLite session-backend packages mak
 
 ---
 
-## 3. After reading five roles, you have an intuition
+## 3. A first architectural model
 
 The core stack now has a recognizable shape:
 
@@ -212,17 +212,20 @@ That looks like a clean bottom-middle-top stack. The package manifests reveal a 
 
 > **Reading path:** Sections 4 and 5 go deeper into dependency direction and TypeScript types. Read them before building on the SDK. If you only need to choose a package for a small Agent, Section 6 gives the practical decision table.
 
-The coding package depends directly on all three foundational packages:
+The coding package depends directly on all three foundational packages in the teaching stack. This selected manifest excerpt shows those dependencies:
 
-```json
+```jsonc
 {
   "dependencies": {
+    // Selected foundational dependencies from package.json at a470b121.
     "@earendil-works/pi-agent-core": "^0.84.2",
     "@earendil-works/pi-ai": "^0.84.2",
     "@earendil-works/pi-tui": "^0.84.2"
   }
 }
 ```
+
+The full manifest also lists `@earendil-works/pi-client` and `@earendil-works/pi-protocol`. They support client/protocol boundaries outside this three-layer teaching stack; the excerpt is not the complete `dependencies` object.
 
 `pi-coding-agent` reaches past the middle layer to `pi-ai`. This is allowed. The architecture promises one-way dependencies, not adjacency-only imports.
 
@@ -349,8 +352,12 @@ Coding Agent assembles types around a complete user workflow. `AgentSession` coo
 For Tools, the product-facing `ToolDefinition` is deliberately separate from `AgentTool`. Their model-facing metadata overlaps, but their execution signatures do not: `ToolDefinition.execute` requires a fifth `ctx: ExtensionContext` parameter. A `ToolDefinition` therefore cannot be passed directly to Agent Core as an `AgentTool`.
 
 ```typescript
-// Abridged from packages/coding-agent/src/core/extensions/types.ts.
-interface ToolDefinition<TParams extends TSchema, TDetails = unknown> {
+// Selected exact fields and signatures from extensions/types.ts at a470b121.
+export interface ToolDefinition<
+  TParams extends TSchema = TSchema,
+  TDetails = unknown,
+  TState = any,
+> {
   name: string;
   label: string;
   description: string;
@@ -366,8 +373,17 @@ interface ToolDefinition<TParams extends TSchema, TDetails = unknown> {
     onUpdate: AgentToolUpdateCallback<TDetails> | undefined,
     ctx: ExtensionContext,
   ): Promise<AgentToolResult<TDetails>>;
-  renderCall?: (...args: any[]) => Component;
-  renderResult?: (...args: any[]) => Component;
+  renderCall?: (
+    args: Static<TParams>,
+    theme: Theme,
+    context: ToolRenderContext<TState, Static<TParams>>,
+  ) => Component;
+  renderResult?: (
+    result: AgentToolResult<TDetails>,
+    options: ToolRenderResultOptions,
+    theme: Theme,
+    context: ToolRenderContext<TState, Static<TParams>>,
+  ) => Component;
 }
 ```
 
