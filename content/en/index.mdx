@@ -3,28 +3,31 @@ title: Pify Agent Book
 description: 'Source-code reading notes for the Pi Agent SDK, in English and Vietnamese.'
 translation_key: home
 language: en
+status: reviewed
+reviewed_by: Pify maintainers
+last_updated: '2026-08-24'
 ---
-Reading notes for the [Pi Agent SDK](https://github.com/earendil-works/pi). The English translation of the [Pi Agent Book](https://www.dgzhuya.com/); Chinese is the canonical source. The English chapters follow the original structure and order.
+Source-reading notes for the [Pi Agent SDK](https://github.com/earendil-works/pi), published in English and Vietnamese. The numbered chapters retain the structure of the original Pi Agent Book, but current upstream code and documentation take precedence when the implementation has changed.
 
 <Callout type="info">
-New here? Start with the [Quickstart](quickstart.md) and you will have a working Pi agent in ten minutes. Skip straight to the chapters if you want the long-form reading.
+New here? Start with the [Quickstart](quickstart.md) to make a streaming model call. Go straight to the numbered chapters for the architecture and source walkthroughs.
 </Callout>
 
 ## How to read
 
 - **New to Pi:** [Quickstart](quickstart.md) first, then chapters in order.
-- **Reading for the architecture:** chapters 1 through 3 are the spine. Chapter 2 sets the three-layer model; chapter 3 is the agent loop. The remaining chapters are reference material you can dip into.
+- **Reading for the architecture:** chapters 1 through 3 establish the three-layer model and the agent loop. Read the remaining chapters as focused explanations of models, tools, messages, events, context, compaction, and sessions.
 - **Building on Pi:** the [How-to Guides](how-to/add-custom-tool.md) are short task-oriented recipes.
 - **Looking up an API or env var:** the [Reference](reference/api.md) is structured for lookup, not reading.
 
-Every chapter links to the matching official [pi.dev](https://pi.dev/docs/latest) page for cross-verification. Code samples are runnable against `@pi-ai/core` and `@pi-agent-core`.
+Technical claims are checked against a pinned revision of the official Pi repository. Code identifiers and package names follow the current `@earendil-works/pi-*` packages.
 
 ## Sections
 
-- [**Quickstart**](quickstart.md) - 10-minute tutorial. Run your first model call.
+- [**Quickstart**](quickstart.md) - make your first streaming model call.
 - [**Glossary**](glossary.md) - the terms Pi uses for itself, and how this book uses them.
 - [**How-to Guides**](how-to/add-custom-tool.md) - 5 task-oriented recipes: tools, model providers, streaming, sessions, prompts.
-- [**Reference**](reference/api.md) - every public export, the settings schema, and the env var surface.
+- [**Reference**](reference/api.md) - package exports, configuration, and environment variables.
 - [**Chapters**](ch01-overview.md) - 10 long-form chapters covering the SDK end to end.
 - [**FAQ**](help/faq.md) - common questions about Pi and this book.
 - [**Changelog**](changelog.md) - what changed in this site.

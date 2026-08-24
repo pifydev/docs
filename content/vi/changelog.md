@@ -1,33 +1,28 @@
 ---
-title: Changelog
-description: 'Thay đổi trên site docs này. Cho chính Pi SDK, xem upstream changelog.'
+title: Nhật ký thay đổi
+description: Các thay đổi của website tài liệu Pify, tách biệt với changelog của Pi SDK.
 translation_key: changelog
 language: vi
+status: reviewed
+reviewed_by: Pify maintainers
+last_updated: '2026-08-24'
 ---
-Những thay đổi trên site docs này, theo thứ tự thời gian ngược. Cho chính Pi SDK, xem [upstream changelog](https://github.com/earendil-works/pi/releases).
+Trang này ghi các thay đổi của website tài liệu Pify. Để xem release của Pi, hãy dùng [lịch sử release upstream](https://github.com/earendil-works/pi/releases).
 
-:::note
+## 2026-08-24
 
-Các entry dưới đây ghi lại **Pify Agent Book** site, không phải Pi SDK. Translation drift, thay đổi layout, và thêm nội dung sống ở đây.
+- Thêm editorial lint song ngữ để phát hiện ký tự Hán còn sót, control character, dấu câu full-width, mojibake, các mẫu dịch sát chữ đã biết và đoạn tiếng Việt dài không dấu.
+- Định nghĩa quy ước thuật ngữ Anh/Việt và review ledger được ghim vào một upstream commit cụ thể của Pi.
+- Bắt đầu biên tập và kiểm chứng kỹ thuật toàn bộ 23 cặp trang tiếng Anh/Việt.
 
-:::
+## 2026-08-22
 
-## Unreleased
-
-- Thêm Quickstart tutorial, glossary này, và chính changelog
-- Sidebar được tổ chức lại thành Getting Started / How-to / Reference / Chapters / Help
-- Bật `lastUpdated` ở footer site
-- Site chrome mới: code block title, line highlighting, Tabs cho snippet đa ngôn ngữ
-- Mục How-to guides: 5 công thức theo task
-- Mục Reference: API, configuration, environment variables
-- Trang FAQ
+- Thay các thử nghiệm triển khai Astro và GitBook trước đó bằng ứng dụng Fumadocs self-hosted trên Vercel.
+- Thêm route Anh/Việt, navigation bản địa hóa, search, SEO metadata, syntax highlighting, Mermaid renderer và end-to-end test song ngữ.
+- Sửa các link tài liệu theo locale để route sạch không còn lộ đuôi `.md`.
+- Thêm logo Pify, favicon thích ứng, giấy phép GPLv3, hướng dẫn đóng góp và tài liệu triển khai.
 
 ## 2026-08-20
 
-- 10 chapter đầu tiên dịch sang tiếng Anh (nguồn canonical là tiếng Trung tại dgzhuya.com)
-- Bản dịch tiếng Việt cho cả 10 chapter
-- Hỗ trợ 3 ngôn ngữ: English (mặc định), Tiếng Việt, Tiếng Trung
-- Search index qua Pagefind
-- Hero landing page trên `/en` với chapter grid
-- Trang 404 tuỳ chỉnh
-- Tạo sitemap
+- Import 10 chương tiếng Anh và tiếng Việt đầu tiên từ dự án dịch Pi Agent Book.
+- Thêm navigation ban đầu và metadata về nguồn tài liệu.

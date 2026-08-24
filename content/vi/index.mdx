@@ -3,31 +3,34 @@ title: Pify Agent Book
 description: 'Ghi chú đọc mã nguồn cho Pi Agent SDK, bằng tiếng Anh và tiếng Việt.'
 translation_key: home
 language: vi
+status: reviewed
+reviewed_by: Pify maintainers
+last_updated: '2026-08-24'
 ---
-Ghi chú đọc mã nguồn cho [Pi Agent SDK](https://github.com/earendil-works/pi). Đây là bản dịch tiếng Việt của [Pi Agent Book](https://www.dgzhuya.com/); tiếng Trung là bản gốc. Các chương tiếng Việt theo đúng cấu trúc và thứ tự của bản gốc.
+Tài liệu đọc mã nguồn [Pi Agent SDK](https://github.com/earendil-works/pi), được xuất bản bằng tiếng Anh và tiếng Việt. Các chương đánh số giữ cấu trúc của Pi Agent Book nguyên bản, nhưng mã nguồn và tài liệu upstream hiện tại luôn được ưu tiên khi implementation đã thay đổi.
 
 <Callout type="info">
-Mới đến với Pi? Bắt đầu với [Quickstart](quickstart.md) và bạn sẽ có một Pi agent hoạt động trong mười phút. Nếu muốn đọc chuyên sâu ngay, có thể nhảy thẳng vào các chương.
+Nếu mới làm quen với Pi, hãy bắt đầu bằng [Hướng dẫn nhanh](quickstart.md) để thực hiện một model call có streaming. Đọc thẳng các chương đánh số nếu bạn muốn tìm hiểu kiến trúc và mã nguồn.
 </Callout>
 
 ## Cách đọc
 
-- **Mới với Pi:** [Quickstart](quickstart.md) trước, rồi đọc các chương theo thứ tự.
-- **Đọc để hiểu kiến trúc:** chương 1 đến 3 là phần lõi. Chương 2 đặt nền cho mô hình ba lớp; chương 3 là agent loop. Các chương còn lại là tài liệu tham khảo có thể đọc theo nhu cầu.
-- **Xây dựng trên Pi:** [How-to Guides](how-to/add-custom-tool.md) là các công thức ngắn theo tác vụ.
-- **Tra cứu API hoặc env var:** [Reference](reference/api.md) được cấu trúc để tra cứu, không phải để đọc tuần tự.
+- **Mới làm quen với Pi:** đọc [Hướng dẫn nhanh](quickstart.md), sau đó đọc các chương theo thứ tự.
+- **Tìm hiểu kiến trúc:** chương 1 đến 3 trình bày mô hình ba lớp và vòng lặp Agent. Các chương còn lại lần lượt giải thích model, Tool, message, sự kiện, ngữ cảnh, nén ngữ cảnh và phiên làm việc.
+- **Xây dựng trên Pi:** phần [Hướng dẫn](how-to/add-custom-tool.md) cung cấp các quy trình ngắn theo từng tác vụ.
+- **Tra cứu API hoặc biến môi trường:** phần [Tham khảo](reference/api.md) được tổ chức để tra cứu nhanh.
 
-Mỗi chương liên kết tới trang [pi.dev](https://pi.dev/docs/latest) tương ứng để đối chiếu. Code mẫu chạy được với `@pi-ai/core` và `@pi-agent-core`.
+Các thông tin kỹ thuật được đối chiếu với một commit đã ghim của repository Pi chính thức. Identifier và tên package trong code dùng namespace `@earendil-works/pi-*` hiện tại.
 
 ## Mục lục
 
-- [**Quickstart**](quickstart.md) - tutorial 10 phút. Chạy model call đầu tiên.
-- [**Glossary**](glossary.md) - các thuật ngữ Pi tự dùng cho mình, và cách cuốn sách này dùng chúng.
-- [**How-to Guides**](how-to/add-custom-tool.md) - 5 công thức theo tác vụ: tools, model providers, streaming, sessions, prompts.
-- [**Reference**](reference/api.md) - mọi public export, schema settings, và bề mặt env var.
-- [**Chapters**](ch01-overview.md) - 10 chương dài bao phủ SDK từ đầu đến cuối.
+- [**Hướng dẫn nhanh**](quickstart.md) - thực hiện model call có streaming đầu tiên.
+- [**Thuật ngữ**](glossary.md) - cách tài liệu sử dụng các khái niệm của Pi.
+- [**Hướng dẫn**](how-to/add-custom-tool.md) - 5 quy trình về Tool, provider, streaming, phiên làm việc và prompt.
+- [**Tham khảo**](reference/api.md) - package export, cấu hình và biến môi trường.
+- [**Các chương**](ch01-overview.md) - 10 chương chuyên sâu về SDK.
 - [**FAQ**](help/faq.md) - các câu hỏi thường gặp về Pi và cuốn sách này.
-- [**Changelog**](changelog.md) - những gì đã thay đổi trên site này.
+- [**Nhật ký thay đổi**](changelog.md) - các thay đổi của website tài liệu.
 
 ## Phản hồi
 

@@ -1,16 +1,19 @@
 ---
-title: 'Quickstart: Xây Pi agent đầu tiên của bạn'
+title: 'Hướng dẫn nhanh: Tạo Pi agent đầu tiên'
 description: >-
-  Tutorial 10 phút đưa bạn từ thư mục rỗng đến một Pi agent hoạt động, stream
-  phản hồi từ model.
+  Tạo một chương trình TypeScript nhỏ để nhận phản hồi streaming qua Pi AI API
+  hiện tại.
 translation_key: quickstart
 language: vi
+status: reviewed
+reviewed_by: Pify maintainers
+last_updated: '2026-08-24'
 ---
-Tutorial này đưa bạn từ một thư mục rỗng đến một Pi agent hoạt động, có khả năng stream phản hồi từ model. Bạn sẽ cài `@pi-ai/core`, gắn một model vào, và chạy một script 5 dòng. Không yêu cầu kiến thức nền tảng về Pi.
+Hướng dẫn này tạo một chương trình TypeScript nhỏ để nhận phản hồi streaming từ model. Bạn sẽ cài `@earendil-works/pi-ai`, đăng ký các provider có sẵn, chọn một model và xử lý luồng sự kiện. Bạn không cần biết Pi từ trước.
 
-:::tip[Bạn sẽ có gì ở cuối tutorial]
+:::tip[Kết quả]
 
-Một file TypeScript gọi model thông qua cùng interface `streamSimple` mà chính Pi agent sử dụng. Từ đó bạn có thể xếp thêm tool, event, session, và toàn bộ agent loop.
+Một file TypeScript gọi model qua `Models.streamSimple()`. Từ đây, bạn có thể bổ sung Tool, xử lý sự kiện, lưu phiên làm việc và xây dựng vòng lặp Agent.
 
 :::
 
@@ -18,29 +21,30 @@ Một file TypeScript gọi model thông qua cùng interface `streamSimple` mà 
 
 Bạn cần:
 
-- **Node.js 20 trở lên** - kiểm tra bằng `node --version`
-- **API key của một provider** - Anthropic, OpenAI, Google, hoặc bất kỳ local proxy nào nói chuyện được theo giao thức OpenAI Chat Completions. Snippet dưới dùng Anthropic.
-- **Một terminal** trong một thư mục rỗng
+- **Node.js 22.19 trở lên** - kiểm tra bằng `node --version`
+- **API key của một provider** - ví dụ Anthropic, OpenAI hoặc Google. Ví dụ dưới đây dùng Anthropic.
+- **Terminal** đang mở tại một thư mục rỗng
 
 :::caution[Chi phí và an toàn]
 
-Tutorial này gọi API thật. Đặt spend limit thấp trên tài khoản provider trước khi tiếp tục, và đừng commit key vào bất kỳ file nào.
+Hướng dẫn này gọi API thật. Hãy đặt giới hạn chi tiêu thấp trên tài khoản provider và tuyệt đối không commit API key.
 
 :::
 
-## 1. Khởi tạo project
+## 1. Khởi tạo dự án
 
 ```bash
 mkdir pi-quickstart && cd pi-quickstart
 npm init -y
 npm pkg set type=module
-npm install @pi-ai/core
+npm install @earendil-works/pi-ai
+npm install --save-dev tsx
 ```
 
 Bạn sẽ có:
 
-- một `package.json` với `"type": "module"` để file `.ts` và `.mjs` chạy không cần flag
-- `@pi-ai/core` đã cài trong `node_modules`
+- `package.json` được cấu hình để dùng ECMAScript modules
+- `@earendil-works/pi-ai` và TypeScript loader `tsx` trong `node_modules`
 
 ## 2. Thêm API key
 
@@ -50,9 +54,9 @@ Tạo file `.env` trong cùng thư mục:
 ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-:::note[Vì sao dùng file `.env` chứ không hardcode]
+:::note[Vì sao dùng `.env` thay vì hardcode]
 
-Key được SDK đọc lúc runtime. Giữ key trong `.env` nghĩa là bạn có thể `.gitignore` nó và không bao giờ để lộ key trong source control.
+Provider đọc key khi chương trình chạy. Thêm `.env` vào `.gitignore` để key không lọt vào source control.
 
 :::
 
@@ -68,13 +72,21 @@ node_modules
 Tạo `agent.ts`:
 
 ```ts title="agent.ts"
-import { getModel, streamSimple } from "@pi-ai/core";
+import { builtinModels } from "@earendil-works/pi-ai/providers/all";
 
-const model = getModel("anthropic", "claude-sonnet-4-5");
+const models = builtinModels();
+const model = models.getModel("anthropic", "claude-sonnet-4-5");
+if (!model) throw new Error("Model not found");
 
-const stream = streamSimple(model, {
+const stream = models.streamSimple(model, {
   systemPrompt: "You are a concise assistant. Reply in one sentence.",
-  messages: [{ role: "user", content: "What is the capital of France?" }],
+  messages: [
+    {
+      role: "user",
+      content: "What is the capital of France?",
+      timestamp: Date.now(),
+    },
+  ],
 });
 
 for await (const event of stream) {
@@ -86,24 +98,24 @@ for await (const event of stream) {
 }
 ```
 
-Ba thứ xảy ra trong file này:
+Bốn bước diễn ra trong file này:
 
-1. `getModel("anthropic", "claude-sonnet-4-5")` tra cứu một model descriptor từ catalog. Descriptor biết provider, URL, và request shape.
-2. `streamSimple(model, context)` mở một streaming request. Nó trả về một async iterable của các event.
-3. Vòng `for await` kéo event cho đến khi stream kết thúc. `text_delta` chứa các token chunk; `done` là event kết thúc.
+1. `builtinModels()` tạo một `Models` collection và đăng ký các provider có sẵn.
+2. `models.getModel("anthropic", "claude-sonnet-4-5")` lấy model descriptor từ collection đó.
+3. `models.streamSimple(model, context)` mở request streaming và trả về một async iterable.
+4. Vòng `for await` xử lý sự kiện cho đến khi stream kết thúc. `text_delta` chứa từng phần văn bản; `done` là sự kiện cuối.
 
-## 4. Load key và chạy
+## 4. Nạp key và chạy
 
-SDK đọc API key từ `process.env.ANTHROPIC_API_KEY`. Để đưa giá trị từ `.env` vào environment, dùng một loader một lần:
+Provider đọc `ANTHROPIC_API_KEY` từ environment của process. Node có thể nạp trực tiếp file `.env`:
 
 ```bash
-npm install --save-dev dotenv
 node --env-file=.env --import tsx agent.ts
 ```
 
-:::tip[Hoặc dùng script]
+:::tip[Thêm npm script]
 
-Nếu bạn thích setup vĩnh viễn, thêm vào `package.json`:
+Thêm cấu hình sau vào `package.json` nếu bạn muốn dùng lệnh ngắn hơn:
 
 ```json title="package.json"
 {
@@ -113,11 +125,11 @@ Nếu bạn thích setup vĩnh viễn, thêm vào `package.json`:
 }
 ```
 
-Sau đó `npm start` làm cùng điều đó.
+Sau đó chạy `npm start`.
 
 :::
 
-Bạn sẽ thấy gì đó như:
+Kết quả sẽ tương tự:
 
 ```
 The capital of France is Paris.
@@ -131,34 +143,40 @@ Nếu thấy vậy, bạn đã có một Pi agent hoạt động.
 Đổi user message và chạy lại:
 
 ```ts title="agent.ts" {6}
-const stream = streamSimple(model, {
+const stream = models.streamSimple(model, {
   systemPrompt: "You are a concise assistant. Reply in one sentence.",
-  messages: [{ role: "user", content: "Name three Pi SDK packages." }],
+  messages: [
+    {
+      role: "user",
+      content: "Name three Pi SDK packages.",
+      timestamp: Date.now(),
+    },
+  ],
 });
 ```
 
-`{6}` sau language tag là Expressive Code line highlighting. Dòng 6 giờ được gọi ra trực quan trong code block đã render.
+Metadata `{6}` yêu cầu code renderer của Fumadocs làm nổi bật dòng 6.
 
 ## Tiếp theo
 
-Bạn đã có một lệnh `streamSimple` hoạt động. Phần còn lại của cuốn sách xếp lên trên primitive này:
+Bạn đã có một lệnh `Models.streamSimple()` hoạt động. Chọn nội dung tiếp theo theo mục tiêu của bạn:
 
 | Mục tiêu | Đọc |
 |---|---|
-| Hiểu toàn bộ agent loop, không chỉ một model call | [Chapter 3: Agent Loop](ch03-agent-loop.md) |
-| Thêm một tool model có thể gọi | [How to add a custom tool](how-to/add-custom-tool.md) |
-| Gắn một model provider SDK không có sẵn | [How to plug in a new model](how-to/plug-new-model.md) |
-| Lưu cuộc hội thoại qua nhiều lần chạy | [How to persist sessions](how-to/persist-sessions.md) |
+| Hiểu toàn bộ vòng lặp Agent | [Chương 3: Vòng lặp Agent](ch03-agent-loop.md) |
+| Thêm một Tool mà model có thể gọi | [Thêm Tool tùy chỉnh](how-to/add-custom-tool.md) |
+| Tích hợp provider mới | [Tích hợp model mới](how-to/plug-new-model.md) |
+| Lưu cuộc hội thoại qua nhiều lần chạy | [Lưu phiên làm việc](how-to/persist-sessions.md) |
 
-## Troubleshooting
+## Khắc phục sự cố
 
 **`Error: ANTHROPIC_API_KEY is not set`**
 
-SDK không tìm thấy key. Xác nhận `.env` tồn tại trong thư mục hiện tại và bạn đã launch Node với `--env-file=.env`.
+Provider không tìm thấy key. Xác nhận `.env` nằm trong thư mục hiện tại và bạn đã chạy Node với `--env-file=.env`.
 
 **`Error: model not found`**
 
-`getModel` không resolve được model descriptor. Kiểm tra chính tả. Các canonical ID được liệt kê trong [Reference: Models](reference/configuration.md#models).
+`models.getModel()` không tìm thấy descriptor. Kiểm tra provider ID và model ID. Xem [Tham khảo cấu hình](reference/configuration.md#models).
 
 **`SyntaxError: Cannot use import statement outside a module`**
 

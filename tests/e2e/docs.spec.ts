@@ -104,12 +104,14 @@ test("switches the current page and keeps search results locale-scoped", async (
   await expect(page).toHaveURL(/\/en\/ch01-overview$/);
 
   const searchResponse = await request.get(
-    "/api/search?query=vòng%20lặp&locale=vi",
+    "/api/search?query=stopReason&locale=vi",
   );
   expect(searchResponse.ok()).toBe(true);
   const results = (await searchResponse.json()) as Array<{ url: string }>;
   expect(results.length).toBeGreaterThan(0);
-  expect(results.every((result) => result.url.startsWith("/vi/"))).toBe(true);
+  expect(
+    results.filter((result) => !/^\/vi(?:[\/#]|$)/.test(result.url)),
+  ).toEqual([]);
 
   await page.goto("/vi");
   await page
@@ -117,7 +119,7 @@ test("switches the current page and keeps search results locale-scoped", async (
     .evaluate((element: HTMLButtonElement) => element.click());
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
-  await page.getByPlaceholder("Tìm kiếm").fill("vòng lặp");
+  await page.getByPlaceholder("Tìm kiếm").fill("stopReason");
 
   const firstResult = dialog.locator("button[aria-selected]").first();
   await expect(firstResult).toContainText("Chương 3");
@@ -170,7 +172,7 @@ test("renders docs primitives, theme controls, and a usable mobile drawer", asyn
   await expect(
     page.getByRole("link", { name: "Sửa trên GitHub" }),
   ).toBeVisible();
-  await expect(page.getByText("Bạn sẽ có gì ở cuối tutorial")).toBeVisible();
+  await expect(page.getByText("Kết quả", { exact: true })).toBeVisible();
   await expect(page.locator(".pify-docs-body")).not.toContainText(":::tip");
   const mobileNav = page.getByRole("button", { name: "Mở thanh điều hướng" });
   await expect(mobileNav).toBeVisible();

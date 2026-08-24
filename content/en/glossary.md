@@ -1,103 +1,104 @@
 ---
 title: Glossary
-description: >-
-  The terms Pi uses for itself. English originals are kept in the translations
-  to keep source-code reading notes unambiguous.
+description: Canonical Pi terms used throughout the English and Vietnamese documentation.
 translation_key: glossary
 language: en
+status: reviewed
+reviewed_by: Pify maintainers
+last_updated: '2026-08-24'
 ---
-This glossary collects the English terms Pi uses for itself. The translations preserve these originals. A term appears here when it has a precise meaning in the Pi codebase, or when the literal translation would mislead.
+These definitions follow the current Pi packages. Code identifiers, package names, commands, paths, configuration keys, and environment variables are always preserved exactly.
 
-:::note[Why a glossary]
+:::note[Translation rule]
 
-Pi ships a small vocabulary and uses each word with intent. Reading the source without these definitions is possible but slow. If a chapter uses a term that is not on this list, treat it as ordinary English.
+The Vietnamese edition keeps product names and code identifiers unchanged. A general concept may be translated when its first use also gives the canonical English term.
 
 :::
 
 ## Agent
 
-The program that drives the LLM. The agent owns the loop, the tool surface, and the session state. In Pi, the agent is split across two packages: `@pi-agent-core` holds the loop, `@pi-coding-agent` adds the CLI shell, prompt expansion, and managed tools.
+The runtime that sends context to a model, exposes tools, processes tool calls, and tracks state. The core implementation is published as `@earendil-works/pi-agent-core`.
 
 ## Agent Loop
 
-The repeated sequence `prompt -> model -> tool calls -> tool results -> model` that drives a turn. Pi implements the loop in `agentLoop()` inside `@pi-agent-core`. The loop is event-driven, not callback-based; consumers subscribe to a stream of typed events.
+The repeated `prompt -> model response -> tool calls -> tool results -> model response` sequence that drives an agent turn. Pi exposes typed events while this loop runs.
 
 ## Block
 
-One user-facing unit inside a turn. A turn is composed of one or more blocks. Examples of block types are `text`, `thinking`, `tool_use`, `tool_result`. Blocks flow through the message stream in declaration order.
+A typed item inside message content. Common block types include `text`, `thinking`, and `toolCall`. A `toolResult` message returns the output of a tool call.
 
 ## Coding Agent
 
-The bundled CLI. Refers specifically to `@pi-coding-agent`, which sits on top of `@pi-agent-core` and adds the prompt expansion, permission prompts, and managed file/bash tools. Not a synonym for "agent".
+The Pi command-line application published as `@earendil-works/pi-coding-agent`. It adds the terminal UI, project context, managed tools, sessions, extensions, skills, and configuration around the agent runtime.
 
 ## Compaction
 
-The process of reducing a long conversation into a shorter summary so it fits the model context window. Pi implements this as a separate agent turn that summarises old blocks while keeping recent ones verbatim. See [Chapter 9: Context Compaction](ch09-compaction.md).
+The process of replacing older conversation context with a structured summary while keeping recent messages verbatim. Compaction lets a session continue before it exceeds the model's context window. See [Chapter 9: Context Compaction](ch09-compaction.md).
 
 ## Context Window
 
-The maximum amount of text the model will read in one request, measured in tokens. Every model has a hard ceiling; Pi tracks usage per turn and triggers compaction when the ceiling is close.
+The maximum number of tokens a model can process in one request. Pi estimates current usage and can compact older context before the request exceeds this limit.
 
 ## Descriptor
 
-The structured description of a model: provider, model id, request shape, capabilities, pricing. Pi stores descriptors in a catalog under `@pi-ai/core`. `getModel(provider, id)` returns one. A descriptor is the unit of pluggability for new models.
+A structured `Model` record containing the provider ID, model ID, API, capabilities, context limits, and pricing metadata. `Models.getModel(provider, id)` resolves one from a registered model collection.
 
 ## Event
 
-A typed message emitted by the agent loop or a stream. Examples: `message_start`, `text_delta`, `tool_use`, `tool_result`, `message_update`, `done`. Events flow over an async iterable.
+A typed update emitted by a model stream or the agent runtime. Model-stream events include `start`, `text_start`, `text_delta`, `text_end`, `toolcall_start`, `toolcall_delta`, `toolcall_end`, `done`, and `error`.
 
 ## Extension
 
-A user-defined hook that runs inside the agent process. Pi extensions can register tools, intercept messages, add slash commands, and override theme tokens. The extension API is stable across `pi-coding-agent` versions.
+A TypeScript module loaded inside the coding-agent process. Extensions can register tools and commands, subscribe to lifecycle events, and customize behavior through the documented extension API.
 
 ## Managed Tools
 
-The four built-in tools `read`, `bash`, `edit`, and `write`. Pi runs these with permission prompts by default and supports a YOLO mode that skips the prompts.
+The built-in `read`, `write`, `edit`, and `bash` tools supplied to the coding agent by default. Additional read-only tools such as `grep`, `find`, and `ls` can be enabled through tool options.
 
 ## Message
 
-A typed record passed between the agent and the model. Pi uses Anthropic-shaped messages at the protocol layer, then adapts them per provider. There are two message kinds in Pi: `user` and `assistant`. Tool use and tool results are embedded inside `assistant` messages.
+A typed record passed through the model and agent layers. The Pi AI package defines `UserMessage`, `AssistantMessage`, and `ToolResultMessage`; provider adapters translate these records to each provider's wire format.
 
 ## Model Provider
 
-The HTTP service the SDK talks to: Anthropic, OpenAI, Google, OpenRouter, llama.cpp, and so on. Each provider has a translator inside `@pi-ai/core` that converts between Pi messages and the provider wire format.
+The service that handles a model request, such as Anthropic, OpenAI, Google, Bedrock, or a compatible local server. A provider registration supplies models, authentication, and streaming functions to a `Models` collection.
 
 ## Pi
 
-The umbrella project. `Pi` with capital P always refers to the Pi Agent SDK by `earendil-works`. The lowercase `pi` is the CLI binary (`@pi-coding-agent`).
+The open-source agent toolkit maintained in `badlogic/pi-mono` and mirrored at `earendil-works/pi`. Lowercase `pi` refers to the coding-agent CLI command.
 
 ## Session
 
-A persisted conversation tree. Sessions live on disk under the Pi home directory and are loaded by id. A session stores messages, branches, metadata, and the resolved model. See [Chapter 10: Session Management](ch10-session.md).
+A persisted conversation history. The coding agent stores sessions as JSONL, supports branching, and can resume a previous branch. See [Chapter 10: Session Management](ch10-session.md).
 
 ## Skill
 
-A named, reusable prompt template invoked by `/skill-name` in the prompt. Skills are stored in `~/.pi/agent/skills/` or in `.pi/skills/` inside a project.
+A reusable instruction file discovered from configured skill directories. A skill describes when it applies and provides task-specific guidance to the agent.
 
 ## Stream
 
-The async iterable of events returned by `streamSimple` or by the agent loop. Streams are pull-based: the consumer awaits each event.
+An `AssistantMessageEventStream`, which is both an async iterable of typed events and a handle for retrieving the final result.
 
 ## Subagent
 
-An agent launched by another agent. Pi supports subagents through the `subagent` tool and the `pi.runSubagent()` extension API. Subagents run their own loop and can return a final result or stream back.
+An agent launched to perform a bounded task on behalf of another agent. Pi supports subagent workflows through extensions and example implementations rather than treating one orchestration policy as part of the core loop.
 
 ## System Prompt
 
-The instruction block sent at the start of every model call. Pi composes the system prompt from CLI flags, project files (`AGENTS.md`, `SYSTEM.md`), and extension contributions. See [Chapter 8: Context Engineering](ch08-context-engineering.md).
+The instruction text sent with model context. The coding agent assembles it from its defaults, project context files, command-line options, and extension contributions. See [Chapter 8: Context Engineering](ch08-context-engineering.md).
 
 ## Tool
 
-A function the model can call. Tools are described to the model with a name, a description, and a JSON schema for the arguments. Pi dispatches tool calls to a registered handler and feeds the result back into the loop.
+A function exposed to the model with a name, description, and TypeBox parameter schema. When the model returns a `ToolCall`, the agent validates the arguments, runs the matching implementation, and adds a `ToolResultMessage`.
 
 ## Tool Use
 
-The protocol-level message representing the model asking to call a tool. It carries the tool name, an id, and the arguments. The agent executes the matching handler and emits a paired `tool_result`.
+The protocol sequence in which an assistant message contains a `ToolCall` and a later `ToolResultMessage` references that call by ID.
 
-## Translator
+## Provider Adapter
 
-The per-provider adapter inside `@pi-ai/core` that converts Pi messages to the provider request format and the provider stream back to Pi events. There is one translator per provider.
+The provider-specific implementation that converts Pi messages and options to a provider request, then converts the provider response stream back to Pi events.
 
 ## Turn
 
-One round-trip of the agent loop, ending when the model returns a stop reason. A turn may contain zero or more tool calls. Multi-turn sessions chain turns together.
+One user request and the model/tool work required to reach the next stable agent state. A turn may contain multiple model calls when the model invokes tools.

@@ -1,16 +1,19 @@
 ---
 title: 'Quickstart: Build your first Pi agent'
 description: >-
-  A 10-minute tutorial that takes you from an empty folder to a working Pi agent
-  that streams a model reply.
+  Create a small TypeScript program that streams a model response through the
+  current Pi AI API.
 translation_key: quickstart
 language: en
+status: reviewed
+reviewed_by: Pify maintainers
+last_updated: '2026-08-24'
 ---
-This tutorial takes you from an empty folder to a working Pi agent that streams a model reply. You will install `@pi-ai/core`, plug in one model, and run a 5-line script. No prior Pi knowledge required.
+This guide creates a small TypeScript program that streams a model response. You will install `@earendil-works/pi-ai`, register the built-in providers, resolve one model, and consume its event stream. No prior Pi knowledge is required.
 
 :::tip[What you will have at the end]
 
-A TypeScript file that talks to one model through the same `streamSimple` interface the Pi agent itself uses. From there you can layer on tools, events, sessions, and the full agent loop.
+A TypeScript file that calls one model through the `Models.streamSimple()` interface. You can then add tools, event handling, session persistence, and an agent loop.
 
 :::
 
@@ -18,13 +21,13 @@ A TypeScript file that talks to one model through the same `streamSimple` interf
 
 You need:
 
-- **Node.js 20 or later** - check with `node --version`
+- **Node.js 22.19 or later** - check with `node --version`
 - **An API key for one provider** - Anthropic, OpenAI, Google, or any local proxy that speaks the OpenAI Chat Completions protocol. Anthropic is used in the snippets below.
 - **A terminal** in an empty folder
 
 :::caution[Cost and safety]
 
-This tutorial makes real API calls. Set a low spend limit on your provider account before continuing, and keep the key out of any file you commit.
+This guide makes real API calls. Set a low spending limit on your provider account, and never commit the API key.
 
 :::
 
@@ -34,13 +37,14 @@ This tutorial makes real API calls. Set a low spend limit on your provider accou
 mkdir pi-quickstart && cd pi-quickstart
 npm init -y
 npm pkg set type=module
-npm install @pi-ai/core
+npm install @earendil-works/pi-ai
+npm install --save-dev tsx
 ```
 
 This gives you:
 
-- a `package.json` with `"type": "module"` so `.ts` and `.mjs` files run without flags
-- `@pi-ai/core` installed in `node_modules`
+- a `package.json` configured for ECMAScript modules
+- `@earendil-works/pi-ai` and the `tsx` TypeScript loader in `node_modules`
 
 ## 2. Add your API key
 
@@ -68,13 +72,21 @@ node_modules
 Create `agent.ts`:
 
 ```ts title="agent.ts"
-import { getModel, streamSimple } from "@pi-ai/core";
+import { builtinModels } from "@earendil-works/pi-ai/providers/all";
 
-const model = getModel("anthropic", "claude-sonnet-4-5");
+const models = builtinModels();
+const model = models.getModel("anthropic", "claude-sonnet-4-5");
+if (!model) throw new Error("Model not found");
 
-const stream = streamSimple(model, {
+const stream = models.streamSimple(model, {
   systemPrompt: "You are a concise assistant. Reply in one sentence.",
-  messages: [{ role: "user", content: "What is the capital of France?" }],
+  messages: [
+    {
+      role: "user",
+      content: "What is the capital of France?",
+      timestamp: Date.now(),
+    },
+  ],
 });
 
 for await (const event of stream) {
@@ -86,24 +98,24 @@ for await (const event of stream) {
 }
 ```
 
-Three things happen in this file:
+Four steps happen in this file:
 
-1. `getModel("anthropic", "claude-sonnet-4-5")` resolves a model descriptor from the catalog. The descriptor knows the provider, the URL, and the request shape.
-2. `streamSimple(model, context)` opens a streaming request. It returns an async iterable of events.
-3. The `for await` loop pulls events until the stream finishes. `text_delta` events carry the token chunks; `done` is the terminal event.
+1. `builtinModels()` creates a `Models` collection with the built-in providers registered.
+2. `models.getModel("anthropic", "claude-sonnet-4-5")` resolves a model descriptor from that collection.
+3. `models.streamSimple(model, context)` opens a streaming request and returns an async iterable of events.
+4. The `for await` loop consumes events until the stream finishes. `text_delta` carries text fragments; `done` is the terminal event.
 
 ## 4. Load the key and run
 
-The SDK reads the API key from `process.env.ANTHROPIC_API_KEY`. To get the value from `.env` into the environment, use a one-shot loader:
+The provider reads `ANTHROPIC_API_KEY` from the process environment. Node can load the `.env` file directly:
 
 ```bash
-npm install --save-dev dotenv
 node --env-file=.env --import tsx agent.ts
 ```
 
 :::tip[Or use a script]
 
-If you prefer a permanent setup, add this to `package.json`:
+Add a script to `package.json` if you want a shorter command:
 
 ```json title="package.json"
 {
@@ -113,7 +125,7 @@ If you prefer a permanent setup, add this to `package.json`:
 }
 ```
 
-Then `npm start` does the same thing.
+Then run `npm start`.
 
 :::
 
@@ -131,17 +143,23 @@ If you see that, you have a working Pi agent.
 Change the user message and run it again:
 
 ```ts title="agent.ts" {6}
-const stream = streamSimple(model, {
+const stream = models.streamSimple(model, {
   systemPrompt: "You are a concise assistant. Reply in one sentence.",
-  messages: [{ role: "user", content: "Name three Pi SDK packages." }],
+  messages: [
+    {
+      role: "user",
+      content: "Name three Pi SDK packages.",
+      timestamp: Date.now(),
+    },
+  ],
 });
 ```
 
-The `{6}` after the language tag is Expressive Code line highlighting. Line 6 is now visually called out in the rendered code block.
+The `{6}` metadata asks the Fumadocs code renderer to highlight line 6.
 
 ## Where to go next
 
-You have a working `streamSimple` call. The rest of the book layers on top of this primitive:
+You now have a working `Models.streamSimple()` call. Continue with the topic that matches your goal:
 
 | Goal | Read |
 |---|---|
@@ -158,7 +176,7 @@ The SDK did not find the key. Confirm `.env` exists in the current directory and
 
 **`Error: model not found`**
 
-`getModel` could not resolve the model descriptor. Check the spelling. The canonical IDs are listed in [Reference: Models](reference/configuration.md#models).
+`models.getModel()` could not resolve the descriptor. Check both the provider ID and model ID. See [Reference: Configuration](reference/configuration.md#models).
 
 **`SyntaxError: Cannot use import statement outside a module`**
 

@@ -1,103 +1,104 @@
 ---
-title: Glossary
-description: >-
-  Các thuật ngữ Pi tự đặt cho mình. Nguyên bản tiếng Anh được giữ trong các bản
-  dịch để ghi chú đọc source code không bị mơ hồ.
+title: Thuật ngữ
+description: Các thuật ngữ Pi được dùng thống nhất trong tài liệu tiếng Anh và tiếng Việt.
 translation_key: glossary
 language: vi
+status: reviewed
+reviewed_by: Pify maintainers
+last_updated: '2026-08-24'
 ---
-Glossary này tổng hợp các thuật ngữ tiếng Anh mà Pi dùng cho chính nó. Bản dịch giữ nguyên các thuật ngữ gốc này. Một thuật ngữ xuất hiện ở đây khi nó có ý nghĩa chính xác trong codebase của Pi, hoặc khi dịch nguyên văn sẽ gây hiểu lầm.
+Các định nghĩa dưới đây bám theo package Pi hiện tại. Identifier, tên package, command, đường dẫn, configuration key và biến môi trường luôn được giữ nguyên.
 
-:::note[Vì sao có glossary]
+:::note[Quy tắc dịch]
 
-Pi dùng một từ vựng nhỏ gọn và dùng mỗi từ với chủ đích. Đọc source mà không có các định nghĩa này thì được nhưng chậm. Nếu một chapter dùng thuật ngữ không có trong danh sách này, hãy hiểu theo nghĩa tiếng Anh thông thường.
+Bản tiếng Việt giữ nguyên tên sản phẩm và identifier trong code. Khái niệm thông thường có thể được dịch, nhưng lần xuất hiện đầu tiên phải kèm thuật ngữ tiếng Anh chuẩn.
 
 :::
 
 ## Agent
 
-Chương trình điều khiển LLM. Agent sở hữu loop, tool surface, và session state. Trong Pi, agent được tách qua hai package: `@pi-agent-core` chứa loop, `@pi-coding-agent` thêm CLI shell, prompt expansion, và managed tool.
+Runtime gửi ngữ cảnh tới model, cung cấp Tool, xử lý tool call và theo dõi state. Implementation cốt lõi được phát hành qua package `@earendil-works/pi-agent-core`.
 
 ## Agent Loop
 
-Chuỗi lặp `prompt -> model -> tool calls -> tool results -> model` điều khiển một turn. Pi hiện thực loop trong `agentLoop()` bên trong `@pi-agent-core`. Loop là event-driven, không phải callback-based; consumer subscribe vào một stream các event có kiểu.
+Vòng lặp Agent (Agent Loop) thực hiện chuỗi `prompt -> model response -> tool calls -> tool results -> model response` trong một lượt xử lý. Pi phát các sự kiện có kiểu trong khi vòng lặp chạy.
 
 ## Block
 
-Một đơn vị unit bên trong một turn. Một turn gồm một hoặc nhiều block. Ví dụ block type: `text`, `thinking`, `tool_use`, `tool_result`. Block chảy trong message stream theo thứ tự khai báo.
+Một phần tử có kiểu trong nội dung message. Các loại thường gặp gồm `text`, `thinking` và `toolCall`. Message `toolResult` trả lại kết quả của một tool call.
 
 ## Coding Agent
 
-CLI đi kèm. Chỉ cụ thể ám chỉ `@pi-coding-agent`, package nằm trên `@pi-agent-core` và thêm prompt expansion, permission prompt, và managed tool cho file/bash. Không phải từ đồng nghĩa của "agent".
+Ứng dụng dòng lệnh Pi được phát hành dưới tên `@earendil-works/pi-coding-agent`. Package này bổ sung TUI, ngữ cảnh dự án, Tool tích hợp, phiên làm việc, extension, skill và cấu hình quanh agent runtime.
 
 ## Compaction
 
-Quá trình rút gọn cuộc hội thoại dài thành một bản tóm tắt ngắn hơn để vừa context window của model. Pi hiện thực điều này dưới dạng một agent turn riêng biệt tóm tắt các block cũ đồng thời giữ nguyên văn các block gần đây. Xem [Chapter 9: Context Compaction](ch09-compaction.md).
+Nén ngữ cảnh (compaction) thay phần hội thoại cũ bằng một bản tóm tắt có cấu trúc, đồng thời giữ nguyên các message gần đây. Cơ chế này giúp phiên làm việc tiếp tục trước khi vượt context window của model. Xem [Chương 9: Nén ngữ cảnh](ch09-compaction.md).
 
 ## Context Window
 
-Lượng text tối đa model sẽ đọc trong một request, đo bằng token. Mỗi model có một trần cứng; Pi theo dõi usage theo turn và trigger compaction khi gần trần.
+Số token tối đa model có thể xử lý trong một request. Pi ước tính lượng token đang dùng và có thể nén phần ngữ cảnh cũ trước khi vượt giới hạn này.
 
 ## Descriptor
 
-Mô tả có cấu trúc của một model: provider, model id, request shape, capability, pricing. Pi lưu descriptor trong catalog dưới `@pi-ai/core`. `getModel(provider, id)` trả về một descriptor. Descriptor là đơn vị pluggability cho model mới.
+Một record `Model` có cấu trúc, chứa provider ID, model ID, API, capability, giới hạn ngữ cảnh và metadata về giá. `Models.getModel(provider, id)` lấy record này từ model collection đã đăng ký.
 
 ## Event
 
-Một message có kiểu do agent loop hoặc stream phát ra. Ví dụ: `message_start`, `text_delta`, `tool_use`, `tool_result`, `message_update`, `done`. Event chảy qua một async iterable.
+Sự kiện (event) có kiểu do model stream hoặc agent runtime phát ra. Các sự kiện model stream gồm `start`, `text_start`, `text_delta`, `text_end`, `toolcall_start`, `toolcall_delta`, `toolcall_end`, `done` và `error`.
 
 ## Extension
 
-Một hook do người dùng định nghĩa chạy bên trong tiến trình agent. Extension của Pi có thể đăng ký tool, chặn message, thêm slash command, và override theme token. Extension API ổn định qua các version `pi-coding-agent`.
+Module TypeScript được nạp trong process của coding agent. Extension có thể đăng ký Tool và command, theo dõi lifecycle event và tùy chỉnh hành vi qua extension API được công bố.
 
 ## Managed Tools
 
-Bốn tool có sẵn `read`, `bash`, `edit`, và `write`. Pi chạy chúng với permission prompt theo mặc định và hỗ trợ YOLO mode bỏ qua prompt.
+Bốn Tool `read`, `write`, `edit` và `bash` được coding agent cung cấp mặc định. Có thể bật thêm các Tool chỉ đọc như `grep`, `find` và `ls` qua cấu hình Tool.
 
 ## Message
 
-Một bản ghi có kiểu truyền giữa agent và model. Pi dùng message hình dạng Anthropic ở protocol layer, sau đó adapt theo provider. Có hai loại message trong Pi: `user` và `assistant`. Tool use và tool result được nhúng trong `assistant` message.
+Record có kiểu được truyền qua các lớp model và agent. Package Pi AI định nghĩa `UserMessage`, `AssistantMessage` và `ToolResultMessage`; provider adapter chuyển các record này sang wire format của từng provider.
 
 ## Model Provider
 
-Dịch vụ HTTP mà SDK gọi đến: Anthropic, OpenAI, Google, OpenRouter, llama.cpp, v.v. Mỗi provider có một translator bên trong `@pi-ai/core` chuyển đổi giữa message của Pi và wire format của provider.
+Dịch vụ xử lý model request, chẳng hạn Anthropic, OpenAI, Google, Bedrock hoặc local server tương thích. Mỗi provider registration bổ sung model, cơ chế xác thực và hàm streaming vào một `Models` collection.
 
 ## Pi
 
-Dự án tổng. `Pi` viết hoa luôn ám chỉ Pi Agent SDK của `earendil-works`. `pi` viết thường là CLI binary (`@pi-coding-agent`).
+Bộ công cụ agent mã nguồn mở được duy trì trong `badlogic/pi-mono` và mirror tại `earendil-works/pi`. Tên viết thường `pi` chỉ command của coding-agent CLI.
 
 ## Session
 
-Một conversation tree được lưu trên đĩa. Session sống trên disk dưới thư mục Pi home và được load theo id. Một session lưu message, branch, metadata, và resolved model. Xem [Chapter 10: Session Management](ch10-session.md).
+Phiên làm việc (session) là lịch sử hội thoại được lưu bền vững. Coding agent lưu session dưới dạng JSONL, hỗ trợ phân nhánh và có thể tiếp tục một nhánh trước đó. Xem [Chương 10: Quản lý phiên làm việc](ch10-session.md).
 
 ## Skill
 
-Một prompt template có tên, tái sử dụng được, gọi qua `/skill-name` trong prompt. Skill được lưu trong `~/.pi/agent/skills/` hoặc trong `.pi/skills/` bên trong project.
+File chỉ dẫn có thể tái sử dụng, được tìm trong các thư mục skill đã cấu hình. Mỗi skill mô tả điều kiện áp dụng và hướng dẫn riêng cho một loại tác vụ.
 
 ## Stream
 
-Async iterable của các event trả về bởi `streamSimple` hoặc bởi agent loop. Stream là pull-based: consumer await từng event.
+Một `AssistantMessageEventStream`: vừa là async iterable chứa các sự kiện có kiểu, vừa là handle dùng để lấy kết quả cuối.
 
 ## Subagent
 
-Một agent được một agent khác khởi chạy. Pi hỗ trợ subagent thông qua tool `subagent` và extension API `pi.runSubagent()`. Subagent chạy loop riêng và có thể trả về kết quả cuối hoặc stream ngược lại.
+Agent được khởi chạy để thực hiện một tác vụ giới hạn thay cho agent khác. Pi hỗ trợ workflow subagent qua extension và implementation mẫu, thay vì cố định một chính sách điều phối trong core loop.
 
 ## System Prompt
 
-Khối instruction gửi ở đầu mỗi model call. Pi compose system prompt từ CLI flag, project file (`AGENTS.md`, `SYSTEM.md`), và extension contribution. Xem [Chapter 8: Context Engineering](ch08-context-engineering.md).
+Phần chỉ dẫn được gửi cùng model context. Coding agent ghép system prompt từ giá trị mặc định, file ngữ cảnh dự án, tùy chọn dòng lệnh và nội dung do extension cung cấp. Xem [Chương 8: Kỹ thuật ngữ cảnh](ch08-context-engineering.md).
 
 ## Tool
 
-Một hàm model có thể gọi. Tool được mô tả với model bằng tên, mô tả, và JSON schema cho tham số. Pi dispatch tool call đến handler đã đăng ký và feed kết quả trở lại loop.
+Hàm được cung cấp cho model bằng tên, mô tả và TypeBox schema cho tham số. Khi model trả về `ToolCall`, agent kiểm tra arguments, chạy implementation tương ứng và thêm một `ToolResultMessage`.
 
 ## Tool Use
 
-Message ở protocol level biểu diễn việc model yêu cầu gọi một tool. Nó mang theo tên tool, một id, và các tham số. Agent thực thi handler tương ứng và phát ra một `tool_result` ghép đôi.
+Chuỗi protocol trong đó assistant message chứa một `ToolCall`, sau đó `ToolResultMessage` tham chiếu tool call đó bằng ID.
 
-## Translator
+## Provider Adapter
 
-Adapter theo provider bên trong `@pi-ai/core` chuyển đổi message của Pi sang request format của provider và stream của provider ngược lại thành event của Pi. Có một translator cho mỗi provider.
+Implementation riêng cho từng provider, chịu trách nhiệm chuyển message và option của Pi thành provider request, sau đó chuyển response stream về các sự kiện Pi.
 
 ## Turn
 
-Một round-trip của agent loop, kết thúc khi model trả về stop reason. Một turn có thể chứa không hoặc nhiều tool call. Session nhiều turn xâu chuỗi các turn với nhau.
+Một user request cùng toàn bộ model/tool work cần thiết để agent đạt state ổn định tiếp theo. Một lượt có thể chứa nhiều model call khi model gọi Tool.

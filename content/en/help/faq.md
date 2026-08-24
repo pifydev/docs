@@ -3,73 +3,76 @@ title: FAQ
 description: Frequently asked questions about Pi and the Pify Agent Book.
 translation_key: faq
 language: en
+status: reviewed
+reviewed_by: Pify maintainers
+last_updated: '2026-08-24'
 ---
-Common questions about Pi and this book. If your question is not here, open an issue on GitHub.
+These answers cover Pi and this documentation project. Open a [GitHub issue](https://github.com/pifydev/docs/issues) if your question is not listed.
 
 ## Pi itself
 
 ### What is Pi?
 
-Pi is an open-source agent SDK and CLI by `earendil-works`. It ships a coding agent, a TUI, and three layered packages (`@pi-ai/core`, `@pi-agent-core`, `@pi-coding-agent`) you can use independently.
+Pi is an open-source coding-agent toolkit. Its monorepo contains a model API, an agent runtime, a terminal UI, and the `pi` command-line application. The main npm packages are `@earendil-works/pi-ai`, `@earendil-works/pi-agent-core`, and `@earendil-works/pi-coding-agent`.
 
 ### How is Pi different from Claude Code or Codex?
 
-Pi is intentionally minimal. It does not ship a planning mode, a built-in subagent, an MCP client, or permission prompts by default. The philosophy is "start empty, let the user fill in what they need". Claude Code and Everything Claude Code ship in the opposite direction: a fully featured agent with hundreds of commands.
+Pi keeps the core small and exposes customization through extensions, skills, prompt templates, themes, and packages. Claude Code and Codex have different built-in workflows and service integrations. Compare the products against the workflow, provider support, security model, and deployment constraints you need rather than treating them as interchangeable agents.
 
 ### Which model providers does Pi support?
 
-Any provider that speaks the OpenAI Chat Completions protocol or the Anthropic Messages protocol. Pi ships translators for Anthropic, OpenAI, Google, Bedrock, and several more. You can add a new provider by writing one translator file. See [How to plug in a new model](../how-to/plug-new-model.md).
+Pi registers built-in providers for Anthropic, OpenAI, Google, Bedrock, OpenRouter, several subscription endpoints, and other hosted or local services. It can also register a custom provider or an OpenAI-compatible server. See [Integrate a model provider](../how-to/plug-new-model.md).
 
 ### Is Pi free?
 
-The SDK is open-source and free. The models you call are billed by the provider. Set a spend limit on your provider account.
+The Pi source and npm packages use open-source licenses. Model providers may charge for inference, so configure account limits before making API calls.
 
 ## Reading this book
 
 ### Should I read the chapters in order?
 
-Chapter 1 motivates the project. Chapter 2 sets the three-layer architecture. Chapter 3 is the agent loop. The remaining chapters are reference material that can be dipped into. If you are reading to understand the codebase, chapters 1 through 3 in order is the right path.
+Read chapters 1 through 3 in order for the project overview, package architecture, and agent loop. Chapters 4 through 10 each focus on one subsystem and can be read independently after that foundation.
 
-### The English chapters say "v0.80.2" in the version note. Is that still current?
+### Which Pi revision does this documentation describe?
 
-No. The Pi SDK is at v0.84.2 as of the last check. The English translation was done against v0.80.2. The architecture described in chapters 2 and 3 has not changed. Newer chapters cover newer features (fullscreen TUI mode, PiClient, Mermaid theming). A future revision will bump the version note.
+The editorial review ledger records the exact upstream commit used for verification. The current review is pinned to [`a470b121`](https://github.com/badlogic/pi-mono/commit/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c). Recheck the upstream source before relying on a version-sensitive API or default.
 
-### Why are some code snippets in TypeScript and others in JavaScript?
+### Why do examples use TypeScript?
 
-The Pi SDK is written in TypeScript. TypeScript is the source of truth. JavaScript appears only when a runtime constraint forces it. Both are valid; the TypeScript snippets are preferred.
+Pi is implemented in TypeScript and publishes type declarations with its packages. The examples use TypeScript when types clarify the API. Shell, JSON, and JavaScript appear where they match the runtime or configuration format.
 
-### Can I copy the snippets into my own project?
+### Can I copy the examples into my project?
 
-Yes, with one caveat: the snippets assume `@pi-ai/core` or `@pi-agent-core` is installed. See the [Quickstart](../quickstart.md) for the install pattern.
+Yes. Install the package named by the example and match the documented Node.js requirement. Start with the [Quickstart](../quickstart.md) for a complete runnable setup.
 
 ## Contributing
 
 ### How do I report a translation error?
 
-Open an issue at [github.com/pifydev/docs/issues](https://github.com/pifydev/docs/issues) and tag it `translation`. Include the chapter slug and the offending sentence.
+Open an issue at [github.com/pifydev/docs/issues](https://github.com/pifydev/docs/issues). Include the page path, the sentence, and your proposed correction.
 
-### Can I add a chapter?
+### Can I add a page or chapter?
 
-Yes. Open a PR with the matching English and Vietnamese chapter files. Translation review is manual.
+Yes. Submit matching English and Vietnamese files, keep their heading and code-fence structures aligned, and follow [CONTRIBUTING.md](https://github.com/pifydev/docs/blob/main/CONTRIBUTING.md).
 
-### Where is the editorial style guide?
+### Where is the terminology policy?
 
-The book follows the house rules in [CONTRIBUTING.md](https://github.com/pifydev/docs/blob/main/CONTRIBUTING.md). The short version: keep English technical terms in translations, use sentence case for headings, prefer active voice.
+The repository-level [GLOSSARY.md](https://github.com/pifydev/docs/blob/main/GLOSSARY.md) defines canonical terms. Preserve identifiers and translate only the concepts that the glossary marks as translatable.
 
 ## Common pitfalls
 
-### My tool result is not reaching the model.
+### My tool result does not reach the model
 
-Check that the tool handler returns a `tool_result` block with the same `tool_use_id` that came in. Mismatched ids silently drop.
+Return a `ToolResultMessage` whose `toolCallId` matches the original `ToolCall.id`. Also preserve the tool name and provide content in the expected block format.
 
-### My session does not resume.
+### My session does not resume
 
-Sessions are stored under the Pi home directory, defaulting to `~/.pi/agent/sessions/`. Confirm the path exists and that the working directory at startup matches.
+The coding agent stores sessions under `~/.pi/agent/sessions/` by default. Confirm the session exists and start Pi from the expected working directory, or pass the session path or ID explicitly.
 
-### The TUI renders oddly over SSH.
+### The TUI behaves oddly over SSH
 
-Set `PI_TUI_ESC_TIMEOUT` higher. Pi 0.84.x added this knob for high-latency terminals. See [Reference: Environment Variables](../reference/environment-variables.md#pi_tui_esc_timeout).
+Increase `PI_TUI_ESC_TIMEOUT` for a high-latency terminal. See [Environment variables](../reference/environment-variables.md#pi_tui_esc_timeout).
 
-### The model returns 429 even though I have a valid key.
+### The provider returns HTTP 429 with a valid key
 
-You are rate-limited. Pi retries automatically with backoff. If the rate limit persists, check your account quota or switch to a smaller model.
+HTTP 429 indicates rate limiting or exhausted quota, not an invalid key. Check the provider account, wait for the retry window, or select another model.

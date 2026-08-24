@@ -1,35 +1,28 @@
 ---
 title: Changelog
-description: >-
-  What changed in this documentation site. For the Pi SDK itself, see the
-  upstream changelog.
+description: Changes to the Pify documentation site, separate from the Pi SDK changelog.
 translation_key: changelog
 language: en
+status: reviewed
+reviewed_by: Pify maintainers
+last_updated: '2026-08-24'
 ---
-What changed in this documentation site, in reverse chronological order. For the Pi SDK itself, see the [upstream changelog](https://github.com/earendil-works/pi/releases).
+This page records changes to the Pify documentation site. For Pi releases, use the [upstream release history](https://github.com/earendil-works/pi/releases).
 
-:::note
+## 2026-08-24
 
-Entries below cover the **Pify Agent Book** site, not the Pi SDK. Translation drift, layout changes, and content additions live here.
+- Added an automated bilingual editorial lint for residual Han characters, control characters, full-width punctuation, mojibake, known literal translations, and long Vietnamese prose without diacritics.
+- Defined a canonical English/Vietnamese terminology contract and a review ledger pinned to a specific upstream Pi commit.
+- Began the full editorial and technical review of all 23 English/Vietnamese page pairs.
 
-:::
+## 2026-08-22
 
-## Unreleased
-
-- Adding the Quickstart tutorial, this glossary, and the changelog itself
-- Sidebar reorganised into Getting Started / How-to / Reference / Chapters / Help
-- `lastUpdated` enabled in site footer
-- New site chrome: code block titles, line highlighting, Tabs for multi-language snippets
-- How-to guides section: 5 task-oriented recipes
-- Reference section: API, configuration, environment variables
-- FAQ page
+- Replaced the previous Astro and GitBook delivery experiments with a self-hosted Fumadocs application on Vercel.
+- Added English and Vietnamese routing, localized navigation, search, SEO metadata, syntax highlighting, Mermaid rendering, and bilingual end-to-end tests.
+- Fixed localized documentation links so clean routes no longer expose `.md` filenames.
+- Added the Pify logo, adaptive favicon, GPLv3 license, contribution guide, and deployment documentation.
 
 ## 2026-08-20
 
-- Initial 10 chapters translated into English (canonical source is Chinese at dgzhuya.com)
-- Vietnamese translations for all 10 chapters
-- 3-language support: English (default), Vietnamese, Chinese
-- Search index via Pagefind
-- Hero landing page on `/en` with chapter grid
-- Custom 404 page
-- Sitemap generation
+- Imported the first 10 English and Vietnamese chapters from the Pi Agent Book translation project.
+- Added the initial documentation navigation and source-provenance records.

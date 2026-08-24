@@ -1,75 +1,78 @@
 ---
-title: FAQ
+title: Câu hỏi thường gặp
 description: Các câu hỏi thường gặp về Pi và Pify Agent Book.
 translation_key: faq
 language: vi
+status: reviewed
+reviewed_by: Pify maintainers
+last_updated: '2026-08-24'
 ---
-Các câu hỏi thường gặp về Pi và cuốn sách này. Nếu câu hỏi của bạn không có ở đây, hãy mở issue trên GitHub.
+Các câu trả lời dưới đây đề cập tới Pi và dự án tài liệu này. Hãy mở [GitHub issue](https://github.com/pifydev/docs/issues) nếu câu hỏi của bạn chưa có trong danh sách.
 
 ## Về Pi
 
 ### Pi là gì?
 
-Pi là một agent SDK và CLI open-source của `earendil-works`. Nó đi kèm một coding agent, một TUI, và ba package xếp lớp (`@pi-ai/core`, `@pi-agent-core`, `@pi-coding-agent`) bạn có thể dùng độc lập.
+Pi là bộ công cụ coding agent mã nguồn mở. Monorepo của Pi chứa model API, agent runtime, TUI và ứng dụng dòng lệnh `pi`. Ba npm package chính là `@earendil-works/pi-ai`, `@earendil-works/pi-agent-core` và `@earendil-works/pi-coding-agent`.
 
-### Pi khác gì Claude Code hay Codex?
+### Pi khác Claude Code hoặc Codex ở điểm nào?
 
-Pi cố tình tối giản. Nó không có planning mode, không có subagent có sẵn, không có MCP client, không có permission prompt theo mặc định. Triết lý là "bắt đầu rỗng, để người dùng điền thứ họ cần". Claude Code và Everything Claude Code đi theo hướng ngược lại: một agent đầy đủ tính năng với hàng trăm command.
+Pi giữ phần core nhỏ và cho phép tùy chỉnh bằng extension, skill, prompt template, theme và package. Claude Code và Codex có workflow tích hợp sẵn và service integration khác. Hãy so sánh theo workflow, provider, mô hình bảo mật và yêu cầu triển khai của dự án thay vì xem chúng là các agent tương đương.
 
 ### Pi hỗ trợ những model provider nào?
 
-Bất kỳ provider nào nói chuyện theo giao thức OpenAI Chat Completions hoặc Anthropic Messages. Pi có translator cho Anthropic, OpenAI, Google, Bedrock, và một số khác. Bạn có thể thêm provider mới bằng cách viết một file translator. Xem [How to plug in a new model](../how-to/plug-new-model.md).
+Pi đăng ký sẵn provider cho Anthropic, OpenAI, Google, Bedrock, OpenRouter, một số subscription endpoint và nhiều dịch vụ hosted hoặc local khác. Bạn cũng có thể đăng ký custom provider hoặc server tương thích OpenAI. Xem [Tích hợp model provider](../how-to/plug-new-model.md).
 
 ### Pi có miễn phí không?
 
-SDK là open-source và miễn phí. Các model bạn gọi thì do provider tính phí. Hãy đặt spend limit trên tài khoản provider.
+Mã nguồn và npm package của Pi dùng giấy phép mã nguồn mở. Model provider vẫn có thể tính phí inference, vì vậy hãy đặt giới hạn tài khoản trước khi gọi API.
 
-## Đọc cuốn sách này
+## Đọc tài liệu
 
-### Có nên đọc các chapter theo thứ tự không?
+### Có nên đọc các chương theo thứ tự không?
 
-Chapter 1 thúc đẩy motivation cho dự án. Chapter 2 thiết lập three-layer architecture. Chapter 3 là agent loop. Các chapter còn lại là reference material có thể lấy ra đọc khi cần. Nếu bạn đọc để hiểu codebase, đi theo chapter 1 đến 3 theo thứ tự là đúng đường.
+Hãy đọc chương 1 đến 3 theo thứ tự để nắm tổng quan dự án, kiến trúc package và vòng lặp Agent. Sau đó, có thể đọc độc lập từng chương 4 đến 10 theo subsystem bạn quan tâm.
 
-### Các chapter tiếng Anh ghi "v0.80.2" trong version note. Còn cập nhật không?
+### Tài liệu này mô tả revision nào của Pi?
 
-Không. Pi SDK hiện ở v0.84.2 tính đến lần kiểm tra cuối. Bản dịch tiếng Anh được làm dựa trên v0.80.2. Kiến trúc mô tả trong chapter 2 và 3 không đổi. Các chapter mới hơn (chưa dịch) bao gồm các tính năng mới hơn (fullscreen TUI mode, PiClient, Mermaid theming). Bản sửa đổi tương lai sẽ bump version note.
+Review ledger ghi chính xác upstream commit dùng để đối chiếu. Lần review hiện tại được ghim tại [`a470b121`](https://github.com/badlogic/pi-mono/commit/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c). Hãy kiểm tra lại upstream trước khi phụ thuộc vào API hoặc giá trị mặc định có thể thay đổi theo version.
 
-### Vì sao có snippet TypeScript và có snippet JavaScript?
+### Vì sao ví dụ dùng TypeScript?
 
-Pi SDK viết bằng TypeScript. TypeScript là nguồn sự thật. JavaScript chỉ xuất hiện khi ràng buộc runtime bắt buộc. Cả hai đều hợp lệ; snippet TypeScript được ưu tiên.
+Pi được viết bằng TypeScript và phát hành type declaration cùng các package. Tài liệu dùng TypeScript khi type giúp API rõ ràng hơn; shell, JSON và JavaScript được dùng khi phù hợp với runtime hoặc định dạng cấu hình.
 
-### Có thể copy snippet vào project riêng không?
+### Có thể dùng lại ví dụ trong dự án riêng không?
 
-Có, với một lưu ý: snippet giả định `@pi-ai/core` hoặc `@pi-agent-core` đã được cài. Xem [Quickstart](../quickstart.md) để biết pattern cài đặt.
+Có. Hãy cài đúng package được ghi trong ví dụ và dùng đúng phiên bản Node.js yêu cầu. [Hướng dẫn nhanh](../quickstart.md) cung cấp một setup hoàn chỉnh có thể chạy ngay.
 
 ## Đóng góp
 
-### Báo lỗi dịch thế nào?
+### Báo lỗi dịch như thế nào?
 
-Mở issue tại [github.com/pifydev/docs/issues](https://github.com/pifydev/docs/issues) và tag `translation`. Kèm chapter slug và câu bị lỗi.
+Mở issue tại [github.com/pifydev/docs/issues](https://github.com/pifydev/docs/issues). Ghi rõ đường dẫn trang, câu bị lỗi và đề xuất sửa.
 
-### Tôi có thể thêm chapter không?
+### Có thể thêm trang hoặc chương mới không?
 
-Có. Hãy mở PR với các file chapter tiếng Anh và tiếng Việt tương ứng. Việc review bản dịch được thực hiện thủ công.
+Có. Hãy gửi đủ file tiếng Anh và tiếng Việt, giữ cấu trúc heading và code fence đồng bộ, đồng thời tuân theo [CONTRIBUTING.md](https://github.com/pifydev/docs/blob/main/CONTRIBUTING.md).
 
-### Style guide biên tập ở đâu?
+### Quy ước thuật ngữ nằm ở đâu?
 
-Cuốn sách theo house rules trong [CONTRIBUTING.md](https://github.com/pifydev/docs/blob/main/CONTRIBUTING.md). Phiên bản ngắn: giữ thuật ngữ kỹ thuật tiếng Anh trong bản dịch, dùng sentence case cho heading, ưu tiên active voice.
+[GLOSSARY.md](https://github.com/pifydev/docs/blob/main/GLOSSARY.md) tại repository root định nghĩa thuật ngữ chuẩn. Giữ nguyên identifier và chỉ dịch các khái niệm được glossary cho phép.
 
-## Lỗi hay gặp
+## Lỗi thường gặp
 
-### Tool result không đến được model.
+### Kết quả Tool không đến được model
 
-Kiểm tra handler tool trả về block `tool_result` với cùng `tool_use_id` đã đến. Id lệch nhau sẽ bị drop âm thầm.
+Hãy trả về `ToolResultMessage` có `toolCallId` khớp với `ToolCall.id` ban đầu. Đồng thời giữ đúng tên Tool và định dạng content block mà API yêu cầu.
 
-### Session không resume.
+### Không thể tiếp tục phiên làm việc
 
-Session được lưu dưới thư mục Pi home, mặc định `~/.pi/agent/sessions/`. Xác nhận đường dẫn tồn tại và working directory lúc khởi động khớp.
+Coding agent mặc định lưu session trong `~/.pi/agent/sessions/`. Xác nhận session còn tồn tại và khởi chạy Pi từ working directory phù hợp, hoặc truyền trực tiếp đường dẫn hay ID của session.
 
-### TUI render xấu qua SSH.
+### TUI hoạt động không ổn định qua SSH
 
-Đặt `PI_TUI_ESC_TIMEOUT` cao hơn. Pi 0.84.x thêm núm chỉnh này cho terminal có độ trễ cao. Xem [Reference: Environment Variables](../reference/environment-variables.md#pi_tui_esc_timeout).
+Tăng `PI_TUI_ESC_TIMEOUT` khi terminal có độ trễ cao. Xem [Biến môi trường](../reference/environment-variables.md#pi_tui_esc_timeout).
 
-### Model trả 429 dù key hợp lệ.
+### Provider trả HTTP 429 dù key hợp lệ
 
-Bạn đang bị rate limit. Pi tự retry với backoff. Nếu rate limit vẫn còn, kiểm tra quota tài khoản hoặc chuyển sang model nhỏ hơn.
+HTTP 429 cho biết request bị rate limit hoặc tài khoản đã hết quota, không phải key sai. Kiểm tra tài khoản provider, chờ hết retry window hoặc chọn model khác.
