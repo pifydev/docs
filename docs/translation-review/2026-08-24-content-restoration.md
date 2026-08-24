@@ -26,7 +26,7 @@ Metric format: `words; H2/H3/H4; fences; tables; Mermaid`. Outcome counts track 
 | reference-environment-variables | 525 words; H2/H3/H4 7/10/0; fences 4; tables 2; Mermaid 0    | 601 words; H2/H3/H4 7/10/0; fences 4; tables 2; Mermaid 0    |        0 |      0 |                   0 |         0 | pending  | pending    | pending |
 | ch01-overview                   | 3941 words; H2/H3/H4 7/15/0; fences 8; tables 4; Mermaid 1   | 4791 words; H2/H3/H4 7/15/0; fences 8; tables 4; Mermaid 1   |       48 |      5 |                   4 |         0 | reviewed | reviewed   | checked |
 | ch02-three-layer-arch           | 2489 words; H2/H3/H4 8/18/0; fences 16; tables 1; Mermaid 0  | 3062 words; H2/H3/H4 8/18/0; fences 16; tables 1; Mermaid 0  |       64 |      1 |                   5 |         0 | reviewed | reviewed   | checked |
-| ch03-agent-loop                 | 3059 words; H2/H3/H4 6/25/6; fences 37; tables 7; Mermaid 0  | 3312 words; H2/H3/H4 6/25/6; fences 37; tables 7; Mermaid 0  |        0 |      0 |                   0 |         0 | pending  | pending    | pending |
+| ch03-agent-loop                 | 3059 words; H2/H3/H4 6/25/6; fences 37; tables 7; Mermaid 0  | 3312 words; H2/H3/H4 6/25/6; fences 37; tables 7; Mermaid 0  |       83 |      1 |                  16 |         0 | reviewed | reviewed   | checked |
 | ch04-model-invocation           | 3418 words; H2/H3/H4 7/13/0; fences 22; tables 2; Mermaid 0  | 3915 words; H2/H3/H4 7/13/0; fences 22; tables 2; Mermaid 0  |        0 |      0 |                   0 |         0 | pending  | pending    | pending |
 | ch05-tool-system                | 4564 words; H2/H3/H4 7/28/0; fences 29; tables 5; Mermaid 0  | 5048 words; H2/H3/H4 7/28/0; fences 29; tables 5; Mermaid 0  |        0 |      0 |                   0 |         0 | pending  | pending    | pending |
 | ch06-messages                   | 3192 words; H2/H3/H4 10/12/0; fences 17; tables 3; Mermaid 0 | 3475 words; H2/H3/H4 10/12/0; fences 17; tables 3; Mermaid 0 |        0 |      0 |                   0 |         0 | pending  | pending    | pending |
@@ -262,3 +262,128 @@ The baseline has no H4 heading. Every H2 and H3 below applies to the matching En
 - `Next up` callout linking Chapter 3 — `restored` in both locales.
 
 The thinner pre-restoration Chapter 2 pages also contained a seven-step request data path and a five-row change-placement table. Those current artifacts are retained inside Sections 3 and 6 respectively. They are outside the 70 baseline decisions above and therefore do not alter the ledger outcome counts.
+
+## Reviewed mapping appendix: Chapter 3
+
+This appendix compares the Chapter 3 pair at `b10130f` with the restored English and Vietnamese pages. It records 100 pair-level decisions: 37 baseline H2–H4 headings and 63 unique artifacts or arguments. They reconcile as `83 restored + 1 merged + 16 technically-invalid + 0 duplicate = 100`. No item was deleted for brevity.
+
+The final English page has 2,549 prose words, 83.33% of its 3,059-word baseline. The final Vietnamese page has 2,785 prose words, 84.09% of its 3,312-word baseline. Both pages have H2/H3/H4 `6/25/6`, 42 paired fences with an identical language sequence, 10 tables, and no Mermaid block. The additional fences and tables split dense historical diagrams and distinguish current control states; they do not reduce any baseline artifact. No preservation-manifest deletion allowance is needed.
+
+Technical review used these pinned files:
+
+- [`packages/agent/src/agent-loop.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/agent-loop.ts) for entry signatures, the inner and outer loops, streaming replacement, queue order, truncated calls, Tool scheduling, hooks, termination, and events.
+- [`packages/agent/src/agent.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/agent.ts) for `Agent` construction, snapshots, queues, subscriptions, state reduction, abort, continuation, and settlement.
+- [`packages/agent/src/types.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/types.ts) for `StreamFn`, `AgentLoopConfig`, hook contracts, `AgentState`, Tool execution modes, and `AgentEvent`.
+- [`packages/agent/src/stream-fn.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/stream-fn.ts) for explicit/default stream-function behavior.
+- [`packages/ai/src/types.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/ai/src/types.ts) and [`packages/ai/src/utils/event-stream.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/ai/src/utils/event-stream.ts) for `StopReason`, deferred handles, assistant stream events, and `EventStream.result()`.
+- [`packages/coding-agent/src/core/sdk.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/sdk.ts), [`messages.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/messages.ts), and [`agent-session.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/agent-session.ts) for Coding Agent’s `StreamFn` wrapper, message conversion, context transformation, next-Turn refresh, steering, follow-up, settings, and session behavior.
+
+### Baseline H2–H4 outcomes
+
+Every entry applies to the matching English and Vietnamese heading pair. The baseline and final pages both have 37 H2–H4 headings.
+
+- H01 — H2 `Prelude: three ways to use an LLM` / `Mở đầu: ba cách dùng LLM` — `restored` with the same direct-call, Workflow, and Agent Loop progression.
+- H02 — H3 `Mode 1: direct call` / `Kiểu 1: gọi trực tiếp` — `restored` with the current `Models.streamSimple()` API.
+- H03 — H3 `Mode 2: Workflow` / `Kiểu 2: Workflow` — `restored` with application-owned state-machine control.
+- H04 — H3 `Mode 3: Agent Loop` / `Kiểu 3: Agent Loop` — `restored` with model-selected Tools bounded by runtime policy.
+- H05 — H2 `Two concepts to clarify first: Trace and Turn` / `Hai khái niệm cần nắm trước: Trace và Turn` — `restored`.
+- H06 — H3 `Trace (one complete run)` / `Trace (một lần chạy đầy đủ)` — `restored` while labeling Trace as a teaching term rather than an exported Pi type.
+- H07 — H3 `Turn (one round)` / `Turn (một vòng)` — `restored` with the current event contract: one assistant response plus its Tool batch.
+- H08 — H3 `relationship between Trace and Turn` / `quan hệ giữa Trace và Turn` — `restored` with the nested three-Turn example.
+- H09 — H2 `Big picture: how a message journeys, and how the loop spins` / `Toàn cảnh: hành trình một message, và vòng lặp quay ra sao` — `restored`.
+- H10 — H3 `Full flow` / `Flow toàn cảnh` — `restored` with the full prompt-to-settlement route.
+- H11 — H3 `How the loop spins: stopReason: the only signal` / `stopReason: đèn tín hiệu duy nhất` — `technically-invalid`; `StopReason` at the pin also includes `pending` and `deferred`, and loop control depends on Tool blocks, truncated-call handling, batch termination, `shouldStopAfterTurn`, and queues. It is replaced in place by `What keeps the loop moving, and what ends it` / `Điều gì làm vòng lặp chạy tiếp, và điều gì kết thúc nó`.
+- H12 — H3 `One rule drives the entire loop` / `Một quy tắc dẫn dắt cả vòng lặp` — `restored` as the narrower, defensible rule for ordinary continuation.
+- H13 — H3 `Minimal Loop` / `Vòng lặp tối thiểu` — `restored` with an explicitly labeled pseudocode kernel.
+- H14 — H3 `All exit paths of the loop` / `Mọi đường thoát của vòng lặp` — `restored` and expanded with deferred and thrown-callback boundaries.
+- H15 — H2 `Source walkthrough: base Loop and the layering design of coding-agent` / `Đi sâu source: Loop nền và thiết kế lớp phủ của coding-agent` — `restored`.
+- H16 — H3 `What coding-agent layers on top` / `coding-agent phủ lên trên những gì` — `technically-invalid` as an ownership claim; queues, turn hooks, and Tool scheduling now live in Agent Core. The final section preserves the product-layering lesson and separates reusable mechanisms from Coding Agent policy.
+- H17 — H3 `4.1 Entry: what runAgentLoop() receives` / `4.1 Đầu vào: runAgentLoop() nhận gì` — `restored` as the current public entries `Agent`, `agentLoop()`, and `agentLoopContinue()`, followed by the internal snapshots they create.
+- H18 — H3 `4.2 Skeleton of runLoop(): core first, then layering` / `Bộ xương của runLoop(): lõi trước, lớp phủ sau` — `restored`.
+- H19 — H4 `Core: the inner loop` / `Lõi: inner loop` — `restored` with both continuation operands.
+- H20 — H4 `Layering: coding-agent adds two outer shells` / `Lớp phủ: coding-agent thêm hai vỏ ngoài` — `restored` as Agent Core’s outer queue shell plus the stateful `Agent` wrapper, with Coding Agent policy above both.
+- H21 — H3 `4.3 steering message injection` / `4.3 steering message injection` — `restored` with exact poll timing and queue modes.
+- H22 — H3 `4.4 streamAssistantResponse(): calling the LLM` / `4.4 streamAssistantResponse(): gọi LLM` — `restored` as the current model boundary.
+- H23 — H4 `Phase A: context preprocessing` / `Pha A: tiền xử lý context` — `restored` with `transformContext` scope and fallback contract.
+- H24 — H4 `Phase B: AgentMessage to Message conversion` / `Pha B: chuyển AgentMessage thành Message` — `restored` with actual Coding Agent message roles and lossy conversion.
+- H25 — H4 `Phase C: build Context and call the model` / `Pha C: dựng Context và gọi model` — `restored` with current `StreamFn` injection.
+- H26 — H4 `Phase D: stream the response: in-place replacement` / `Pha D: xử lý streaming response: thay tại chỗ` — `restored` with all stream event families and the no-`start` fallback.
+- H27 — H3 `4.5 check stopReason` / `4.5 kiểm tra stopReason` — `technically-invalid` as a complete label; the final `Stop and termination checks` / `Kiểm tra stop và termination` retains the hard-stop branch and adds Tool, length, hook, queue, and deferred state.
+- H28 — H3 `4.6 executeToolCalls(): execute tools` / `4.6 executeToolCalls(): thực thi tool` — `restored` with current parallel and sequential pipelines.
+- H29 — H3 `4.7 turn_end + hooks + recheck steering` / `4.7 turn_end + hook + kiểm tra lại steering` — `restored` with exact `prepareNextTurn` then `shouldStopAfterTurn` order.
+- H30 — H3 `4.8 Back to top of the loop` / `4.8 Quay về đầu vòng lặp` — `restored`.
+- H31 — H3 `4.9 outer loop: followUp life-extension` / `outer loop: cơ chế kéo dài của followUp` — `restored` without the baseline’s metaphorical wording.
+- H32 — H3 `4.10 steering vs followUp` / `steering vs followUp` — `restored` with separate poll points, queue modes, and error behavior.
+- H33 — H2 `Summary: four core Loop designs` / `Tổng kết: bốn thiết kế cốt lõi` — `technically-invalid` because the baseline contains only three summary subsections. The final heading says three and preserves all three.
+- H34 — H3 `ReAct loop pattern` / `Mô hình vòng lặp ReAct` — `restored`.
+- H35 — H3 `stopReason-driven mechanism` / `Cơ chế dẫn dắt bởi stopReason` — `technically-invalid`; replaced by state-based termination covering all current signals.
+- H36 — H3 `Core + layering architecture approach` / `Tư duy kiến trúc lõi + lớp phủ` — `restored` with an ownership table.
+- H37 — H2 `Next stop` / `Trạm tiếp theo` — `restored` with the Chapter 4 hand-off.
+
+### Unique artifact and argument outcomes
+
+- A01 — Opening hand-off from Chapter 2 and the questions “why loop, how, when stop” — `restored` in direct prose.
+- A02 — Direct-call plain-text journey — `restored` with `Models.streamSimple()`.
+- A03 — Direct-call code sample — `restored` as a valid `createModels()` plus `anthropicProvider()` example.
+- A04 — Direct-call responsibilities and use cases — `restored`.
+- A05 — Workflow multi-stage diagram — `restored`.
+- A06 — Workflow decision-ownership and use-case argument — `restored`.
+- A07 — Agent read/search/answer journey — `restored` with explicit `ToolResultMessage` steps.
+- A08 — The application’s two core loop duties — `restored` and expanded with Tool resolution, validation, permissions, queues, and stop policy.
+- A09 — Five-row direct/Workflow/Agent comparison table — `restored` with all five baseline dimensions and current control terminology.
+- A10 — Three-Turn Trace diagram — `restored`.
+- A11 — Inner-iteration Turn skeleton — `restored` with one `streamFn` call and one Tool batch.
+- A12 — Three Tool calls in one Turn argument — `restored` with parallel-batch event semantics.
+- A13 — Nested Trace/Turn diagram — `restored`.
+- A14 — First-Turn event note and full user-message journey — `restored` with the current `runAgentLoop` emission order.
+- A15 — Separate provider and framework `stopReason` tables — `merged` into one current final-reason table plus a precise `pending` explanation; no value or source distinction was dropped.
+- A16 — Claim that only `stop`, `length`, `toolUse`, `error`, and `aborted` exist — `technically-invalid`; pinned `StopReason` also includes `pending` and `deferred`.
+- A17 — Simplified code/comment saying “any tool terminate then stop” — `technically-invalid`; pinned `shouldTerminateToolBatch()` uses non-empty `every` over finalized results.
+- A18 — Gas/brake diagram driven solely by `stopReason` — `technically-invalid`; replaced by a state diagram spanning Tool blocks, hooks, queues, errors, abort, and deferred ownership.
+- A19 — Minimal-loop rationale and Agent-versus-Workflow distinction — `restored` without claiming Tool presence is the only production signal.
+- A20 — Exit-path table — `restored` and expanded from four to six evidenced paths.
+- A21 — Simplest-loop pseudocode branching on `response.stopReason !== "toolUse"` — `technically-invalid` for current Pi; replaced by explicitly labeled pseudocode that selects complete Tool calls from content.
+- A22 — Coding Agent layering table assigning steering, follow-up, and turn hooks to Coding Agent — `technically-invalid` at the pin; the final table separates Agent Core mechanism from Coding Agent policy.
+- A23 — Argument that a small Agent can omit coding-product policy — `restored` with `Agent` as the reusable boundary.
+- A24 — Entry chain from prompt to loop — `restored` with `Agent.prompt()`, `Agent.continue()`, `agentLoop()`, and `agentLoopContinue()`.
+- A25 — `runAgentLoop()` sample with an optional generic `streamFn` fallback — `technically-invalid` as public guidance; current copyable examples pass `models.streamSimple.bind(models)` and current low-level signatures require `StreamFn`.
+- A26 — Prompt message data shape — `restored`.
+- A27 — Context data and snapshot explanation — `restored` with separate `Agent` and low-level ownership rules.
+- A28 — Config and callback inventory — `restored` across the entry example and the source sections.
+- A29 — Entry preparation and initial event sequence — `restored`.
+- A30 — Before/after context and run-local message collector — `restored` as the `newMessages` explanation.
+- A31 — Core inner-loop skeleton — `restored` with current Tool and queue operands.
+- A32 — Combined inner/outer loop skeleton — `restored` and placed inside the `Agent` state shell.
+- A33 — Steering scenario and injection code — `restored` with no claim of mid-Tool interruption.
+- A34 — `transformContext` snippet — `restored` with its no-throw contract and per-request scope.
+- A35 — `convertToLlm` boundary call — `restored`.
+- A36 — Two-layer message-system explanation and coding-specific roles — `restored` against pinned `messages.ts`.
+- A37 — Default converter code — `restored` in the low-level config and explained against `Agent` defaults.
+- A38 — Before/after message conversion diagram — `restored` with actual `bashExecution`, `custom`, and summary behavior.
+- A39 — Fresh `Context` construction — `restored`.
+- A40 — `streamFn || streamSimple` fallback call — `technically-invalid` as active guidance; replaced by injected `models.streamSimple.bind(models)` and Coding Agent’s `ModelRuntime.streamSimple()` wrapper.
+- A41 — Per-Turn Context wrapper and changing/stable fields — `restored` in a four-row table.
+- A42 — Anthropic cache table tied to obsolete source line numbers — `technically-invalid` as pinned evidence; replaced in place by a provider-neutral stability/cache-ownership table.
+- A43 — Rolling-prefix cache teaching point — `restored` as the rule that provider-visible content and adapter semantics, not JavaScript object identity, determine caching.
+- A44 — Tool definitions as a separate provider request field and provider-specific cache behavior — `restored` without stale OpenAI field claims.
+- A45 — In-place streaming replacement code — `restored` from pinned `streamAssistantResponse()`.
+- A46 — Empty/partial/final assistant-message evolution diagram — `restored`.
+- A47 — Hard `error`/`aborted` source branch — `restored` with exact skipped phases.
+- A48 — Tool-call extraction from `AssistantMessage.content` — `restored`.
+- A49 — Sequential-versus-parallel selection — `restored` with per-Tool `executionMode` override.
+- A50 — Three-stage parallel scheduling diagram — `restored` as a stage/order table and explanatory prose.
+- A51 — Claim that blocking call B prevents call C from executing — `technically-invalid`; pinned parallel preparation records immediate failures but continues preparing later calls unless abort is observed.
+- A52 — Tool result message shape and transcript append — `restored` with normalization and event timing.
+- A53 — Batch-wide `terminate` using `every` — `restored` and expanded with hook override semantics and the fact that the flag is not serialized into `ToolResultMessage`.
+- A54 — `turn_end`, `prepareNextTurn`, `shouldStopAfterTurn`, and steering sequence — `restored` with the exact pinned order and update semantics.
+- A55 — Model/context/thinking replacement scenarios — `restored` as `AgentLoopTurnUpdate` behavior and Coding Agent next-Turn refresh.
+- A56 — Inner condition and return-to-top explanation — `restored`.
+- A57 — Follow-up outer-loop code and same-run behavior — `restored`, with `Agent.continue()` distinguished as a new run.
+- A58 — Steering/follow-up comparison table, timing example, and visual description — `restored` as a six-row mirrored table without the meeting/mailbox analogy.
+- A59 — ReAct summary — `restored` with a compact message/Tool/result diagram.
+- A60 — Summary claim that `stopReason` drives termination — `technically-invalid`; replaced by the complete state decision.
+- A61 — Core-plus-layering summary — `restored` in a four-boundary Agent Core/Coding Agent table.
+- A62 — Pi `v0.80.2` version note — `technically-invalid`; pinned package manifests report `0.84.2` and Node.js `>=22.19.0`.
+- A63 — `Next up` link to Chapter 4 — `restored`.
+
+The thinner pre-restoration Chapter 3 pages contained a compact `AgentState` interface and a five-item invariant list. Their valid state, event-barrier, Tool-result, provider-boundary, and explicit-stop material is retained across Sections 3, 4.1, 4.6, and 4.7. These are current-page artifacts rather than baseline decisions, so they do not change the 100-decision reconciliation above.
