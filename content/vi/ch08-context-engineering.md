@@ -400,7 +400,7 @@ while current tồn tại và current != common:
 
 ### Việc sinh bản tóm tắt dùng lại luồng compaction
 
-Bộ tóm tắt nhánh đổi các bản ghi đủ điều kiện thành `AgentMessage`, chuẩn bị tập con theo thứ tự mới nhất trước trong hạn mức `model.contextWindow - reserveTokens`, rồi khôi phục thứ tự thời gian. Bản ghi chỉ chứa kết quả Tool bị bỏ qua khi đổi thành thông điệp, còn lời gọi Tool và dữ liệu theo dõi thao tác file giữ lại bằng chứng hữu ích.
+Bộ tóm tắt nhánh đổi các bản ghi đủ điều kiện thành `AgentMessage`, chọn các bản ghi mới nhất trước trong hạn mức `model.contextWindow - reserveTokens`, rồi khôi phục thứ tự thời gian. Bản ghi chỉ chứa kết quả Tool bị bỏ qua khi đổi thành thông điệp, còn lời gọi Tool và dữ liệu theo dõi thao tác file giữ lại bằng chứng hữu ích.
 
 Sau đó bộ sinh dùng `convertToLlm()`, `serializeConversation()` cùng `SUMMARIZATION_SYSTEM_PROMPT` dùng chung. Phép tuần tự hóa bọc hội thoại cũ như dữ liệu để bộ tóm tắt không tiếp tục cuộc hội thoại đó. Phần dự trữ mặc định cho nhánh là 16.384 token, cửa sổ context dự phòng là 128.000 khi model không báo, và giới hạn phản hồi tóm tắt là 2.048 token.
 
@@ -430,7 +430,7 @@ Mẫu nhánh hiện tại yêu cầu ràng buộc và ưu tiên, ba trạng thá
 1. [Next action]
 ```
 
-Theo mặc định, chỉ dẫn tùy chỉnh được nối dưới nhãn `Additional focus`. `replaceInstructions: true` cho phép chúng thay mẫu. Kết quả tích hợp sẵn nhận phần mở đầu nói rằng người dùng đã khám phá nhánh khác, cộng với danh sách `<read-files>` và `<modified-files>` được suy ra từ hoạt động của Tool.
+Theo mặc định, chỉ dẫn tùy chỉnh được nối dưới nhãn `Additional focus`. `replaceInstructions: true` cho phép chúng thay mẫu. Pi thêm vào kết quả tích hợp sẵn phần mở đầu cho biết người dùng đã khám phá nhánh khác, cùng danh sách `<read-files>` và `<modified-files>` được suy ra từ hoạt động của Tool.
 
 ### Chèn bản ghi trước, chiếu thành thông điệp sau
 
@@ -507,7 +507,7 @@ Các lớp phòng thủ xuất hiện vào những thời điểm khác nhau. Lu
 | Compaction | `AgentSession` + module compaction của Coding Agent | có; thêm `CompactionEntry` |
 | Bản tóm tắt nhánh | `AgentSession.navigateTree()` + bộ tóm tắt nhánh | có khi được yêu cầu; thêm `BranchSummaryEntry` |
 
-Bảng phân quyền sở hữu này ngăn hai lỗi phổ biến: đặt compaction của phiên trong hook chỉ biến đổi context của một yêu cầu, và cho rằng kết quả Tool đã giới hạn byte đồng nghĩa toàn bộ context theo token chắc chắn vừa cửa sổ.
+Bảng phân định trách nhiệm này ngăn hai lỗi phổ biến: đặt compaction của phiên trong hook chỉ biến đổi context của một yêu cầu, và cho rằng kết quả Tool đã giới hạn byte đồng nghĩa toàn bộ context theo token chắc chắn vừa cửa sổ.
 
 ## 8. Bài học thiết kế
 
@@ -539,7 +539,7 @@ Trước khi bàn giao luồng xử lý ngữ cảnh, hãy kiểm thử năm ran
 
 1. Đưa vào một dòng lớn hơn giới hạn byte và đặt văn bản đa byte tại điểm cắt.
 2. Tạo các chỉ dẫn toàn cục, ở thư mục cha, ở thư mục hiện tại, thay thế và nối thêm sao cho chúng xung đột; ghi lại thứ tự kết quả.
-3. Lặp lại phép kiểm thử tài nguyên khi từ chối project trust; xác nhận file ngữ cảnh vẫn được nạp còn tài nguyên dự án được trust gate bảo vệ thì không.
+3. Lặp lại phép kiểm thử tài nguyên khi từ chối project trust; xác nhận file ngữ cảnh vẫn được nạp, còn tài nguyên dự án bị chặn khi dự án chưa được tin cậy.
 4. Vượt ngưỡng token một lần bằng số liệu `usage` của provider và một lần bằng các thông điệp theo sau được ước lượng; kiểm tra ranh giới bản ghi được giữ lại.
 5. Điều hướng giữa hai nút lá cùng cấp, một lần không tóm tắt và một lần có tóm tắt; kiểm tra `fromId`, `parentId` cùng thông điệp được chiếu.
 
@@ -573,7 +573,7 @@ Các tham chiếu phần triển khai của chương này được ghim theo Pi 
 - [Phép cắt đầu ra Tool và ranh giới Unicode](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/tools/truncate.ts#L11-L275)
 - [Dấu tiếp tục của `read`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/tools/read.ts#L271-L317) và [giới hạn của `grep`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/tools/grep.ts#L321-L361)
 - [Cách tìm file ngữ cảnh và `DefaultResourceLoader`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/resource-loader.ts#L71-L193)
-- [Thư mục tài nguyên được trust gate bảo vệ](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/package-manager.ts#L2360-L2515) và [ranh giới trust](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/docs/security.md#L3-L37)
+- [Thư mục tài nguyên được kiểm soát theo mức tin cậy của dự án](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/package-manager.ts#L2360-L2515) và [ranh giới trust](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/docs/security.md#L3-L37)
 - [Cách ghép system prompt](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/system-prompt.ts#L28-L161) và [định dạng metadata của skill](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/skills.ts#L347-L380)
 - [Giá trị mặc định và ngưỡng compaction](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/compaction/compaction.ts#L126-L237)
 - [Cách thu thập và sinh bản tóm tắt nhánh](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/compaction/branch-summarization.ts#L96-L378)

@@ -830,7 +830,7 @@ The thinner pre-restoration Chapter 7 pages already contained the ten core event
 
 ## Reviewed mapping appendix: Chapter 8
 
-Chapter 8 has 30 baseline H2–H3 decisions and 85 unique artifact or argument decisions: 115 total. The reconciliation is exact: 96 `restored` + 4 `merged` + 15 `technically-invalid` + 0 `duplicate` = 115. Final-to-baseline semantic-word preservation measured by `contentMetrics()` is EN 3,257 / 3,524 = 92.4% and VI 4,592 / 4,043 = 113.6%; each ratio compares one locale only. The final pair has mirrored H2/H3/H4 counts 9/23/0, 21 aligned fences, eight aligned tables, and no Mermaid block. The old branch-summary template labels remain inside a fenced block, so they do not create page navigation headings. No Chapter 8 deletion allowance is present in `content/preservation-manifest.json`.
+Chapter 8 has 30 baseline H2–H3 decisions and 85 unique artifact or argument decisions: 115 total. The reconciliation is exact: 96 `restored` + 4 `merged` + 15 `technically-invalid` + 0 `duplicate` = 115. Final-to-baseline semantic-word preservation measured by `contentMetrics()` is EN 3,257 / 3,524 = 92.4% and VI 4,597 / 4,043 = 113.7%; each ratio compares one locale only. The final pair has mirrored H2/H3/H4 counts 9/23/0, 21 aligned fences, eight aligned tables, and no Mermaid block. The old branch-summary template labels remain inside a fenced block, so they do not create page navigation headings. No Chapter 8 deletion allowance is present in `content/preservation-manifest.json`.
 
 ### Heading outcomes
 
