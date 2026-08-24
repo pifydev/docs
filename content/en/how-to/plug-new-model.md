@@ -23,7 +23,7 @@ Most model additions describe an endpoint Pi already knows how to call. Start wi
 
 :::tip[What you will have]
 
-A local OpenAI-compatible model in the Pi catalog, accurate capability and cost metadata, commands that prove selection works, and a test probe for text, thinking, Tools, failure, retry, and cancellation.
+A local OpenAI-compatible model in the Pi catalog, accurate capability and cost metadata, and seven checks covering selection, text, thinking, Tools, failure, one retry, and delayed cancellation.
 
 :::
 
@@ -128,7 +128,7 @@ Pi uses model metadata for selection, validation, request shaping, usage, and di
 | `api`, `baseUrl`, `provider` | Select the adapter and endpoint. `ModelRuntime` fills `provider` and inherited values; a resolved `Model` always has all three. |
 | `reasoning`, `thinkingLevelMap` | Enable only when the model emits reasoning. Map Pi levels to accepted provider values; use `null` for an unsupported level. |
 | `input` | Declare only accepted modalities: `text` and, when tested, `image`. |
-| `cost` | Per-million-token `input`, `output`, `cacheRead`, and `cacheWrite` rates. Optional `tiers` apply request-wide above an input-token threshold. Use zero when the endpoint is free/local. |
+| `cost` | Per-million-token `input`, `output`, `cacheRead`, and `cacheWrite` rates. `tiers` compare `usage.input + usage.cacheRead + usage.cacheWrite` with each `inputTokensAbove`; the highest threshold strictly below that total sets rates for the whole request. Use zero when the endpoint is free/local. |
 | `contextWindow`, `maxTokens` | Total context capacity and maximum generated tokens. Both are token counts, not bytes or characters. |
 | `samplingParams`, `headers` | Optional model defaults and model-specific headers. Request values override sampling defaults. Keep secrets out of either field. |
 | `compat` | Explicit corrections for an OpenAI-compatible server's dialect. Defaults may be URL-derived, which is unsafe for an unknown local URL. |
@@ -137,7 +137,7 @@ Common completions compatibility switches cover `developer` roles, `reasoning_ef
 
 ## 3. Discover models with provider config
 
-Use an async Extension when the endpoint's model list changes. Validate the untrusted response and pass the supplied signal to `fetch`. The returned list replaces this Extension's models; if refresh throws, Pi keeps the previous list.
+Use an async Extension when the endpoint's model list changes. Validate the untrusted response and pass the supplied signal to `fetch`. The returned list replaces this Extension's models; if refresh throws, Pi keeps the previous in-memory list.
 
 ```ts title=".pi/extensions/discover-local-models.ts"
 import type {
@@ -200,17 +200,47 @@ async function discover(signal: AbortSignal): Promise<ProviderModelConfig[]> {
 }
 
 export default function discoverLocalModels(pi: ExtensionAPI) {
+  const provider = "local-openai";
+  const api = "openai-completions";
+  const baseUrl = "http://127.0.0.1:1234/v1";
+
   pi.registerProvider("local-openai", {
     name: "Local OpenAI",
-    baseUrl: "http://127.0.0.1:1234/v1",
+    baseUrl,
     apiKey: "$LOCAL_OPENAI_API_KEY",
-    api: "openai-completions",
-    refreshModels: ({ signal }) => discover(signal),
+    api,
+    refreshModels: async (context) => {
+      const stored =
+        context.stored?.models.filter((model) => model.provider === provider) ??
+        [];
+      if (!context.allowNetwork) return [...stored];
+
+      try {
+        const discovered = await discover(context.signal);
+        await context.publish({
+          persist: {
+            models: discovered.map((model) => ({
+              ...model,
+              provider,
+              api: model.api ?? api,
+              baseUrl: model.baseUrl ?? baseUrl,
+            })),
+            checkedAt: Date.now(),
+          },
+        });
+        return discovered;
+      } catch (error) {
+        if (stored.length > 0) return [...stored];
+        throw error;
+      }
+    },
   });
 }
 ```
 
-For provider-owned remote catalogs outside an Extension, call `await models.refresh({ allowNetwork: true, force: true, signal })`. Coding Agent also offers `pi update --models`; configured dynamic catalogs are cached for offline startup. `PI_OFFLINE` disables model network access. Refresh is optional; static providers need no refresh method.
+`ProviderConfig.refreshModels()` must opt into cross-session storage with the published one-argument contract `await context.publish({ persist: entry })`; the example persists fully resolved `Model` objects and returns that cache when networking is disabled or fails. A native `createProvider({ fetchModels })` restores and publishes its dynamic overlay automatically.
+
+Call `await models.refresh({ allowNetwork: true, force: true, signal })` for provider-owned remote catalogs outside an Extension. Coding Agent also offers `pi update --models`. `PI_OFFLINE` disables model network access. Refresh is optional; static providers need no refresh method.
 
 ## 4. Build a native `Provider`
 
@@ -327,7 +357,19 @@ If `getModel()` succeeds but the model is absent from `/model`, auth is not conf
 
 ## 7. Probe streaming, thinking, and Tools
 
-Run a real request for every capability you declare. This probe uses the `Models.streamSimple()` path that applies auth and provider defaults. It prints incremental output and fails on the stream's terminal error message.
+Run every check that applies before claiming support:
+
+| Check | Target | Pass condition |
+| --- | --- | --- |
+| Selection | Configured Pi | `provider/id` resolves and answers. |
+| Text stream | Live endpoint | Text arrives incrementally and ends with `"stop"`. |
+| Thinking | Live endpoint | The declared reasoning representation appears. |
+| Tool | Live endpoint | `toolcall_end` has the expected name and parsed arguments. |
+| Failure | Local fixture | The terminal event and result both report `"error"`. |
+| One retry | Local fixture | One `429` produces exactly two attempts, then content and `"stop"`. |
+| Delayed abort | Local fixture | The result is `"aborted"` and the connection closes without hanging. |
+
+The live probe uses the `Models.streamSimple()` path that applies auth and provider defaults. It prints incremental output and fails on the stream's terminal error message.
 
 ```ts title="verify-provider.ts"
 import {
@@ -407,6 +449,187 @@ npx tsx verify-provider.ts tool
 
 Run text first. Enable `reasoning` and a truthful `thinkingLevelMap` only after the thinking run emits thinking content or the protocol's documented reasoning representation. Add `image` only after an image request succeeds. Tool support requires a `toolcall_end` with the right name and parsed arguments; a normal text answer does not prove it.
 
+Save the next file beside the live probe. It starts a loopback OpenAI-compatible endpoint, so its failure, retry, and abort checks need no external server or secret.
+
+```ts title="verify-provider-errors.test.ts"
+import assert from "node:assert/strict";
+import { once } from "node:events";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
+import test from "node:test";
+import {
+  createModels,
+  createProvider,
+  envApiKeyAuth,
+  type AssistantMessageEvent,
+  type AssistantMessageEventStream,
+  type Context,
+  type Model,
+  type ModelsSimpleStreamOptions,
+} from "@earendil-works/pi-ai";
+import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
+
+const context: Context = {
+  messages: [{ role: "user", content: "test", timestamp: 0 }],
+};
+
+async function within<T>(promise: Promise<T>, label: string): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timeout = setTimeout(
+          () => reject(new Error(`${label} timed out`)),
+          1_000,
+        );
+      }),
+    ]);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function settle(stream: AssistantMessageEventStream) {
+  const events: AssistantMessageEvent[] = [];
+  for await (const event of stream) events.push(event);
+  return { events, result: await stream.result() };
+}
+
+function terminalError(events: AssistantMessageEvent[]) {
+  const terminal = events.at(-1);
+  assert.equal(terminal?.type, "error");
+  if (terminal?.type !== "error") throw new Error("missing error event");
+  return terminal.reason;
+}
+
+test("provider errors, retry, and abort use the real stream path", async (t) => {
+  let scenario: "failure" | "retry" | "abort" = "failure";
+  let retryAttempts = 0;
+  let signalAbortRequest!: () => void;
+  let signalAbortClosed!: () => void;
+  const abortRequest = new Promise<void>((resolve) =>
+    (signalAbortRequest = resolve),
+  );
+  const abortClosed = new Promise<void>((resolve) =>
+    (signalAbortClosed = resolve),
+  );
+  const server = createServer(async (req, res) => {
+    assert.equal(req.url, "/v1/chat/completions");
+    for await (const _chunk of req) {
+      // Consume the request before choosing the deterministic response.
+    }
+
+    if (scenario === "failure") {
+      res.writeHead(500, { "content-type": "application/json" });
+      res.end(JSON.stringify({ error: { message: "fixture failure" } }));
+      return;
+    }
+    if (scenario === "retry" && ++retryAttempts === 1) {
+      res.writeHead(429, {
+        "content-type": "application/json",
+        "retry-after-ms": "0",
+      });
+      res.end(JSON.stringify({ error: { message: "retry once" } }));
+      return;
+    }
+    if (scenario === "abort") {
+      res.on("close", signalAbortClosed);
+      signalAbortRequest();
+      return;
+    }
+
+    const chunk = {
+      id: "fixture",
+      model: "fixture-model",
+      choices: [
+        {
+          index: 0,
+          delta: { content: "retry ok" },
+          finish_reason: "stop",
+        },
+      ],
+      usage: { prompt_tokens: 1, completion_tokens: 2 },
+    };
+    res.writeHead(200, { "content-type": "text/event-stream" });
+    res.end(`data: ${JSON.stringify(chunk)}\n\ndata: [DONE]\n\n`);
+  });
+
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const { port } = server.address() as AddressInfo;
+  const model: Model<"openai-completions"> = {
+    id: "fixture-model",
+    name: "Fixture model",
+    provider: "fixture",
+    api: "openai-completions",
+    baseUrl: `http://127.0.0.1:${port}/v1`,
+    reasoning: false,
+    input: ["text"],
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: 1024,
+    maxTokens: 64,
+  };
+  process.env.FIXTURE_API_KEY = "not-secret";
+  const models = createModels();
+  models.setProvider(
+    createProvider({
+      id: "fixture",
+      auth: { apiKey: envApiKeyAuth("Fixture key", ["FIXTURE_API_KEY"]) },
+      models: [model],
+      api: openAICompletionsApi(),
+    }),
+  );
+  const run = (options: ModelsSimpleStreamOptions = {}) =>
+    settle(models.streamSimple(model, context, options));
+
+  try {
+    await t.test("returns a terminal error", async () => {
+      scenario = "failure";
+      const { events, result } = await run({ maxRetries: 0 });
+      assert.equal(terminalError(events), "error");
+      assert.equal(result.stopReason, "error");
+      assert.match(result.errorMessage ?? "", /fixture failure/);
+    });
+
+    await t.test("retries once, then returns the successful content", async () => {
+      scenario = "retry";
+      const { events, result } = await run({ maxRetries: 1 });
+      assert.equal(retryAttempts, 2);
+      assert.equal(events.at(-1)?.type, "done");
+      assert.equal(result.stopReason, "stop");
+      assert.deepEqual(result.content, [{ type: "text", text: "retry ok" }]);
+    });
+
+    await t.test(
+      "aborts a delayed response and closes its connection",
+      async () => {
+        scenario = "abort";
+        const controller = new AbortController();
+        const settled = run({
+          signal: controller.signal,
+          maxRetries: 0,
+        });
+        await within(abortRequest, "request start");
+        controller.abort();
+        const { events, result } = await within(settled, "aborted stream");
+        await within(abortClosed, "connection cleanup");
+        assert.equal(terminalError(events), "aborted");
+        assert.equal(result.stopReason, "aborted");
+      },
+    );
+  } finally {
+    delete process.env.FIXTURE_API_KEY;
+    server.closeAllConnections();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+});
+```
+
+```bash
+npx tsx --test verify-provider-errors.test.ts
+```
+
 ## 8. Handle errors, retry, and cancellation
 
 Keep transport policy explicit. Direct API adapters default to no retries unless the caller sets `maxRetries`; the OpenAI adapters retry connection failures, HTTP `408`, `409`, `429`, and `5xx` responses unless the server's retry header says otherwise. Retry waits are abortable. Coding Agent's higher-level agent retry is separate, so avoid multiplying retries across both layers.
@@ -437,4 +660,4 @@ An aborted request terminates with an assistant message whose `stopReason` is `"
 
 ## Next
 
-Once selection and the three probes pass, use the model in the [Quickstart](../quickstart.md) agent. [Chapter 4: Model invocation](../ch04-model-invocation.md) traces the request and stream path. If a new protocol needs a custom Tool translation layer, review [Add a custom Tool](add-custom-tool.md) alongside the source adapter you are matching.
+Once the seven checks pass, use the model in the [Quickstart](../quickstart.md) agent. [Chapter 4: Model invocation](../ch04-model-invocation.md) traces the request and stream path. If a new protocol needs a custom Tool translation layer, review [Add a custom Tool](add-custom-tool.md) alongside the source adapter you are matching.

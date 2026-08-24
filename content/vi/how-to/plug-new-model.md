@@ -1,5 +1,5 @@
 ---
-title: Thêm model provider
+title: Thêm một nhà cung cấp mô hình
 description: Thêm model qua models.json hoặc Provider, và chỉ viết streaming API adapter khi wire protocol hoàn toàn mới.
 translation_key: how-to-plug-new-model
 language: vi
@@ -23,7 +23,7 @@ Phần lớn trường hợp thêm model chỉ cần mô tả một endpoint mà
 
 :::tip[Kết quả sau hướng dẫn]
 
-Một model tương thích OpenAI trong catalog của Pi, metadata đúng về khả năng và chi phí, các lệnh xác nhận chọn model thành công, cùng chương trình kiểm tra text, thinking, Tool, lỗi, retry và cancellation.
+Một model tương thích OpenAI trong catalog của Pi, metadata đúng về khả năng và chi phí, cùng bảy bước kiểm tra cho việc chọn model, text, thinking, Tool, lỗi, một lần retry và cancellation có độ trễ.
 
 :::
 
@@ -128,7 +128,7 @@ Pi dùng metadata của model để chọn model, kiểm tra dữ liệu, tạo 
 | `api`, `baseUrl`, `provider` | Chọn adapter và endpoint. `ModelRuntime` điền `provider` cùng các giá trị kế thừa; một `Model` đã resolve luôn có đủ ba field. |
 | `reasoning`, `thinkingLevelMap` | Chỉ bật khi model phát reasoning. Ánh xạ level của Pi sang giá trị provider chấp nhận; dùng `null` cho level không được hỗ trợ. |
 | `input` | Chỉ khai báo modality được chấp nhận: `text` và, sau khi đã kiểm tra, `image`. |
-| `cost` | Giá trên một triệu token cho `input`, `output`, `cacheRead` và `cacheWrite`. `tiers` tùy chọn áp dụng cho toàn request khi vượt ngưỡng input token. Chỉ dùng số không nếu endpoint thật sự miễn phí/local. |
+| `cost` | Giá trên một triệu token cho `input`, `output`, `cacheRead` và `cacheWrite`. `tiers` so sánh `usage.input + usage.cacheRead + usage.cacheWrite` với từng `inputTokensAbove`; ngưỡng cao nhất nhỏ hơn tổng đó quyết định mức giá cho toàn request. Chỉ dùng số không nếu endpoint thật sự miễn phí/local. |
 | `contextWindow`, `maxTokens` | Tổng sức chứa context và số token sinh tối đa. Cả hai đều tính bằng token, không phải byte hay ký tự. |
 | `samplingParams`, `headers` | Default tùy chọn của model và header riêng cho model. Giá trị trong request ghi đè sampling default. Không đặt secret trong hai field này. |
 | `compat` | Các điều chỉnh rõ ràng cho dialect của server tương thích OpenAI. Default có thể được suy ra từ URL, không an toàn với URL local chưa biết. |
@@ -137,7 +137,7 @@ Những switch tương thích completions thường gặp điều khiển role `
 
 ## 3. Khám phá model bằng provider config
 
-Dùng Extension bất đồng bộ khi danh sách model của endpoint thay đổi. Hãy kiểm tra response không đáng tin cậy và truyền signal được cấp vào `fetch`. Danh sách trả về thay thế các model của Extension này; nếu refresh ném lỗi, Pi giữ danh sách trước đó.
+Dùng Extension bất đồng bộ khi danh sách model của endpoint thay đổi. Hãy kiểm tra response không đáng tin cậy và truyền signal được cấp vào `fetch`. Danh sách trả về thay thế các model của Extension này; nếu refresh ném lỗi, Pi giữ danh sách đang có trong bộ nhớ.
 
 ```ts title=".pi/extensions/discover-local-models.ts"
 import type {
@@ -200,17 +200,47 @@ async function discover(signal: AbortSignal): Promise<ProviderModelConfig[]> {
 }
 
 export default function discoverLocalModels(pi: ExtensionAPI) {
+  const provider = "local-openai";
+  const api = "openai-completions";
+  const baseUrl = "http://127.0.0.1:1234/v1";
+
   pi.registerProvider("local-openai", {
     name: "Local OpenAI",
-    baseUrl: "http://127.0.0.1:1234/v1",
+    baseUrl,
     apiKey: "$LOCAL_OPENAI_API_KEY",
-    api: "openai-completions",
-    refreshModels: ({ signal }) => discover(signal),
+    api,
+    refreshModels: async (context) => {
+      const stored =
+        context.stored?.models.filter((model) => model.provider === provider) ??
+        [];
+      if (!context.allowNetwork) return [...stored];
+
+      try {
+        const discovered = await discover(context.signal);
+        await context.publish({
+          persist: {
+            models: discovered.map((model) => ({
+              ...model,
+              provider,
+              api: model.api ?? api,
+              baseUrl: model.baseUrl ?? baseUrl,
+            })),
+            checkedAt: Date.now(),
+          },
+        });
+        return discovered;
+      } catch (error) {
+        if (stored.length > 0) return [...stored];
+        throw error;
+      }
+    },
   });
 }
 ```
 
-Với remote catalog do provider quản lý ngoài Extension, gọi `await models.refresh({ allowNetwork: true, force: true, signal })`. Coding Agent cũng có `pi update --models`; catalog động đã cấu hình được cache để dùng khi khởi động offline. `PI_OFFLINE` tắt truy cập mạng để lấy model. Refresh là tùy chọn; provider tĩnh không cần refresh method.
+`ProviderConfig.refreshModels()` phải chủ động lưu dữ liệu qua contract công khai nhận một đối số: `await context.publish({ persist: entry })`. Ví dụ lưu các object `Model` đã resolve đầy đủ để dùng lại khi tắt mạng hoặc lúc discovery thất bại. Native `createProvider({ fetchModels })` tự khôi phục và lưu dynamic overlay.
+
+Với remote catalog do provider quản lý ngoài Extension, gọi `await models.refresh({ allowNetwork: true, force: true, signal })`. Coding Agent cũng có `pi update --models`. `PI_OFFLINE` tắt truy cập mạng để lấy model. Refresh là tùy chọn; provider tĩnh không cần refresh method.
 
 ## 4. Tạo native `Provider`
 
@@ -327,7 +357,19 @@ Nếu `getModel()` thành công nhưng model không xuất hiện trong `/model`
 
 ## 7. Kiểm tra streaming, thinking và Tool
 
-Chạy request thật cho từng khả năng được khai báo. Chương trình này dùng đường `Models.streamSimple()` để áp dụng auth và default của provider. Nó in output tăng dần và báo lỗi nếu stream kết thúc bằng error message.
+Hãy chạy mọi bước phù hợp trước khi tuyên bố hỗ trợ:
+
+| Bước kiểm tra | Đích | Điều kiện đạt |
+| --- | --- | --- |
+| Chọn model | Pi đã cấu hình | Dạng `provider/id` resolve được và trả lời. |
+| Stream text | Endpoint thật | Text đến theo từng phần và kết thúc bằng `"stop"`. |
+| Thinking | Endpoint thật | Xuất hiện representation reasoning đã khai báo. |
+| Tool | Endpoint thật | `toolcall_end` có đúng tên và đối số đã parse. |
+| Lỗi | Fixture local | Event cuối và result đều báo `"error"`. |
+| Một lần retry | Fixture local | Một response `429` tạo đúng hai lần gọi, rồi trả content và `"stop"`. |
+| Abort có độ trễ | Fixture local | Result là `"aborted"` và connection đóng mà không bị treo. |
+
+Chương trình kiểm tra endpoint thật dùng đường `Models.streamSimple()` để áp dụng auth và default của provider. Nó in output tăng dần và báo lỗi nếu stream kết thúc bằng error message.
 
 ```ts title="verify-provider.ts"
 import {
@@ -407,6 +449,187 @@ npx tsx verify-provider.ts tool
 
 Chạy text trước. Chỉ bật `reasoning` và `thinkingLevelMap` đúng sự thật sau khi lần chạy thinking phát thinking content hoặc representation reasoning được protocol ghi rõ. Chỉ thêm `image` sau khi request ảnh thành công. Khả năng dùng Tool đòi hỏi một `toolcall_end` có đúng tên và đối số đã parse; một câu trả lời text bình thường chưa chứng minh được điều đó.
 
+Lưu file tiếp theo cạnh chương trình kiểm tra endpoint thật. File này khởi động một endpoint OpenAI-compatible trên loopback, nên ba bài kiểm tra lỗi, retry và abort không cần server bên ngoài hay secret.
+
+```ts title="verify-provider-errors.test.ts"
+import assert from "node:assert/strict";
+import { once } from "node:events";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
+import test from "node:test";
+import {
+  createModels,
+  createProvider,
+  envApiKeyAuth,
+  type AssistantMessageEvent,
+  type AssistantMessageEventStream,
+  type Context,
+  type Model,
+  type ModelsSimpleStreamOptions,
+} from "@earendil-works/pi-ai";
+import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
+
+const context: Context = {
+  messages: [{ role: "user", content: "test", timestamp: 0 }],
+};
+
+async function within<T>(promise: Promise<T>, label: string): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timeout = setTimeout(
+          () => reject(new Error(`${label} timed out`)),
+          1_000,
+        );
+      }),
+    ]);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function settle(stream: AssistantMessageEventStream) {
+  const events: AssistantMessageEvent[] = [];
+  for await (const event of stream) events.push(event);
+  return { events, result: await stream.result() };
+}
+
+function terminalError(events: AssistantMessageEvent[]) {
+  const terminal = events.at(-1);
+  assert.equal(terminal?.type, "error");
+  if (terminal?.type !== "error") throw new Error("missing error event");
+  return terminal.reason;
+}
+
+test("provider errors, retry, and abort use the real stream path", async (t) => {
+  let scenario: "failure" | "retry" | "abort" = "failure";
+  let retryAttempts = 0;
+  let signalAbortRequest!: () => void;
+  let signalAbortClosed!: () => void;
+  const abortRequest = new Promise<void>((resolve) =>
+    (signalAbortRequest = resolve),
+  );
+  const abortClosed = new Promise<void>((resolve) =>
+    (signalAbortClosed = resolve),
+  );
+  const server = createServer(async (req, res) => {
+    assert.equal(req.url, "/v1/chat/completions");
+    for await (const _chunk of req) {
+      // Consume the request before choosing the deterministic response.
+    }
+
+    if (scenario === "failure") {
+      res.writeHead(500, { "content-type": "application/json" });
+      res.end(JSON.stringify({ error: { message: "fixture failure" } }));
+      return;
+    }
+    if (scenario === "retry" && ++retryAttempts === 1) {
+      res.writeHead(429, {
+        "content-type": "application/json",
+        "retry-after-ms": "0",
+      });
+      res.end(JSON.stringify({ error: { message: "retry once" } }));
+      return;
+    }
+    if (scenario === "abort") {
+      res.on("close", signalAbortClosed);
+      signalAbortRequest();
+      return;
+    }
+
+    const chunk = {
+      id: "fixture",
+      model: "fixture-model",
+      choices: [
+        {
+          index: 0,
+          delta: { content: "retry ok" },
+          finish_reason: "stop",
+        },
+      ],
+      usage: { prompt_tokens: 1, completion_tokens: 2 },
+    };
+    res.writeHead(200, { "content-type": "text/event-stream" });
+    res.end(`data: ${JSON.stringify(chunk)}\n\ndata: [DONE]\n\n`);
+  });
+
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const { port } = server.address() as AddressInfo;
+  const model: Model<"openai-completions"> = {
+    id: "fixture-model",
+    name: "Fixture model",
+    provider: "fixture",
+    api: "openai-completions",
+    baseUrl: `http://127.0.0.1:${port}/v1`,
+    reasoning: false,
+    input: ["text"],
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: 1024,
+    maxTokens: 64,
+  };
+  process.env.FIXTURE_API_KEY = "not-secret";
+  const models = createModels();
+  models.setProvider(
+    createProvider({
+      id: "fixture",
+      auth: { apiKey: envApiKeyAuth("Fixture key", ["FIXTURE_API_KEY"]) },
+      models: [model],
+      api: openAICompletionsApi(),
+    }),
+  );
+  const run = (options: ModelsSimpleStreamOptions = {}) =>
+    settle(models.streamSimple(model, context, options));
+
+  try {
+    await t.test("returns a terminal error", async () => {
+      scenario = "failure";
+      const { events, result } = await run({ maxRetries: 0 });
+      assert.equal(terminalError(events), "error");
+      assert.equal(result.stopReason, "error");
+      assert.match(result.errorMessage ?? "", /fixture failure/);
+    });
+
+    await t.test("retries once, then returns the successful content", async () => {
+      scenario = "retry";
+      const { events, result } = await run({ maxRetries: 1 });
+      assert.equal(retryAttempts, 2);
+      assert.equal(events.at(-1)?.type, "done");
+      assert.equal(result.stopReason, "stop");
+      assert.deepEqual(result.content, [{ type: "text", text: "retry ok" }]);
+    });
+
+    await t.test(
+      "aborts a delayed response and closes its connection",
+      async () => {
+        scenario = "abort";
+        const controller = new AbortController();
+        const settled = run({
+          signal: controller.signal,
+          maxRetries: 0,
+        });
+        await within(abortRequest, "request start");
+        controller.abort();
+        const { events, result } = await within(settled, "aborted stream");
+        await within(abortClosed, "connection cleanup");
+        assert.equal(terminalError(events), "aborted");
+        assert.equal(result.stopReason, "aborted");
+      },
+    );
+  } finally {
+    delete process.env.FIXTURE_API_KEY;
+    server.closeAllConnections();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+});
+```
+
+```bash
+npx tsx --test verify-provider-errors.test.ts
+```
+
 ## 8. Xử lý lỗi, retry và cancellation
 
 Hãy quy định transport policy rõ ràng. API adapter được gọi trực tiếp mặc định không retry trừ khi caller đặt `maxRetries`; các OpenAI adapter retry lỗi kết nối và response HTTP `408`, `409`, `429`, `5xx`, trừ khi retry header của server yêu cầu khác. Thời gian chờ giữa các lần retry có thể bị abort. Agent retry ở tầng Coding Agent là cơ chế riêng, vì vậy tránh nhân số lần retry ở cả hai tầng.
@@ -437,4 +660,4 @@ Request bị abort kết thúc bằng assistant message có `stopReason` là `"a
 
 ## Tiếp theo
 
-Sau khi chọn model và vượt qua ba bài kiểm tra, hãy dùng model đó trong agent ở [Quickstart](../quickstart.md). [Chương 4: Gọi model](../ch04-model-invocation.md) lần theo đường đi của request và stream. Nếu protocol mới cần lớp chuyển đổi Tool tùy chỉnh, hãy đọc [Thêm Tool tùy chỉnh](add-custom-tool.md) cùng source adapter mà bạn đang đối chiếu.
+Sau khi vượt qua cả bảy bước kiểm tra, hãy dùng model đó trong agent ở [Quickstart](../quickstart.md). [Chương 4: Gọi model](../ch04-model-invocation.md) lần theo đường đi của request và stream. Nếu protocol mới cần lớp chuyển đổi Tool tùy chỉnh, hãy đọc [Thêm Tool tùy chỉnh](add-custom-tool.md) cùng source adapter mà bạn đang đối chiếu.
