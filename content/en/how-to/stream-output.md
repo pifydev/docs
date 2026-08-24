@@ -1,16 +1,51 @@
 ---
 title: Stream agent output
-description: Subscribe to AgentSession events to render text, thinking, tool progress, errors, and completion.
+description: Render text, thinking, and Tool progress from AgentSession events without buffering a whole run.
 translation_key: how-to-stream-output
 language: en
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-08-24'
+last_updated: '2026-08-25'
 ---
 
-`AgentSession` publishes lifecycle events while `prompt()` is running. Subscribe before sending the prompt, update the UI from deltas, and unsubscribe when the consumer is disposed.
+Subscribe to an `AgentSession` before calling `prompt()`. Its events let a CLI or UI render partial output, Tool work, retries, and final state without repeatedly reading the complete transcript.
 
-## Stream text to a terminal
+:::tip[When you need this]
+
+- A chat UI that reveals text while the model responds
+- A CLI that reports thinking and Tool progress
+- A web app that must cancel a long run
+
+:::
+
+The examples target Node.js `>=22.19.0`, ESM, and the published package at `0.84.2`:
+
+```bash
+npm install @earendil-works/pi-coding-agent@0.84.2
+npm install --save-dev tsx typescript @types/node
+```
+
+## The event stream
+
+`subscribe()` takes a synchronous `(event) => void` listener and returns its unsubscribe function. `AgentSession` calls listeners immediately; it does not await a returned Promise. Keep the callback small and move expensive rendering into a queue or batch.
+
+| Session event | What it means | Typical UI action |
+|---|---|---|
+| `message_start` | A user, assistant, or Tool-result message opened | Allocate a message row |
+| `message_update` | An assistant message changed | Inspect `assistantMessageEvent` |
+| `message_end` | The complete message is available, including an assistant `stopReason` | Commit or label the row |
+| `tool_execution_start` / `update` / `end` | One Tool started, reported progress, then returned or failed | Update state keyed by `toolCallId` |
+| `agent_end` | One agent attempt ended; `willRetry` says whether session retry follows | End the attempt, not necessarily the run |
+| `auto_retry_start` / `end` | Session retry delay or result | Show retry status |
+| `agent_settled` | Retries and queued continuation work are finished and the session is idle | Enable input and mark the run complete |
+
+For `message_update`, inspect `assistantMessageEvent.type`. Text, thinking, and Tool arguments each have `*_start`, `*_delta`, and `*_end` phases. In the current agent loop, provider `start` and terminal `done` or `error` become the outer `message_start` and `message_end`; they are not separate top-level session events.
+
+`prompt()` resolves after the session settles. It does not wait for asynchronous work started inside your listener, because session listeners are synchronous.
+
+## 1. Stream plain text
+
+With a model and credentials already configured, this is a complete terminal consumer:
 
 ```ts title="stream.ts"
 import {
@@ -43,56 +78,238 @@ try {
 }
 ```
 
-`prompt()` resolves after the accepted run finishes, including tool calls, retries, and awaited end-of-run subscribers. The callback receives incremental events; do not repeatedly render the full message on every delta.
+Run it with `npx tsx stream.ts`. A delta is a text chunk, not necessarily one character. Append each delta as it arrives; if you also need the final string, accumulate the same deltas while still rendering them.
 
-## Handle the event families
+## 2. Stream Tool calls
 
-```ts title="render-events.ts"
-const unsubscribe = session.subscribe((event) => {
-  switch (event.type) {
-    case "message_update":
-      if (event.assistantMessageEvent.type === "text_delta") {
-        appendText(event.assistantMessageEvent.delta);
-      } else if (event.assistantMessageEvent.type === "thinking_delta") {
-        appendThinking(event.assistantMessageEvent.delta);
+Tool streaming has two layers. Nested `toolcall_*` events assemble the model's Tool-call arguments. Later, `tool_execution_*` events report actual execution. This compact renderer handles both layers, text, retry state, and final settlement:
+
+```ts title="render-output.ts"
+import type {
+  AgentSession,
+  AgentSessionEvent,
+} from "@earendil-works/pi-coding-agent";
+
+interface OutputView {
+  appendText(delta: string): void;
+  startToolArguments(contentIndex: number): void;
+  appendToolArguments(contentIndex: number, delta: string): void;
+  commitToolCall(call: {
+    id: string;
+    name: string;
+    arguments: Record<string, unknown>;
+  }): void;
+  startTool(id: string, name: string, args: unknown): void;
+  updateTool(id: string, partialResult: unknown): void;
+  finishTool(id: string, result: unknown, isError: boolean): void;
+  finishMessage(stopReason: string, errorMessage?: string): void;
+  finishAttempt(willRetry: boolean): void;
+  showRetry(attempt: number, maxAttempts: number): void;
+  markIdle(): void;
+}
+
+export function subscribeToOutput(
+  session: AgentSession,
+  view: OutputView,
+): () => void {
+  return session.subscribe((event: AgentSessionEvent) => {
+    if (event.type === "message_update") {
+      const part = event.assistantMessageEvent;
+      if (part.type === "text_delta") view.appendText(part.delta);
+      if (part.type === "toolcall_start") {
+        view.startToolArguments(part.contentIndex);
       }
-      break;
+      if (part.type === "toolcall_delta") {
+        view.appendToolArguments(part.contentIndex, part.delta);
+      }
+      if (part.type === "toolcall_end") view.commitToolCall(part.toolCall);
+      return;
+    }
 
-    case "tool_execution_start":
-      showTool(event.toolCallId, event.toolName, event.args);
-      break;
-
-    case "tool_execution_update":
-      updateTool(event.toolCallId, event.partialResult);
-      break;
-
-    case "tool_execution_end":
-      finishTool(event.toolCallId, event.isError);
-      break;
-
-    case "agent_end":
-      markIdle();
-      break;
-  }
-});
+    switch (event.type) {
+      case "message_end":
+        if (event.message.role === "assistant") {
+          view.finishMessage(
+            event.message.stopReason,
+            event.message.errorMessage,
+          );
+        }
+        break;
+      case "tool_execution_start":
+        view.startTool(event.toolCallId, event.toolName, event.args);
+        break;
+      case "tool_execution_update":
+        view.updateTool(event.toolCallId, event.partialResult);
+        break;
+      case "tool_execution_end":
+        view.finishTool(event.toolCallId, event.result, event.isError);
+        break;
+      case "agent_end":
+        view.finishAttempt(event.willRetry);
+        break;
+      case "auto_retry_start":
+        view.showRetry(event.attempt, event.maxAttempts);
+        break;
+      case "agent_settled":
+        view.markIdle();
+        break;
+    }
+  });
+}
 ```
 
-In parallel tool mode, tool completion events can arrive in completion order rather than source order. Key UI state by `toolCallId`; never assume the last started tool is the next one to finish.
+Tools can execute in parallel. Their progress and completion can interleave, so keep execution state by `toolCallId`; do not use “last Tool started” as an implicit stack. `contentIndex` identifies argument blocks while the model is still constructing them.
 
-## Support cancellation
+## 3. Stream thinking blocks
 
-```ts
-cancelButton.addEventListener("click", () => {
-  void session.abort();
-});
+Thinking is a separate content type and may be absent. Keep it separate from answer text and decide whether your product should show, collapse, or omit it.
+
+```ts title="thinking.ts"
+import type { AgentSession } from "@earendil-works/pi-coding-agent";
+
+interface ThinkingView {
+  open(contentIndex: number): void;
+  append(delta: string): void;
+  close(content: string): void;
+}
+
+export function subscribeToThinking(
+  session: AgentSession,
+  view: ThinkingView,
+): () => void {
+  return session.subscribe((event) => {
+    if (event.type !== "message_update") return;
+
+    const part = event.assistantMessageEvent;
+    if (part.type === "thinking_start") view.open(part.contentIndex);
+    if (part.type === "thinking_delta") view.append(part.delta);
+    if (part.type === "thinking_end") view.close(part.content);
+  });
+}
 ```
 
-Aborting stops the active operation. Keep partial output already rendered and use the final message state or event sequence to label the run accurately.
+Do not infer support from a provider name. Test the selected model and treat no thinking events as a valid outcome. Avoid logging thinking by default if it may contain sensitive context.
 
-## Avoid common streaming bugs
+## 4. Cancel an active run
 
-- Subscribe once per session and retain the unsubscribe function.
-- Batch high-frequency UI updates with `requestAnimationFrame` in browser clients.
-- Treat thinking as a separate content type; do not merge it into the final answer.
-- Render tool updates as replaceable progress, not permanent transcript messages.
-- Re-subscribe after an `AgentSessionRuntime` operation replaces `runtime.session`.
+Await `session.abort()`. It cancels an active retry and the core agent, then waits until the session is idle:
+
+```ts title="cancel.ts"
+import type { AgentSession } from "@earendil-works/pi-coding-agent";
+
+export function wireCancel(
+  session: AgentSession,
+  cancelButton: HTMLButtonElement,
+  onError: (error: unknown) => void = console.error,
+): () => void {
+  const onCancel = () => {
+    cancelButton.disabled = true;
+    void (async () => {
+      try {
+        await session.abort();
+      } finally {
+        cancelButton.disabled = false;
+      }
+    })().catch(onError);
+  };
+
+  cancelButton.addEventListener("click", onCancel);
+  return () => cancelButton.removeEventListener("click", onCancel);
+}
+```
+
+Keep partial output already rendered. If an assistant response is active, it ends through `message_end` with `stopReason: "aborted"`, followed by attempt and settlement events. This API guarantees local cancellation and idle settlement; it does not make a billing guarantee about an external provider.
+
+## 5. Batch UI work; do not expect backpressure
+
+An `AgentSession` listener is not an async iterator. Returning a Promise or awaiting inside an async listener does not slow event production. Browser clients should batch deltas and put an explicit bound on pending work:
+
+```ts title="browser-batcher.ts"
+import type { AgentSession } from "@earendil-works/pi-coding-agent";
+
+const MAX_PENDING_CHARS = 64 * 1024;
+
+export function subscribeBatchedText(
+  session: AgentSession,
+  append: (text: string) => void,
+): () => void {
+  let pending = "";
+  let frame: number | undefined;
+
+  const flush = () => {
+    frame = undefined;
+    if (pending.length === 0) return;
+    const batch = pending;
+    pending = "";
+    append(batch);
+  };
+
+  const unsubscribe = session.subscribe((event) => {
+    if (
+      event.type !== "message_update" ||
+      event.assistantMessageEvent.type !== "text_delta"
+    ) {
+      return;
+    }
+
+    pending += event.assistantMessageEvent.delta;
+    if (pending.length >= MAX_PENDING_CHARS) {
+      if (frame !== undefined) cancelAnimationFrame(frame);
+      flush();
+    } else if (frame === undefined) {
+      frame = requestAnimationFrame(flush);
+    }
+  });
+
+  return () => {
+    unsubscribe();
+    if (frame !== undefined) cancelAnimationFrame(frame);
+    flush();
+  };
+}
+```
+
+For a server or worker, replace `requestAnimationFrame` with a bounded queue and one consumer. Decide explicitly whether overload should pause upstream work outside the listener, coalesce UI updates, or cancel the session; never let a queue grow without a limit.
+
+## Pitfalls
+
+- **Silent event loss:** log unhandled event types during development. New session event families should not crash the renderer.
+- **Rendering only at the end:** accumulate final text if needed, but append `text_delta` chunks immediately.
+- **Treating `agent_end` as idle:** check `willRetry`; use `agent_settled` or await `prompt()` / `abort()` for the final boundary.
+- **Leaking listeners:** retain the unsubscribe function. When completely finished, unsubscribe and call `session.dispose()`.
+- **Keeping an old runtime subscription:** new, switch, fork, clone, and import flows can replace `runtime.session`. Rebind to the new object:
+
+```ts title="runtime-binding.ts"
+import type {
+  AgentSession,
+  AgentSessionEventListener,
+  AgentSessionRuntime,
+} from "@earendil-works/pi-coding-agent";
+
+export async function followRuntime(
+  runtime: AgentSessionRuntime,
+  listener: AgentSessionEventListener,
+): Promise<() => void> {
+  let unsubscribe: (() => void) | undefined;
+
+  const bind = async (session: AgentSession) => {
+    unsubscribe?.();
+    unsubscribe = session.subscribe(listener);
+  };
+
+  runtime.setRebindSession(bind);
+  await bind(runtime.session);
+
+  return () => {
+    runtime.setRebindSession(undefined);
+    unsubscribe?.();
+  };
+}
+```
+
+The runtime aborts and disposes the outgoing session before it applies the replacement, then calls the rebind callback. Do not keep using a captured old session.
+
+## Next
+
+- [Chapter 6: Message System](../ch06-messages.md) explains the message shapes carried by these events.
+- [Reference: API events](../reference/api.md#events) lists the public event families and fields.

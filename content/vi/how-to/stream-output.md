@@ -1,16 +1,51 @@
 ---
 title: Stream output của agent
-description: Subscribe event của AgentSession để hiển thị text, thinking, tiến trình tool, lỗi và trạng thái hoàn tất.
+description: Hiển thị text, thinking và tiến trình Tool từ event của AgentSession mà không buffer toàn bộ lượt chạy.
 translation_key: how-to-stream-output
 language: vi
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-08-24'
+last_updated: '2026-08-25'
 ---
 
-`AgentSession` phát lifecycle event trong khi `prompt()` chạy. Hãy subscribe trước khi gửi prompt, cập nhật UI từ các delta và unsubscribe khi consumer bị hủy.
+Subscribe vào `AgentSession` trước khi gọi `prompt()`. Các event của session cho phép CLI hoặc UI hiển thị partial output, công việc của Tool, retry và trạng thái cuối mà không phải đọc lại toàn bộ transcript.
 
-## Stream text ra terminal
+:::tip[Khi nào cần]
+
+- Chat UI hiển thị text trong lúc model phản hồi
+- CLI báo tiến trình thinking và Tool
+- Web app cần hủy một lượt chạy dài
+
+:::
+
+Các ví dụ dùng Node.js `>=22.19.0`, ESM và package phát hành ở phiên bản `0.84.2`:
+
+```bash
+npm install @earendil-works/pi-coding-agent@0.84.2
+npm install --save-dev tsx typescript @types/node
+```
+
+## Event stream
+
+`subscribe()` nhận listener đồng bộ `(event) => void` và trả về hàm unsubscribe. `AgentSession` gọi listener ngay lập tức; nó không await Promise được trả về. Hãy giữ callback gọn và chuyển phần render tốn thời gian sang queue hoặc batch.
+
+| Event của session | Ý nghĩa | Thao tác UI thường dùng |
+|---|---|---|
+| `message_start` | Mở một message của user, assistant hoặc kết quả Tool | Tạo hàng cho message |
+| `message_update` | Assistant message thay đổi | Kiểm tra `assistantMessageEvent` |
+| `message_end` | Đã có message hoàn chỉnh, gồm cả `stopReason` của assistant | Commit hoặc gắn nhãn cho hàng |
+| `tool_execution_start` / `update` / `end` | Một Tool bắt đầu, báo tiến trình rồi trả kết quả hoặc lỗi | Cập nhật state theo `toolCallId` |
+| `agent_end` | Một attempt của agent kết thúc; `willRetry` cho biết session có retry hay không | Kết thúc attempt, chưa chắc đã kết thúc lượt chạy |
+| `auto_retry_start` / `end` | Thời gian chờ hoặc kết quả retry của session | Hiển thị trạng thái retry |
+| `agent_settled` | Retry và công việc continuation trong queue đã xong, session ở trạng thái idle | Bật input và đánh dấu lượt chạy hoàn tất |
+
+Với `message_update`, hãy kiểm tra `assistantMessageEvent.type`. Text, thinking và tham số Tool đều có các phase `*_start`, `*_delta` và `*_end`. Trong agent loop hiện tại, `start` từ provider cùng `done` hoặc `error` ở cuối stream trở thành `message_start` và `message_end` bên ngoài; chúng không phải event cấp session riêng.
+
+`prompt()` resolve sau khi session settle. Nó không chờ công việc bất đồng bộ được khởi chạy bên trong listener vì listener của session là đồng bộ.
+
+## 1. Stream text thuần
+
+Khi đã cấu hình model và credential, đây là consumer hoàn chỉnh cho terminal:
 
 ```ts title="stream.ts"
 import {
@@ -43,56 +78,238 @@ try {
 }
 ```
 
-`prompt()` resolve sau khi lượt chạy đã nhận hoàn tất, bao gồm tool call, retry và các subscriber cuối lượt cần được await. Callback nhận event tăng dần; không render lại toàn bộ message sau mỗi delta.
+Chạy bằng `npx tsx stream.ts`. Delta là một chunk text, không nhất thiết chỉ có một ký tự. Append từng delta khi nó đến; nếu cũng cần chuỗi cuối, hãy tích lũy chính các delta đó trong khi vẫn render tăng dần.
 
-## Xử lý các nhóm event
+## 2. Stream Tool call
 
-```ts title="render-events.ts"
-const unsubscribe = session.subscribe((event) => {
-  switch (event.type) {
-    case "message_update":
-      if (event.assistantMessageEvent.type === "text_delta") {
-        appendText(event.assistantMessageEvent.delta);
-      } else if (event.assistantMessageEvent.type === "thinking_delta") {
-        appendThinking(event.assistantMessageEvent.delta);
+Tool streaming có hai lớp. Event `toolcall_*` lồng bên trong ghép tham số Tool call do model tạo. Sau đó, event `tool_execution_*` báo quá trình thực thi thật. Renderer gọn dưới đây xử lý cả hai lớp, text, trạng thái retry và lúc settle cuối cùng:
+
+```ts title="render-output.ts"
+import type {
+  AgentSession,
+  AgentSessionEvent,
+} from "@earendil-works/pi-coding-agent";
+
+interface OutputView {
+  appendText(delta: string): void;
+  startToolArguments(contentIndex: number): void;
+  appendToolArguments(contentIndex: number, delta: string): void;
+  commitToolCall(call: {
+    id: string;
+    name: string;
+    arguments: Record<string, unknown>;
+  }): void;
+  startTool(id: string, name: string, args: unknown): void;
+  updateTool(id: string, partialResult: unknown): void;
+  finishTool(id: string, result: unknown, isError: boolean): void;
+  finishMessage(stopReason: string, errorMessage?: string): void;
+  finishAttempt(willRetry: boolean): void;
+  showRetry(attempt: number, maxAttempts: number): void;
+  markIdle(): void;
+}
+
+export function subscribeToOutput(
+  session: AgentSession,
+  view: OutputView,
+): () => void {
+  return session.subscribe((event: AgentSessionEvent) => {
+    if (event.type === "message_update") {
+      const part = event.assistantMessageEvent;
+      if (part.type === "text_delta") view.appendText(part.delta);
+      if (part.type === "toolcall_start") {
+        view.startToolArguments(part.contentIndex);
       }
-      break;
+      if (part.type === "toolcall_delta") {
+        view.appendToolArguments(part.contentIndex, part.delta);
+      }
+      if (part.type === "toolcall_end") view.commitToolCall(part.toolCall);
+      return;
+    }
 
-    case "tool_execution_start":
-      showTool(event.toolCallId, event.toolName, event.args);
-      break;
-
-    case "tool_execution_update":
-      updateTool(event.toolCallId, event.partialResult);
-      break;
-
-    case "tool_execution_end":
-      finishTool(event.toolCallId, event.isError);
-      break;
-
-    case "agent_end":
-      markIdle();
-      break;
-  }
-});
+    switch (event.type) {
+      case "message_end":
+        if (event.message.role === "assistant") {
+          view.finishMessage(
+            event.message.stopReason,
+            event.message.errorMessage,
+          );
+        }
+        break;
+      case "tool_execution_start":
+        view.startTool(event.toolCallId, event.toolName, event.args);
+        break;
+      case "tool_execution_update":
+        view.updateTool(event.toolCallId, event.partialResult);
+        break;
+      case "tool_execution_end":
+        view.finishTool(event.toolCallId, event.result, event.isError);
+        break;
+      case "agent_end":
+        view.finishAttempt(event.willRetry);
+        break;
+      case "auto_retry_start":
+        view.showRetry(event.attempt, event.maxAttempts);
+        break;
+      case "agent_settled":
+        view.markIdle();
+        break;
+    }
+  });
+}
 ```
 
-Trong chế độ chạy tool song song, event hoàn tất có thể đến theo thứ tự hoàn thành thay vì thứ tự trong source. Hãy quản lý state UI theo `toolCallId`; đừng giả định tool được bắt đầu gần nhất sẽ hoàn tất tiếp theo.
+Các Tool có thể chạy song song. Tiến trình và event hoàn tất có thể xen kẽ, vì vậy hãy giữ state thực thi theo `toolCallId`; đừng dùng “Tool bắt đầu gần nhất” làm stack ngầm. `contentIndex` nhận diện block tham số khi model vẫn đang tạo chúng.
 
-## Hỗ trợ cancellation
+## 3. Stream thinking block
 
-```ts
-cancelButton.addEventListener("click", () => {
-  void session.abort();
-});
+Thinking là content type riêng và có thể không xuất hiện. Hãy tách nó khỏi answer text và quyết định sản phẩm của bạn nên hiển thị, thu gọn hay bỏ qua phần này.
+
+```ts title="thinking.ts"
+import type { AgentSession } from "@earendil-works/pi-coding-agent";
+
+interface ThinkingView {
+  open(contentIndex: number): void;
+  append(delta: string): void;
+  close(content: string): void;
+}
+
+export function subscribeToThinking(
+  session: AgentSession,
+  view: ThinkingView,
+): () => void {
+  return session.subscribe((event) => {
+    if (event.type !== "message_update") return;
+
+    const part = event.assistantMessageEvent;
+    if (part.type === "thinking_start") view.open(part.contentIndex);
+    if (part.type === "thinking_delta") view.append(part.delta);
+    if (part.type === "thinking_end") view.close(part.content);
+  });
+}
 ```
 
-Abort sẽ dừng thao tác đang chạy. Giữ lại partial output đã hiển thị và dùng state cuối của message hoặc chuỗi event để gắn nhãn chính xác cho lượt chạy.
+Đừng suy luận khả năng thinking từ tên provider. Hãy kiểm tra model đã chọn và xem việc không có thinking event là kết quả hợp lệ. Không nên log thinking theo mặc định nếu nó có thể chứa context nhạy cảm.
 
-## Tránh lỗi streaming thường gặp
+## 4. Hủy lượt chạy đang hoạt động
 
-- Chỉ subscribe một lần cho mỗi session và giữ lại hàm unsubscribe.
-- Gom các lần cập nhật UI có tần suất cao bằng `requestAnimationFrame` trong browser client.
-- Xử lý thinking như content type riêng; không trộn vào câu trả lời cuối.
-- Hiển thị tool update như tiến trình có thể thay thế, không phải message cố định trong transcript.
-- Subscribe lại sau khi thao tác của `AgentSessionRuntime` thay thế `runtime.session`.
+Hãy await `session.abort()`. Hàm này hủy retry đang hoạt động và core agent, sau đó chờ tới khi session idle:
+
+```ts title="cancel.ts"
+import type { AgentSession } from "@earendil-works/pi-coding-agent";
+
+export function wireCancel(
+  session: AgentSession,
+  cancelButton: HTMLButtonElement,
+  onError: (error: unknown) => void = console.error,
+): () => void {
+  const onCancel = () => {
+    cancelButton.disabled = true;
+    void (async () => {
+      try {
+        await session.abort();
+      } finally {
+        cancelButton.disabled = false;
+      }
+    })().catch(onError);
+  };
+
+  cancelButton.addEventListener("click", onCancel);
+  return () => cancelButton.removeEventListener("click", onCancel);
+}
+```
+
+Giữ lại partial output đã render. Nếu có assistant response đang hoạt động, nó kết thúc qua `message_end` với `stopReason: "aborted"`, rồi tới event kết thúc attempt và settle. API này bảo đảm thao tác hủy cục bộ và trạng thái idle; nó không đưa ra cam kết tính phí cho provider bên ngoài.
+
+## 5. Batch công việc UI; đừng kỳ vọng backpressure
+
+Listener của `AgentSession` không phải async iterator. Việc trả về Promise hoặc await trong async listener không làm chậm quá trình phát event. Browser client nên gom delta thành batch và đặt giới hạn rõ ràng cho công việc đang chờ:
+
+```ts title="browser-batcher.ts"
+import type { AgentSession } from "@earendil-works/pi-coding-agent";
+
+const MAX_PENDING_CHARS = 64 * 1024;
+
+export function subscribeBatchedText(
+  session: AgentSession,
+  append: (text: string) => void,
+): () => void {
+  let pending = "";
+  let frame: number | undefined;
+
+  const flush = () => {
+    frame = undefined;
+    if (pending.length === 0) return;
+    const batch = pending;
+    pending = "";
+    append(batch);
+  };
+
+  const unsubscribe = session.subscribe((event) => {
+    if (
+      event.type !== "message_update" ||
+      event.assistantMessageEvent.type !== "text_delta"
+    ) {
+      return;
+    }
+
+    pending += event.assistantMessageEvent.delta;
+    if (pending.length >= MAX_PENDING_CHARS) {
+      if (frame !== undefined) cancelAnimationFrame(frame);
+      flush();
+    } else if (frame === undefined) {
+      frame = requestAnimationFrame(flush);
+    }
+  });
+
+  return () => {
+    unsubscribe();
+    if (frame !== undefined) cancelAnimationFrame(frame);
+    flush();
+  };
+}
+```
+
+Với server hoặc worker, thay `requestAnimationFrame` bằng queue có giới hạn và một consumer. Hãy quyết định rõ khi quá tải thì sẽ tạm dừng công việc upstream ở bên ngoài listener, gộp cập nhật UI hay hủy session; không bao giờ để queue tăng mà không có giới hạn.
+
+## Các lỗi thường gặp
+
+- **Làm mất event mà không nhận ra:** log event type chưa xử lý trong lúc phát triển. Nhóm event mới của session không nên làm renderer crash.
+- **Chỉ render ở cuối:** tích lũy text cuối nếu cần, nhưng vẫn append các chunk `text_delta` ngay lập tức.
+- **Coi `agent_end` là idle:** kiểm tra `willRetry`; dùng `agent_settled` hoặc await `prompt()` / `abort()` làm ranh giới cuối.
+- **Rò rỉ listener:** giữ hàm unsubscribe. Khi hoàn toàn không dùng session nữa, unsubscribe rồi gọi `session.dispose()`.
+- **Giữ subscription của runtime cũ:** flow new, switch, fork, clone và import có thể thay `runtime.session`. Hãy bind lại vào object mới:
+
+```ts title="runtime-binding.ts"
+import type {
+  AgentSession,
+  AgentSessionEventListener,
+  AgentSessionRuntime,
+} from "@earendil-works/pi-coding-agent";
+
+export async function followRuntime(
+  runtime: AgentSessionRuntime,
+  listener: AgentSessionEventListener,
+): Promise<() => void> {
+  let unsubscribe: (() => void) | undefined;
+
+  const bind = async (session: AgentSession) => {
+    unsubscribe?.();
+    unsubscribe = session.subscribe(listener);
+  };
+
+  runtime.setRebindSession(bind);
+  await bind(runtime.session);
+
+  return () => {
+    runtime.setRebindSession(undefined);
+    unsubscribe?.();
+  };
+}
+```
+
+Runtime abort và dispose session cũ trước khi áp dụng session thay thế, rồi gọi callback rebind. Đừng tiếp tục dùng session cũ đã capture.
+
+## Tiếp theo
+
+- [Chương 6: Hệ thống message](../ch06-messages.md) giải thích các kiểu message được event mang theo.
+- [Tham chiếu: API event](../reference/api.md#event) liệt kê các nhóm event công khai và field của chúng.
