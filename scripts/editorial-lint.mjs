@@ -48,10 +48,7 @@ function escapeRegExp(value) {
 
 function pushPatternErrors(errors, markdown, patterns, rule, relativePath) {
   for (const phrase of patterns) {
-    const expression = new RegExp(
-      escapeRegExp(phrase),
-      "iu",
-    );
+    const expression = new RegExp(escapeRegExp(phrase), "iu");
     if (expression.test(markdown)) {
       errors.push({
         rule,

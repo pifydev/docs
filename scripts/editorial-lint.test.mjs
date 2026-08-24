@@ -51,9 +51,7 @@ test("Vietnamese lint reports a long unaccented paragraph", () => {
     "Day la mot doan van tieng Viet khong dau du dai de bo kiem tra phat hien va yeu cau bien tap lai truoc khi xuat ban chinh thuc cho nguoi doc.";
   const errors = inspectDocument(paragraph, "vi", "ch09-compaction.md");
 
-  assert.ok(
-    errors.some((error) => error.rule === "unaccented-vietnamese"),
-  );
+  assert.ok(errors.some((error) => error.rule === "unaccented-vietnamese"));
 });
 
 test("Vietnamese lint handles Markdown punctuation at paragraph start", () => {
@@ -74,10 +72,7 @@ test("Vietnamese lint accepts natural accented prose", () => {
   const paragraph =
     "Đây là một đoạn văn tiếng Việt có dấu, giải thích rõ cách hệ thống nén ngữ cảnh nhưng vẫn giữ lại các quyết định quan trọng của phiên làm việc.";
 
-  assert.deepEqual(
-    inspectDocument(paragraph, "vi", "ch09-compaction.md"),
-    [],
-  );
+  assert.deepEqual(inspectDocument(paragraph, "vi", "ch09-compaction.md"), []);
 });
 
 test("editorial lint ignores technical identifiers inside code", () => {
