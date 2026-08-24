@@ -1068,7 +1068,7 @@ The thinner pre-restoration Chapter 9 pages already contained the exact threshol
 
 ## Reviewed mapping appendix: Chapter 10
 
-Chapter 10 has 37 baseline H2–H3 decisions and 96 unique artifact or argument decisions: 133 total. The reconciliation is exact: 116 `restored` + 2 `merged` + 15 `technically-invalid` + 0 `duplicate` = 133. Final-to-baseline semantic-word preservation measured by `contentMetrics()` is EN 3,390 / 3,972 = 85.3% and VI 4,392 / 4,617 = 95.1%; each ratio compares one locale only. The final pair has mirrored H2/H3/H4 counts 9/28/0, 33 aligned fences, 11 aligned tables, and no Mermaid block. No Chapter 10 deletion allowance is present in `content/preservation-manifest.json`.
+Chapter 10 has 37 baseline H2–H3 decisions and 96 unique artifact or argument decisions: 133 total. The reconciliation is exact: 116 `restored` + 2 `merged` + 15 `technically-invalid` + 0 `duplicate` = 133. Final-to-baseline semantic-word preservation measured by `contentMetrics()` is EN 3,390 / 3,972 = 85.3% and VI 4,395 / 4,617 = 95.2%; each ratio compares one locale only. The final pair has mirrored H2/H3/H4 counts 9/28/0, 33 aligned fences, 11 aligned tables, and no Mermaid block. No Chapter 10 deletion allowance is present in `content/preservation-manifest.json`.
 
 ### Heading outcomes
 

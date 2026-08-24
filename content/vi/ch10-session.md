@@ -22,7 +22,7 @@ reviewed_by: Pify maintainers
 
 Chương 9 kết thúc với một `CompactionEntry` trên Session Tree. Mô tả ngắn đó còn để lại hai câu hỏi: cây nằm ở đâu, và `buildSessionContext()` biến cây trở lại danh sách message tuyến tính mà mỗi lần gọi model cần bằng cách nào?
 
-Coding Agent của Pi giải quyết cả hai bằng một file session bền vững. Mỗi bản ghi sau header trỏ đến parent, một leaf trong bộ nhớ đánh dấu vị trí hiện tại, còn bước dựng context chiếu ra đúng một đường từ root đến leaf. Vì vậy, cùng một file có thể giữ nhiều hướng xử lý trong khi model chỉ thấy branch mà người dùng đã chọn.
+Coding Agent của Pi giải quyết cả hai bằng một file session bền vững. Mỗi bản ghi sau header trỏ đến nút cha, một nút lá trong bộ nhớ đánh dấu vị trí hiện tại, còn bước dựng context chiếu ra đúng một đường từ gốc đến nút lá. Vì vậy, cùng một file có thể giữ nhiều hướng xử lý trong khi model chỉ thấy nhánh mà người dùng đã chọn.
 
 ## 1. Bắt đầu từ hai câu hỏi về lưu trữ
 
@@ -60,10 +60,10 @@ Bản ghi hội thoại tuyến tính đủ dùng cho đến khi người dùng 
 
 Coding Agent giữ một cây nối bằng parent. Append thêm bản ghi; rewind di chuyển leaf hiện tại; lần append tiếp theo tạo nút con mới bên dưới entry được chọn. Các nút con cũ vẫn ở trong bộ nhớ và file JSONL. Chỉ khi người dùng chủ động fork hoặc clone thì Pi mới tạo file khác.
 
-| Chiều thiết kế | Lựa chọn phổ biến                   | Mặc định của Coding Agent             |
-| -------------- | ----------------------------------- | ------------------------------------- |
-| Nơi lưu trữ    | Cơ sở dữ liệu quan hệ hoặc tài liệu | Một file JSONL cục bộ cho mỗi session |
-| Cấu trúc logic | Bản ghi hội thoại tuyến tính        | Cây chỉ ghi thêm, nối bằng parent     |
+| Chiều thiết kế | Lựa chọn phổ biến                                      | Mặc định của Coding Agent             |
+| -------------- | ------------------------------------------------------ | ------------------------------------- |
+| Nơi lưu trữ    | Cơ sở dữ liệu quan hệ hoặc cơ sở dữ liệu dạng tài liệu | Một file JSONL cục bộ cho mỗi session |
+| Cấu trúc logic | Bản ghi hội thoại tuyến tính                           | Cây chỉ ghi thêm, nối bằng parent     |
 
 Hai lựa chọn này dẫn đến toàn bộ phần còn lại của chương. JSONL tạo thứ tự vật lý; `id`, `parentId` và `leafId` tạo cây logic.
 
