@@ -104,7 +104,13 @@ interface OutputView {
   finishTool(id: string, result: unknown, isError: boolean): void;
   finishMessage(stopReason: string, errorMessage?: string): void;
   finishAttempt(willRetry: boolean): void;
-  showRetry(attempt: number, maxAttempts: number): void;
+  showRetry(
+    attempt: number,
+    maxAttempts: number,
+    delayMs: number,
+    errorMessage: string,
+  ): void;
+  finishRetry(success: boolean, attempt: number, finalError?: string): void;
   markIdle(): void;
 }
 
@@ -148,7 +154,15 @@ export function subscribeToOutput(
         view.finishAttempt(event.willRetry);
         break;
       case "auto_retry_start":
-        view.showRetry(event.attempt, event.maxAttempts);
+        view.showRetry(
+          event.attempt,
+          event.maxAttempts,
+          event.delayMs,
+          event.errorMessage,
+        );
+        break;
+      case "auto_retry_end":
+        view.finishRetry(event.success, event.attempt, event.finalError);
         break;
       case "agent_settled":
         view.markIdle();
@@ -158,7 +172,7 @@ export function subscribeToOutput(
 }
 ```
 
-Các Tool có thể chạy song song. Tiến trình và event hoàn tất có thể xen kẽ, vì vậy hãy giữ state thực thi theo `toolCallId`; đừng dùng “Tool bắt đầu gần nhất” làm stack ngầm. `contentIndex` nhận diện block tham số khi model vẫn đang tạo chúng.
+Các Tool có thể chạy song song. Tiến trình và event hoàn tất có thể xen kẽ, vì vậy hãy giữ state thực thi theo `toolCallId`; đừng dùng “Tool bắt đầu gần nhất” làm stack ngầm. `contentIndex` nhận diện block tham số khi model vẫn đang tạo chúng. `auto_retry_start` cung cấp thời gian chờ và lỗi kích hoạt retry; `auto_retry_end` kết thúc trạng thái này bằng kết quả thành công hoặc lỗi cuối.
 
 ## 3. Stream thinking block
 
@@ -222,12 +236,12 @@ Giữ lại partial output đã render. Nếu có assistant response đang hoạ
 
 ## 5. Batch công việc UI; đừng kỳ vọng backpressure
 
-Listener của `AgentSession` không phải async iterator. Việc trả về Promise hoặc await trong async listener không làm chậm quá trình phát event. Browser client nên gom delta thành batch và đặt giới hạn rõ ràng cho công việc đang chờ:
+Listener của `AgentSession` không phải async iterator. Việc trả về Promise hoặc await trong async listener không làm chậm quá trình phát event. Browser client nên gom delta thành batch và flush khi chạm ngưỡng đã chọn:
 
 ```ts title="browser-batcher.ts"
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
 
-const MAX_PENDING_CHARS = 64 * 1024;
+const FLUSH_THRESHOLD_CHARS = 64 * 1024;
 
 export function subscribeBatchedText(
   session: AgentSession,
@@ -253,7 +267,7 @@ export function subscribeBatchedText(
     }
 
     pending += event.assistantMessageEvent.delta;
-    if (pending.length >= MAX_PENDING_CHARS) {
+    if (pending.length >= FLUSH_THRESHOLD_CHARS) {
       if (frame !== undefined) cancelAnimationFrame(frame);
       flush();
     } else if (frame === undefined) {
@@ -269,7 +283,7 @@ export function subscribeBatchedText(
 }
 ```
 
-Với server hoặc worker, thay `requestAnimationFrame` bằng queue có giới hạn và một consumer. Hãy quyết định rõ khi quá tải thì sẽ tạm dừng công việc upstream ở bên ngoài listener, gộp cập nhật UI hay hủy session; không bao giờ để queue tăng mà không có giới hạn.
+Một delta có thể vượt quá ngưỡng, còn `flush()` vẫn gọi `append()` đồng bộ. Ngưỡng này kiểm soát kích thước batch trong browser; nó không phải giới hạn cứng cho công việc bất đồng bộ. Với server hoặc worker, thay `requestAnimationFrame` bằng queue có giới hạn và một consumer. Hãy quyết định rõ khi quá tải thì sẽ tạm dừng công việc upstream ở bên ngoài listener, gộp cập nhật UI hay hủy session; không bao giờ để queue tăng mà không có giới hạn.
 
 ## Các lỗi thường gặp
 

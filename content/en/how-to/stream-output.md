@@ -104,7 +104,13 @@ interface OutputView {
   finishTool(id: string, result: unknown, isError: boolean): void;
   finishMessage(stopReason: string, errorMessage?: string): void;
   finishAttempt(willRetry: boolean): void;
-  showRetry(attempt: number, maxAttempts: number): void;
+  showRetry(
+    attempt: number,
+    maxAttempts: number,
+    delayMs: number,
+    errorMessage: string,
+  ): void;
+  finishRetry(success: boolean, attempt: number, finalError?: string): void;
   markIdle(): void;
 }
 
@@ -148,7 +154,15 @@ export function subscribeToOutput(
         view.finishAttempt(event.willRetry);
         break;
       case "auto_retry_start":
-        view.showRetry(event.attempt, event.maxAttempts);
+        view.showRetry(
+          event.attempt,
+          event.maxAttempts,
+          event.delayMs,
+          event.errorMessage,
+        );
+        break;
+      case "auto_retry_end":
+        view.finishRetry(event.success, event.attempt, event.finalError);
         break;
       case "agent_settled":
         view.markIdle();
@@ -158,7 +172,7 @@ export function subscribeToOutput(
 }
 ```
 
-Tools can execute in parallel. Their progress and completion can interleave, so keep execution state by `toolCallId`; do not use “last Tool started” as an implicit stack. `contentIndex` identifies argument blocks while the model is still constructing them.
+Tools can execute in parallel. Their progress and completion can interleave, so keep execution state by `toolCallId`; do not use “last Tool started” as an implicit stack. `contentIndex` identifies argument blocks while the model is still constructing them. `auto_retry_start` supplies the delay and triggering error; `auto_retry_end` closes that status with success or a final error.
 
 ## 3. Stream thinking blocks
 
@@ -222,12 +236,12 @@ Keep partial output already rendered. If an assistant response is active, it end
 
 ## 5. Batch UI work; do not expect backpressure
 
-An `AgentSession` listener is not an async iterator. Returning a Promise or awaiting inside an async listener does not slow event production. Browser clients should batch deltas and put an explicit bound on pending work:
+An `AgentSession` listener is not an async iterator. Returning a Promise or awaiting inside an async listener does not slow event production. Browser clients should batch deltas and flush at a chosen threshold:
 
 ```ts title="browser-batcher.ts"
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
 
-const MAX_PENDING_CHARS = 64 * 1024;
+const FLUSH_THRESHOLD_CHARS = 64 * 1024;
 
 export function subscribeBatchedText(
   session: AgentSession,
@@ -253,7 +267,7 @@ export function subscribeBatchedText(
     }
 
     pending += event.assistantMessageEvent.delta;
-    if (pending.length >= MAX_PENDING_CHARS) {
+    if (pending.length >= FLUSH_THRESHOLD_CHARS) {
       if (frame !== undefined) cancelAnimationFrame(frame);
       flush();
     } else if (frame === undefined) {
@@ -269,7 +283,7 @@ export function subscribeBatchedText(
 }
 ```
 
-For a server or worker, replace `requestAnimationFrame` with a bounded queue and one consumer. Decide explicitly whether overload should pause upstream work outside the listener, coalesce UI updates, or cancel the session; never let a queue grow without a limit.
+A single delta may exceed the threshold, and `flush()` still calls `append()` synchronously. The threshold controls browser batch size; it is not a hard bound on asynchronous work. For a server or worker, replace `requestAnimationFrame` with a bounded queue and one consumer. Decide explicitly whether overload should pause upstream work outside the listener, coalesce UI updates, or cancel the session; never let a queue grow without a limit.
 
 ## Pitfalls
 
