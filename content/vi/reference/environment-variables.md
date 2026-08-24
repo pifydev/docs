@@ -1,6 +1,6 @@
 ---
-title: Environment variables reference
-description: Process configuration, child-process marker, session metadata, credential và proxy variable được Pi sử dụng.
+title: Tham chiếu biến môi trường
+description: Process flag, provider credential, child marker, session metadata và proxy variable được Pi sử dụng.
 translation_key: reference-environment-variables
 language: vi
 status: reviewed
@@ -8,88 +8,173 @@ reviewed_by: Pify maintainers
 last_updated: '2026-08-24'
 ---
 
-Pi đọc các variable dùng để cấu hình process và inject một nhóm riêng vào command được chạy qua built-in bash tool. Provider credential variable phụ thuộc vào provider đã chọn.
+Pi dùng environment variable ở ba nơi riêng biệt: cấu hình process của chính Pi, authentication cho provider đã chọn và environment của command do LLM-callable bash tool khởi chạy. Scope rất quan trọng: một variable được một provider nhận diện không tự động trở thành setting dùng trên toàn Pi.
 
-## Cấu hình process
+:::note[Thời điểm đọc giá trị]
 
-| Variable | Mục đích |
-|---|---|
-| `PI_CODING_AGENT_DIR` | Ghi đè config directory; mặc định `~/.pi/agent` |
-| `PI_CODING_AGENT_SESSION_DIR` | Ghi đè nơi lưu persistent session; `--session-dir` có độ ưu tiên cao hơn |
-| `PI_PACKAGE_DIR` | Ghi đè package directory, bao gồm vị trí chỉ đọc của Nix/Guix |
-| `PI_OFFLINE` | Tắt network operation khi khởi động, bao gồm update và telemetry |
-| `PI_SKIP_VERSION_CHECK` | Chỉ tắt request kiểm tra phiên bản mới nhất |
-| `PI_TELEMETRY` | Ép bật hoặc tắt telemetry bằng `1`/`true`/`yes` hoặc `0`/`false`/`no` |
-| `PI_CACHE_RETENTION` | Đặt `long` để yêu cầu prompt caching dài hơn khi provider hỗ trợ |
-| `PI_SHARE_VIEWER_URL` | Ghi đè base URL được `/share` sử dụng |
-| `PI_HARDWARE_CURSOR` | Đặt `1` để hiện hardware cursor trong TUI |
-| `PI_TUI_ESC_TIMEOUT` | Delay phân biệt phím ESC theo mili giây; mặc định 100 qua SSH và 10 trong trường hợp khác |
-| `VISUAL`, `EDITOR` | External-editor fallback khi chưa đặt `externalEditor` |
-| `HTTP_PROXY`, `HTTPS_PROXY` | Proxy cho outbound HTTP request |
+Phần lớn process flag có hiệu lực khi khởi động. Provider authentication được resolve khi Pi yêu cầu credential cho provider đã chọn. Credential trong `auth.json` sở hữu provider đó, vì vậy thay đổi shell variable chỉ ảnh hưởng request sau khi không có stored credential nào được ưu tiên. Bash metadata được tạo lại cho từng tool command.
 
-Boolean variable của Pi là configuration flag, không phải chuỗi bất kỳ khác rỗng. Hãy dùng đúng các giá trị được chấp nhận ở trên.
-
-## Process marker
-
-CLI và RPC entry point đặt các variable sau cho child process:
-
-| Variable | Giá trị | Mục đích |
-|---|---|---|
-| `AI_AGENT` | `pi` | Marker chung xác định agent đã khởi chạy process |
-| `PI_CODING_AGENT` | `true` | Process marker riêng của Pi |
-
-Các marker này không gắn với session cụ thể và không được tự động đặt khi Pi được nhúng qua SDK.
-
-## Session metadata trong bash tool
-
-Command do LLM-callable bash tool của Pi thực thi nhận state hiện tại của session:
-
-| Variable | Mục đích |
-|---|---|
-| `PI_SESSION_ID` | Session ID hiện tại |
-| `PI_SESSION_FILE` | Absolute path đến file JSONL; không được đặt với ephemeral session |
-| `PI_PROVIDER` | Pi provider ID đang chọn |
-| `PI_MODEL` | Pi model ID đang chọn |
-| `PI_REASONING_LEVEL` | Reasoning level thực tế |
-
-Giá trị được resolve khi mỗi command bắt đầu, vì vậy thay model hoặc reasoning level sẽ tác động đến command tiếp theo.
-
-```bash
-printf '%s/%s\n' "$PI_PROVIDER" "$PI_MODEL"
-printf 'reasoning=%s session=%s\n' "$PI_REASONING_LEVEL" "$PI_SESSION_ID"
-```
-
-Các variable này không được inject vào command `!` hoặc `!!` do người dùng nhập trực tiếp. Custom tool được tạo bằng `createBashTool()` expose chúng theo mặc định; đặt `exposeSessionEnvironment: false` để loại bỏ.
+:::
 
 ## Provider credential
 
-Các built-in provider thường đọc những variable như:
+Với built-in provider của Pi, thứ tự credential trên CLI là `--api-key`, API key hoặc OAuth credential khớp trong `auth.json`, ambient environment của provider, rồi custom key được tham chiếu trong `models.json`. Provider do extension định nghĩa có thể triển khai contract khác. Hãy dùng `/login` để ghi vào credential store được bảo vệ thay vì đưa secret vào file của project.
 
-| Variable | Provider hoặc runtime |
+| Provider | Environment credential được 0.84.2 nhận diện |
 |---|---|
-| `ANTHROPIC_API_KEY` | Anthropic |
-| `OPENAI_API_KEY` | Authentication tương thích OpenAI |
-| `GEMINI_API_KEY` hoặc `GOOGLE_API_KEY` | Google Generative AI |
-| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `AWS_REGION` | Amazon Bedrock qua AWS credential chain |
-| `AZURE_OPENAI_API_KEY` | Cấu hình Azure OpenAI dùng API-key authentication |
+| Anthropic | `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_OAUTH_TOKEN`, `ANTHROPIC_API_KEY` |
+| Ant Ling, OpenAI, Azure OpenAI | `ANT_LING_API_KEY`, `OPENAI_API_KEY`, `AZURE_OPENAI_API_KEY` |
+| DeepSeek, NVIDIA NIM, Gemini | `DEEPSEEK_API_KEY`, `NVIDIA_API_KEY`, `GEMINI_API_KEY` |
+| Mistral, Groq, Cerebras | `MISTRAL_API_KEY`, `GROQ_API_KEY`, `CEREBRAS_API_KEY` |
+| xAI, OpenRouter, Vercel AI Gateway | `XAI_API_KEY`, `OPENROUTER_API_KEY`, `AI_GATEWAY_API_KEY` |
+| ZAI Global và China | `ZAI_API_KEY`, `ZAI_CODING_CN_API_KEY` |
+| OpenCode Zen và Go | `OPENCODE_API_KEY` |
+| Radius, Hugging Face | `RADIUS_API_KEY`, `HF_TOKEN` |
+| Fireworks, Together AI, Baseten | `FIREWORKS_API_KEY`, `TOGETHER_API_KEY`, `BASETEN_API_KEY` |
+| Kimi, MiniMax, MiniMax China, Moonshot | `KIMI_API_KEY`, `MINIMAX_API_KEY`, `MINIMAX_CN_API_KEY`, `MOONSHOT_API_KEY` |
+| Qwen Token Plan | `QWEN_TOKEN_PLAN_API_KEY`, `QWEN_TOKEN_PLAN_CN_API_KEY` |
+| Xiaomi MiMo và các region token-plan | `XIAOMI_API_KEY`, `XIAOMI_TOKEN_PLAN_CN_API_KEY`, `XIAOMI_TOKEN_PLAN_AMS_API_KEY`, `XIAOMI_TOKEN_PLAN_SGP_API_KEY` |
+| GitHub Copilot | `COPILOT_GITHUB_TOKEN` |
+| Cloudflare AI Gateway và Workers AI | `CLOUDFLARE_API_KEY`; các ID được trình bày bên dưới |
 
-Bảng này không phải model catalog: credential source được hỗ trợ khác nhau theo provider và có thể gồm stored OAuth credential, cloud SDK configuration cùng cơ chế resolve do extension định nghĩa.
+Amazon Bedrock và Google Vertex AI còn nhận ambient cloud credential được mô tả trong phần variable riêng cho provider. Custom provider trong `models.json` có thể tham chiếu variable bất kỳ bằng `"apiKey": "$COMPANY_AI_TOKEN"`; chuỗi chỉ gồm chữ hoa là literal, không phải environment lookup. Xem <a href="/vi/how-to/plug-new-model">Thêm một nhà cung cấp mô hình</a> để biết surface chính xác của file này.
 
-Custom provider configuration có thể tham chiếu `$ENV_VAR` hoặc `${ENV_VAR}` trong `apiKey` và giá trị header:
+## Runtime flag
 
-```ts
-pi.registerProvider("company", {
-  baseUrl: "https://gateway.example.com/v1",
-  apiKey: "$COMPANY_AI_TOKEN",
-  api: "openai-completions",
-  models: [],
+### Directory và runtime asset
+
+| Variable | Mục đích chính xác |
+|---|---|
+| `PI_CODING_AGENT_DIR` | Agent config directory; mặc định `~/.pi/agent` |
+| `PI_CODING_AGENT_SESSION_DIR` | Persistent session directory; đứng dưới `--session-dir` và trên setting `sessionDir` trong thứ tự ưu tiên của CLI |
+| `PI_PACKAGE_DIR` | Packaged asset directory, hữu ích với bản cài đặt Nix hoặc Guix chỉ đọc |
+
+`PI_CODING_AGENT_DIR` thay thế switch home-directory rộng trước đây; nó nhắm đến agent configuration của Pi, không phải home directory của hệ điều hành. Lời gọi SDK trực tiếp dùng path được truyền vào constructor và không tự động tái hiện mọi quy tắc ưu tiên của CLI.
+
+```bash title="Khởi động Pi với runtime directory tường minh"
+export PI_CODING_AGENT_DIR=/srv/pi/agent
+export PI_CODING_AGENT_SESSION_DIR=/srv/pi/sessions
+export PI_PACKAGE_DIR=/nix/store/example-pi
+pi
+```
+
+### Switch offline, version và telemetry
+
+| Variable | Giá trị được chấp nhận và tác dụng |
+|---|---|
+| `PI_OFFLINE` | `1`, `true` hoặc `yes` tắt startup và model-catalog network work được hỗ trợ, gồm version/package check và install/update telemetry |
+| `PI_SKIP_VERSION_CHECK` | Đặt thành `1` để chỉ bỏ qua request lấy phiên bản mới nhất |
+| `PI_TELEMETRY` | `1`/`true`/`yes` bật install/update telemetry và Pi provider-attribution header; `0`/`false`/`no` tắt chúng |
+
+Hãy dùng `--offline` hoặc giá trị truthy được hỗ trợ cho `PI_OFFLINE`. Muốn bật lại network work, hãy unset variable: một số path phía sau trong 0.84.2 chỉ kiểm tra `PI_OFFLINE` có tồn tại hay không, vì vậy `PI_OFFLINE=0` không an toàn và có thể vẫn hoạt động như offline. `PI_SKIP_VERSION_CHECK` có scope hẹp hơn offline mode. Đừng dựa vào cách viết không được tài liệu hóa cho `PI_TELEMETRY`.
+
+### Hành vi terminal và editor
+
+`PI_HARDWARE_CURSOR=1` làm hardware cursor của TUI hiện ra. `PI_TUI_ESC_TIMEOUT` nhận số mili giây hữu hạn dương để phân biệt một phím Escape đơn với Alt-key sequence bị chia nhỏ; mặc định là 100 ms khi có `SSH_CONNECTION` hoặc `SSH_TTY`, và 10 ms trong trường hợp khác.
+
+Với Ctrl+G, setting `externalEditor` được ưu tiên, sau đó là `VISUAL`, `EDITOR` rồi fallback theo platform. Các variable này chứa editor command, không chứa nội dung file.
+
+### Cache và chia sẻ
+
+`PI_CACHE_RETENTION=long` yêu cầu provider prompt caching kéo dài nếu API được chọn hỗ trợ; giá trị khác không chọn một tier được tài liệu hóa. `PI_SHARE_VIEWER_URL` thay base URL dùng để tạo viewer link cho `/share`. Không variable nào trong hai variable này là credential.
+
+### `PI_EXPERIMENTAL`
+
+`PI_EXPERIMENTAL=1` bật preferred strict JSON-schema sampling của 0.84.2 cho managed tool khi model/API hỗ trợ. Phép so sánh chính xác là `1`; `true` không được chấp nhận. Hành vi experimental có thể thay đổi giữa các release và không thay đổi project trust hay tool set đã chọn.
+
+### Quy tắc về giá trị
+
+Environment variable là chuỗi, nhưng Pi không coi mọi chuỗi khác rỗng là true. Chỉ dùng các giá trị nêu trên. Path có thể là absolute path hoặc được helper path của CLI expand theo tài liệu; giá trị riêng cho provider cũng có thể đến từ object `env` theo scope của stored credential, và được ưu tiên hơn ambient process đối với các field được hỗ trợ.
+
+## Proxy và TLS
+
+Pi 0.84.2 cấu hình Undici `EnvHttpProxyAgent` cho traffic dùng fetch do Pi quản lý.
+
+| Variable | Hành vi |
+|---|---|
+| `HTTP_PROXY` | Proxy cho HTTP destination |
+| `HTTPS_PROXY` | Proxy cho HTTPS destination |
+| `NO_PROXY` | Bypass host phân tách bằng dấu phẩy hoặc khoảng trắng; `*` bỏ qua toàn bộ proxy |
+
+Undici cũng nhận dạng dạng chữ thường và ưu tiên dạng đó hơn dạng chữ hoa. Setting global `httpProxy` chỉ điền `HTTP_PROXY` và `HTTPS_PROXY` khi chúng chưa được đặt. Provider SDK như AWS hoặc Google có thể sở hữu transport riêng, vì vậy các variable này không bảo đảm cho mọi extension hoặc cloud client.
+
+`SSL_CERT_FILE` không được transport trong bản Pi 0.84.2 đã publish đọc hoặc cài đặt. Hãy cấu hình custom certificate trust qua Node runtime hoặc provider SDK đã chọn rồi kiểm tra riêng route đó; đừng giả định variable từ baseline này thay đổi TLS do Pi quản lý.
+
+## Variable riêng cho provider
+
+### Azure OpenAI
+
+Azure OpenAI Responses yêu cầu `AZURE_OPENAI_API_KEY` cùng `AZURE_OPENAI_BASE_URL` hoặc `AZURE_OPENAI_RESOURCE_NAME`. Control tùy chọn gồm `AZURE_OPENAI_API_VERSION` và `AZURE_OPENAI_DEPLOYMENT_NAME_MAP` phân tách bằng dấu phẩy. Variable `OPENAI_ORG_ID` chung trong baseline không được OpenAI provider của 0.84.2 sử dụng.
+
+### Amazon Bedrock
+
+Bedrock nhận `AWS_BEARER_TOKEN_BEDROCK`, `AWS_PROFILE` hoặc standard AWS access-key/role chain, gồm `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` tùy chọn, ECS credential và web identity. Region selection đọc `AWS_REGION` hoặc `AWS_DEFAULT_REGION`. Proxy deployment có thể dùng `AWS_ENDPOINT_URL_BEDROCK_RUNTIME`; `AWS_BEDROCK_SKIP_AUTH=1` và `AWS_BEDROCK_FORCE_HTTP1=1` là compatibility switch chuyên biệt.
+
+### Google Vertex AI
+
+Vertex nhận trực tiếp `GOOGLE_CLOUD_API_KEY`. Application Default Credentials cần default credential file hợp lệ hoặc `GOOGLE_APPLICATION_CREDENTIALS`, cộng với `GOOGLE_CLOUD_PROJECT` (hoặc `GCLOUD_PROJECT`) và `GOOGLE_CLOUD_LOCATION`. `GOOGLE_API_KEY` và `GOOGLE_VERTEX_API_KEY` không phải alias cho variable Gemini và Vertex hiện tại.
+
+### Cloudflare
+
+Cloudflare Workers AI dùng `CLOUDFLARE_API_KEY` và `CLOUDFLARE_ACCOUNT_ID`; AI Gateway cần thêm `CLOUDFLARE_GATEWAY_ID`. Các tên viết hoa hoàn toàn và chính xác này thay dạng `CLOUDflare_*` bị viết sai trong baseline.
+
+```bash title="Đặt giá trị proxy và cloud routing không chứa secret"
+export HTTPS_PROXY=http://proxy.internal.example:8080
+export NO_PROXY=localhost,127.0.0.1,.internal.example
+export GOOGLE_CLOUD_PROJECT=example-project
+export GOOGLE_CLOUD_LOCATION=us-central1
+```
+
+Variable cũ `ANTHROPIC_BASE_URL` cũng không phải built-in override hiện tại. Hãy cấu hình endpoint được hỗ trợ trong `models.json` hoặc provider implementation thay vì dựa vào ambient alias.
+
+## Process marker và bash metadata
+
+CLI và RPC entry point đặt `AI_AGENT=pi` cùng `PI_CODING_AGENT=true`. Child process kế thừa chúng, nhưng đây không phải session identifier và bản nhúng SDK không tự động đặt chúng. Bản publish 0.84.2 không phát marker cũ `PI_PARENT_SESSION`.
+
+Command do LLM-callable bash tool của Pi chạy nhận session context mới:
+
+| Variable | Giá trị |
+|---|---|
+| `PI_SESSION_ID` | Session ID hiện tại |
+| `PI_SESSION_FILE` | Absolute path đến JSONL; không có với in-memory session |
+| `PI_PROVIDER` | Pi provider ID đang chọn |
+| `PI_MODEL` | Pi model ID đang chọn |
+| `PI_REASONING_LEVEL` | Level thực tế: `off`, `minimal`, `low`, `medium`, `high`, `xhigh` hoặc `max` |
+
+Giá trị được resolve trước mỗi bash-tool command, sau khi đổi model hoặc reasoning. Chúng không được inject vào command `!` hoặc `!!` do người dùng nhập. Custom tool được đăng ký với Pi expose các giá trị này trước `spawnHook`, vì vậy hãy giữ environment nhận được khi thêm field:
+
+```ts title="Giữ Pi metadata trong custom bash tool"
+import { createBashTool } from "@earendil-works/pi-coding-agent";
+
+export const bashTool = createBashTool(process.cwd(), {
+  spawnHook: (context) => ({
+    ...context,
+    env: { ...context.env, CI: "1" },
+  }),
 });
 ```
 
-Không đưa secret vào `settings.json`, mã nguồn extension, log hoặc session transcript. Ưu tiên credential store của Pi hoặc inject environment từ secret manager.
+Hãy tắt exposure một cách tường minh khi command vượt qua trust boundary. Pi xóa session field kế thừa trước, ngăn metadata cũ của parent rò vào command hoặc hook:
 
-## Lưu ý về độ ưu tiên
+```ts title="Tắt bash session metadata"
+import { createBashTool } from "@earendil-works/pi-coding-agent";
 
-- Session directory: `--session-dir` → `PI_CODING_AGENT_SESSION_DIR` → setting `sessionDir` → mặc định.
-- External editor: setting `externalEditor` → `VISUAL` → `EDITOR` → fallback theo platform.
-- Offline mode rộng hơn `PI_SKIP_VERSION_CHECK`: nó tắt mọi startup network operation được hỗ trợ.
+export const isolatedBashTool = createBashTool(process.cwd(), {
+  exposeSessionEnvironment: false,
+  spawnHook: (context) => context,
+});
+```
+
+## Lỗi thường gặp và bảo mật
+
+- Không đưa API key vào shell file được commit, `settings.json`, mã nguồn extension, log, prompt hoặc transcript. Ưu tiên `/login`, secret manager hoặc process injection có scope hẹp; hãy nhớ child process kế thừa giá trị được export.
+- Tên hiện tại phải chính xác. `PI_HOME`, `PI_LOG_LEVEL`, `PI_PARENT_SESSION`, `GOOGLE_API_KEY`, `GOOGLE_VERTEX_API_KEY`, `GITHUB_TOKEN`, `OPENAI_ORG_ID`, `ANTHROPIC_BASE_URL` và tên `CLOUDflare_*` viết sai không phải compatibility alias trong bản publish 0.84.2.
+- Stored provider credential được ưu tiên hơn ambient variable. Hãy logout hoặc cập nhật stored entry trước khi mong shell key vừa rotate được chọn.
+- `PI_EXPERIMENTAL` không liên quan đến provider authentication và không phải switch permission hay “yolo”.
+- Không in toàn bộ environment dump khi debug. Chỉ kiểm tra non-secret marker hoặc từng metadata field, đồng thời coi `PI_SESSION_FILE` là local data nhạy cảm.
+
+## Tiếp theo
+
+- <a href="/vi/reference/configuration">Tham chiếu cấu hình</a> trình bày `settings.json`, trust, resource, tool và session.
+- <a href="/vi/reference/api">Tham chiếu API</a> trình bày public SDK surface.
+- <a href="/vi/how-to/plug-new-model">Thêm một nhà cung cấp mô hình</a> trình bày `models.json`, authentication và custom adapter.
