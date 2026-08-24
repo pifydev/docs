@@ -6,7 +6,7 @@ language: vi
 chapter: 9
 source_url: 'https://www.dgzhuya.com/modules/ch09-compaction'
 official_refs:
-  - 'https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/compaction.md'
+  - 'https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/docs/compaction.md'
 terms_used:
   - Context Compaction
   - CompactionEntry
