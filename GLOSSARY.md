@@ -1,46 +1,45 @@
 # Glossary
 
-English technical terms used across all translations of the Pi Agent Book. **Do not translate** anything on this page. Use each term verbatim in every language.
+This file defines the terminology contract for the English and Vietnamese documentation. Preserve code identifiers, type names, package names, commands, file paths, configuration keys, and environment variables exactly. Ordinary technical concepts may be translated only when the table below explicitly allows it.
 
-When you encounter a term not yet listed here, append a row with: `term | category | short explanation | source`.
+In Vietnamese prose, introduce terms marked **Explain first use** with the Vietnamese phrase followed by the canonical English term in parentheses. After that, use the Vietnamese phrase consistently. Do not alternate between synonyms for style.
 
 ---
 
-## Core Pi Terms
+## Core terminology
 
-| English term | Vietnamese (giải thích) | Source / Bối cảnh |
-|---|---|---|
-| Pi Agent | Pi Agent (tên sản phẩm) | Tên project, không dịch |
-| Agent Loop | Vòng lặp Agent | Engine chính của Pi runtime |
-| Harness | Harness | Agent shell framework |
-| Tool System | Hệ thống Tool | 5-step pipeline |
-| Tool | Tool | read, write, edit, bash, grep, find, ls |
-| Event-driven | Event-driven | pub/sub + sync barrier |
-| Context Engineering | Context Engineering | Kỹ thuật tối ưu cửa sổ LLM |
-| Context Compression | Nén ngữ cảnh | Structured summary |
-| Session Tree | Cây phiên (DAG) | Branchable history |
-| Provider | Provider | LLM vendor abstraction |
-| KnownProvider | KnownProvider (enum) | 35 provider IDs |
-| TUI | TUI | Terminal UI |
-| MCP | MCP | Model Context Protocol |
-| RPC | RPC | Remote Procedure Call |
-| SDK | SDK | Software Development Kit |
-| YOLO mode | YOLO mode | Không hỏi trước khi chạy |
-| DAG | DAG | Directed Acyclic Graph |
-| Skills | Skills | Markdown-based tools |
-| Extensions | Extensions | TS-based plugins |
-| Pi Package | Pi Package | npm/git-distributed bundle |
-| Prompt Template | Prompt Template | Markdown workflows |
-| Theme | Theme | TUI skin |
-| Hot Reload | Hot Reload | Tự áp dụng thay đổi extension/keybindings/prompts khi đang chạy, không cần restart |
-| Message Queue | Message Queue | Hàng chờ steering (Enter) + follow-up (Alt+Enter) trong khi Agent đang xử lý |
-| Steer / Steering | Steer / Steering | Tin nhắn xen vào giữa turn hiện tại |
-| Follow-up | Follow-up | Tin nhắn chờ tới khi Agent kết thúc toàn bộ |
-| pi-orchestrator | pi-orchestrator | Experimental multi-agent orchestration (v0.80.x) |
-| Anthropic Extra Usage | Anthropic Extra Usage | Third-party harness sử dụng billing theo token, không tính vào Claude plan limit |
-| Codex for OSS | Codex for OSS | OpenAI chương trình OSS cho Codex CLI |
-| Radius | Radius | OAuth gateway `pi-messages` động, cache catalog trong models-store.json |
-| Anthropic Bedrock | Anthropic Bedrock | AWS Bedrock-hosted Claude |
+| Canonical term | English usage | Vietnamese usage | Translate? | Verification source |
+| --- | --- | --- | --- | --- |
+| Pi | Pi | Pi | No | [Project README](https://github.com/badlogic/pi-mono/blob/main/README.md) |
+| Agent | agent; `Agent` for the class | Agent; preserve `Agent` for the class | No | [`packages/agent/README.md`](https://github.com/badlogic/pi-mono/blob/main/packages/agent/README.md) |
+| Agent Loop | agent loop | vòng lặp Agent (Agent Loop) | Explain first use | [`harness.md`](https://github.com/badlogic/pi-mono/blob/main/packages/agent/docs/harness.md) |
+| Harness | harness | bộ khung (harness) | Explain first use | [`harness.md`](https://github.com/badlogic/pi-mono/blob/main/packages/agent/docs/harness.md) |
+| Tool | tool; preserve `Tool` for the type | Tool | No | [`packages/agent/README.md`](https://github.com/badlogic/pi-mono/blob/main/packages/agent/README.md) |
+| Tool System | tool system | hệ thống Tool | Explain first use | [`harness.md`](https://github.com/badlogic/pi-mono/blob/main/packages/agent/docs/harness.md) |
+| Event | event | sự kiện | Yes in prose | [`harness.md`](https://github.com/badlogic/pi-mono/blob/main/packages/agent/docs/harness.md) |
+| event-driven | event-driven | hướng sự kiện | Yes | [`harness.md`](https://github.com/badlogic/pi-mono/blob/main/packages/agent/docs/harness.md) |
+| Provider | provider; preserve provider IDs | provider | No | [`providers.md`](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/providers.md) |
+| Model | model; preserve model IDs | model | No | [`models.md`](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/models.md) |
+| Prompt | prompt | prompt | No | [`prompt-templates.md`](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/prompt-templates.md) |
+| Message | message; preserve message types | message; preserve message types | No | [`packages/agent/README.md`](https://github.com/badlogic/pi-mono/blob/main/packages/agent/README.md) |
+| Context | context | ngữ cảnh | Yes in prose | [`usage.md`](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/usage.md) |
+| Context Engineering | context engineering | kỹ thuật ngữ cảnh (context engineering) | Explain first use | [`harness.md`](https://github.com/badlogic/pi-mono/blob/main/packages/agent/docs/harness.md) |
+| Context Compaction | context compaction | nén ngữ cảnh | Yes | [`compaction.md`](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/compaction.md) |
+| Session | session | phiên làm việc (session) | Explain first use | [`sessions.md`](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/sessions.md) |
+| Session Tree | session tree | cây phiên làm việc | Yes | [`sessions.md`](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/sessions.md) |
+| streaming | streaming | truyền dữ liệu theo luồng (streaming) | Explain first use | [`packages/ai/README.md`](https://github.com/badlogic/pi-mono/blob/main/packages/ai/README.md) |
+| TUI | TUI | TUI | No | [`tui.md`](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/tui.md) |
+| MCP | MCP | MCP | No | Model Context Protocol |
+| RPC | RPC | RPC | No | [`rpc.md`](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/rpc.md) |
+| SDK | SDK | SDK | No | [`sdk.md`](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/sdk.md) |
+| DAG | DAG | DAG | No | Directed acyclic graph |
+| Skill | skill | skill | No | [`skills.md`](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/skills.md) |
+| Extension | extension | extension | No | [`extensions.md`](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/extensions.md) |
+| Pi Package | Pi package | gói Pi (Pi package) | Explain first use | [`packages.md`](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/packages.md) |
+| Prompt Template | prompt template | mẫu prompt (prompt template) | Explain first use | [`prompt-templates.md`](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/prompt-templates.md) |
+| Hot Reload | hot reload | hot reload | No | [`extensions.md`](https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/extensions.md) |
+| Steering | steering message | message điều hướng (steering) | Explain first use | [`harness.md`](https://github.com/badlogic/pi-mono/blob/main/packages/agent/docs/harness.md) |
+| Follow-up | follow-up message | message tiếp nối (follow-up) | Explain first use | [`harness.md`](https://github.com/badlogic/pi-mono/blob/main/packages/agent/docs/harness.md) |
 
 ---
 
