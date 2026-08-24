@@ -1,129 +1,551 @@
 ---
 title: 'Chương 2: Kiến trúc ba lớp'
-description: Cách Pi tách provider transport, agent runtime và ứng dụng coding agent.
+description: Cách Pi tách model transport, Agent runtime và ứng dụng coding agent mà không ép mọi package vào đúng ba ô.
 translation_key: ch02-three-layer-arch
 language: vi
 chapter: 2
 source_url: 'https://www.dgzhuya.com/modules/ch02-three-layer-arch'
 official_refs:
-  - 'https://github.com/badlogic/pi-mono/tree/main/packages'
+  - 'https://github.com/badlogic/pi-mono/tree/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages'
 terms_used:
   - Model
   - Provider
+  - Message
   - Agent
+  - Agent Loop
+  - AgentMessage
+  - AgentTool
   - Coding Agent
+  - Tool
   - TUI
+  - Extension
+  - Session
+  - SDK
+  - monorepo
+  - npm workspaces
+  - TypeScript
+  - TypeBox
+  - TSchema
 status: reviewed
 last_updated: '2026-08-24'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
-Pi tách ba trách nhiệm: giao tiếp với model, chạy agent và cung cấp sản phẩm coding. Package graph thực thi ranh giới này bằng hướng dependency, không chỉ bằng tên package.
+> Chương này lùi lại khỏi từng function để nhìn toàn bộ kiến trúc package của Pi: code nằm ở đâu, package nào sở hữu từng quyết định, dependency hướng về đâu và type nhận thêm năng lực thế nào khi đi qua mỗi lớp. Tấm bản đồ ấy sẽ giúp bạn không mất phương hướng trong các chương đọc source tiếp theo.
 
-## 1. Ba lớp
+---
 
-| Lớp | Package | Trách nhiệm |
-| --- | --- | --- |
-| Model | `@earendil-works/pi-ai` | Model, provider registration, message, Tool, xác thực, streaming |
-| Agent | `@earendil-works/pi-agent-core` | State, vòng lặp model/Tool, hàng chờ, context transform, runtime event |
-| Ứng dụng | `@earendil-works/pi-coding-agent` | CLI, ngữ cảnh dự án, Tool tích hợp, session, extension, skill |
+## 1. Bạn vừa mở một codebase Agent
 
-`@earendil-works/pi-tui` là presentation package độc lập. Coding agent dùng package này; model layer và agent layer thì không.
+Giả sử bạn vừa clone repository Pi tại revision `a470b121` rồi mở thư mục `packages/`. Phần cây thư mục liên quan trông như sau:
 
-## 2. Lớp 1: model transport
-
-Model layer trả lời một câu hỏi: làm sao ứng dụng gọi nhiều provider qua cùng typed interface?
-
-Package này định nghĩa các type dùng chung như `Model`, `Message`, `Tool`, `Context` và stream event. Provider factory đăng ký model catalog cùng implementation của `stream()` và `streamSimple()`.
-
-```typescript
-import { createModels } from "@earendil-works/pi-ai";
-import { openAIProvider } from "@earendil-works/pi-ai/providers/openai";
-
-const models = createModels();
-models.setProvider(openAIProvider());
-
-const model = models.getModel("openai", "gpt-5-mini");
-if (!model) throw new Error("Model not found");
+```text
+repo/
+├── packages/
+│   ├── ai/                 ← @earendil-works/pi-ai
+│   ├── agent/              ← @earendil-works/pi-agent-core
+│   ├── coding-agent/       ← @earendil-works/pi-coding-agent
+│   ├── tui/                ← @earendil-works/pi-tui
+│   ├── server/             ← @earendil-works/pi-server (thử nghiệm)
+│   ├── client/
+│   ├── protocol/
+│   ├── telemetry/
+│   ├── evals/
+│   └── session-backends/
+├── package.json            ← workspace gốc và thứ tự build
+└── tsconfig.json
 ```
 
-Đoạn code này không biết về session, terminal hoặc vòng lặp Agent. Kết quả là một model descriptor và collection có thể gửi streaming request.
+Ba package đầu tạo thành mô hình hướng dependency được trình bày trong chương này. `pi-tui` là thư viện UI trực giao, còn `pi-server` là một service boundary thử nghiệm ở revision hiện tại. Những thư mục còn lại là package hỗ trợ cho wire protocol, client, telemetry, evaluation và session backend. Vì vậy monorepo có nhiều hơn năm package, dù năm vai trò vẫn là một cách vào bài dễ hiểu cho chuyến tham quan kiến trúc đầu tiên.
 
-## 3. Lớp 2: agent runtime
+Tài liệu Pi cũ có thể nhắc tới `pi-web-ui` hoặc `pi-orchestrator`. Cả hai đều không phải workspace tại revision đã ghim. Cụ thể, nhận định cũ rằng một `pi-orchestrator` thử nghiệm nằm trên coding-agent không còn mô tả đúng cây source này. Mục 2.5 thay vị trí đó bằng boundary `pi-server` hiện hành và ghi rõ trạng thái thử nghiệm của nó.
 
-Agent layer bổ sung state và control flow. Nó quản lý:
+Pi dùng npm workspaces. Manifest gốc bao gồm `packages/*`, các subpackage session backend và một số ví dụ Extension của coding-agent có dependency riêng. Workspace giúp các package local build cùng nhau; việc cùng nằm trong workspace không biến chúng thành một lớp kiến trúc duy nhất.
 
-- system prompt, model, Tool, message và thinking level hiện tại;
-- vòng lặp luân phiên giữa model call và chạy Tool;
-- boundary `transformContext` và `convertToLlm`;
-- hàng chờ steering và follow-up;
-- lifecycle event cho application consumer.
+Câu hỏi hữu ích nên hẹp hơn “tại sao có đúng năm package?”. Hãy hỏi quyết định nào thuộc model transport, quyết định nào thuộc Agent runtime có thể tái sử dụng và quyết định nào thuộc sản phẩm coding. Sau đó xem UI cùng service boundary kết nối ở đâu mà không cần ép chúng vào stack ba lớp ấy.
 
-Runtime nhận model stream function qua cấu hình:
+---
+
+## 2. Năm vai trò package, mỗi vai trò một việc
+
+Tạm gác mũi tên dependency sang một bên. Hãy đọc từng package từ public surface và manifest của chính nó.
+
+### 2.1 pi-ai: phụ trách “gọi model”
+
+`@earendil-works/pi-ai`, nằm trong `packages/ai/`, trả lời câu hỏi: làm sao một ứng dụng có thể gọi model từ nhiều provider qua các type và streaming contract dùng chung?
+
+Manifest mô tả package này là “Unified LLM API with automatic model discovery and provider configuration”. Tại revision `a470b121`, package sở hữu bốn nhóm khái niệm liên quan:
+
+1. `Model<TApi>` mô tả một model cụ thể, gồm provider, API protocol, input mode, context window, token limit, chi phí, header và thiết lập tương thích.
+2. `Provider<TApi>` sở hữu provider ID, cách xác thực, model catalog đồng bộ, hành vi refresh tùy chọn cùng implementation của `stream()` và `streamSimple()`.
+3. `Models` là collection lúc runtime. Nó tra provider và model, giải quyết xác thực, refresh catalog động rồi chuyển request tới provider sở hữu `Model` đã chọn.
+4. `Message`, `Context`, `Tool` và `AssistantMessageEventStream` tạo thành contract request/response không phụ thuộc provider cụ thể.
+
+Root entry được giữ side-effect free có chủ đích. Provider factory nằm sau package subpath, còn `createModels()` và các domain type dùng chung nằm ở root:
 
 ```typescript
+// packages/ai/src/index.ts (một số export tại a470b121)
+export type { Static, TSchema } from "typebox";
+export { Type } from "typebox";
+export * from "./models.ts";
+export * from "./types.ts";
+export * from "./utils/event-stream.ts";
+
+// Code ứng dụng chọn provider một cách tường minh.
+import { createModels } from "@earendil-works/pi-ai";
+import { anthropicProvider } from "@earendil-works/pi-ai/providers/anthropic";
+```
+
+Boundary này không chứa Agent Loop hoặc policy của coding session. Pi AI biết cách biểu diễn, xác thực, gửi và stream một model request. Nó không quyết định khi nào phải bắt đầu model turn tiếp theo, cũng không quyết định coding transcript sẽ được lưu ở đâu.
+
+### 2.2 pi-agent-core: phụ trách “chạy vòng lặp”
+
+`@earendil-works/pi-agent-core`, nằm trong `packages/agent/`, trả lời câu hỏi: làm sao LLM liên tục tạo message, yêu cầu Tool, nhận kết quả rồi tiếp tục cho tới khi run kết thúc?
+
+Manifest gọi đây là “General-purpose agent with transport abstraction, state management, and attachment support”. Tính general-purpose chính là boundary. Runtime không mặc định Tool phải đọc file, chạy Bash hay sửa source code. Nó sở hữu:
+
+- `Agent` và control flow cấp thấp `agentLoop()`;
+- `AgentState`, gồm system prompt, `Model` đã chọn, thinking level, `AgentTool[]`, `AgentMessage[]`, streaming state và các Tool call đang chờ;
+- hàng đợi steering và follow-up;
+- hook `transformContext` cùng `convertToLlm` giữa application message và `Message[]` dành cho model;
+- event ở cấp Agent, turn, message và quá trình thực thi Tool;
+- các thành phần tái sử dụng cho session, compaction, prompt, Skill và môi trường Tool được quản lý.
+
+Public entry point phản ánh sự phân chia đó:
+
+```typescript
+// packages/agent/src/index.ts (một số export tại a470b121)
+export * from "./agent.ts";
+export * from "./agent-loop.ts";
+export * from "./harness/compaction/compaction.ts";
+export * from "./harness/session/index.ts";
+export * from "./harness/tools/index.ts";
+export * from "./types.ts";
+```
+
+Vòng lặp nhận một `StreamFn`. `models.streamSimple.bind(models)` thỏa contract đó, nên Agent Core có thể chạy trên collection `Models` đã được cấu hình mà không cần tự khám phá provider factory. Điểm injection này tách việc “chạy state machine” khỏi việc “chọn và xác thực provider”.
+
+### 2.3 pi-coding-agent: phụ trách “sản phẩm thực tế”
+
+`@earendil-works/pi-coding-agent`, nằm trong `packages/coding-agent/`, trả lời câu hỏi: làm sao các thành phần lớp dưới trở thành coding assistant `pi`?
+
+Manifest mô tả “Coding agent CLI with read, bash, edit, write tools and session management”. Package này sở hữu product policy và khâu lắp ráp:
+
+- phân tích CLI cùng các entry path interactive, print, JSON, RPC và SDK;
+- definition của bảy Tool tích hợp `read`, `bash`, `edit`, `write`, `grep`, `find` và `ls`;
+- `AgentSession`, `SessionManager`, session entry, branching, tích hợp compaction và lựa chọn persistence;
+- credential, setting, model resolution, project trust và việc nạp chỉ dẫn ở cấp project/global;
+- Extension, Skill, prompt template, theme, Pi Package và resource discovery;
+- TUI component cùng adapter render Agent event và Tool result.
+
+Executable entry vẫn rất ngắn:
+
+```typescript
+// packages/coding-agent/src/cli.ts (một số dòng được chọn)
+#!/usr/bin/env node
+import { main } from "./main.ts";
+
+main(process.argv.slice(2));
+```
+
+Phần việc phía sau đi qua nhiều component do sản phẩm sở hữu:
+
+```text
+bạn nhập: pi "Giúp tôi sửa lỗi này"
+│
+├── cli.ts                  phân tích argv
+├── main.ts                 chọn mode interactive, print, JSON hoặc RPC
+├── thiết lập resource/model nạp chỉ dẫn, Extension, Skill và Model
+├── AgentSession            lắp Tool, setting và lịch sử session
+├── Agent                   sở hữu state trực tiếp và hàng đợi
+└── agentLoop()             stream output model và thực thi Tool
+```
+
+Coding package export `AgentSession`, `createAgentSession()`, các type Extension, Tool factory, resource loader và session type. Nó không export type mang tên `CodingAgentMessage`. Coding Agent tiếp tục dùng `AgentMessage`; message riêng của ứng dụng gia nhập union đó qua declaration merging của `CustomAgentMessages`, rồi được chuyển thành `Message[]` của model layer trước khi gọi provider.
+
+### 2.4 pi-tui: phụ trách “hiển thị”
+
+`@earendil-works/pi-tui`, nằm trong `packages/tui/`, là thư viện terminal UI có differential rendering. Nó export các component như `Markdown`, `Text`, `Editor`, `SelectList`, `ScrollView`, stack, terminal abstraction, xử lý bàn phím, render ảnh và tiện ích chuỗi có tính tới độ rộng ký tự.
+
+Runtime dependency tại revision đã ghim chỉ gồm `marked` và `get-east-asian-width`. Package không có runtime dependency tới `pi-ai`, `pi-agent-core` hoặc `pi-coding-agent`. Coding Agent phụ thuộc TUI và chuyển runtime event thành component, nhưng package TUI không biết Agent, Model, Provider hay session là gì. Vì vậy nó trực giao với mô hình dependency ba lớp, không phải lớp thứ tư nằm trên cùng.
+
+### 2.5 pi-server: một service boundary thử nghiệm
+
+Boundary hiện hành thứ năm đáng nhận diện là `@earendil-works/pi-server`, nằm trong `packages/server/`. Manifest gọi nó là “experimental server package for pi”, còn README cảnh báo API có thể thay đổi hoặc bị gỡ bỏ.
+
+`PiServer` nhận một `PiServerService` do ứng dụng cung cấp, kết hợp các transport listener đã xác thực và trao đổi message CBOR có length prefix do `@earendil-works/pi-protocol` định nghĩa. Package cũng sở hữu adapter giữa domain object của `pi-ai` và protocol DTO. Manifest phụ thuộc `pi-ai` cùng `pi-protocol`; nó không phụ thuộc `pi-coding-agent`.
+
+> **Boundary thử nghiệm:** `pi-server` không cung cấp standalone CLI hay coding-agent service. Ứng dụng phải hiện thực các thao tác session và model phía sau `PiServerService`. Đây là integration boundary ngang hàng, không phải multi-Agent orchestrator cũ và cũng không phải bước thứ tư của core stack.
+
+Các package protocol, client, telemetry, evaluation và SQLite session backend làm những boundary khác trở nên tường minh. Chúng có ý nghĩa khi contract tương ứng đi vào thiết kế, nhưng không xóa bỏ mô hình học ba lớp.
+
+---
+
+## 3. Sau khi đọc năm vai trò, bạn đã có một trực giác
+
+Core stack giờ có hình dạng dễ nhận ra:
+
+```text
+┌──────────────────────────────────────────────────────────┐
+│ @earendil-works/pi-coding-agent                          │
+│ product policy: CLI, session, resource, Tool, UI         │
+├──────────────────────────────────────────────────────────┤
+│ @earendil-works/pi-agent-core                            │
+│ runtime mechanics: Agent state, loop, queue, event       │
+├──────────────────────────────────────────────────────────┤
+│ @earendil-works/pi-ai                                    │
+│ model boundary: Models, Provider, Model, Message, stream │
+└──────────────────────────────────────────────────────────┘
+
+Nằm cạnh stack:
+  @earendil-works/pi-tui       terminal UI tái sử dụng được
+  @earendil-works/pi-server    service/protocol bridge thử nghiệm
+```
+
+Một request thông thường giúp ranh giới trở nên cụ thể. Coding Agent đọc input và project resource, sau đó yêu cầu Agent Core chạy prompt. Agent Core áp dụng `transformContext`, chuyển `AgentMessage[]` thành `Message[]` cho model rồi gọi `StreamFn` đã được inject. Pi AI tìm provider sở hữu `Model` được chọn, giải quyết auth và mở stream. Agent Core nhận event rồi thực thi `AgentTool` mà model yêu cầu. Coding Agent render event và ghi session entry. Payload riêng của provider dừng trong Pi AI; policy UI cùng storage dừng trong Coding Agent.
+
+Hình dạng ấy giống một stack dưới-giữa-trên gọn gàng. Manifest của package để lộ một chi tiết mà hình vẽ chỉ cho phép phụ thuộc lớp kề sẽ che mất.
+
+---
+
+## 4. Mở package.json ra, mọi thứ không đơn giản như vậy
+
+> **Lộ trình đọc:** Mục 4 và 5 đi sâu vào hướng dependency cùng type trong TypeScript. Hãy đọc trước khi xây trên SDK. Nếu chỉ cần chọn package cho một Agent nhỏ, Mục 6 có bảng quyết định thực dụng.
+
+Coding package phụ thuộc trực tiếp cả ba package nền tảng:
+
+```json
+{
+  "dependencies": {
+    "@earendil-works/pi-agent-core": "^0.84.2",
+    "@earendil-works/pi-ai": "^0.84.2",
+    "@earendil-works/pi-tui": "^0.84.2"
+  }
+}
+```
+
+`pi-coding-agent` đi xuyên qua lớp giữa để dùng `pi-ai`. Điều này hợp lệ. Kiến trúc cam kết dependency một chiều, không giới hạn import ở lớp kề.
+
+### Câu trả lời nằm trong hệ thống type
+
+Một số direct import tồn tại vì public API của sản phẩm nhắc đến `Model`, `Provider`, `Usage`, `Context`, `ImageContent` và các type Pi AI khác. TypeScript vẫn phải resolve những type đó ngay cả khi import cụ thể biến mất khỏi JavaScript được emit.
+
+Dependency cũng tồn tại lúc runtime. Coding Agent so sánh model, lấy text từ nội dung message, tạo ID, retry assistant call và hiện thực `ModelRuntime` cùng `ModelRegistry` trên contract của Pi AI. Mô tả cạnh này là “chỉ re-export type” sẽ sai ở revision `a470b121`.
+
+Agent Core cho thấy nền tảng được mở rộng dần rõ nhất:
+
+```typescript
+// packages/agent/src/types.ts (lược bớt import, a470b121)
+import type {
+  Api,
+  AssistantMessageEventStream,
+  Context,
+  ImageContent,
+  Message,
+  Model,
+  SimpleStreamOptions,
+  TextContent,
+  Tool,
+  ToolResultMessage,
+  Usage,
+} from "@earendil-works/pi-ai";
+```
+
+`Message`, `Model`, `Tool` và `Context` là các nguyên tử dùng để phát biểu runtime contract. Agent Core thêm state, execution, queue và event của nó. Coding Agent có thể dùng cả hai nhóm vì nó đảm nhiệm việc lắp ráp sản phẩm.
+
+### Vậy quy tắc phân lớp thực sự là gì?
+
+> **Code lớp dưới không được tham chiếu symbol của lớp trên.**
+
+Quy tắc tạo ra ba phép kiểm tra cụ thể:
+
+- Pi AI không được import Agent Core hoặc Coding Agent.
+- Agent Core có thể import Pi AI, nhưng không được import product policy của Coding Agent.
+- Coding Agent có thể import cả hai package lớp dưới và thư viện TUI trực giao.
+
+Truy cập trực tiếp từ lớp trên tới lớp dưới vẫn giữ đúng hướng. Một vi phạm sẽ trông như `packages/ai/src/index.ts` import `AgentState`, hoặc Agent Core tự chọn session directory và permission UI của Coding Agent.
+
+Các mũi tên dependency bên dưới đi từ dependency tái sử dụng được tới package sử dụng nó:
+
+```text
+@earendil-works/pi-ai ───────→ @earendil-works/pi-agent-core
+          │                                │
+          └────────────────────────────────┼──→ @earendil-works/pi-coding-agent
+                                           │
+@earendil-works/pi-tui ────────────────────┘
+
+@earendil-works/pi-ai ───────→ @earendil-works/pi-server
+@earendil-works/pi-protocol ──→ @earendil-works/pi-server
+```
+
+Sơ đồ cho thấy hai giới hạn. Thứ nhất, ba lớp mô tả hướng dependency của các trách nhiệm model, runtime và coding product; chúng không phân loại mọi package trong monorepo. Thứ hai, `pi-server` không nằm trên Coding Agent ở revision này. Nó nối object Pi AI với protocol phía sau service do ứng dụng cung cấp.
+
+---
+
+## 5. Type tiến hóa giữa các lớp: từ nguyên tử tới phân tử và vật liệu
+
+Mũi tên dependency cho biết ai được phép biết ai. Type definition cho biết mỗi lớp bổ sung điều gì.
+
+### Lớp 1: pi-ai định nghĩa các nguyên tử
+
+Pi AI khai báo các shape nhỏ nhất không phụ thuộc provider cụ thể. Đoạn sau đã rút gọn, nhưng mọi member được hiển thị đều khớp source đã ghim:
+
+```typescript
+type Message = UserMessage | AssistantMessage | ToolResultMessage;
+
+interface Model<TApi extends Api> {
+  id: string;
+  name: string;
+  api: TApi;
+  provider: ProviderId;
+  baseUrl: string;
+  reasoning: boolean;
+  input: ("text" | "image")[];
+  contextWindow: number;
+  maxTokens: number;
+}
+
+interface Tool<TParameters extends TSchema = TSchema> {
+  name: string;
+  description: string;
+  parameters: TParameters;
+  constrainedSampling?: false | ConstrainedSamplingConfig;
+}
+```
+
+`Tool` mô tả schema mà model có thể gọi. Nó không có method `execute()` và cũng không có terminal renderer. `Message` là union đóng dành cho LLM. `Model` xác định cả provider lẫn API protocol, nhờ vậy `Models` có thể chuyển stream tới đúng `Provider`.
+
+### Lớp 2: pi-agent-core ghép nguyên tử thành phân tử
+
+Agent Core giữ các nguyên tử đó rồi thêm năng lực runtime:
+
+```typescript
+type AgentMessage =
+  | Message
+  | CustomAgentMessages[keyof CustomAgentMessages];
+
+interface AgentTool<
+  TParameters extends TSchema = TSchema,
+  TDetails = any,
+> extends Tool<TParameters> {
+  label: string;
+  prepareArguments?: (args: unknown) => Static<TParameters>;
+  execute(
+    toolCallId: string,
+    params: Static<TParameters>,
+    signal?: AbortSignal,
+    onUpdate?: AgentToolUpdateCallback<TDetails>,
+  ): Promise<AgentToolResult<TDetails>>;
+  executionMode?: "sequential" | "parallel";
+}
+```
+
+`AgentMessage` mở transcript cho message do ứng dụng định nghĩa qua declaration merging. Trước khi gọi LLM, `convertToLlm` phải chuyển union rộng hơn ấy về `Message[]` của Pi AI. `AgentTool` mở rộng schema hướng model bằng label, bước chuẩn bị argument tùy chọn, execution, streaming update và execution mode riêng cho từng Tool. Agent Loop giờ có thể chạy điều model yêu cầu.
+
+### Lớp 3: pi-coding-agent kết hợp phân tử thành vật liệu
+
+Coding Agent lắp các type quanh một workflow hoàn chỉnh cho người dùng. `AgentSession` điều phối Agent đang chạy với setting, model runtime, resource loading, Extension và `SessionManager`. Session entry giữ message cùng model change, thinking-level change, compaction record, branch summary và custom entry. `ResolvedResource` cùng diagnostic liên quan ghi lại Skill, prompt template, theme và file chỉ dẫn đến từ đâu.
+
+Với Tool, `ToolDefinition` hướng sản phẩm tương thích về cấu trúc với `AgentTool` và thêm các product hook. Đây là một interface độc lập, không kế thừa bằng `extends AgentTool`:
+
+```typescript
+// Lược từ packages/coding-agent/src/core/extensions/types.ts.
+interface ToolDefinition<TParams extends TSchema, TDetails = unknown> {
+  name: string;
+  label: string;
+  description: string;
+  promptSnippet?: string;
+  promptGuidelines?: string[];
+  parameters: TParams;
+  prepareArguments?: (args: unknown) => Static<TParams>;
+  executionMode?: ToolExecutionMode;
+  execute(
+    toolCallId: string,
+    params: Static<TParams>,
+    signal: AbortSignal | undefined,
+    onUpdate: AgentToolUpdateCallback<TDetails> | undefined,
+    ctx: ExtensionContext,
+  ): Promise<AgentToolResult<TDetails>>;
+  renderCall?: (...args: any[]) => Component;
+  renderResult?: (...args: any[]) => Component;
+}
+```
+
+`ExtensionContext`, các đoạn prompt và rendering hook bổ sung thuộc boundary sản phẩm và Extension. Factory tích hợp tạo bảy coding Tool: `read`, `bash`, `edit`, `write`, `grep`, `find` và `ls`. Dạng runtime sau khi wrap vẫn thỏa điều Agent Core cần.
+
+Không có nấc `CodingAgentMessage` trong chiếc thang này. Coding Agent dùng `AgentMessage` cho transcript đang chạy và định nghĩa các biến thể `SessionEntry` cho lịch sử sản phẩm cần lưu bền. Tách hai khái niệm giúp một storage record không bị hiểu nhầm là dữ liệu LLM có thể nhận.
+
+### So sánh Before → After của quá trình mở rộng type
+
+Đường đi của Tool cho ta phép so sánh từng field ngắn nhất:
+
+```text
+Before, trong pi-ai: Tool mô tả thứ model có thể gọi
+────────────────────────────────────────────────────────
+name + description + parameters + constrainedSampling
+
+            ↓ Agent Core thêm năng lực runtime
+
+After, trong pi-agent-core: AgentTool có thể chạy
+────────────────────────────────────────────────────────
+field của Tool + label + prepareArguments + execute + executionMode
+
+            ↓ Coding Agent chuyển nó sang product policy
+
+After, trong pi-coding-agent: ToolDefinition tham gia sản phẩm
+────────────────────────────────────────────────────────
+field tương thích với Tool/AgentTool
++ promptSnippet + promptGuidelines + ExtensionContext
++ renderCall + renderResult
+```
+
+Đường đi của message khác một chút: `Message` trở thành union `AgentMessage` rộng hơn, sau đó Coding Agent lưu nó trong session entry và render biến thể tùy chỉnh. Mở rộng dần có thể dùng inheritance, union, composition hoặc structural compatibility. Invariant nằm ở quyền sở hữu: mỗi lớp chỉ thêm thông tin cần cho trách nhiệm của lớp đó.
+
+---
+
+## 6. Khi viết Agent riêng, tôi có thực sự cần ba lớp không?
+
+Câu trả lời phụ thuộc sản phẩm bạn đang xây. Ba kịch bản sau làm rõ đánh đổi.
+
+### Kịch bản A: không phân lớp, tất cả gom vào một file
+
+```typescript
+// Pseudocode minh họa: một Agent cố ý không phân lớp.
+import OpenAI from "openai";
+
+const client = new OpenAI();
+const messages = [];
+
+while (true) {
+  const response = await client.chat.completions.create({
+    model: "gpt-4o",
+    messages,
+  });
+  // Phân tích Tool call, thực thi, nối kết quả rồi tiếp tục.
+}
+```
+
+Cách này đủ cho một thử nghiệm nhỏ. Khi provider request, Tool execution, state, storage và UI tích tụ trong cùng module, thay đổi ở một mối quan tâm buộc người đọc kiểm tra tất cả phần còn lại. Merge conflict chỉ là triệu chứng; chi phí sâu hơn là không thành phần nào có contract độc lập.
+
+### Kịch bản B: chỉ hai lớp, không dùng sản phẩm coding-agent
+
+```typescript
+import { Agent } from "@earendil-works/pi-agent-core";
+import { createModels } from "@earendil-works/pi-ai";
+import { anthropicProvider } from "@earendil-works/pi-ai/providers/anthropic";
+
+const models = createModels();
+models.setProvider(anthropicProvider());
+
+const model = models.getModel("anthropic", "claude-sonnet-4-6");
+if (!model) throw new Error("Model not found");
+
 const agent = new Agent({
-  initialState: { systemPrompt, model, tools },
+  initialState: { systemPrompt: "Hãy hỗ trợ người vận hành.", model },
   streamFn: models.streamSimple.bind(models),
 });
 ```
 
-Cách inject này giữ runtime độc lập với provider registry cụ thể và giúp boundary dễ test.
+Đây là lựa chọn phù hợp cho Agent theo domain riêng. Agent Core cung cấp state, vòng lặp, Tool execution, queue và event. Ứng dụng của bạn cung cấp `AgentTool`, entry point, session policy, permission và UI riêng. Bạn không phải nhận product policy của coding assistant khi sản phẩm không cần nó.
 
-## 4. Lớp 3: ứng dụng coding agent
+### Kịch bản C: chỉ một lớp, pi-ai
 
-Coding-agent package biến runtime thành sản phẩm `pi`. Nó quyết định application policy:
+```typescript
+import { createModels } from "@earendil-works/pi-ai";
+import { anthropicProvider } from "@earendil-works/pi-ai/providers/anthropic";
 
-- nạp file chỉ dẫn global và file chỉ dẫn dự án nào;
-- cung cấp implementation Tool nào;
-- lưu credential, setting và session ở đâu;
-- render event trong TUI ra sao;
-- tìm extension, skill, prompt template, theme và package như thế nào.
+const models = createModels();
+models.setProvider(anthropicProvider());
 
-Các quyết định này nằm trên agent runtime vì một sản phẩm khác có thể dùng storage, permission hoặc presentation khác.
+const model = models.getModel("anthropic", "claude-sonnet-4-6");
+if (!model) throw new Error("Model not found");
 
-## 5. Đường đi của dữ liệu
+const stream = models.streamSimple(model, {
+  messages: [{ role: "user", content: "Giải thích hướng dependency.", timestamp: Date.now() }],
+});
 
-Một interactive request thông thường đi qua các lớp theo thứ tự:
+for await (const event of stream) {
+  if (event.type === "text_delta") process.stdout.write(event.delta);
+}
+```
 
-1. Coding agent nhận user input và ngữ cảnh dự án.
-2. Agent runtime thêm user message và chuẩn bị model context tiếp theo.
-3. `transformContext` có thể lược bỏ hoặc chèn agent message.
-4. `convertToLlm` tạo `Message[]` cho model layer.
-5. Pi AI chọn provider đã đăng ký và mở model stream.
-6. Runtime cập nhật state từ stream event và chạy Tool nếu model yêu cầu.
-7. Coding agent render event và lưu các session entry mới.
+Pi AI hoạt động độc lập khi bạn cần một lượt trao đổi với model hoặc muốn tự viết control flow. Bạn sẽ tự quản lý message state, các turn lặp lại, Tool execution, queue và điều kiện kết thúc.
 
-Response đi ngược qua cùng các boundary. Provider-specific payload dừng trong Pi AI; coding agent chỉ nhận event và agent message đã chuẩn hóa.
+### Hướng dependency quan trọng hơn số lượng lớp
 
-## 6. Quy tắc dependency
+Ba kịch bản dẫn tới một lựa chọn thực dụng:
 
-Kiến trúc giữ được tính rõ ràng khi tuân theo các quy tắc sau:
+| Kịch bản | Phù hợp nhất khi | Phần code của bạn vẫn phải sở hữu |
+| --- | --- | --- |
+| Chỉ Pi AI | Gọi model mà không cần Agent Loop tái sử dụng | State, loop, Tool execution, điều kiện kết thúc |
+| Pi AI + Agent Core | Agent theo domain riêng | Product Tool, entry point, storage, permission, UI |
+| Cả ba lớp | Coding assistant hoặc Pi Extension | Thay đổi và tích hợp riêng của sản phẩm |
 
-### 6.1 Lớp dưới không import product policy
+Dù chọn hình dạng nào, hãy giữ package lớp dưới không biết product knowledge của lớp trên. Agent Core không nên import ứng dụng đang nhúng nó, còn Pi AI không nên import Agent Core hay ứng dụng ấy. Những điểm injection như `streamFn`, context transform, hook và Tool implementation cho phép lớp trên cung cấp hành vi mà không đẩy policy xuống dưới.
 
-Pi AI không được import setting của coding agent hoặc terminal component. Agent core không nên giả định một session directory hay permission UI cụ thể.
+Quy tắc này không hứa rằng bạn có thể thay mọi package lớp dưới mà không cần adapter. Public contract của Agent Core dùng trực tiếp `Model`, `Message`, `Context` và stream type từ Pi AI. Nó bảo đảm rằng khi bỏ sản phẩm lớp trên, dependency lớp dưới vẫn dùng độc lập được.
 
-### 6.2 Truyền hành vi qua interface hẹp
+Bảng chọn vị trí dựa trên cùng quy tắc cũng hữu ích khi review code:
 
-Agent nhận `streamFn`, context transform, hook và implementation Tool dưới dạng value. Cách này rõ hơn việc dạy runtime tự tìm mọi application service.
-
-### 6.3 Giữ nguyên protocol identifier tại boundary
-
-Các type như `ToolCall`, `ToolResultMessage`, provider ID, model ID và event name là contract. Chỉ dịch phần giải thích xung quanh, không dịch identifier.
-
-## 7. Chọn đúng layer
-
-| Thay đổi | Layer phù hợp |
+| Thay đổi | Boundary sở hữu |
 | --- | --- |
-| Thêm request header riêng cho provider | Pi AI provider adapter |
-| Lọc UI-only message trước model call | `convertToLlm` của Agent |
-| Chặn shell command nguy hiểm | Tool policy hoặc coding-agent extension |
-| Thêm terminal panel | Coding agent hoặc Pi TUI |
-| Lưu session bằng backend khác | Application/session integration |
+| Thêm request header riêng cho provider | Pi AI provider hoặc request transform |
+| Lọc message riêng của ứng dụng trước model call | Boundary `convertToLlm` của Agent |
+| Chặn shell command nguy hiểm | Coding Tool policy hoặc Extension |
+| Thêm terminal panel | Coding Agent, dùng primitive của Pi TUI |
+| Lưu session bằng backend khác | Tích hợp application/session |
 
-Khi một thay đổi đi qua nhiều layer, hãy đặt shared type tại layer thấp nhất sở hữu khái niệm và giữ policy ở layer cao nhất cần policy đó.
+---
 
-## 8. Bước tiếp theo
+## 7. Ba phương pháp có thể mang sang dự án khác
 
-[Chương 3](ch03-agent-loop.md) theo dõi agent runtime qua một prompt hoàn chỉnh, gồm streaming, tool call, message trong hàng chờ và điều kiện kết thúc.
+Package graph của Pi gợi ra ba phương pháp dùng lại được trong những dự án Agent khác.
+
+### Phương pháp 1: “phễu dependency”
+
+Vẽ mũi tên dependency trước khi chọn tên thư mục. Đặt khái niệm không phụ thuộc provider cùng transport contract ở đầu hẹp. Đặt state và control flow tái sử dụng phía trên. Đặt policy về người dùng, storage, permission và presentation ở đầu rộng phía sản phẩm.
+
+Thực hiện theo bốn bước:
+
+1. Tìm code có thể hoạt động mà không cần product knowledge. Đó là ứng viên cho lớp dưới.
+2. Tìm code phụ thuộc các contract ấy nhưng vẫn không biết workflow cụ thể của người dùng. Đó là ứng viên runtime.
+3. Tìm code quyết định người dùng thấy gì, resource nào được nạp, permission nào áp dụng và dữ liệu nào được lưu. Phần ấy thuộc sản phẩm.
+4. Tìm import package lớp trên trong source tree lớp dưới. Mỗi kết quả phải được gỡ bỏ hoặc dẫn tới một lần thiết kế lại boundary có chủ đích.
+
+Câu hỏi kiểm chứng nhanh là: nếu ứng dụng lớp trên biến mất, package lớp dưới còn build và làm được công việc nó tuyên bố hay không? Pi AI có thể stream khi không có Agent Core. Agent Core có thể chạy Agent khi không có Coding Agent. TUI có thể render ứng dụng terminal mà không cần package AI nào.
+
+### Phương pháp 2: pattern “mở rộng type từng bước”
+
+Bắt đầu bằng type nhỏ nhất mà owner ở lớp thấp nhất có thể bảo vệ. Cho lớp cao hơn thêm năng lực bằng union, `extends`, composition hoặc structural adaptation.
+
+1. Transport layer định nghĩa nguyên tử như `Message`, `Model` và `Tool` chỉ có schema.
+2. Runtime mở rộng `Message` thành `AgentMessage` rồi thêm execution để tạo `AgentTool`.
+3. Sản phẩm lưu Agent message trong session record và chuyển Tool sang dạng có prompt, context cùng renderer.
+4. Trước khi truyền dữ liệu xuống dưới, hãy chuyển nó về contract của lớp thấp hơn. `convertToLlm` là ví dụ dễ thấy.
+
+Cách này giữ package lớp dưới ở trạng thái có thể publish và tái sử dụng. Nó cũng đặt tên cho boundary có thể làm mất thông tin. Một application message tùy chỉnh không thể âm thầm đi tới provider; bước chuyển đổi phải lọc hoặc dịch nó.
+
+### Phương pháp 3: test “có thể dùng độc lập”
+
+Test từng package mà không có consumer. Gỡ dependency lớp trên khỏi môi trường test, sau đó compile và thực thi đúng công việc public của package lớp dưới.
+
+- Pi AI phải tạo được collection `Models`, đăng ký `Provider`, chọn `Model` và stream một `Context` mà không cần Agent Core.
+- Agent Core phải chạy được với streaming cùng Tool implementation được inject mà không cần Coding Agent.
+- Pi TUI phải render component mà không import domain type AI.
+- Coding Agent là sản phẩm đã lắp ráp, vì vậy việc nó phụ thuộc các package lớp dưới là điều dự kiến.
+
+Hãy dùng package manifest và source-import graph làm bằng chứng. Application test chạy qua có thể che một upward dependency vì toàn bộ monorepo làm mọi workspace sẵn có. Test package cô lập sẽ phơi bày dependency đó.
+
+---
+
+## 8. Bước tiếp theo: đi vào trung tâm của Agent
+
+Tấm bản đồ này cho bạn tọa độ của chuyến đọc source kế tiếp. Pi AI sở hữu `Models`, `Provider`, `Model`, `Message` và provider stream. Agent Core sở hữu `Agent`, `AgentMessage`, `AgentTool`, state, queue, event và vòng lặp. Coding Agent sở hữu session, Extension, coding Tool, resource và UI sản phẩm. Pi TUI vẫn tái sử dụng được ở cạnh stack, còn Pi Server thử nghiệm nối object Pi AI với wire protocol phía sau application service.
+
+Chương 3 theo dõi một prompt đi qua Agent Loop: vì sao cần vòng lặp, streaming event cập nhật state thế nào, Tool call trở thành result ra sao, message trong queue đi vào turn tiếp theo khi nào và run kết thúc bằng cách nào.
+
+> **Thứ tự đọc:** Chương 1–6 xây cơ chế lõi theo trình tự. Từ Chương 7 trở đi, mỗi chương tách một vấn đề kỹ thuật nâng cao và có thể dùng như tài liệu tra cứu theo chủ đề.
+
+> **Ghi chú phiên bản:** Chương này mô tả Pi `0.84.2` tại commit `a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c`. Tên package, export, dependency và nhãn thử nghiệm đều đã được kiểm tra theo revision đó.
+
+> **Chương tiếp theo:** [Chương 3: Agent Loop](ch03-agent-loop.md)
