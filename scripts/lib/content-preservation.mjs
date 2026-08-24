@@ -374,6 +374,45 @@ function validateManifest(manifest) {
   return { errors, validIndices };
 }
 
+export function preservationManifestCoverageErrors(translations, manifest) {
+  const expectedPages = (translations?.pages ?? []).flatMap((page) => [
+    { key: page.key, path: `en/${page.en}` },
+    { key: page.key, path: `vi/${page.vi}` },
+  ]);
+  const manifestPages = manifest?.pages ?? [];
+  const errors = [];
+
+  expectedPages.forEach((expected, index) => {
+    const actual = manifestPages[index];
+    if (!actual) {
+      errors.push(
+        `${MANIFEST_LABEL}: missing pages[${index}] for translation key ${expected.key} (${expected.path})`,
+      );
+      return;
+    }
+    if (actual.key !== expected.key) {
+      errors.push(
+        `${MANIFEST_LABEL}: pages[${index}].key must match translation key ${expected.key}`,
+      );
+    }
+    if (actual.path !== expected.path) {
+      errors.push(
+        `${MANIFEST_LABEL}: pages[${index}].path must match translation path ${expected.path}`,
+      );
+    }
+  });
+
+  for (
+    let index = expectedPages.length;
+    index < manifestPages.length;
+    index += 1
+  ) {
+    errors.push(`${MANIFEST_LABEL}: pages[${index}] has no translation entry`);
+  }
+
+  return errors;
+}
+
 export async function validatePreservation(rootURL, manifest) {
   const validation = validateManifest(manifest);
   const errors = validation.errors;

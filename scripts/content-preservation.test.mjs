@@ -4,6 +4,7 @@ import test from "node:test";
 
 import {
   contentMetrics,
+  preservationManifestCoverageErrors,
   preservationErrors,
   validatePreservation,
 } from "./lib/content-preservation.mjs";
@@ -306,16 +307,69 @@ test("validatePreservation reads every manifest page and combines diagnostics", 
   assert.match(errors[0], /^en\/does-not-exist\.md:/);
 });
 
+test("preservation manifest coverage rejects incomplete and mis-keyed translations", () => {
+  const translations = {
+    pages: [
+      { key: "home", en: "index.mdx", vi: "index.mdx" },
+      { key: "quickstart", en: "quickstart.md", vi: "quickstart.md" },
+    ],
+  };
+  const manifest = {
+    pages: [
+      validRule("en/index.mdx"),
+      { ...validRule("vi/index.mdx"), key: "wrong-key" },
+      { ...validRule("en/quickstart.md"), key: "quickstart" },
+    ],
+  };
+  manifest.pages[0].key = "home";
+
+  assert.deepEqual(preservationManifestCoverageErrors(translations, manifest), [
+    "preservation-manifest.json: pages[1].key must match translation key home",
+    "preservation-manifest.json: missing pages[3] for translation key quickstart (vi/quickstart.md)",
+  ]);
+});
+
 test("the repository content satisfies the historical preservation baseline", async () => {
-  const manifest = JSON.parse(
-    await readFile(
+  const [manifest, translations] = await Promise.all([
+    readFile(
       new URL("../content/preservation-manifest.json", import.meta.url),
       "utf8",
-    ),
-  );
+    ).then(JSON.parse),
+    readFile(
+      new URL("../content/translation-manifest.json", import.meta.url),
+      "utf8",
+    ).then(JSON.parse),
+  ]);
+  const expectedPages = translations.pages.flatMap((page) => [
+    { key: page.key, path: `en/${page.en}` },
+    { key: page.key, path: `vi/${page.vi}` },
+  ]);
 
   assert.deepEqual(
-    await validatePreservation(new URL("../", import.meta.url), manifest),
+    manifest.pages.map(({ key, path }) => ({ key, path })),
+    expectedPages,
+  );
+  assert.deepEqual(
+    preservationManifestCoverageErrors(translations, manifest),
     [],
   );
+  for (const page of translations.pages) {
+    const entries = manifest.pages.filter((entry) => entry.key === page.key);
+    assert.equal(
+      entries.length,
+      2,
+      `${page.key} must have exactly two entries`,
+    );
+    assert.deepEqual(
+      entries.map(({ path }) => path),
+      [`en/${page.en}`, `vi/${page.vi}`],
+      `${page.key} must have one EN and one VI path in order`,
+    );
+  }
+
+  const errors = await validatePreservation(
+    new URL("../", import.meta.url),
+    manifest,
+  );
+  assert.equal(errors.length, 0, errors.join("\n"));
 });
