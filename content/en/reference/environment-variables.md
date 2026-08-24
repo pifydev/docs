@@ -12,7 +12,7 @@ Pi uses environment variables in three distinct places: its own process configur
 
 :::note[When values are read]
 
-Most process flags affect startup. Provider authentication is resolved when Pi asks the selected provider for credentials. A stored `auth.json` credential owns that provider, so changing a shell variable affects a later request only when no stored credential takes precedence. Bash metadata is rebuilt for every tool command.
+Most process flags affect startup. Provider authentication is resolved when Pi asks the selected provider for credentials. Changing a shell variable affects later requests only when neither a stored `auth.json` credential nor a configured provider `apiKey` in `models.json` takes precedence. Bash metadata is rebuilt for every tool command.
 
 :::
 

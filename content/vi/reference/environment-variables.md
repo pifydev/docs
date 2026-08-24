@@ -12,7 +12,7 @@ Pi dùng environment variable ở ba nơi riêng biệt: cấu hình process c�
 
 :::note[Thời điểm đọc giá trị]
 
-Phần lớn process flag có hiệu lực khi khởi động. Provider authentication được resolve khi Pi yêu cầu credential cho provider đã chọn. Credential trong `auth.json` sở hữu provider đó, vì vậy thay đổi shell variable chỉ ảnh hưởng request sau khi không có stored credential nào được ưu tiên. Bash metadata được tạo lại cho từng tool command.
+Phần lớn process flag có hiệu lực khi khởi động. Provider authentication được resolve khi Pi yêu cầu credential cho provider đã chọn. Thay đổi shell variable chỉ ảnh hưởng request sau nếu stored credential trong `auth.json` và configured `apiKey` trong `models.json` đều không được ưu tiên cho provider đó. Bash metadata được tạo lại cho từng tool command.
 
 :::
 
