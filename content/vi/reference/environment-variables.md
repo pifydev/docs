@@ -1,136 +1,95 @@
 ---
 title: Environment variables reference
-description: Mọi environment variable Pi đọc khi chạy.
+description: Process configuration, child-process marker, session metadata, credential và proxy variable được Pi sử dụng.
 translation_key: reference-environment-variables
 language: vi
+status: reviewed
+reviewed_by: Pify maintainers
+last_updated: '2026-08-24'
 ---
-Pi đọc environment variable cho API key, runtime flag, và process marker. Trang này liệt kê mọi biến mà SDK chạm vào.
 
-:::note[Cách Pi đọc các biến này]
+Pi đọc các variable dùng để cấu hình process và inject một nhóm riêng vào command được chạy qua built-in bash tool. Provider credential variable phụ thuộc vào provider đã chọn.
 
-API key của provider được đọc vào lúc gửi một request, không phải khi khởi động. Điều này có nghĩa xoay vòng key (ví dụ sau `pi auth print-api-key`) có hiệu lực ở turn kế tiếp mà không cần khởi động lại agent.
+## Cấu hình process
 
-:::
+| Variable | Mục đích |
+|---|---|
+| `PI_CODING_AGENT_DIR` | Ghi đè config directory; mặc định `~/.pi/agent` |
+| `PI_CODING_AGENT_SESSION_DIR` | Ghi đè nơi lưu persistent session; `--session-dir` có độ ưu tiên cao hơn |
+| `PI_PACKAGE_DIR` | Ghi đè package directory, bao gồm vị trí chỉ đọc của Nix/Guix |
+| `PI_OFFLINE` | Tắt network operation khi khởi động, bao gồm update và telemetry |
+| `PI_SKIP_VERSION_CHECK` | Chỉ tắt request kiểm tra phiên bản mới nhất |
+| `PI_TELEMETRY` | Ép bật hoặc tắt telemetry bằng `1`/`true`/`yes` hoặc `0`/`false`/`no` |
+| `PI_CACHE_RETENTION` | Đặt `long` để yêu cầu prompt caching dài hơn khi provider hỗ trợ |
+| `PI_SHARE_VIEWER_URL` | Ghi đè base URL được `/share` sử dụng |
+| `PI_HARDWARE_CURSOR` | Đặt `1` để hiện hardware cursor trong TUI |
+| `PI_TUI_ESC_TIMEOUT` | Delay phân biệt phím ESC theo mili giây; mặc định 100 qua SSH và 10 trong trường hợp khác |
+| `VISUAL`, `EDITOR` | External-editor fallback khi chưa đặt `externalEditor` |
+| `HTTP_PROXY`, `HTTPS_PROXY` | Proxy cho outbound HTTP request |
 
-## Provider API keys
+Boolean variable của Pi là configuration flag, không phải chuỗi bất kỳ khác rỗng. Hãy dùng đúng các giá trị được chấp nhận ở trên.
 
-| Variable | Provider |
+## Process marker
+
+CLI và RPC entry point đặt các variable sau cho child process:
+
+| Variable | Giá trị | Mục đích |
+|---|---|---|
+| `AI_AGENT` | `pi` | Marker chung xác định agent đã khởi chạy process |
+| `PI_CODING_AGENT` | `true` | Process marker riêng của Pi |
+
+Các marker này không gắn với session cụ thể và không được tự động đặt khi Pi được nhúng qua SDK.
+
+## Session metadata trong bash tool
+
+Command do LLM-callable bash tool của Pi thực thi nhận state hiện tại của session:
+
+| Variable | Mục đích |
+|---|---|
+| `PI_SESSION_ID` | Session ID hiện tại |
+| `PI_SESSION_FILE` | Absolute path đến file JSONL; không được đặt với ephemeral session |
+| `PI_PROVIDER` | Pi provider ID đang chọn |
+| `PI_MODEL` | Pi model ID đang chọn |
+| `PI_REASONING_LEVEL` | Reasoning level thực tế |
+
+Giá trị được resolve khi mỗi command bắt đầu, vì vậy thay model hoặc reasoning level sẽ tác động đến command tiếp theo.
+
+```bash
+printf '%s/%s\n' "$PI_PROVIDER" "$PI_MODEL"
+printf 'reasoning=%s session=%s\n' "$PI_REASONING_LEVEL" "$PI_SESSION_ID"
+```
+
+Các variable này không được inject vào command `!` hoặc `!!` do người dùng nhập trực tiếp. Custom tool được tạo bằng `createBashTool()` expose chúng theo mặc định; đặt `exposeSessionEnvironment: false` để loại bỏ.
+
+## Provider credential
+
+Các built-in provider thường đọc những variable như:
+
+| Variable | Provider hoặc runtime |
 |---|---|
 | `ANTHROPIC_API_KEY` | Anthropic |
-| `OPENAI_API_KEY` | OpenAI |
-| `GOOGLE_API_KEY` | Google Generative AI |
-| `GEMINI_API_KEY` | Google Generative AI (thay thế) |
-| `GOOGLE_VERTEX_API_KEY` | Google Vertex AI |
-| `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` | Amazon Bedrock |
-| `BASETEN_API_KEY` | Baseten |
-| `OPENROUTER_API_KEY` | OpenRouter |
-| `AZURE_OPENAI_API_KEY` + `AZURE_OPENAI_ENDPOINT` | Azure OpenAI |
-| `GITHUB_TOKEN` | GitHub Copilot |
+| `OPENAI_API_KEY` | Authentication tương thích OpenAI |
+| `GEMINI_API_KEY` hoặc `GOOGLE_API_KEY` | Google Generative AI |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `AWS_REGION` | Amazon Bedrock qua AWS credential chain |
+| `AZURE_OPENAI_API_KEY` | Cấu hình Azure OpenAI dùng API-key authentication |
 
-Với self-hosted provider, tên biến là bất cứ gì được cấu hình trong `providers[provider].apiKeyEnvVar` trong [settings.json](configuration.md#providers).
+Bảng này không phải model catalog: credential source được hỗ trợ khác nhau theo provider và có thể gồm stored OAuth credential, cloud SDK configuration cùng cơ chế resolve do extension định nghĩa.
 
-## Runtime flags
+Custom provider configuration có thể tham chiếu `$ENV_VAR` hoặc `${ENV_VAR}` trong `apiKey` và giá trị header:
 
-### `PI_HOME`
-
-Ghi đè thư mục Pi home. Mặc định `~/.pi`. Pi tìm `settings.json`, `skills/`, `extensions/`, và `sessions/` dưới đường dẫn này.
-
-```bash
-PI_HOME=/var/lib/pi pi
+```ts
+pi.registerProvider("company", {
+  baseUrl: "https://gateway.example.com/v1",
+  apiKey: "$COMPANY_AI_TOKEN",
+  api: "openai-completions",
+  models: [],
+});
 ```
 
-### `PI_TUI_ESC_TIMEOUT`
+Không đưa secret vào `settings.json`, mã nguồn extension, log hoặc session transcript. Ưu tiên credential store của Pi hoặc inject environment từ secret manager.
 
-Số mili giây chờ giữa phím Escape và phím tiếp theo, dùng để phân biệt `Alt+Enter` với một Escape đơn trong TUI. Tăng lên khi SSH có độ trễ cao.
+## Lưu ý về độ ưu tiên
 
-```bash
-PI_TUI_ESC_TIMEOUT=200 pi
-```
-
-Mặc định `50`.
-
-### `PI_CODING_AGENT`
-
-Tự động được đặt thành `true` khi `@pi-coding-agent` sinh một tiến trình con. Sub-agent và extension đọc biến này để phát hiện chúng đang chạy bên trong coding agent và điều chỉnh hành vi cho phù hợp.
-
-### `AI_AGENT`
-
-Tự động được đặt thành `pi` khi bất kỳ tiến trình Pi nào sinh một tiến trình con. Được dùng bởi dịch vụ bên ngoài và bởi agent khác để phát hiện "công việc này đang được thực hiện bởi Pi". Chỉ đọc từ phía Pi.
-
-### `PI_EXPERIMENTAL`
-
-Đặt thành `1` để bật các tính năng thử nghiệm. Tính đến v0.84, tính năng thử nghiệm duy nhất là strict JSON-schema constrained sampling cho các managed tool `read`, `bash`, `edit`, và `write`.
-
-```bash
-PI_EXPERIMENTAL=1 pi
-```
-
-Tính năng thử nghiệm có thể thay đổi hình thức giữa các bản minor.
-
-### `PI_LOG_LEVEL`
-
-Mức chi tiết của log. Một trong `silent`, `error`, `warn`, `info`, `debug`. Mặc định `info`. CLI cũng nhận `--log-prompts` để log composed system prompt ở mỗi turn bất kể level.
-
-## Proxy variables
-
-Pi tôn trọng các biến proxy chuẩn khi được đặt:
-
-| Variable | Effect |
-|---|---|
-| `HTTP_PROXY` | HTTP proxy cho non-TLS request |
-| `HTTPS_PROXY` | HTTP proxy cho TLS request |
-| `NO_PROXY` | Danh sách host phân tách bởi dấu phẩy để bypass proxy |
-| `SSL_CERT_FILE` | Đường dẫn tới CA bundle để verify TLS |
-
-Provider HTTP client trong `@pi-ai/core` đọc trực tiếp từ `process.env`.
-
-## Provider-specific
-
-### `OPENAI_ORG_ID`
-
-Đặt header `OpenAI-Organization` trên mọi request OpenAI. Hữu ích khi chạy với nhiều organization.
-
-### `ANTHROPIC_BASE_URL`
-
-Ghi đè Anthropic base URL. Tương đương `providers.anthropic.baseUrl` trong settings.
-
-### `GOOGLE_APPLICATION_CREDENTIALS`
-
-Đường dẫn tới file JSON service-account Google cho Vertex AI authentication. Quy ước chuẩn của Google; Pi đọc cho Vertex nhưng không thông dịch.
-
-### `CLOUDFLARE_AI_GATEWAY_ACCOUNT_ID` + `CLOUDFLARE_AI_GATEWAY_TOKEN`
-
-Bắt buộc để route qua Cloudflare AI Gateway. Đặt trong `providers[provider].baseUrl` nếu bạn cũng dùng gateway.
-
-## Process markers
-
-Pi đặt các biến sau trên mỗi tiến trình con được sinh ra:
-
-- `AI_AGENT=pi` - marker agent chung, được đọc bởi công cụ bên ngoài
-- `PI_CODING_AGENT=true` - thêm khi tiến trình con chính là coding agent
-- `PI_PARENT_SESSION=<session-id>` - khi tiến trình con được sinh từ một session
-
-Tiến trình con có thể tuỳ ý đọc các biến này hoặc bỏ qua. Đọc `PI_PARENT_SESSION` cho phép một sub-agent ghi lại nguồn gốc của nó trong metadata của bất kỳ session nào nó tạo.
-
-## Pitfalls
-
-**Nhiều key cho cùng một provider**
-
-Pi dùng biến khớp đầu tiên theo thứ tự liệt kê ở trên. Nếu cả `GOOGLE_API_KEY` và `GEMINI_API_KEY` đều được đặt, `GOOGLE_API_KEY` thắng.
-
-**YOLO mode vs. `PI_EXPERIMENTAL`**
-
-Chúng độc lập. YOLO là thiết lập permission; `PI_EXPERIMENTAL` bật các tính năng cụ thể. Có thể bật cùng lúc.
-
-**Đặt `PI_HOME` tới thư mục không tồn tại**
-
-Pi không tự tạo thư mục home. Nó sẽ fail ở thao tác đầu tiên cố ghi một session. Hãy tạo thư mục trước:
-
-```bash
-mkdir -p "$PI_HOME" && pi
-```
-
-## Tiếp theo
-
-- [Reference: Configuration](configuration.md) để xem bề mặt settings.json.
-- [Reference: API](api.md) để xem runtime API.
+- Session directory: `--session-dir` → `PI_CODING_AGENT_SESSION_DIR` → setting `sessionDir` → mặc định.
+- External editor: setting `externalEditor` → `VISUAL` → `EDITOR` → fallback theo platform.
+- Offline mode rộng hơn `PI_SKIP_VERSION_CHECK`: nó tắt mọi startup network operation được hỗ trợ.

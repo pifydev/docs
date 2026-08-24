@@ -1,136 +1,95 @@
 ---
 title: Environment variables reference
-description: Every environment variable Pi reads at runtime.
+description: Process configuration, child-process markers, session metadata, credentials, and proxy variables used by Pi.
 translation_key: reference-environment-variables
 language: en
+status: reviewed
+reviewed_by: Pify maintainers
+last_updated: '2026-08-24'
 ---
-Pi reads environment variables for API keys, runtime flags, and process markers. This page lists every variable the SDK touches.
 
-:::note[How Pi reads these]
+Pi reads variables that configure its process and injects a separate set into commands launched through the built-in bash tool. Provider credential variables depend on the selected provider.
 
-Provider API keys are read at the moment a request is sent, not at startup. This means rotating a key (e.g. after `pi auth print-api-key`) takes effect on the next turn without restarting the agent.
+## Process configuration
 
-:::
-
-## Provider API keys
-
-| Variable | Provider |
+| Variable | Purpose |
 |---|---|
-| `ANTHROPIC_API_KEY` | Anthropic |
-| `OPENAI_API_KEY` | OpenAI |
-| `GOOGLE_API_KEY` | Google Generative AI |
-| `GEMINI_API_KEY` | Google Generative AI (alternate) |
-| `GOOGLE_VERTEX_API_KEY` | Google Vertex AI |
-| `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` | Amazon Bedrock |
-| `BASETEN_API_KEY` | Baseten |
-| `OPENROUTER_API_KEY` | OpenRouter |
-| `AZURE_OPENAI_API_KEY` + `AZURE_OPENAI_ENDPOINT` | Azure OpenAI |
-| `GITHUB_TOKEN` | GitHub Copilot |
+| `PI_CODING_AGENT_DIR` | Override the config directory; default `~/.pi/agent` |
+| `PI_CODING_AGENT_SESSION_DIR` | Override persistent-session storage; `--session-dir` has higher precedence |
+| `PI_PACKAGE_DIR` | Override the package directory, including read-only Nix/Guix locations |
+| `PI_OFFLINE` | Disable startup network work, including updates and telemetry |
+| `PI_SKIP_VERSION_CHECK` | Disable only the latest-version request |
+| `PI_TELEMETRY` | Force telemetry on or off with `1`/`true`/`yes` or `0`/`false`/`no` |
+| `PI_CACHE_RETENTION` | Set `long` to request extended prompt caching where supported |
+| `PI_SHARE_VIEWER_URL` | Override the base URL used by `/share` |
+| `PI_HARDWARE_CURSOR` | Set `1` to show the hardware cursor in the TUI |
+| `PI_TUI_ESC_TIMEOUT` | ESC disambiguation delay in milliseconds; default 100 over SSH and 10 otherwise |
+| `VISUAL`, `EDITOR` | External-editor fallback when `externalEditor` is unset |
+| `HTTP_PROXY`, `HTTPS_PROXY` | Proxy outbound HTTP requests |
 
-For self-hosted providers, the variable name is whatever is configured in `providers[provider].apiKeyEnvVar` in [settings.json](configuration.md#providers).
-
-## Runtime flags
-
-### `PI_HOME`
-
-Overrides the Pi home directory. Default `~/.pi`. Pi looks for `settings.json`, `skills/`, `extensions/`, and `sessions/` under this path.
-
-```bash
-PI_HOME=/var/lib/pi pi
-```
-
-### `PI_TUI_ESC_TIMEOUT`
-
-Milliseconds to wait between an Escape key and the next key, used to disambiguate `Alt+Enter` from a lone Escape in the TUI. Increase on high-latency SSH sessions.
-
-```bash
-PI_TUI_ESC_TIMEOUT=200 pi
-```
-
-Default `50`.
-
-### `PI_CODING_AGENT`
-
-Set automatically to `true` when `@pi-coding-agent` spawns a child process. Sub-agents and extensions read this to detect they are running inside the coding agent and adjust their behaviour accordingly.
-
-### `AI_AGENT`
-
-Set automatically to `pi` when any Pi process spawns a child. Used by external services and by other agents to detect "this work is being done by Pi". Read-only from Pi's perspective.
-
-### `PI_EXPERIMENTAL`
-
-Set to `1` to enable experimental features. As of v0.84 the only experimental feature is strict JSON-schema constrained sampling for the managed `read`, `bash`, `edit`, and `write` tools.
-
-```bash
-PI_EXPERIMENTAL=1 pi
-```
-
-Experimental features may change shape between minor versions.
-
-### `PI_LOG_LEVEL`
-
-Log verbosity. One of `silent`, `error`, `warn`, `info`, `debug`. Default `info`. The CLI also accepts `--log-prompts` which logs the composed system prompt on every turn regardless of level.
-
-## Proxy variables
-
-Pi honours the standard proxy variables when set:
-
-| Variable | Effect |
-|---|---|
-| `HTTP_PROXY` | HTTP proxy for non-TLS requests |
-| `HTTPS_PROXY` | HTTP proxy for TLS requests |
-| `NO_PROXY` | Comma-separated host list to bypass the proxy |
-| `SSL_CERT_FILE` | Path to a CA bundle for verifying TLS |
-
-The provider HTTP client in `@pi-ai/core` reads these directly from `process.env`.
-
-## Provider-specific
-
-### `OPENAI_ORG_ID`
-
-Sets the `OpenAI-Organization` header on every OpenAI request. Useful when running against multiple organisations.
-
-### `ANTHROPIC_BASE_URL`
-
-Overrides the Anthropic base URL. Equivalent to `providers.anthropic.baseUrl` in settings.
-
-### `GOOGLE_APPLICATION_CREDENTIALS`
-
-Path to a Google service-account JSON file for Vertex AI authentication. Standard Google convention; Pi reads it for Vertex but does not interpret it.
-
-### `CLOUDflare_AI_GATEWAY_ACCOUNT_ID` + `CLOUDFLARE_AI_GATEWAY_TOKEN`
-
-Required for routing through Cloudflare AI Gateway. Set in `providers[provider].baseUrl` if you also use the gateway.
+Boolean Pi variables are configuration flags, not arbitrary non-empty strings. Use the accepted values documented above.
 
 ## Process markers
 
-Pi sets the following on every child it spawns:
+CLI and RPC entry points set these variables for child processes:
 
-- `AI_AGENT=pi` - generic agent marker, read by external tools
-- `PI_CODING_AGENT=true` - added when the child is the coding agent itself
-- `PI_PARENT_SESSION=<session-id>` - when the child was spawned from a session
+| Variable | Value | Purpose |
+|---|---|---|
+| `AI_AGENT` | `pi` | Generic marker identifying the launching agent |
+| `PI_CODING_AGENT` | `true` | Pi-specific process marker |
 
-Children may opt to read these or ignore them. Reading `PI_PARENT_SESSION` lets a sub-agent record its origin in the metadata of any session it creates.
+The markers are not session-specific and are not automatically set when Pi is embedded through the SDK.
 
-## Pitfalls
+## Bash tool session metadata
 
-**Multiple keys for the same provider**
+Commands executed by Pi's LLM-callable bash tool receive current session state:
 
-Pi uses the first matching variable in the order listed above. If both `GOOGLE_API_KEY` and `GEMINI_API_KEY` are set, `GOOGLE_API_KEY` wins.
+| Variable | Purpose |
+|---|---|
+| `PI_SESSION_ID` | Current session ID |
+| `PI_SESSION_FILE` | Absolute JSONL path; unset for an ephemeral session |
+| `PI_PROVIDER` | Selected Pi provider ID |
+| `PI_MODEL` | Selected Pi model ID |
+| `PI_REASONING_LEVEL` | Effective reasoning level |
 
-**YOLO mode vs. `PI_EXPERIMENTAL`**
-
-These are independent. YOLO is a permission setting; `PI_EXPERIMENTAL` enables specific features. They can be on at the same time.
-
-**Setting `PI_HOME` to a directory that does not exist**
-
-Pi does not auto-create the home directory. It will fail at the first operation that tries to write a session. Create the directory first:
+Values are resolved when each command starts, so a model or reasoning-level change affects the next command.
 
 ```bash
-mkdir -p "$PI_HOME" && pi
+printf '%s/%s\n' "$PI_PROVIDER" "$PI_MODEL"
+printf 'reasoning=%s session=%s\n' "$PI_REASONING_LEVEL" "$PI_SESSION_ID"
 ```
 
-## Next
+These variables are not injected into `!` or `!!` commands entered directly by the user. Custom tools built with `createBashTool()` expose them by default; set `exposeSessionEnvironment: false` to remove them.
 
-- [Reference: Configuration](configuration.md) for the settings.json surface.
-- [Reference: API](api.md) for the runtime API.
+## Provider credentials
+
+Built-in providers commonly read variables such as:
+
+| Variable | Provider or runtime |
+|---|---|
+| `ANTHROPIC_API_KEY` | Anthropic |
+| `OPENAI_API_KEY` | OpenAI-compatible authentication |
+| `GEMINI_API_KEY` or `GOOGLE_API_KEY` | Google Generative AI |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `AWS_REGION` | Amazon Bedrock through the AWS credential chain |
+| `AZURE_OPENAI_API_KEY` | Azure OpenAI configurations that use API-key authentication |
+
+This table is not the model catalog: supported credential sources vary by provider and can include stored OAuth credentials, cloud SDK configuration, and extension-defined resolution.
+
+Custom provider configuration can reference `$ENV_VAR` or `${ENV_VAR}` in `apiKey` and header values:
+
+```ts
+pi.registerProvider("company", {
+  baseUrl: "https://gateway.example.com/v1",
+  apiKey: "$COMPANY_AI_TOKEN",
+  api: "openai-completions",
+  models: [],
+});
+```
+
+Keep secrets out of `settings.json`, extension source, logs, and session transcripts. Prefer the Pi credential store or environment injection from a secret manager.
+
+## Precedence notes
+
+- Session directory: `--session-dir` → `PI_CODING_AGENT_SESSION_DIR` → `sessionDir` setting → default.
+- External editor: `externalEditor` setting → `VISUAL` → `EDITOR` → platform fallback.
+- Offline mode is broader than `PI_SKIP_VERSION_CHECK`: it disables all supported startup network operations.

@@ -1,222 +1,166 @@
 ---
 title: API reference
-description: 'The public surface of @pi-ai/core, @pi-agent-core, and @pi-coding-agent.'
+description: Key public entry points for Pi AI, Agent Core, and Coding Agent at the reviewed upstream revision.
 translation_key: reference-api
 language: en
+status: reviewed
+reviewed_by: Pify maintainers
+last_updated: '2026-08-24'
 ---
-The public surface of the three Pi packages. This page lists every export a user is expected to import. Internal helpers are deliberately omitted.
 
-:::note[Versioning]
+This reference covers the stable entry points most integrations need. It reflects upstream commit `a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c`, package version `0.84.2`.
 
-The APIs documented here reflect `@pi-ai/core`, `@pi-agent-core`, and `@pi-coding-agent` at **v0.80.2**. Newer releases may add exports; check the upstream changelog for additions.
+## Packages
 
-:::
+| Package | Responsibility |
+|---|---|
+| `@earendil-works/pi-ai` | Providers, model catalog, authentication, messages, and LLM streams |
+| `@earendil-works/pi-agent-core` | Stateful agent loop, tools, events, queues, compaction, and harness primitives |
+| `@earendil-works/pi-coding-agent` | Sessions, settings, extensions, resources, coding tools, CLI, and SDK |
 
-## `@pi-ai/core`
+The old global catalog API remains on `@earendil-works/pi-ai/compat`. New code should use a `Models` collection and provider factories.
 
-The lowest layer. Translators, descriptors, and the `streamSimple` primitive.
+## Pi AI
 
-### `getModel(provider, id)`
+### `createModels(options?)`
+
+Creates an empty mutable provider collection.
 
 ```ts
-function getModel(provider: string, id: string): ModelDescriptor;
+import { createModels } from "@earendil-works/pi-ai";
+import { anthropicProvider } from "@earendil-works/pi-ai/providers/anthropic";
+
+const models = createModels();
+models.setProvider(anthropicProvider());
 ```
 
-Resolve a model from the in-process catalog. Throws if the pair is unknown.
+Use `builtinModels()` from `@earendil-works/pi-ai/providers/all` when an application needs all built-in providers.
 
-### `registerModel(provider, descriptor)`
+### `Models`
 
-```ts
-function registerModel(provider: string, descriptor: ModelDescriptor): void;
-```
-
-Add or replace a model in the catalog. Idempotent.
-
-### `registerTranslator(provider, translator)`
+Important methods:
 
 ```ts
-function registerTranslator(provider: string, translator: Translator): void;
-```
-
-Attach a translator to a provider id. The translator is called on every `streamSimple` request whose descriptor references this provider.
-
-### `streamSimple(model, context, options?)`
-
-```ts
-function streamSimple(
- model: ModelDescriptor,
- context: Context,
- options?: StreamOptions
-): AsyncIterable<StreamEvent>;
-```
-
-Open a streaming request and return an async iterable of typed events. The simplest way to talk to one model without an agent loop.
-
-### `ModelDescriptor`
-
-```ts
-interface ModelDescriptor {
- id: string;
- provider: string;
- displayName: string;
- contextWindow: number;
- maxOutputTokens: number;
- pricing: { input: number; output: number };
- capabilities: {
- toolUse: boolean;
- images: boolean;
- streaming: boolean;
- thinking: boolean;
- };
- baseUrl: string;
- apiKeyEnvVar: string;
+interface Models {
+  getProviders(): readonly Provider[];
+  getProvider(id: string): Provider | undefined;
+  getModels(provider?: string): readonly Model[];
+  getModel(provider: string, id: string): Model | undefined;
+  getAvailable(provider?: string): Promise<readonly Model[]>;
+  refresh(options?: ModelsRefreshOptions): Promise<ModelsRefreshResult>;
+  stream(model: Model, context: Context, options?: StreamOptions): AssistantMessageEventStream;
+  complete(model: Model, context: Context, options?: StreamOptions): Promise<AssistantMessage>;
+  streamSimple(model: Model, context: Context, options?: SimpleStreamOptions): AssistantMessageEventStream;
+  completeSimple(model: Model, context: Context, options?: SimpleStreamOptions): Promise<AssistantMessage>;
 }
 ```
 
-### `Translator`
+`getModel()` is synchronous and returns `undefined` for an unknown pair. `refresh()` updates configured dynamic providers without rejecting the whole operation when one provider fails.
+
+### `createProvider(options)`
+
+Creates a native `Provider`. A provider owns its model list, authentication policy, streaming implementation, and optional dynamic refresh behavior.
+
+### Messages and streams
+
+`Context` contains the system prompt, `Message[]`, and optional tools. `Message` is the provider-facing union of user, assistant, and tool-result messages. `AssistantMessageEventStream` emits incremental assistant events and resolves to the complete assistant message.
+
+## Agent Core
+
+### `new Agent(options)`
 
 ```ts
-interface Translator {
- request(
- model: ModelDescriptor,
- context: Context,
- options?: StreamOptions
-): Promise<HttpRequest>;
+import { Agent } from "@earendil-works/pi-agent-core";
 
- response(
- model: ModelDescriptor,
- response: Response,
- options?: StreamOptions
-): AsyncIterable<StreamEvent>;
-}
+const agent = new Agent({
+  initialState: { systemPrompt: "Be concise.", model },
+  streamFn: models.streamSimple.bind(models),
+});
+
+const unsubscribe = agent.subscribe((event) => {
+  // Handle lifecycle and streaming events.
+});
+
+await agent.prompt("Explain the current module.");
 ```
+
+Core state is available through `agent.state`: `systemPrompt`, `model`, `thinkingLevel`, `tools`, `messages`, `streamingMessage`, and `errorMessage`.
+
+Key methods are `prompt()`, `continue()`, `steer()`, `followUp()`, `abort()`, `subscribe()`, and `waitForIdle()`.
+
+### `AgentTool`
+
+A tool provides `name`, `label`, `description`, a TypeBox `parameters` schema, and `execute(toolCallId, params, signal, onUpdate)`. A successful handler returns `content`, optional `details`, and optional `terminate`. Throw to report a tool failure.
 
 ### Events
 
-| Event | Fields |
+| Event | Meaning |
 |---|---|
-| `message_start` | `model: string` |
-| `text_delta` | `delta: string` |
-| `thinking_delta` | `delta: string` |
-| `tool_use` | `id`, `name`, `args: unknown` |
-| `tool_result` | `toolUseId`, `output: unknown` |
-| `message_update` | `usage: { input, output }` |
-| `error` | `message`, `code?` |
-| `done` | `reason: "stop" \| "length" \| "tool_use" \| "error"` |
+| `agent_start` / `agent_end` | One agent run starts or settles |
+| `turn_start` / `turn_end` | One LLM call and its tool batch start or finish |
+| `message_start` / `message_update` / `message_end` | A message lifecycle; only assistant messages update incrementally |
+| `tool_execution_start` / `tool_execution_update` / `tool_execution_end` | Tool preflight, progress, and final result |
 
-## `@pi-agent-core`
+Parallel execution can finish tools out of source order. Persisted tool-result messages remain in assistant source order.
 
-The middle layer. The agent loop, tool registry, and session management.
+## Coding Agent
 
-### `agentLoop(options)`
+### `createAgentSession(options?)`
+
+Creates an `AgentSession` and its resolved runtime dependencies.
 
 ```ts
-function agentLoop(options: AgentLoopOptions): AsyncIterable<StreamEvent>;
+import {
+  createAgentSession,
+  ModelRuntime,
+  SessionManager,
+} from "@earendil-works/pi-coding-agent";
+
+const modelRuntime = await ModelRuntime.create();
+const { session } = await createAgentSession({
+  modelRuntime,
+  sessionManager: SessionManager.inMemory(),
+});
 ```
 
-Run one agent turn. The loop emits the same event vocabulary as `streamSimple`, plus tool dispatch events.
+Common options include `cwd`, `model`, `modelRuntime`, `sessionManager`, `settingsManager`, `resourceLoader`, `tools`, `excludeTools`, `customTools`, and `noTools`.
 
-### `AgentLoopOptions`
+### `AgentSession`
+
+Important members:
 
 ```ts
-interface AgentLoopOptions {
- model: ModelDescriptor;
- systemPrompt?: string;
- messages: Message[];
- tools?: Tool[];
- session?: Session;
+interface AgentSession {
+  prompt(text: string, options?: PromptOptions): Promise<void>;
+  steer(text: string): Promise<void>;
+  followUp(text: string): Promise<void>;
+  subscribe(listener: (event: AgentSessionEvent) => void): () => void;
+  compact(customInstructions?: string): Promise<CompactionResult>;
+  abort(): Promise<void>;
+  dispose(): void;
+
+  readonly sessionId: string;
+  readonly sessionFile: string | undefined;
+  readonly agent: Agent;
+  readonly messages: AgentMessage[];
+  readonly isStreaming: boolean;
 }
 ```
 
-### `Tool`
+### Session and settings helpers
 
-```ts
-interface Tool {
- name: string;
- description: string;
- parameters: unknown; // JSON Schema or TypeBox schema
- handler: (args: unknown) => Promise<unknown>;
- requiresPermission?: boolean;
-}
-```
+- `SessionManager.create(cwd)`, `.inMemory(cwd)`, `.continueRecent(cwd)`, and `.open(path)` select persistence behavior.
+- `SettingsManager.create()` loads global and project settings; `applyOverrides()` adds runtime overrides.
+- `DefaultResourceLoader` discovers context files, extensions, skills, prompt templates, and themes.
+- `defineTool()` preserves parameter inference for standalone tools passed through `customTools`.
+- `ModelRuntime.create()` composes the model catalog, credentials, provider configuration, and runtime refresh.
 
-### `Session`
+### Runtime replacement
 
-```ts
-class Session {
- static load(opts: { root: string; id: string; pinModel?: boolean }): Promise<Session>;
- static branch(opts: {
- root: string;
- parentId: string;
- fromTurn: number;
- newId?: string;
- }): Promise<Session>;
+Use `createAgentSessionRuntime()` when the application must replace the active session through new, switch, fork, clone, or import flows. After replacement, read `runtime.session` again and attach new subscriptions.
 
- save(events: StreamEvent[]): Promise<void>;
- readonly id: string;
- readonly metadata: SessionMetadata;
-}
-```
+## Compatibility notes
 
-### `listSessions(opts)`
-
-```ts
-function listSessions(opts: { root: string }): Promise<SessionMetadata[]>;
-```
-
-List every session under a root. Used by the CLI to render the session picker.
-
-## `@pi-coding-agent`
-
-The top layer. CLI shell, prompt expansion, managed tools, and the extension API.
-
-### `registerExtension(extension)`
-
-```ts
-function registerExtension(extension: Extension): void;
-```
-
-Register a Pi extension. Extensions can contribute to the system prompt, register tools, intercept messages, and add slash commands.
-
-### `Extension`
-
-```ts
-interface Extension {
- name: string;
- systemPrompt?: (ctx: { cwd: string; model: ModelDescriptor }) => string | Promise<string>;
- tools?: Tool[];
- commands?: { name: string; description: string; handler: (args: string) => Promise<void> }[];
- messageTransformers?: {
- beforeModel?: (event: StreamEvent) => StreamEvent | null;
- afterModel?: (event: StreamEvent) => StreamEvent | null;
- };
-}
-```
-
-### Managed tools
-
-| Name | Purpose |
-|---|---|
-| `read` | Read a file with line range support |
-| `bash` | Run a shell command |
-| `edit` | Apply a targeted edit by string match |
-| `write` | Create or overwrite a file |
-
-All four are gated behind permission prompts by default. Pass `--yolo` or set `yolo: true` in extension config to skip.
-
-### CLI flags
-
-| Flag | Effect |
-|---|---|
-| `--model <provider/id>` | Override the default model |
-| `--system-prompt <text>` | Replace the default prompt |
-| `--append-system-prompt <text>` | Append to the composed prompt |
-| `--no-default-system-prompt` | Strip the default Pi prompt |
-| `--yolo` | Skip permission prompts |
-| `--log-prompts` | Log the composed prompt to stderr |
-| `--session <id>` | Resume a specific session |
-
-## Next
-
-- [Reference: Configuration](configuration.md) for the runtime settings.
-- [Reference: Environment Variables](environment-variables.md) for the env var surface.
+- Import provider factories from `@earendil-works/pi-ai/providers/*` and API implementations from `@earendil-works/pi-ai/api/*`.
+- Do not use removed package names such as `@pi-ai/core` or `@pi-agent-core`.
+- Prefer exact package types over recreating interfaces from this page; signatures can gain optional fields in later releases.

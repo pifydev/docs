@@ -1,184 +1,133 @@
 ---
 title: Configuration reference
-description: 'The settings Pi reads from settings.json, project files, and CLI flags.'
+description: Current settings files, merge rules, trust behavior, and commonly used Pi configuration keys.
 translation_key: reference-configuration
 language: en
+status: reviewed
+reviewed_by: Pify maintainers
+last_updated: '2026-08-24'
 ---
-The settings Pi reads at startup. Most live in `settings.json` under the Pi home directory; some can be overridden per-project or per-CLI.
 
-:::note[Resolution order]
+Pi reads JSON settings from two locations:
 
-CLI flags > `settings.json` (project) > `settings.json` (global) > defaults. Per-project settings live in `./.pi/settings.json`.
-
-:::
-
-## File locations
-
-| Path | Scope |
+| Location | Scope |
 |---|---|
-| `~/.pi/settings.json` | Global defaults, applied to every project |
-| `./.pi/settings.json` | Project overrides, applied when cwd is here or below |
-| `./SYSTEM.md` | Mandatory system prompt additions |
-| `./AGENTS.md` | Soft system prompt guidance |
+| `~/.pi/agent/settings.json` | Global settings for every project |
+| `.pi/settings.json` | Overrides for the current project |
 
-## Schema
+Project values override global values. Nested objects are merged; arrays and scalar values are replaced. Common CLI flags then override the resolved settings for that process.
 
-```ts title="settings.json (TypeScript shape)"
-interface Settings {
-  model?: { provider: string; id: string };
-  yolo?: boolean;
-  logPrompts?: boolean;
-  defaultTools?: string[];
-  fullscreen?: {
-    mode?: "auto" | "always" | "hidden";
-    onExit?: "transcript" | "resume-hint";
-  };
-  tui?: {
-    theme?: string;
-    escapeTimeout?: number; // ms
-  };
-  compaction?: {
-    threshold?: number; // 0..1, fraction of context window
-    preserveRecentTurns?: number;
-  };
-  sessions?: {
-    retention?: "1d" | "7d" | "30d" | "forever";
-    redactSecrets?: boolean;
-  };
-  providers?: {
-    [provider: string]: {
-      baseUrl?: string;
-      apiKeyEnvVar?: string;
-    };
-  };
-  extensions?: string[]; // paths or npm package names
-}
-```
+## Model and thinking
 
-## Models
+| Setting | Type | Default | Purpose |
+|---|---|---|---|
+| `defaultProvider` | string | unset | Default provider ID |
+| `defaultModel` | string | unset | Default model ID |
+| `defaultThinkingLevel` | string | unset | `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max` |
+| `hideThinkingBlock` | boolean | `false` | Hide thinking blocks from rendered output |
+| `thinkingBudgets` | object | provider defaults | Token budgets by thinking level |
 
-### `model`
+Only levels supported by the selected model are effective.
 
-The default model for new sessions. Format: `{ provider, id }`.
+## UI and terminal
 
-```json title="settings.json"
+| Setting | Type | Default | Purpose |
+|---|---|---|---|
+| `theme` | string | `dark` | Built-in or custom theme name |
+| `externalEditor` | string | platform fallback | Command opened by the external-editor action |
+| `quietStartup` | boolean | `false` | Hide the startup header |
+| `tuiMode` | string | `regular` | `regular` or experimental `fullscreen` |
+| `fullscreenExitOutput` | string | `transcript` | Output shown when fullscreen mode exits |
+| `fullscreenScrollbar` | string | `auto` | `auto`, `always`, or `hidden` |
+| `terminal.showImages` | boolean | `true` | Render images when the terminal supports them |
+| `images.autoResize` | boolean | `true` | Resize images to at most 2000 × 2000 |
+| `images.blockImages` | boolean | `false` | Prevent images from being sent to the model |
+
+Set `externalEditor` to `"code --wait"` for VS Code so Pi waits for the editor process.
+
+## Compaction and retries
+
+| Setting | Type | Default | Purpose |
+|---|---|---|---|
+| `compaction.enabled` | boolean | `true` | Enable automatic compaction |
+| `compaction.reserveTokens` | number | `16384` | Reserve context space for the next response |
+| `compaction.keepRecentTokens` | number | `20000` | Keep this many recent tokens outside the summary |
+| `branchSummary.reserveTokens` | number | `16384` | Reserve tokens when summarizing an abandoned branch |
+| `retry.enabled` | boolean | `true` | Retry transient failures at the agent layer |
+| `retry.maxRetries` | number | `3` | Maximum agent-level retries |
+| `retry.baseDelayMs` | number | `2000` | Initial exponential-backoff delay |
+| `retry.provider.maxRetries` | number | `0` | Provider-layer retries |
+
+Leave provider retries at `0` unless the integration requires them. Layering provider and agent retries can multiply requests and delay a visible failure.
+
+## Delivery and transport
+
+| Setting | Type | Default | Purpose |
+|---|---|---|---|
+| `steeringMode` | string | `one-at-a-time` | Deliver queued steering messages one at a time or all together |
+| `followUpMode` | string | `one-at-a-time` | Deliver follow-up messages one at a time or all together |
+| `transport` | string | `auto` | `sse`, `websocket`, `websocket-cached`, or automatic selection |
+| `httpIdleTimeoutMs` | number | `300000` | HTTP stream idle timeout; `0` disables it |
+| `websocketConnectTimeoutMs` | number | `15000` | WebSocket connection timeout; `0` disables it |
+
+## Tools and shell
+
+| Setting | Type | Default | Purpose |
+|---|---|---|---|
+| `defaultTools` | string[] | standard built-ins | Initial built-in tool set |
+| `shellPath` | string | platform shell | Custom shell executable |
+| `shellCommandPrefix` | string | unset | Prefix applied to each bash command |
+| `npmCommand` | string[] | npm | Argument vector used for package operations |
+
+An empty `defaultTools` array disables built-in defaults but does not disable extension or SDK custom tools. `--tools` is a strict allowlist; `--no-tools` disables every tool.
+
+Windows paths in JSON must use forward slashes or escaped backslashes:
+
+```json
 {
-  "model": { "provider": "anthropic", "id": "claude-sonnet-4-5" }
+  "shellPath": "C:/Program Files/Git/bin/bash.exe"
 }
 ```
 
-Per-session overrides take precedence when a session is resumed with `--session <id>`.
+## Sessions and resources
 
-### `defaultTools`
+| Setting | Type | Default | Purpose |
+|---|---|---|---|
+| `sessionDir` | string | Pi session directory | Custom persistent-session directory |
+| `enabledModels` | string[] | unset | Model patterns available through model cycling |
+| `packages` | array | `[]` | npm or Git packages that provide resources |
+| `extensions` | string[] | `[]` | Local extension files or directories |
+| `skills` | string[] | `[]` | Local skill files or directories |
+| `prompts` | string[] | `[]` | Local prompt-template files or directories |
+| `themes` | string[] | `[]` | Local theme files or directories |
+| `enableSkillCommands` | boolean | `true` | Register discovered skills as slash commands |
 
-Names of the built-in tools that are enabled at startup. Defaults to `["read", "bash", "edit", "write"]`.
+Paths in global settings resolve from `~/.pi/agent`; project paths resolve from `.pi`. Resource arrays accept glob patterns, exclusions, and explicit include/exclude entries.
 
-```json title="settings.json"
+## Project trust
+
+`defaultProjectTrust` is a global-only setting with values `ask`, `always`, or `never`; its default is `ask`. Project trust controls project-local settings and executable resources such as extensions. Saved decisions live in `~/.pi/agent/trust.json`.
+
+Non-interactive modes cannot show a trust prompt. Use a saved decision, configure the global fallback, or pass `--approve` / `--no-approve` for one run.
+
+## Example
+
+```json title="~/.pi/agent/settings.json"
 {
-  "defaultTools": ["read", "bash", "edit"]
+  "defaultProvider": "anthropic",
+  "defaultModel": "claude-sonnet-4-6",
+  "defaultThinkingLevel": "medium",
+  "theme": "dark",
+  "compaction": {
+    "enabled": true,
+    "reserveTokens": 16384,
+    "keepRecentTokens": 20000
+  },
+  "retry": {
+    "enabled": true,
+    "maxRetries": 3
+  },
+  "defaultTools": ["read", "bash", "edit", "write"],
+  "packages": ["@org/pi-resources"]
 }
 ```
-
-Setting an empty array disables all managed tools.
-
-## Permissions
-
-### `yolo`
-
-If `true`, skips the permission prompt before invoking any tool with `requiresPermission: true`.
-
-```json title="settings.json"
-{ "yolo": true }
-```
-
-:::caution
-
-YOLO mode lets the agent write files and run shell commands without asking. Use it only in disposable sandboxes.
-
-:::
-
-### Per-tool overrides
-
-To allow one tool without prompting while keeping prompts for others, set `requiresPermission: false` on the extension tool definition rather than flipping global `yolo`.
-
-## Compaction
-
-### `compaction.threshold`
-
-Fraction of the model context window that triggers automatic compaction. Default `0.85`.
-
-### `compaction.preserveRecentTurns`
-
-Number of recent turns kept verbatim during compaction. The rest are summarised. Default `3`.
-
-## Sessions
-
-### `sessions.retention`
-
-How long to keep session files. Pi sweeps the sessions directory on startup.
-
-| Value | Effect |
-|---|---|
-| `"1d"` | Delete after one day |
-| `"7d"` | Delete after one week (default) |
-| `"30d"` | Delete after thirty days |
-| `"forever"` | Never delete automatically |
-
-### `sessions.redactSecrets`
-
-If `true`, the default `redact` hook scans `tool_result` outputs for strings that look like API keys and replaces them with `[redacted]`. Custom redaction logic can be set per-session via `Session({ redact })`.
-
-## TUI
-
-### `tui.theme`
-
-Name of the theme to apply on startup. Use `/settings` in the TUI to browse.
-
-### `tui.escapeTimeout`
-
-Milliseconds to wait for an Escape key to be followed by another key (for `Alt+Enter`, arrow keys, etc.). Default `50`. Increase on high-latency SSH sessions.
-
-## Providers
-
-### `providers[provider].baseUrl`
-
-Override the base URL for a provider. Useful for self-hosted gateways or local llama.cpp servers.
-
-```json title="settings.json"
-{
-  "providers": {
-    "openai": { "baseUrl": "http://localhost:8080/v1" }
-  }
-}
-```
-
-### `providers[provider].apiKeyEnvVar`
-
-Override the environment variable name the SDK reads for the API key. The default is `<PROVIDER>_API_KEY`.
-
-## Extensions
-
-### `extensions`
-
-List of extensions to load at startup. Each entry is either a path to a local file or an npm package name.
-
-```json title="settings.json"
-{ "extensions": ["@pi-extensions/git", "./extensions/team-roles.ts"] }
-```
-
-Relative paths are resolved from the project root.
-
-## Validation
-
-Pi validates `settings.json` against the schema on every load. Invalid values fail fast with a precise error message that names the field. To test a config file before committing:
-
-```bash
-pi --dry-run
-```
-
-The `--dry-run` flag loads settings and prints the resolved configuration without starting the agent.
-
-## Next
-
-- [Reference: API](api.md) for the runtime API.
-- [Reference: Environment Variables](environment-variables.md) for env-var level overrides.

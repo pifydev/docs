@@ -1,184 +1,133 @@
 ---
 title: Configuration reference
-description: 'Các thiết lập Pi đọc từ settings.json, file project, và CLI flags.'
+description: File setting, quy tắc merge, project trust và các key cấu hình Pi thường dùng ở phiên bản hiện tại.
 translation_key: reference-configuration
 language: vi
+status: reviewed
+reviewed_by: Pify maintainers
+last_updated: '2026-08-24'
 ---
-Các thiết lập Pi đọc khi khởi động. Hầu hết nằm trong `settings.json` dưới thư mục Pi home; một số có thể được ghi đè theo project hoặc theo CLI.
 
-:::note[Thứ tự phân giải]
+Pi đọc JSON setting từ hai vị trí:
 
-CLI flags > `settings.json` (project) > `settings.json` (global) > defaults. Thiết lập theo project nằm trong `./.pi/settings.json`.
-
-:::
-
-## File locations
-
-| Path | Scope |
+| Vị trí | Phạm vi |
 |---|---|
-| `~/.pi/settings.json` | Global defaults, áp dụng cho mọi project |
-| `./.pi/settings.json` | Project overrides, áp dụng khi cwd ở đây hoặc bên dưới |
-| `./SYSTEM.md` | Phần bắt buộc thêm vào system prompt |
-| `./AGENTS.md` | Hướng dẫn mềm cho system prompt |
+| `~/.pi/agent/settings.json` | Global setting cho mọi project |
+| `.pi/settings.json` | Override cho project hiện tại |
 
-## Schema
+Giá trị project ghi đè giá trị global. Object lồng nhau được merge; array và scalar bị thay thế. Các CLI flag thông dụng tiếp tục ghi đè setting đã resolve trong process đó.
 
-```ts title="settings.json (TypeScript shape)"
-interface Settings {
-  model?: { provider: string; id: string };
-  yolo?: boolean;
-  logPrompts?: boolean;
-  defaultTools?: string[];
-  fullscreen?: {
-    mode?: "auto" | "always" | "hidden";
-    onExit?: "transcript" | "resume-hint";
-  };
-  tui?: {
-    theme?: string;
-    escapeTimeout?: number; // ms
-  };
-  compaction?: {
-    threshold?: number; // 0..1, tỉ lệ context window
-    preserveRecentTurns?: number;
-  };
-  sessions?: {
-    retention?: "1d" | "7d" | "30d" | "forever";
-    redactSecrets?: boolean;
-  };
-  providers?: {
-    [provider: string]: {
-      baseUrl?: string;
-      apiKeyEnvVar?: string;
-    };
-  };
-  extensions?: string[]; // đường dẫn hoặc tên npm package
-}
-```
+## Model và thinking
 
-## Models
+| Setting | Type | Mặc định | Mục đích |
+|---|---|---|---|
+| `defaultProvider` | string | chưa đặt | Provider ID mặc định |
+| `defaultModel` | string | chưa đặt | Model ID mặc định |
+| `defaultThinkingLevel` | string | chưa đặt | `off`, `minimal`, `low`, `medium`, `high`, `xhigh` hoặc `max` |
+| `hideThinkingBlock` | boolean | `false` | Ẩn thinking block khỏi output được render |
+| `thinkingBudgets` | object | theo provider | Token budget cho từng thinking level |
 
-### `model`
+Chỉ các level được model đã chọn hỗ trợ mới có hiệu lực.
 
-Default model cho session mới. Định dạng: `{ provider, id }`.
+## UI và terminal
 
-```json title="settings.json"
+| Setting | Type | Mặc định | Mục đích |
+|---|---|---|---|
+| `theme` | string | `dark` | Tên theme tích hợp hoặc custom |
+| `externalEditor` | string | theo platform | Command được mở bởi thao tác external editor |
+| `quietStartup` | boolean | `false` | Ẩn startup header |
+| `tuiMode` | string | `regular` | `regular` hoặc `fullscreen` đang thử nghiệm |
+| `fullscreenExitOutput` | string | `transcript` | Output khi thoát fullscreen mode |
+| `fullscreenScrollbar` | string | `auto` | `auto`, `always` hoặc `hidden` |
+| `terminal.showImages` | boolean | `true` | Render image khi terminal hỗ trợ |
+| `images.autoResize` | boolean | `true` | Resize image về tối đa 2000 × 2000 |
+| `images.blockImages` | boolean | `false` | Không cho gửi image tới model |
+
+Với VS Code, đặt `externalEditor` thành `"code --wait"` để Pi chờ editor process.
+
+## Compaction và retry
+
+| Setting | Type | Mặc định | Mục đích |
+|---|---|---|---|
+| `compaction.enabled` | boolean | `true` | Bật automatic compaction |
+| `compaction.reserveTokens` | number | `16384` | Chừa context cho response tiếp theo |
+| `compaction.keepRecentTokens` | number | `20000` | Giữ số recent token này ngoài summary |
+| `branchSummary.reserveTokens` | number | `16384` | Chừa token khi tóm tắt branch đã rời |
+| `retry.enabled` | boolean | `true` | Retry transient failure ở agent layer |
+| `retry.maxRetries` | number | `3` | Số agent-level retry tối đa |
+| `retry.baseDelayMs` | number | `2000` | Delay ban đầu của exponential backoff |
+| `retry.provider.maxRetries` | number | `0` | Số retry ở provider layer |
+
+Nên giữ provider retry bằng `0` trừ khi tích hợp thực sự cần. Kết hợp provider retry với agent retry có thể nhân số request và làm lỗi hiển thị chậm hơn.
+
+## Delivery và transport
+
+| Setting | Type | Mặc định | Mục đích |
+|---|---|---|---|
+| `steeringMode` | string | `one-at-a-time` | Gửi steering message trong queue từng message hoặc cùng lúc |
+| `followUpMode` | string | `one-at-a-time` | Gửi follow-up message từng message hoặc cùng lúc |
+| `transport` | string | `auto` | `sse`, `websocket`, `websocket-cached` hoặc tự chọn |
+| `httpIdleTimeoutMs` | number | `300000` | HTTP stream idle timeout; `0` để tắt |
+| `websocketConnectTimeoutMs` | number | `15000` | WebSocket connection timeout; `0` để tắt |
+
+## Tool và shell
+
+| Setting | Type | Mặc định | Mục đích |
+|---|---|---|---|
+| `defaultTools` | string[] | built-in chuẩn | Bộ built-in tool ban đầu |
+| `shellPath` | string | shell theo platform | Shell executable tùy chỉnh |
+| `shellCommandPrefix` | string | chưa đặt | Prefix áp dụng cho mỗi bash command |
+| `npmCommand` | string[] | npm | Argument vector dùng cho package operation |
+
+Array `defaultTools` rỗng sẽ tắt built-in mặc định nhưng không tắt custom tool từ extension hoặc SDK. `--tools` là allowlist nghiêm ngặt; `--no-tools` tắt mọi tool.
+
+Path Windows trong JSON phải dùng dấu gạch chéo xuôi hoặc escape dấu gạch chéo ngược:
+
+```json
 {
-  "model": { "provider": "anthropic", "id": "claude-sonnet-4-5" }
+  "shellPath": "C:/Program Files/Git/bin/bash.exe"
 }
 ```
 
-Override theo session sẽ được ưu tiên khi một session được resume bằng `--session <id>`.
+## Session và resource
 
-### `defaultTools`
+| Setting | Type | Mặc định | Mục đích |
+|---|---|---|---|
+| `sessionDir` | string | session directory của Pi | Directory riêng cho persistent session |
+| `enabledModels` | string[] | chưa đặt | Model pattern dùng khi chuyển model |
+| `packages` | array | `[]` | npm hoặc Git package cung cấp resource |
+| `extensions` | string[] | `[]` | File hoặc directory extension cục bộ |
+| `skills` | string[] | `[]` | File hoặc directory skill cục bộ |
+| `prompts` | string[] | `[]` | File hoặc directory prompt template cục bộ |
+| `themes` | string[] | `[]` | File hoặc directory theme cục bộ |
+| `enableSkillCommands` | boolean | `true` | Đăng ký skill đã discover thành slash command |
 
-Tên các built-in tool được bật khi khởi động. Mặc định `["read", "bash", "edit", "write"]`.
+Path trong global setting được resolve từ `~/.pi/agent`; project path được resolve từ `.pi`. Resource array hỗ trợ glob pattern, exclusion và entry include/exclude tường minh.
 
-```json title="settings.json"
+## Project trust
+
+`defaultProjectTrust` là setting chỉ dùng ở global với giá trị `ask`, `always` hoặc `never`; mặc định là `ask`. Project trust kiểm soát project-local setting và resource có thể thực thi như extension. Quyết định đã lưu nằm trong `~/.pi/agent/trust.json`.
+
+Chế độ non-interactive không thể hiện trust prompt. Hãy dùng quyết định đã lưu, cấu hình global fallback hoặc truyền `--approve` / `--no-approve` cho một lần chạy.
+
+## Ví dụ
+
+```json title="~/.pi/agent/settings.json"
 {
-  "defaultTools": ["read", "bash", "edit"]
+  "defaultProvider": "anthropic",
+  "defaultModel": "claude-sonnet-4-6",
+  "defaultThinkingLevel": "medium",
+  "theme": "dark",
+  "compaction": {
+    "enabled": true,
+    "reserveTokens": 16384,
+    "keepRecentTokens": 20000
+  },
+  "retry": {
+    "enabled": true,
+    "maxRetries": 3
+  },
+  "defaultTools": ["read", "bash", "edit", "write"],
+  "packages": ["@org/pi-resources"]
 }
 ```
-
-Đặt một mảng rỗng sẽ tắt tất cả managed tools.
-
-## Permissions
-
-### `yolo`
-
-Nếu `true`, bỏ qua permission prompt trước khi gọi bất kỳ tool nào có `requiresPermission: true`.
-
-```json title="settings.json"
-{ "yolo": true }
-```
-
-:::caution
-
-YOLO mode cho phép agent ghi file và chạy shell command mà không hỏi. Chỉ dùng trong sandbox có thể vứt bỏ.
-
-:::
-
-### Per-tool overrides
-
-Để cho phép một tool cụ thể chạy không hỏi trong khi các tool khác vẫn hỏi, hãy đặt `requiresPermission: false` trên định nghĩa extension tool thay vì bật global `yolo`.
-
-## Compaction
-
-### `compaction.threshold`
-
-Tỉ lệ context window của model kích hoạt automatic compaction. Mặc định `0.85`.
-
-### `compaction.preserveRecentTurns`
-
-Số turn gần nhất được giữ nguyên văn trong quá trình compaction. Phần còn lại được tóm tắt. Mặc định `3`.
-
-## Sessions
-
-### `sessions.retention`
-
-Thời gian giữ session file. Pi quét thư mục sessions khi khởi động.
-
-| Value | Effect |
-|---|---|
-| `"1d"` | Xoá sau một ngày |
-| `"7d"` | Xoá sau một tuần (mặc định) |
-| `"30d"` | Xoá sau ba mươi ngày |
-| `"forever"` | Không bao giờ tự động xoá |
-
-### `sessions.redactSecrets`
-
-Nếu `true`, hook `redact` mặc định quét output `tool_result` tìm chuỗi trông giống API key và thay bằng `[redacted]`. Có thể đặt logic redact tuỳ biến theo session qua `Session({ redact })`.
-
-## TUI
-
-### `tui.theme`
-
-Tên theme áp dụng khi khởi động. Dùng `/settings` trong TUI để duyệt.
-
-### `tui.escapeTimeout`
-
-Số mili giây chờ phím Escape được theo sau bởi một phím khác (cho `Alt+Enter`, arrow keys, v.v.). Mặc định `50`. Tăng lên khi SSH có độ trễ cao.
-
-## Providers
-
-### `providers[provider].baseUrl`
-
-Ghi đè base URL cho một provider. Hữu ích cho self-hosted gateway hoặc llama.cpp server local.
-
-```json title="settings.json"
-{
-  "providers": {
-    "openai": { "baseUrl": "http://localhost:8080/v1" }
-  }
-}
-```
-
-### `providers[provider].apiKeyEnvVar`
-
-Ghi đè tên biến môi trường mà SDK đọc cho API key. Mặc định là `<PROVIDER>_API_KEY`.
-
-## Extensions
-
-### `extensions`
-
-Danh sách extension cần load khi khởi động. Mỗi mục là một đường dẫn tới file local hoặc tên npm package.
-
-```json title="settings.json"
-{ "extensions": ["@pi-extensions/git", "./extensions/team-roles.ts"] }
-```
-
-Đường dẫn tương đối được phân giải từ project root.
-
-## Validation
-
-Pi xác thực `settings.json` theo schema mỗi lần load. Giá trị không hợp lệ fail-fast với thông báo lỗi chính xác nêu tên field. Để kiểm thử file config trước khi commit:
-
-```bash
-pi --dry-run
-```
-
-Flag `--dry-run` load settings và in cấu hình đã được phân giải mà không khởi động agent.
-
-## Tiếp theo
-
-- [Reference: API](api.md) để xem runtime API.
-- [Reference: Environment Variables](environment-variables.md) để xem các env var override.
