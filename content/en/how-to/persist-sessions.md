@@ -1,149 +1,89 @@
 ---
-title: How to persist sessions
-description: >-
-  Save a turn-by-turn conversation to disk, resume it later, and branch the
-  history.
+title: Persist and resume sessions
+description: Save a JSONL session, continue recent work, open a specific file, and branch conversation history.
 translation_key: how-to-persist-sessions
 language: en
+status: reviewed
+reviewed_by: Pify maintainers
+last_updated: '2026-08-24'
 ---
-This guide shows how to persist a conversation across runs. After it you will be able to start an agent, save the session, quit the process, and resume on the next run with full context restored.
 
-:::tip[When you need this]
+Pi stores a persistent session as one JSONL file. Entries form a tree through `id` and `parentId`, so one file can preserve multiple conversation branches.
 
-- A long-running task that must survive restarts
-- A user who closes the laptop and reopens the project tomorrow
-- A tree of conversations that branch from a shared point
+## Create a persistent session
 
-:::
+```ts title="new-session.ts"
+import {
+  createAgentSession,
+  ModelRuntime,
+  SessionManager,
+} from "@earendil-works/pi-coding-agent";
 
-## The session model
-
-A Pi session is a directory containing one JSONL file per turn and a `metadata.json` with the resolved model, the working directory, and the parent session id. The default location is `~/.pi/agent/sessions/`. You can override the root with `PI_HOME`.
-
-## 1. Start a session
-
-The agent loop accepts a `sessionId` option. If unset, the SDK generates a UUID.
-
-```ts title="agent.ts"
-import { agentLoop, getModel, Session } from "@pi-agent-core";
-import { homedir } from "node:os";
-import { join } from "node:path";
-
-const sessionsRoot = join(homedir(), ".pi", "agent", "sessions");
-const session = new Session({
-  root: sessionsRoot,
-  // No id: a new session is created on first save.
+const cwd = process.cwd();
+const modelRuntime = await ModelRuntime.create();
+const { session } = await createAgentSession({
+  modelRuntime,
+  sessionManager: SessionManager.create(cwd),
 });
 
-const model = getModel("anthropic", "claude-sonnet-4-5");
-
-const events: unknown[] = [];
-for await (const event of agentLoop({
-  model,
-  session,
-  messages: [{ role: "user", content: "Start a refactor plan." }],
-})) {
-  events.push(event);
-  if (event.type === "done") break;
-}
-
-await session.save(events);
-console.log("saved as", session.id);
+await session.prompt("Create a refactoring plan for this project.");
+console.log(session.sessionFile);
+session.dispose();
 ```
 
-After the run, `~/.pi/agent/sessions/<id>/turn-0.jsonl` and `metadata.json` exist on disk.
+`SessionManager.create(cwd)` creates a new persistent session for that working directory. Pi appends entries as the conversation changes; you do not need a separate `save()` call.
 
-## 2. Resume a session
+Use `SessionManager.inMemory(cwd)` for tests or ephemeral work that must not reach disk.
 
-On the next run, load the session by id:
+## Continue the most recent session
 
-```ts title="agent.ts" {4}
-import { Session } from "@pi-agent-core";
-import { join } from "node:path";
-import { homedir } from "node:os";
+```ts title="continue-session.ts"
+import {
+  createAgentSession,
+  ModelRuntime,
+  SessionManager,
+} from "@earendil-works/pi-coding-agent";
 
-const session = await Session.load({
-  root: join(homedir(), ".pi", "agent", "sessions"),
-  id: "a1b2c3-...", // the id from the previous run
-});
-```
-
-`Session.load` reads `metadata.json` and the turn files, in order, and reconstructs the message history. The model and provider are restored from the metadata, not from `getModel`.
-
-:::caution[Check the model is still available]
-
-If the original model is no longer in your catalog, the resume fails. Pin the model with `Session.load({ ..., pinModel: true })` to keep using the original descriptor even if the catalog changes.
-
-:::
-
-## 3. Branch a session
-
-Branching forks the conversation at a specific turn. The original session is unchanged; a new session is created with a `parentId`:
-
-```ts title="agent.ts"
-const branch = await Session.branch({
-  root: sessionsRoot,
-  parentId: "a1b2c3-...",
-  fromTurn: 4, // copy turns 0..4 to the new session
-  newId: "d4e5f6-...",
+const cwd = process.cwd();
+const modelRuntime = await ModelRuntime.create();
+const { session, modelFallbackMessage } = await createAgentSession({
+  modelRuntime,
+  sessionManager: SessionManager.continueRecent(cwd),
 });
 
-// branch.messages contains the copied turns.
-// Subsequent writes go to branch, not to the parent.
+if (modelFallbackMessage) console.warn(modelFallbackMessage);
+await session.prompt("Continue with the first safe change.");
 ```
 
-The new session can diverge from turn 5 onward. The parent stays read-only.
+The fallback message matters: a saved model may no longer be available, and the restored session can select a replacement.
 
-## 4. Walk the tree
+## Open or list saved sessions
 
-Sessions form a tree via `parentId`. To list a user's history:
+```ts
+const sessions = await SessionManager.list(process.cwd());
+const allSessions = await SessionManager.listAll(process.cwd());
 
-```ts title="agent.ts"
-import { listSessions } from "@pi-agent-core";
-
-const all = await listSessions({ root: sessionsRoot });
-for (const meta of all) {
-  console.log(meta.id, meta.parentId, meta.title);
-}
+const manager = SessionManager.open("/absolute/path/to/session.jsonl");
+const { session } = await createAgentSession({ sessionManager: manager });
 ```
 
-The CLI uses this to render the session picker.
+`list()` is scoped to a working directory. `listAll()` searches every project known to the configured Pi agent directory.
 
-## 5. Privacy and cleanup
+## Navigate and branch the tree
 
-Sessions are plain JSONL on disk. They contain every user message and every tool result. Before shipping a build that creates sessions, decide:
+```ts
+const manager = SessionManager.open("/absolute/path/to/session.jsonl");
+const entries = manager.getEntries();
+const currentPath = manager.getPath();
 
-- Where the root lives (the default `~/.pi/agent/sessions` is fine for personal use; multi-user deployments want a per-user root)
-- How long to keep them (Pi ships a retention setting; see [Reference: Configuration](../reference/configuration.md))
-- Whether to redact secrets before write (a `Session.redact` hook runs before each save)
-
-```ts title="agent.ts"
-const session = new Session({
-  root: sessionsRoot,
-  redact: (event) => {
-    if (event.type === "tool_result" && event.output.includes("sk-")) {
-      return { ...event, output: "[redacted]" };
-    }
-    return event;
-  },
-});
+const checkpoint = entries.find((entry) => manager.getLabel(entry.id) === "checkpoint");
+if (checkpoint) manager.branch(checkpoint.id);
 ```
 
-## Pitfalls
+`branch(id)` changes the active leaf in the same file. A new prompt then creates another child. Use `createBranchedSession(leafId)` when the selected path should become a separate session file.
 
-**Forgetting to call `save`**
+## Storage and safety
 
-Events are buffered in memory until you save. A crash before save loses the turn. Wrap the loop in `try/finally` and call `save` even on error.
+The default root is `~/.pi/agent/sessions/`, grouped by working directory. Override it with `--session-dir`, then `PI_CODING_AGENT_SESSION_DIR`, or `sessionDir` in `settings.json`, in that precedence order.
 
-**Writing to the wrong root**
-
-The `root` option is per-`Session`. If you start a new `Session` with a different root by accident, the two halves of your conversation will not link.
-
-**Loading a session with a different model version**
-
-The Pi SDK may bump message shapes between minor versions. A session from 0.78 may not load on 0.84 if the schemas diverge. The session file includes a `schemaVersion` field; check it in your loader and surface a clear error on mismatch.
-
-## Next
-
-- [Chapter 10: Session Management](../ch10-session.md) for the full session tree and metadata schema.
-- [Reference: Configuration](../reference/configuration.md#sessions) for the retention and redacting settings.
+Session files can contain prompts, tool arguments, tool output, file paths, and extension data. Apply the same access control, retention, and backup policy as source code and operational logs.

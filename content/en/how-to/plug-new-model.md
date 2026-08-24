@@ -1,160 +1,89 @@
 ---
-title: How to plug in a new model
-description: >-
-  Add a model provider that the SDK does not ship with by writing one translator
-  and one descriptor.
+title: Add a model provider
+description: Register an OpenAI-compatible endpoint or a native provider without changing the agent loop.
 translation_key: how-to-plug-new-model
 language: en
+status: reviewed
+reviewed_by: Pify maintainers
+last_updated: '2026-08-24'
 ---
-This guide shows how to add a model provider that `@pi-ai/core` does not ship with. After it you will be able to call `getModel("my-provider", "my-model")` and have the SDK talk to the new provider with no changes to the agent loop.
 
-:::tip[When you need this]
+Providers own authentication, model metadata, and streaming. Registering one through an extension makes its models available to the CLI and Coding Agent SDK without changing the agent loop.
 
-- A local llama.cpp server
-- A self-hosted model gateway that wraps Anthropic or OpenAI
-- A new commercial provider that has not been added upstream yet
+## Choose an integration level
 
-:::
+Use the provider-config form for an OpenAI-compatible server, a proxy, or a known Pi API. Use `createProvider()` when you need custom authentication, model discovery, filtering, or streaming behavior.
 
-## The two halves
+## Register an OpenAI-compatible server
 
-To plug in a model you need exactly two things:
+Create an extension:
 
-1. **A descriptor** that names the model, its capabilities, and where to send requests.
-2. **A translator** that converts Pi messages into the provider wire format and the provider stream back into Pi events.
+```ts title=".pi/extensions/local-provider.ts"
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
-The descriptor is pure data. The translator is the only code you write.
-
-## 1. Write the descriptor
-
-A descriptor is a literal object. Save it next to your other descriptors.
-
-```ts title="models/my-provider.ts"
-import type { ModelDescriptor } from "@pi-ai/core";
-
-export const myModel: ModelDescriptor = {
-  id: "my-model",
-  provider: "my-provider",
-  displayName: "My Model 7B",
-  contextWindow: 8192,
-  maxOutputTokens: 2048,
-  pricing: { input: 0, output: 0 }, // free for self-hosted
-  capabilities: {
-    toolUse: true,
-    images: false,
-    streaming: true,
-    thinking: false,
-  },
-  baseUrl: "http://localhost:8080/v1",
-  apiKeyEnvVar: "MY_PROVIDER_API_KEY",
-};
-```
-
-`baseUrl` points at the provider. `apiKeyEnvVar` is the environment variable the SDK reads at call time.
-
-## 2. Register the descriptor
-
-```ts title="models/index.ts"
-import { registerModel } from "@pi-ai/core";
-import { myModel } from "./models/my-provider.js";
-
-registerModel("my-provider", myModel);
-```
-
-`registerModel` is idempotent. Calling it twice with the same provider id replaces the entry.
-
-## 3. Write a translator
-
-A translator is a small object with two methods: `request` builds the HTTP body from Pi messages, and `response` parses the provider stream back into Pi events.
-
-```ts title="translators/openai-completions.ts"
-import type { Translator, Context, Message } from "@pi-ai/core";
-
-export const openaiCompletionsTranslator: Translator = {
-  async request(model, context: Context, options) {
-    const body = {
-      model: model.id,
-      messages: [
-        ...(context.systemPrompt
-          ? [{ role: "system", content: context.systemPrompt }]
-          : []),
-        ...context.messages.map((m) => ({
-          role: m.role,
-          content: m.content,
-        })),
-      ],
-      stream: true,
-    };
-    return {
-      url: `${model.baseUrl}/chat/completions`,
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${process.env[model.apiKeyEnvVar]}`,
+export default function localProvider(pi: ExtensionAPI) {
+  pi.registerProvider("local-openai", {
+    name: "Local OpenAI",
+    baseUrl: "http://localhost:1234/v1",
+    apiKey: "$LOCAL_OPENAI_API_KEY",
+    api: "openai-completions",
+    models: [
+      {
+        id: "local-model",
+        name: "Local Model",
+        reasoning: false,
+        input: ["text"],
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+        contextWindow: 128000,
+        maxTokens: 4096,
       },
-      body,
-    };
-  },
-
-  async *response(model, response, options) {
-    // Parse SSE chunks into Pi events.
-    // The exact shape depends on the provider.
-    // See the Anthropic or OpenAI translator for a full implementation.
-    for await (const chunk of parseSse(response)) {
-      yield {
-        type: "text_delta",
-        delta: chunk.choices[0].delta.content ?? "",
-      };
-    }
-    yield { type: "done", reason: "stop" };
-  },
-};
+    ],
+  });
+}
 ```
 
-:::note[This is a skeleton]
+Set the credential only if the server requires one:
 
-The real translators in `@pi-ai/core` are 200-300 lines. They handle tool calls, image content, errors, retries, and streaming back-pressure. Copy the closest existing translator and adapt it rather than starting from scratch.
-
-:::
-
-## 4. Wire the translator
-
-```ts title="translators/index.ts"
-import { registerTranslator } from "@pi-ai/core";
-import { openaiCompletionsTranslator } from "./openai-completions.js";
-
-registerTranslator("my-provider", openaiCompletionsTranslator);
+```bash
+export LOCAL_OPENAI_API_KEY="your-key"
 ```
 
-## 5. Call it
+When `models` is present, it replaces the provider's current model list. Every descriptor must reflect the endpoint's real context limit, output limit, input modes, reasoning support, and token cost.
 
-```ts title="agent.ts"
-import { getModel, streamSimple } from "@pi-ai/core";
-import "./models/index.js";
-import "./translators/index.js";
+## Select and verify the model
 
-const model = getModel("my-provider", "my-model");
-const stream = streamSimple(model, {
-  messages: [{ role: "user", content: "Hello" }],
-});
+```bash
+pi --list-models local-openai
+pi --provider local-openai --model local-model
 ```
 
-If you have a llama.cpp server running on `localhost:8080`, you now have a working agent that talks to it.
+For an SDK integration, resolve the model through `ModelRuntime` or the `Models` collection used by your application. Do not construct a model with fields copied from another provider.
 
-## Pitfalls
+## Redirect an existing provider
 
-**The translator yields the wrong event types**
+Omit `models` to keep the built-in catalog and change only its endpoint or headers:
 
-The agent loop branches on event type. A `done` event with `reason: "stop"` ends the turn cleanly. A `tool_use` event without a matching `tool_result` block leaves the loop hanging.
+```ts title=".pi/extensions/company-proxy.ts"
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
-**The provider sends responses as JSON, not SSE**
+export default function companyProxy(pi: ExtensionAPI) {
+  pi.registerProvider("anthropic", {
+    baseUrl: "https://ai-gateway.example.com/anthropic",
+    headers: { "X-Company-Token": "$COMPANY_AI_TOKEN" },
+  });
+}
+```
 
-Most modern providers support streaming. If yours does not, set `streaming: false` in the descriptor and yield all events from a single `response` call.
+Configuration values support `$ENV_VAR` and `${ENV_VAR}` interpolation. Keep credentials in the environment or the Pi credential store, not in the extension source.
 
-**The descriptor is registered but `getModel` returns undefined**
+## Implement a native provider
 
-`getModel` reads from the catalog. `registerModel` mutates the catalog. Make sure the import order in your entry point loads the registration before the first `getModel` call.
+For a non-standard protocol, create a complete `Provider` with `createProvider()` and a matching API implementation, then pass it to `pi.registerProvider(provider)`. This is the advanced path because the adapter must preserve:
 
-## Next
+- Pi message and content-block semantics;
+- tool calls and tool results;
+- incremental text, thinking, usage, and terminal events;
+- cancellation through `AbortSignal`;
+- provider error and context-overflow classification.
 
-- [Chapter 4: Model Invocation](../ch04-model-invocation.md) shows how the upstream translators are layered.
-- [Reference: API](../reference/api.md) lists every descriptor field and translator method.
+Test plain text, tools, images, reasoning, cancellation, malformed responses, and context overflow before enabling the provider in production.

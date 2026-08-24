@@ -1,123 +1,111 @@
 ---
-title: How to add a custom tool
-description: >-
-  Register a function the model can call, describe it with a JSON schema, and
-  read the result back in the loop.
+title: Add a custom tool
+description: Define a typed tool, expose it to an AgentSession, and handle progress, cancellation, and errors.
 translation_key: how-to-add-custom-tool
 language: en
+status: reviewed
+reviewed_by: Pify maintainers
+last_updated: '2026-08-24'
 ---
-This guide shows how to register a tool the model can call during a turn. After it you will have a working `get_weather` tool that the agent invokes when relevant and reads the result back into the loop.
 
-:::tip[What you will have]
+Use a custom tool when the model needs to call application code or an external service. This example adds a typed `get_weather` tool to the Coding Agent SDK.
 
-A tool definition (name, description, JSON schema) and a handler. The handler runs when the model emits a `tool_use` block. The result is fed back as a `tool_result` block on the next loop iteration.
+## Install the SDK
 
-:::
+```bash
+npm install @earendil-works/pi-coding-agent typebox
+```
 
-## 1. Describe the tool
+Pi uses TypeBox schemas both to describe arguments to the model and to validate each tool call before execution.
 
-The model only sees the schema. Write it as you would write the public docs for the tool.
+## Define the tool
 
-```ts title="tools/get_weather.ts"
-import { Type } from "@sinclair/typebox";
+```ts title="tools/get-weather.ts"
+import { defineTool } from "@earendil-works/pi-coding-agent";
+import { Type } from "typebox";
 
-export const get_weather = {
+export const getWeather = defineTool({
   name: "get_weather",
-  description: "Return the current weather for a city. Use when the user asks about weather or temperature.",
+  label: "Get Weather",
+  description: "Return the current weather for a city.",
   parameters: Type.Object({
-    city: Type.String({ description: "City name, e.g. 'Paris'" }),
+    city: Type.String({ description: "City name, for example Paris" }),
     unit: Type.Optional(
-      Type.Union([Type.Literal("celsius"), Type.Literal("fahrenheit")], {
-        default: "celsius",
-      })
+      Type.Union([Type.Literal("celsius"), Type.Literal("fahrenheit")]),
     ),
   }),
-};
+  async execute(_toolCallId, params, signal, onUpdate) {
+    onUpdate?.({
+      content: [{ type: "text", text: `Checking ${params.city}...` }],
+      details: {},
+    });
+
+    const response = await fetch(
+      `https://weather.example.test/current?city=${encodeURIComponent(params.city)}`,
+      { signal },
+    );
+    if (!response.ok) throw new Error(`Weather service returned ${response.status}`);
+
+    const data = (await response.json()) as { temperature: number };
+    return {
+      content: [
+        {
+          type: "text",
+          text: `${params.city}: ${data.temperature}° ${params.unit ?? "celsius"}`,
+        },
+      ],
+      details: { city: params.city, temperature: data.temperature },
+    };
+  },
+});
 ```
 
-:::note[Why TypeBox and not raw JSON Schema]
+The handler receives a validated `params` object. Pass `signal` to cancellable I/O, and call `onUpdate` only for useful progress. Throw when execution fails; Pi converts the exception into a tool error for the model.
 
-The SDK accepts both. TypeBox gives compile-time safety for the parameters, so a typo in `city` shows up at build time rather than as a runtime validation error.
-
-:::
-
-## 2. Write the handler
-
-The handler receives the parsed arguments and returns a string or an object. The SDK serialises the return value into the `tool_result` block.
-
-```ts title="tools/get_weather.ts" {13}
-export async function get_weather_handler(args: {
-  city: string;
-  unit?: "celsius" | "fahrenheit";
-}): Promise<string> {
-  // In real code, call a weather API.
-  // The hardcoded response below stands in for that.
-  const temp = 18;
-  const unit = args.unit ?? "celsius";
-  return `${temp} degrees ${unit} in ${args.city}`;
-}
-```
-
-The handler must be `async` and must return either a string or a serialisable object. The return value is the value the model sees in the next iteration.
-
-## 3. Register both with the agent
+## Add the tool to a session
 
 ```ts title="agent.ts"
-import { agentLoop, getModel } from "@pi-agent-core";
-import { get_weather, get_weather_handler } from "./tools/get_weather.js";
+import {
+  createAgentSession,
+  ModelRuntime,
+  SessionManager,
+} from "@earendil-works/pi-coding-agent";
+import { getWeather } from "./tools/get-weather.js";
 
-const tools = [
-  {
-    ...get_weather,
-    handler: get_weather_handler,
-  },
-];
+const modelRuntime = await ModelRuntime.create();
+const { session } = await createAgentSession({
+  modelRuntime,
+  sessionManager: SessionManager.inMemory(),
+  customTools: [getWeather],
+});
 
-const model = getModel("anthropic", "claude-sonnet-4-5");
+await session.prompt("What is the weather in Paris?");
+```
 
-for await (const event of agentLoop({
-  model,
-  systemPrompt: "You can look up the weather. Use the get_weather tool when relevant.",
-  messages: [{ role: "user", content: "What's the weather in Tokyo?" }],
-  tools,
-})) {
-  if (event.type === "text_delta") process.stdout.write(event.delta);
-  if (event.type === "tool_use") console.log("\n[tool]", event.name, event.args);
-  if (event.type === "done") console.log("\n[done] reason:", event.reason);
+`customTools` are combined with tools registered by extensions. If you also pass a `tools` allowlist, include `"get_weather"` or the tool will remain inactive.
+
+## Register the tool from an extension
+
+An extension can register the same definition through `pi.registerTool()`:
+
+```ts title="weather-extension.ts"
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { Type } from "typebox";
+
+export default function weatherExtension(pi: ExtensionAPI) {
+  pi.registerTool({
+    name: "get_weather",
+    label: "Get Weather",
+    description: "Return the current weather for a city.",
+    parameters: Type.Object({ city: Type.String() }),
+    async execute(_toolCallId, { city }) {
+      return {
+        content: [{ type: "text", text: `No forecast configured for ${city}.` }],
+        details: {},
+      };
+    },
+  });
 }
 ```
 
-When the model decides the user's question needs weather, it emits a `tool_use` block with `{ city: "Tokyo" }`. The agent loop calls your handler, feeds the return value back as a `tool_result`, and continues.
-
-## 4. Add a permission gate (optional)
-
-By default, the agent calls the handler without asking. For tools that touch the filesystem or shell, gate the call behind a permission check:
-
-```ts title="tools/get_weather.ts" {2}
-{
-  ...get_weather,
-  handler: get_weather_handler,
-  requiresPermission: true,
-}
-```
-
-When `requiresPermission` is `true`, the coding agent prompts the user before invoking the handler. In headless or `yolo` mode the prompt is skipped.
-
-## Pitfalls
-
-**The handler is `async` but throws synchronously**
-
-Wrap the body in `try/catch` and return a string error message. The model sees the string and can react. A thrown exception ends the loop.
-
-**The schema is too vague**
-
-If the description is "weather tool", the model will call it for every message. Be specific: name the use cases, name the inputs, name what is returned.
-
-**The result is too large**
-
-A 50,000-character string is a fast way to blow the context window. Trim results before returning. For paginated APIs, return the first page and let the tool be called again.
-
-## Next
-
-- [Chapter 5: Tool System](../ch05-tool-system.md) covers the full tool registry and the JSON Schema to provider-translator pipeline.
-- [How to plug in a new model](plug-new-model.md) for the other half of agent customisation.
+Tool names should be stable, specific, and easy for the model to distinguish. Keep secrets out of descriptions and returned content.

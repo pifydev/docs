@@ -1,135 +1,86 @@
 ---
-title: How to customize the system prompt
-description: >-
-  Layer AGENTS.md, SYSTEM.md, CLI flags, and extensions into a single coherent
-  prompt the model sees.
+title: Customize the system prompt
+description: Choose between context files, prompt replacement, prompt append files, CLI flags, and SDK overrides.
 translation_key: how-to-customize-system-prompt
 language: en
+status: reviewed
+reviewed_by: Pify maintainers
+last_updated: '2026-08-24'
 ---
-This guide shows how Pi composes the system prompt from CLI flags, project files, and extension contributions. After it you will know which file to edit for which effect and how to debug the final prompt the model actually sees.
 
-:::tip[When you need this]
+Pi separates project guidance from the base system prompt. Choose the narrowest mechanism that matches the intended scope.
 
-- Project-specific rules ("never use `any` in `src/`")
-- Team conventions encoded once, applied everywhere
-- Debugging why the model is or is not following a rule
+## Choose the right source
 
-:::
+| Goal | Source |
+|---|---|
+| Share project conventions | `AGENTS.md` or `CLAUDE.md` |
+| Override instructions for one directory | `AGENTS.override.md` |
+| Replace Pi's default prompt | `.pi/SYSTEM.md` or `~/.pi/agent/SYSTEM.md` |
+| Append to the default prompt | `.pi/APPEND_SYSTEM.md` or the global equivalent |
+| Make a one-run override | `--system-prompt` or `--append-system-prompt` |
+| Embed Pi with a programmatic prompt | `DefaultResourceLoader` |
 
-## The composition order
+## Add project guidance
 
-Pi reads the system prompt sources in this order, top wins:
-
-1. `--system-prompt <text>` CLI flag
-2. `--append-system-prompt <text>` CLI flag
-3. Project file `./SYSTEM.md` (closest to cwd)
-4. Project file `./AGENTS.md` (closest to cwd)
-5. Extension contributions via `pi.registerSystemPrompt()`
-6. Default Pi system prompt
-
-Each later layer sees the prompt as modified by earlier layers. The CLI flags override everything below them.
-
-## 1. Add project rules in AGENTS.md
-
-Create `AGENTS.md` in your project root:
+Create `AGENTS.md` in the repository:
 
 ```md title="AGENTS.md"
-- Use TypeScript strict mode everywhere.
-- Prefer `unknown` over `any`. Cast only at the boundary.
-- Tests live next to the code as `*.test.ts`.
-- Do not edit files under `vendor/`.
+# Project conventions
+
+- Use TypeScript strict mode.
+- Run `npm test` before reporting completion.
+- Do not edit generated files under `dist/`.
+- Treat migrations as backward-compatible changes.
 ```
 
-Pi reads this on every session that opens inside the project. The file is resolved by walking up from the working directory.
+Pi loads the global file and walks from parent directories to the current working directory. If one directory contains `AGENTS.override.md`, that file replaces `AGENTS.md` or `CLAUDE.md` from the same directory only.
 
-:::note[Closest file wins]
+Use context files for commands, conventions, safety rules, and repository facts. Keep them short and verifiable. Disable discovery with `--no-context-files` when handling an untrusted checkout.
 
-If both `./apps/web/AGENTS.md` and `./AGENTS.md` exist, Pi uses `./apps/web/AGENTS.md` because it is closer to the cwd. This lets you have repo-wide rules plus per-app overrides.
+## Replace or append the base prompt
 
-:::
+Use `.pi/SYSTEM.md` when the application needs a different base role. Use `.pi/APPEND_SYSTEM.md` when Pi's built-in tool and environment guidance should remain intact.
 
-## 2. Add an explicit system prompt block with SYSTEM.md
+```md title=".pi/APPEND_SYSTEM.md"
+## Release policy
 
-`SYSTEM.md` is treated as mandatory prose, while `AGENTS.md` is treated as guidance. Use `SYSTEM.md` when the model must follow the rule, `AGENTS.md` when it is a preference.
-
-```md title="SYSTEM.md"
-You are working inside the Pify monorepo.
-
-Constraints:
-- Never run `git push` without explicit user confirmation.
-- Never delete files outside the working directory.
-- Always read a file before editing it.
+Never publish a package without showing the exact version and tag to the user.
 ```
 
-The distinction matters because Pi budgets token space differently for the two: `SYSTEM.md` is never trimmed during compaction, `AGENTS.md` may be.
+Project-local `.pi` resources require project trust. Interactive Pi prompts for that decision; non-interactive modes follow `defaultProjectTrust` unless `--approve` or `--no-approve` is provided.
 
-## 3. Pass a one-off instruction from the CLI
-
-For an ad-hoc override without editing any file:
+## Override from the CLI
 
 ```bash
-pi --append-system-prompt "Reply in Japanese for this session."
+pi --system-prompt "You review API compatibility. Return a concise report."
+pi --append-system-prompt "Do not modify files in this run."
 ```
 
-`--system-prompt` replaces the default Pi prompt entirely (use with care). `--append-system-prompt` adds to whatever is composed below it.
+`--system-prompt` replaces the base prompt, but discovered context files and skills are still added. `--append-system-prompt` preserves the base prompt and adds the supplied text.
 
-## 4. Add prompt expansion via extensions
+## Override from the SDK
 
-A Pi extension can contribute to the system prompt programmatically:
+```ts title="custom-prompt.ts"
+import {
+  createAgentSession,
+  DefaultResourceLoader,
+} from "@earendil-works/pi-coding-agent";
 
-```ts title="extensions/team-roles.ts"
-import { registerExtension } from "@pi-coding-agent";
-
-registerExtension({
-  name: "team-roles",
-  systemPrompt: () => `
-You are a staff engineer.
-When reviewing code, focus on:
-- API contract changes
-- Backward compatibility
-- Test coverage of new branches
-`,
+const loader = new DefaultResourceLoader({
+  systemPromptOverride: () =>
+    "You are a concise API compatibility reviewer. Cite files and symbols.",
 });
+await loader.reload();
+
+const { session } = await createAgentSession({ resourceLoader: loader });
+await session.prompt("Review the public exports.");
 ```
 
-The function runs at session start. It sees the current working directory and the resolved model and returns a string. The string is appended after the project files and before the default prompt.
+Use `appendSystemPromptOverride` instead when you need to transform the list of appended prompt sections without replacing the base prompt.
 
-## 5. Inspect the final prompt
+## Check the effective prompt
 
-When the model behaves oddly, the fastest debugging step is to log the composed prompt. Pi does this when you pass `--log-prompts`:
+In an SDK integration, inspect `session.agent.state.systemPrompt` after session creation. When debugging the CLI, reduce overlapping sources and confirm the effective working directory and project-trust decision first.
 
-```bash
-pi --log-prompts
-# starts the agent, logs the final system prompt to stderr on every turn
-```
-
-The log includes the source of each section, so you can tell whether a missing rule came from `AGENTS.md` or from a stale extension.
-
-## 6. Override the model default prompt
-
-Some models ship with vendor-specific framing in the default Pi prompt. To opt out:
-
-```bash
-pi --no-default-system-prompt --system-prompt "You are a focused coding agent."
-```
-
-This is useful when you want full control and do not want Pi's tone or guidance leaking into the conversation.
-
-## Pitfalls
-
-**Editing `AGENTS.md` and seeing no effect**
-
-The file is read at session start. If the agent is already running, restart it. Hot-reload of `AGENTS.md` is not supported in stable releases.
-
-**Putting secrets in the system prompt**
-
-Anything in `SYSTEM.md` or `AGENTS.md` is sent to the model provider on every turn. Treat both files as public to whichever provider you call.
-
-**Conflicting rules between AGENTS.md and SYSTEM.md**
-
-`SYSTEM.md` wins for hard constraints, `AGENTS.md` for soft guidance. If they disagree and the model picks the wrong one, move the rule from `AGENTS.md` to `SYSTEM.md`.
-
-## Next
-
-- [Chapter 8: Context Engineering](../ch08-context-engineering.md) covers how the system prompt fits into the broader context budget.
-- [Reference: Environment Variables](../reference/environment-variables.md) lists the knobs that affect prompt loading.
+Never place API keys, access tokens, or private user data in prompt files: the selected provider receives the resulting context.

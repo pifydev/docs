@@ -1,155 +1,98 @@
 ---
-title: How to stream output
-description: >-
-  Render token model cho người dùng khi chúng đến, bao gồm tool call và thinking
-  block.
+title: Stream output của agent
+description: Subscribe event của AgentSession để hiển thị text, thinking, tiến trình tool, lỗi và trạng thái hoàn tất.
 translation_key: how-to-stream-output
 language: vi
+status: reviewed
+reviewed_by: Pify maintainers
+last_updated: '2026-08-24'
 ---
-Hướng dẫn này chỉ cách consume agent stream theo thời gian thực. Sau khi xong bạn sẽ có thể render text delta, hiện tool call khi chúng xảy ra, và stream thinking block ra UI mà không buffer cả turn.
 
-:::tip[Khi nào cần]
+`AgentSession` phát lifecycle event trong khi `prompt()` chạy. Hãy subscribe trước khi gửi prompt, cập nhật UI từ các delta và unsubscribe khi consumer bị hủy.
 
-- Một chat UI hiện token xuất hiện từng chữ một
-- Một CLI in tiến trình khi model đang suy nghĩ
-- Một web app cần huỷ một generation dài
+## Stream text ra terminal
 
-:::
+```ts title="stream.ts"
+import {
+  createAgentSession,
+  ModelRuntime,
+  SessionManager,
+} from "@earendil-works/pi-coding-agent";
 
-## Event stream
+const modelRuntime = await ModelRuntime.create();
+const { session } = await createAgentSession({
+  modelRuntime,
+  sessionManager: SessionManager.inMemory(),
+});
 
-Agent loop phát ra một async iterable có kiểu. Mọi event có field `type`. Danh sách đầy đủ ở [Reference: Events](../reference/api.md#events); bốn event bạn dùng nhiều nhất:
-
-| Event | Mang theo |
-|---|---|
-| `message_start` | Mở đầu của một turn. Một mỗi turn. |
-| `text_delta` | Một chunk của text đang stream. Nhiều mỗi turn. |
-| `tool_use` | Model gọi một tool. Không hoặc nhiều mỗi turn. |
-| `done` | Event kết thúc. Một mỗi turn. |
-
-## 1. Plain text streaming
-
-Consumer tối thiểu hữu dụng render text khi nó đến:
-
-```ts title="agent.ts"
-import { agentLoop, getModel } from "@pi-agent-core";
-
-const model = getModel("anthropic", "claude-sonnet-4-5");
-
-for await (const event of agentLoop({
-  model,
-  messages: [{ role: "user", content: "Tell me a haiku about TypeScript." }],
-})) {
-  if (event.type === "text_delta") {
-    process.stdout.write(event.delta);
-  } else if (event.type === "done") {
-    console.log("\n[done]");
+const unsubscribe = session.subscribe((event) => {
+  if (
+    event.type === "message_update" &&
+    event.assistantMessageEvent.type === "text_delta"
+  ) {
+    process.stdout.write(event.assistantMessageEvent.delta);
   }
+});
+
+try {
+  await session.prompt("Write a TypeScript haiku.");
+  process.stdout.write("\n");
+} finally {
+  unsubscribe();
+  session.dispose();
 }
 ```
 
-Output xuất hiện từng ký tự. Không buffer, không bọc JSON.
+`prompt()` resolve sau khi lượt chạy đã nhận hoàn tất, bao gồm tool call, retry và các subscriber cuối lượt cần được await. Callback nhận event tăng dần; không render lại toàn bộ message sau mỗi delta.
 
-## 2. Stream với tool call
+## Xử lý các nhóm event
 
-Một turn có dùng tool phát ra `text_delta`, rồi `tool_use`, rồi thêm `text_delta` sau khi tool result trở về. Để hiện điều này trong chat UI:
-
-```ts title="agent.ts" {7-11}
-for await (const event of agentLoop({ model, messages, tools })) {
+```ts title="render-events.ts"
+const unsubscribe = session.subscribe((event) => {
   switch (event.type) {
-    case "text_delta":
-      chat.appendText(event.delta);
+    case "message_update":
+      if (event.assistantMessageEvent.type === "text_delta") {
+        appendText(event.assistantMessageEvent.delta);
+      } else if (event.assistantMessageEvent.type === "thinking_delta") {
+        appendThinking(event.assistantMessageEvent.delta);
+      }
       break;
-    case "tool_use":
-      chat.appendToolCall(event.name, event.args);
-      break;
-    case "tool_result":
-      chat.appendToolResult(event.toolUseId, event.output);
-      break;
-    case "done":
-      chat.finalise(event.reason, event.usage);
-      break;
-  }
-}
-```
 
-`chat` là object tuỳ frontend bạn dùng. Điểm là mỗi event có đủ thông tin để update UI mà không cần parse lại toàn bộ state.
-
-## 3. Stream thinking block
-
-Một số model phát ra một stream "thinking" riêng trước câu trả lời. Để hiện nó thụt vào phía trên câu trả lời:
-
-```ts title="agent.ts" {13-15}
-for await (const event of agentLoop({ model, messages, tools })) {
-  switch (event.type) {
-    case "text_delta":
-      chat.appendText(event.delta);
+    case "tool_execution_start":
+      showTool(event.toolCallId, event.toolName, event.args);
       break;
-    case "thinking_delta":
-      chat.appendThinking(event.delta);
+
+    case "tool_execution_update":
+      updateTool(event.toolCallId, event.partialResult);
       break;
-    case "tool_use":
-      chat.appendToolCall(event.name, event.args);
+
+    case "tool_execution_end":
+      finishTool(event.toolCallId, event.isError);
       break;
-    case "done":
-      chat.finalise(event.reason, event.usage);
+
+    case "agent_end":
+      markIdle();
       break;
   }
-}
+});
 ```
 
-Event `thinking_delta` chỉ đến khi descriptor có `capabilities.thinking: true`. Model Anthropic và Gemini hỗ trợ. OpenAI thì chưa.
+Trong chế độ chạy tool song song, event hoàn tất có thể đến theo thứ tự hoàn thành thay vì thứ tự trong source. Hãy quản lý state UI theo `toolCallId`; đừng giả định tool được bắt đầu gần nhất sẽ hoàn tất tiếp theo.
 
-## 4. Huỷ giữa stream
+## Hỗ trợ cancellation
 
-Để huỷ một generation dài, drop loop:
-
-```ts title="agent.ts"
-const iterator = agentLoop({ model, messages, tools })[Symbol.asyncIterator]();
-
-// Bắt đầu streaming
-const next = await iterator.next();
-// ... render `next.value` ...
-
-// Người dùng bấm cancel
-iterator.return?.(); // đóng HTTP request bên dưới
+```ts
+cancelButton.addEventListener("click", () => {
+  void session.abort();
+});
 ```
 
-Sau `return`, lần gọi `next()` tiếp theo resolve với `{ done: true }`. HTTP request bị huỷ sạch. Model provider thấy kết nối drop và dừng tính phí.
+Abort sẽ dừng thao tác đang chạy. Giữ lại partial output đã hiển thị và dùng state cuối của message hoặc chuỗi event để gắn nhãn chính xác cho lượt chạy.
 
-## 5. Backpressure
+## Tránh lỗi streaming thường gặp
 
-Async iterator áp dụng backpressure tự nhiên. Nếu renderer của bạn chậm, loop tạm dừng chờ bạn consume event tiếp theo. Nghĩa là bạn không cần queue:
-
-```ts title="agent.ts"
-// Renderer chậm cố ý
-async function slowAppend(delta: string) {
-  await new Promise((r) => setTimeout(r, 16));
-  // ... ghi ra UI ...
-}
-
-for await (const event of agentLoop({ model, messages, tools })) {
-  if (event.type === "text_delta") await slowAppend(event.delta);
-}
-```
-
-Model bị throttle theo tốc độ renderer theo kịp. Hữu ích khi bạn không muốn buffer 100k token trong bộ nhớ trước khi render.
-
-## Pitfalls
-
-**Thiếu một case trong switch**
-
-Event type không được xử lý sẽ bị drop âm thầm. Thêm một nhánh `default:` log ra console. Các version SDK tương lai có thể thêm event type mới và bạn muốn biết.
-
-**Buffer trong một chuỗi và flush ở cuối**
-
-Điều này vô hiệu hoá mục đích. Cả lý do dùng stream là render token khi chúng đến. Nếu bạn cần text cuối, tích luỹ `text_delta` event vào một chuỗi nhưng vẫn render incremental.
-
-**Gọi `await iterator.return()` sau `done`**
-
-Gọi `return` trên iterator đã kết thúc là no-op, không phải lỗi. Nhưng gọi hai lần có thể hành xử khác nhau qua các runtime. Guard bằng cờ `done`.
-
-## Tiếp theo
-
-- [Chapter 6: Message System](../ch06-messages.md) cho taxonomy event đầy đủ.
-- [Reference: API](../reference/api.md#events) cho mọi field của event.
+- Chỉ subscribe một lần cho mỗi session và giữ lại hàm unsubscribe.
+- Gom các lần cập nhật UI có tần suất cao bằng `requestAnimationFrame` trong browser client.
+- Xử lý thinking như content type riêng; không trộn vào câu trả lời cuối.
+- Hiển thị tool update như tiến trình có thể thay thế, không phải message cố định trong transcript.
+- Subscribe lại sau khi thao tác của `AgentSessionRuntime` thay thế `runtime.session`.

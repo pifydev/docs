@@ -1,147 +1,89 @@
 ---
-title: How to persist sessions
-description: 'Lưu cuộc hội thoại từng turn lên đĩa, resume sau, và rẽ nhánh lịch sử.'
+title: Lưu và tiếp tục session
+description: Lưu session dạng JSONL, tiếp tục công việc gần nhất, mở file cụ thể và rẽ nhánh lịch sử hội thoại.
 translation_key: how-to-persist-sessions
 language: vi
+status: reviewed
+reviewed_by: Pify maintainers
+last_updated: '2026-08-24'
 ---
-Hướng dẫn này chỉ cách persist một cuộc hội thoại qua nhiều lần chạy. Sau khi xong bạn sẽ có thể khởi động agent, lưu session, tắt tiến trình, và resume ở lần chạy sau với context đầy đủ được khôi phục.
 
-:::tip[Khi nào cần]
+Pi lưu mỗi persistent session trong một file JSONL. Các entry tạo thành cây qua `id` và `parentId`, nên một file có thể giữ nhiều nhánh hội thoại.
 
-- Một task chạy lâu phải sống qua restart
-- Người dùng đóng laptop và mở lại project ngày mai
-- Một cây hội thoại rẽ nhánh từ một điểm chung
+## Tạo persistent session
 
-:::
+```ts title="new-session.ts"
+import {
+  createAgentSession,
+  ModelRuntime,
+  SessionManager,
+} from "@earendil-works/pi-coding-agent";
 
-## Mô hình session
-
-Một session Pi là một thư mục chứa một file JSONL mỗi turn và một `metadata.json` với resolved model, working directory, và parent session id. Vị trí mặc định là `~/.pi/agent/sessions/`. Bạn có thể override root bằng `PI_HOME`.
-
-## 1. Bắt đầu session
-
-Agent loop nhận tuỳ chọn `sessionId`. Nếu không đặt, SDK tạo UUID.
-
-```ts title="agent.ts"
-import { agentLoop, getModel, Session } from "@pi-agent-core";
-import { homedir } from "node:os";
-import { join } from "node:path";
-
-const sessionsRoot = join(homedir(), ".pi", "agent", "sessions");
-const session = new Session({
-  root: sessionsRoot,
-  // Không id: session mới được tạo khi save lần đầu.
+const cwd = process.cwd();
+const modelRuntime = await ModelRuntime.create();
+const { session } = await createAgentSession({
+  modelRuntime,
+  sessionManager: SessionManager.create(cwd),
 });
 
-const model = getModel("anthropic", "claude-sonnet-4-5");
-
-const events: unknown[] = [];
-for await (const event of agentLoop({
-  model,
-  session,
-  messages: [{ role: "user", content: "Start a refactor plan." }],
-})) {
-  events.push(event);
-  if (event.type === "done") break;
-}
-
-await session.save(events);
-console.log("saved as", session.id);
+await session.prompt("Create a refactoring plan for this project.");
+console.log(session.sessionFile);
+session.dispose();
 ```
 
-Sau khi chạy, `~/.pi/agent/sessions/<id>/turn-0.jsonl` và `metadata.json` tồn tại trên disk.
+`SessionManager.create(cwd)` tạo persistent session mới cho working directory đó. Pi tự append entry khi hội thoại thay đổi; bạn không cần gọi `save()` riêng.
 
-## 2. Resume session
+Dùng `SessionManager.inMemory(cwd)` cho test hoặc công việc tạm thời không được ghi xuống disk.
 
-Ở lần chạy tiếp theo, load session theo id:
+## Tiếp tục session gần nhất
 
-```ts title="agent.ts" {4}
-import { Session } from "@pi-agent-core";
-import { join } from "node:path";
-import { homedir } from "node:os";
+```ts title="continue-session.ts"
+import {
+  createAgentSession,
+  ModelRuntime,
+  SessionManager,
+} from "@earendil-works/pi-coding-agent";
 
-const session = await Session.load({
-  root: join(homedir(), ".pi", "agent", "sessions"),
-  id: "a1b2c3-...", // id từ lần chạy trước
-});
-```
-
-`Session.load` đọc `metadata.json` và các file turn, theo thứ tự, và tái dựng message history. Model và provider được khôi phục từ metadata, không phải từ `getModel`.
-
-:::caution[Kiểm tra model vẫn khả dụng]
-
-Nếu model gốc không còn trong catalog, resume thất bại. Pin model bằng `Session.load({ ..., pinModel: true })` để tiếp tục dùng descriptor gốc ngay cả khi catalog thay đổi.
-
-:::
-
-## 3. Rẽ nhánh session
-
-Branching rẽ cuộc hội thoại tại một turn cụ thể. Session gốc không đổi; một session mới được tạo với `parentId`:
-
-```ts title="agent.ts"
-const branch = await Session.branch({
-  root: sessionsRoot,
-  parentId: "a1b2c3-...",
-  fromTurn: 4, // copy turn 0..4 sang session mới
-  newId: "d4e5f6-...",
+const cwd = process.cwd();
+const modelRuntime = await ModelRuntime.create();
+const { session, modelFallbackMessage } = await createAgentSession({
+  modelRuntime,
+  sessionManager: SessionManager.continueRecent(cwd),
 });
 
-// branch.messages chứa các turn đã copy.
-// Ghi tiếp theo đi vào branch, không phải parent.
+if (modelFallbackMessage) console.warn(modelFallbackMessage);
+await session.prompt("Continue with the first safe change.");
 ```
 
-Session mới có thể tách ra từ turn 5 trở đi. Parent giữ read-only.
+Thông báo fallback cần được xử lý: model đã lưu có thể không còn khả dụng và session được khôi phục có thể chọn model thay thế.
 
-## 4. Duyệt cây
+## Mở hoặc liệt kê session đã lưu
 
-Session tạo thành cây qua `parentId`. Để liệt kê lịch sử của user:
+```ts
+const sessions = await SessionManager.list(process.cwd());
+const allSessions = await SessionManager.listAll(process.cwd());
 
-```ts title="agent.ts"
-import { listSessions } from "@pi-agent-core";
-
-const all = await listSessions({ root: sessionsRoot });
-for (const meta of all) {
-  console.log(meta.id, meta.parentId, meta.title);
-}
+const manager = SessionManager.open("/absolute/path/to/session.jsonl");
+const { session } = await createAgentSession({ sessionManager: manager });
 ```
 
-CLI dùng cái này để render session picker.
+`list()` giới hạn theo working directory. `listAll()` tìm trong mọi project đã biết của Pi agent directory đang được cấu hình.
 
-## 5. Riêng tư và cleanup
+## Di chuyển và rẽ nhánh trên cây
 
-Session là JSONL thuần trên disk. Chúng chứa mọi user message và mọi tool result. Trước khi ship một build có tạo session, quyết định:
+```ts
+const manager = SessionManager.open("/absolute/path/to/session.jsonl");
+const entries = manager.getEntries();
+const currentPath = manager.getPath();
 
-- Root ở đâu (mặc định `~/.pi/agent/sessions` ổn cho dùng cá nhân; deployment nhiều user muốn root theo từng user)
-- Giữ bao lâu (Pi có setting retention; xem [Reference: Configuration](../reference/configuration.md))
-- Có redact secret trước khi ghi không (một hook `Session.redact` chạy trước mỗi lần save)
-
-```ts title="agent.ts"
-const session = new Session({
-  root: sessionsRoot,
-  redact: (event) => {
-    if (event.type === "tool_result" && event.output.includes("sk-")) {
-      return { ...event, output: "[redacted]" };
-    }
-    return event;
-  },
-});
+const checkpoint = entries.find((entry) => manager.getLabel(entry.id) === "checkpoint");
+if (checkpoint) manager.branch(checkpoint.id);
 ```
 
-## Pitfalls
+`branch(id)` đổi active leaf trong cùng file. Prompt mới sau đó sẽ tạo một child khác. Dùng `createBranchedSession(leafId)` khi muốn tách path đã chọn thành session file riêng.
 
-**Quên gọi `save`**
+## Lưu trữ và an toàn
 
-Event được buffer trong bộ nhớ cho đến khi bạn save. Crash trước khi save mất turn. Bọc loop trong `try/finally` và gọi `save` cả khi có lỗi.
+Root mặc định là `~/.pi/agent/sessions/`, được nhóm theo working directory. Có thể ghi đè bằng `--session-dir`, sau đó là `PI_CODING_AGENT_SESSION_DIR`, rồi `sessionDir` trong `settings.json`, theo đúng thứ tự ưu tiên này.
 
-**Ghi vào sai root**
-
-Tuỳ chọn `root` là theo `Session`. Nếu bạn tạo `Session` mới với root khác do nhầm, hai nửa cuộc hội thoại sẽ không liên kết.
-
-**Load session với phiên bản model khác**
-
-Pi SDK có thể bump message shape giữa các version nhỏ. Một session từ 0.78 có thể không load trên 0.84 nếu schema lệch. File session có field `schemaVersion`; hãy kiểm tra trong loader của bạn và đưa ra lỗi rõ ràng khi lệch.
-
-## Tiếp theo
-
-- [Chapter 10: Session Management](../ch10-session.md) cho session tree đầy đủ và schema metadata.
-- [Reference: Configuration](../reference/configuration.md#sessions) cho các setting retention và redacting.
+Session file có thể chứa prompt, tham số và output của tool, file path cùng dữ liệu extension. Hãy áp dụng cùng chính sách access control, retention và backup như đối với source code và operational log.

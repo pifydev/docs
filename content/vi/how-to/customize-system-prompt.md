@@ -1,135 +1,86 @@
 ---
-title: How to customize the system prompt
-description: >-
-  Xếp lớp AGENTS.md, SYSTEM.md, CLI flag, và extension thành một prompt mạch lạc
-  mà model thấy.
+title: Tùy chỉnh system prompt
+description: Chọn context file, prompt thay thế, prompt bổ sung, CLI flag hoặc SDK override đúng với phạm vi sử dụng.
 translation_key: how-to-customize-system-prompt
 language: vi
+status: reviewed
+reviewed_by: Pify maintainers
+last_updated: '2026-08-24'
 ---
-Hướng dẫn này cho thấy Pi compose system prompt từ CLI flag, project file, và extension contribution. Sau khi xong bạn sẽ biết cần edit file nào để có tác dụng gì và cách debug prompt cuối cùng mà model thật sự thấy.
 
-:::tip[Khi nào cần]
+Pi tách hướng dẫn của project khỏi system prompt nền. Hãy chọn cơ chế có phạm vi hẹp nhất nhưng vẫn đáp ứng đúng mục tiêu.
 
-- Rule riêng cho project ("không dùng `any` trong `src/`")
-- Quy ước team encode một lần, áp dụng mọi nơi
-- Debug vì sao model theo hoặc không theo một rule
+## Chọn nguồn phù hợp
 
-:::
+| Mục tiêu | Nguồn |
+|---|---|
+| Chia sẻ quy ước của project | `AGENTS.md` hoặc `CLAUDE.md` |
+| Ghi đè hướng dẫn cho một directory | `AGENTS.override.md` |
+| Thay system prompt mặc định của Pi | `.pi/SYSTEM.md` hoặc `~/.pi/agent/SYSTEM.md` |
+| Bổ sung vào prompt mặc định | `.pi/APPEND_SYSTEM.md` hoặc file global tương ứng |
+| Ghi đè cho một lần chạy | `--system-prompt` hoặc `--append-system-prompt` |
+| Nhúng Pi với prompt được cấu hình bằng code | `DefaultResourceLoader` |
 
-## Thứ tự composition
+## Thêm hướng dẫn cho project
 
-Pi đọc các nguồn system prompt theo thứ tự này, cái trên thắng:
-
-1. `--system-prompt <text>` CLI flag
-2. `--append-system-prompt <text>` CLI flag
-3. Project file `./SYSTEM.md` (gần cwd nhất)
-4. Project file `./AGENTS.md` (gần cwd nhất)
-5. Extension contribution qua `pi.registerSystemPrompt()`
-6. Default Pi system prompt
-
-Mỗi layer sau thấy prompt đã được sửa bởi các layer trước. CLI flag ghi đè tất cả bên dưới.
-
-## 1. Thêm rule project trong AGENTS.md
-
-Tạo `AGENTS.md` ở root project:
+Tạo `AGENTS.md` trong repository:
 
 ```md title="AGENTS.md"
-- Use TypeScript strict mode everywhere.
-- Prefer `unknown` over `any`. Cast only at the boundary.
-- Tests live next to the code as `*.test.ts`.
-- Do not edit files under `vendor/`.
+# Project conventions
+
+- Use TypeScript strict mode.
+- Run `npm test` before reporting completion.
+- Do not edit generated files under `dist/`.
+- Treat migrations as backward-compatible changes.
 ```
 
-Pi đọc file này ở mọi session mở trong project. File được resolve bằng cách đi ngược lên từ working directory.
+Pi đọc file global rồi đi từ các parent directory đến current working directory. Nếu một directory có `AGENTS.override.md`, file này chỉ thay thế `AGENTS.md` hoặc `CLAUDE.md` trong chính directory đó.
 
-:::note[File gần nhất thắng]
+Dùng context file cho command, convention, safety rule và thông tin về repository. Nội dung nên ngắn gọn, có thể kiểm chứng. Dùng `--no-context-files` để tắt discovery khi xử lý checkout chưa đáng tin cậy.
 
-Nếu cả `./apps/web/AGENTS.md` và `./AGENTS.md` tồn tại, Pi dùng `./apps/web/AGENTS.md` vì nó gần cwd hơn. Điều này cho phép có rule toàn repo cộng với override theo từng app.
+## Thay hoặc bổ sung prompt nền
 
-:::
+Dùng `.pi/SYSTEM.md` khi ứng dụng cần một base role khác. Dùng `.pi/APPEND_SYSTEM.md` khi vẫn cần giữ hướng dẫn tích hợp của Pi về tool và environment.
 
-## 2. Thêm block system prompt tường minh với SYSTEM.md
+```md title=".pi/APPEND_SYSTEM.md"
+## Release policy
 
-`SYSTEM.md` được coi là prose bắt buộc, trong khi `AGENTS.md` là hướng dẫn. Dùng `SYSTEM.md` khi model phải tuân theo rule, `AGENTS.md` khi đó là preference.
-
-```md title="SYSTEM.md"
-You are working inside the Pify monorepo.
-
-Constraints:
-- Never run `git push` without explicit user confirmation.
-- Never delete files outside the working directory.
-- Always read a file before editing it.
+Never publish a package without showing the exact version and tag to the user.
 ```
 
-Sự phân biệt quan trọng vì Pi budget token space khác nhau cho hai cái: `SYSTEM.md` không bao giờ bị cắt trong compaction, `AGENTS.md` có thể bị.
+Resource `.pi` trong project cần project trust. Chế độ interactive sẽ hỏi người dùng; chế độ non-interactive dùng `defaultProjectTrust` trừ khi có `--approve` hoặc `--no-approve`.
 
-## 3. Truyền chỉ dẫn một lần từ CLI
-
-Cho override ad-hoc mà không edit file nào:
+## Ghi đè từ CLI
 
 ```bash
-pi --append-system-prompt "Reply in Japanese for this session."
+pi --system-prompt "You review API compatibility. Return a concise report."
+pi --append-system-prompt "Do not modify files in this run."
 ```
 
-`--system-prompt` thay thế hoàn toàn default Pi prompt (cẩn thận khi dùng). `--append-system-prompt` thêm vào bất cứ gì đã compose bên dưới.
+`--system-prompt` thay base prompt, nhưng context file và skill đã discover vẫn được thêm vào. `--append-system-prompt` giữ base prompt và bổ sung nội dung được truyền vào.
 
-## 4. Thêm prompt expansion qua extension
+## Ghi đè từ SDK
 
-Một extension Pi có thể đóng góp vào system prompt theo lập trình:
+```ts title="custom-prompt.ts"
+import {
+  createAgentSession,
+  DefaultResourceLoader,
+} from "@earendil-works/pi-coding-agent";
 
-```ts title="extensions/team-roles.ts"
-import { registerExtension } from "@pi-coding-agent";
-
-registerExtension({
-  name: "team-roles",
-  systemPrompt: () => `
-You are a staff engineer.
-When reviewing code, focus on:
-- API contract changes
-- Backward compatibility
-- Test coverage of new branches
-`,
+const loader = new DefaultResourceLoader({
+  systemPromptOverride: () =>
+    "You are a concise API compatibility reviewer. Cite files and symbols.",
 });
+await loader.reload();
+
+const { session } = await createAgentSession({ resourceLoader: loader });
+await session.prompt("Review the public exports.");
 ```
 
-Hàm chạy lúc session bắt đầu. Nó thấy working directory hiện tại và resolved model, và trả về chuỗi. Chuỗi được append sau các project file và trước default prompt.
+Dùng `appendSystemPromptOverride` nếu cần biến đổi danh sách các prompt section được bổ sung mà không thay base prompt.
 
-## 5. Inspect prompt cuối
+## Kiểm tra prompt thực tế
 
-Khi model hành xử lạ, bước debug nhanh nhất là log composed prompt. Pi làm điều này khi bạn truyền `--log-prompts`:
+Trong tích hợp SDK, kiểm tra `session.agent.state.systemPrompt` sau khi tạo session. Khi debug CLI, trước tiên hãy giảm số nguồn chồng lấp và xác nhận working directory cùng quyết định project trust.
 
-```bash
-pi --log-prompts
-# bắt đầu agent, log final system prompt ra stderr ở mỗi turn
-```
-
-Log gồm nguồn của mỗi section, vì vậy bạn có thể biết một rule thiếu đến từ `AGENTS.md` hay từ extension cũ.
-
-## 6. Override default prompt của model
-
-Một số model có framing riêng của vendor trong default Pi prompt. Để opt out:
-
-```bash
-pi --no-default-system-prompt --system-prompt "You are a focused coding agent."
-```
-
-Hữu ích khi bạn muốn toàn quyền kiểm soát và không muốn tone hoặc guidance của Pi rò rỉ vào cuộc hội thoại.
-
-## Pitfalls
-
-**Edit `AGENTS.md` mà không thấy tác dụng**
-
-File được đọc lúc session bắt đầu. Nếu agent đang chạy, hãy restart. Hot-reload `AGENTS.md` không được hỗ trợ trong các bản stable.
-
-**Đặt secret trong system prompt**
-
-Bất cứ thứ gì trong `SYSTEM.md` hoặc `AGENTS.md` đều được gửi đến model provider ở mỗi turn. Coi cả hai file là công khai với provider bạn gọi.
-
-**Rule xung đột giữa AGENTS.md và SYSTEM.md**
-
-`SYSTEM.md` thắng cho hard constraint, `AGENTS.md` cho soft guidance. Nếu chúng mâu thuẫn và model chọn sai, chuyển rule từ `AGENTS.md` sang `SYSTEM.md`.
-
-## Tiếp theo
-
-- [Chapter 8: Context Engineering](../ch08-context-engineering.md) trình bày cách system prompt vừa với context budget rộng hơn.
-- [Reference: Environment Variables](../reference/environment-variables.md) liệt kê các núm chỉnh ảnh hưởng đến việc load prompt.
+Không đưa API key, access token hoặc dữ liệu riêng tư của người dùng vào prompt file vì provider được chọn sẽ nhận context kết quả.

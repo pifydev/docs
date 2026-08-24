@@ -1,123 +1,111 @@
 ---
-title: How to add a custom tool
-description: >-
-  Đăng ký một hàm model có thể gọi, mô tả bằng JSON schema, và đọc kết quả trở
-  lại loop.
+title: Thêm custom tool
+description: Định nghĩa tool có type, cung cấp cho AgentSession và xử lý tiến trình, hủy tác vụ cùng lỗi thực thi.
 translation_key: how-to-add-custom-tool
 language: vi
+status: reviewed
+reviewed_by: Pify maintainers
+last_updated: '2026-08-24'
 ---
-Hướng dẫn này chỉ cách đăng ký một tool mà model có thể gọi trong một turn. Sau khi xong bạn sẽ có một tool `get_weather` hoạt động, được agent gọi khi phù hợp và đọc kết quả trở lại loop.
 
-:::tip[Bạn sẽ có gì]
+Dùng custom tool khi model cần gọi mã ứng dụng hoặc dịch vụ bên ngoài. Ví dụ này thêm tool `get_weather` có type vào Coding Agent SDK.
 
-Một định nghĩa tool (tên, mô tả, JSON schema) và một handler. Handler chạy khi model phát ra một block `tool_use`. Kết quả được feed trở lại dưới dạng block `tool_result` ở vòng lặp tiếp theo.
+## Cài đặt SDK
 
-:::
+```bash
+npm install @earendil-works/pi-coding-agent typebox
+```
 
-## 1. Mô tả tool
+Pi dùng schema TypeBox để mô tả tham số cho model và kiểm tra từng tool call trước khi thực thi.
 
-Model chỉ thấy schema. Hãy viết như khi viết docs công khai cho tool.
+## Định nghĩa tool
 
-```ts title="tools/get_weather.ts"
-import { Type } from "@sinclair/typebox";
+```ts title="tools/get-weather.ts"
+import { defineTool } from "@earendil-works/pi-coding-agent";
+import { Type } from "typebox";
 
-export const get_weather = {
+export const getWeather = defineTool({
   name: "get_weather",
-  description: "Return the current weather for a city. Use when the user asks about weather or temperature.",
+  label: "Get Weather",
+  description: "Return the current weather for a city.",
   parameters: Type.Object({
-    city: Type.String({ description: "City name, e.g. 'Paris'" }),
+    city: Type.String({ description: "City name, for example Paris" }),
     unit: Type.Optional(
-      Type.Union([Type.Literal("celsius"), Type.Literal("fahrenheit")], {
-        default: "celsius",
-      })
+      Type.Union([Type.Literal("celsius"), Type.Literal("fahrenheit")]),
     ),
   }),
-};
+  async execute(_toolCallId, params, signal, onUpdate) {
+    onUpdate?.({
+      content: [{ type: "text", text: `Checking ${params.city}...` }],
+      details: {},
+    });
+
+    const response = await fetch(
+      `https://weather.example.test/current?city=${encodeURIComponent(params.city)}`,
+      { signal },
+    );
+    if (!response.ok) throw new Error(`Weather service returned ${response.status}`);
+
+    const data = (await response.json()) as { temperature: number };
+    return {
+      content: [
+        {
+          type: "text",
+          text: `${params.city}: ${data.temperature}° ${params.unit ?? "celsius"}`,
+        },
+      ],
+      details: { city: params.city, temperature: data.temperature },
+    };
+  },
+});
 ```
 
-:::note[Vì sao dùng TypeBox mà không phải raw JSON Schema]
+Handler nhận object `params` đã được kiểm tra. Truyền `signal` vào các thao tác I/O có thể hủy và chỉ gọi `onUpdate` khi có tiến trình hữu ích. Hãy throw khi thực thi thất bại; Pi sẽ chuyển exception thành tool error cho model.
 
-SDK nhận cả hai. TypeBox cho type safety ở thời điểm biên dịch cho parameters, vì vậy một lỗi đánh máy trong `city` hiện ra lúc build chứ không phải lúc runtime.
-
-:::
-
-## 2. Viết handler
-
-Handler nhận tham số đã parse và trả về chuỗi hoặc object. SDK serialize giá trị trả về thành block `tool_result`.
-
-```ts title="tools/get_weather.ts" {13}
-export async function get_weather_handler(args: {
-  city: string;
-  unit?: "celsius" | "fahrenheit";
-}): Promise<string> {
-  // Trong code thật, gọi một weather API.
-  // Response hardcode dưới đây thay thế cho việc đó.
-  const temp = 18;
-  const unit = args.unit ?? "celsius";
-  return `${temp} degrees ${unit} in ${args.city}`;
-}
-```
-
-Handler phải `async` và phải trả về hoặc chuỗi hoặc object có thể serialize. Giá trị trả về là giá trị model thấy ở vòng lặp tiếp theo.
-
-## 3. Đăng ký cả hai với agent
+## Thêm tool vào session
 
 ```ts title="agent.ts"
-import { agentLoop, getModel } from "@pi-agent-core";
-import { get_weather, get_weather_handler } from "./tools/get_weather.js";
+import {
+  createAgentSession,
+  ModelRuntime,
+  SessionManager,
+} from "@earendil-works/pi-coding-agent";
+import { getWeather } from "./tools/get-weather.js";
 
-const tools = [
-  {
-    ...get_weather,
-    handler: get_weather_handler,
-  },
-];
+const modelRuntime = await ModelRuntime.create();
+const { session } = await createAgentSession({
+  modelRuntime,
+  sessionManager: SessionManager.inMemory(),
+  customTools: [getWeather],
+});
 
-const model = getModel("anthropic", "claude-sonnet-4-5");
+await session.prompt("What is the weather in Paris?");
+```
 
-for await (const event of agentLoop({
-  model,
-  systemPrompt: "You can look up the weather. Use the get_weather tool when relevant.",
-  messages: [{ role: "user", content: "What's the weather in Tokyo?" }],
-  tools,
-})) {
-  if (event.type === "text_delta") process.stdout.write(event.delta);
-  if (event.type === "tool_use") console.log("\n[tool]", event.name, event.args);
-  if (event.type === "done") console.log("\n[done] reason:", event.reason);
+`customTools` được kết hợp với các tool do extension đăng ký. Nếu bạn còn truyền allowlist `tools`, hãy thêm `"get_weather"`; nếu không, tool sẽ chưa được kích hoạt.
+
+## Đăng ký tool từ extension
+
+Extension có thể đăng ký cùng một định nghĩa qua `pi.registerTool()`:
+
+```ts title="weather-extension.ts"
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { Type } from "typebox";
+
+export default function weatherExtension(pi: ExtensionAPI) {
+  pi.registerTool({
+    name: "get_weather",
+    label: "Get Weather",
+    description: "Return the current weather for a city.",
+    parameters: Type.Object({ city: Type.String() }),
+    async execute(_toolCallId, { city }) {
+      return {
+        content: [{ type: "text", text: `No forecast configured for ${city}.` }],
+        details: {},
+      };
+    },
+  });
 }
 ```
 
-Khi model quyết định câu hỏi của user cần weather, nó phát ra block `tool_use` với `{ city: "Tokyo" }`. Agent loop gọi handler của bạn, feed giá trị trả về thành `tool_result`, và tiếp tục.
-
-## 4. Thêm permission gate (tuỳ chọn)
-
-Theo mặc định, agent gọi handler không hỏi. Với tool chạm vào filesystem hoặc shell, chặn cuộc gọi bằng permission check:
-
-```ts title="tools/get_weather.ts" {2}
-{
-  ...get_weather,
-  handler: get_weather_handler,
-  requiresPermission: true,
-}
-```
-
-Khi `requiresPermission` là `true`, coding agent sẽ prompt người dùng trước khi gọi handler. Ở chế độ headless hoặc `yolo`, prompt bị bỏ qua.
-
-## Pitfalls
-
-**Handler `async` nhưng throw đồng bộ**
-
-Bọc phần thân trong `try/catch` và trả về chuỗi thông báo lỗi. Model thấy chuỗi và phản ứng. Exception bị ném ra kết thúc loop.
-
-**Schema quá mơ hồ**
-
-Nếu mô tả chỉ là "weather tool", model sẽ gọi nó cho mọi message. Hãy cụ thể: liệt kê use case, liệt kê input, liệt kê output trả về.
-
-**Kết quả quá lớn**
-
-Một chuỗi 50.000 ký tự là cách nhanh nhất để phá context window. Cắt kết quả trước khi trả về. Với API phân trang, trả về trang đầu và để tool được gọi lại.
-
-## Tiếp theo
-
-- [Chapter 5: Tool System](../ch05-tool-system.md) trình bày toàn bộ tool registry và pipeline JSON Schema sang provider-translator.
-- [How to plug in a new model](plug-new-model.md) cho nửa còn lại của việc tuỳ biến agent.
+Tên tool nên ổn định, cụ thể và dễ phân biệt đối với model. Không đưa secret vào description hoặc nội dung trả về.
