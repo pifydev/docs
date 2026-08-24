@@ -69,7 +69,7 @@ History boundary
 | Mechanism | Unit and scope | Trigger | What it does not do |
 | --- | --- | --- | --- |
 | Tool-output truncation | Lines, UTF-8 bytes, and grep string length | During selected built-in Tool execution | It does not calculate tokens or shorten earlier history |
-| System-prompt assembly | Files, resource records, and strings | Resource reload and prompt rebuild | It does not make repository instructions trusted code |
+| System-prompt assembly | Files, resource records, and strings | Resource reload and prompt rebuild | It does not make repository instructions safe, authoritative, or permitted; project trust controls resource loading, not authorization or sandboxing |
 | `transformContext` and `convertToLlm` | Messages for one model call | Before each assistant response | They do not persist a compaction entry by themselves |
 | Compaction | Estimated or provider-reported tokens on the active branch | Manual request, threshold, or overflow recovery | It does not truncate a single oversized Tool result at execution time |
 | Branch summary | Entries on the path being left | Tree navigation with summarization requested | It does not run for every branch switch |
@@ -147,7 +147,7 @@ value                  UTF-8 bytes   UTF-16 code units   code points
 
 Head and tail truncation deliberately behave differently at this edge.
 
-For `read`, if the selected first line alone is larger than 50 KiB, `truncateHead()` returns empty content with `firstLineExceedsLimit: true`. The Tool converts that state into an actionable result:
+For `read`, if the selected first line alone is larger than 50 KiB, `truncateHead()` returns empty content with `firstLineExceedsLimit: true`. The Tool converts that state into a result with an explicit recovery action:
 
 ```text
 [Line 1 is 92.3KB, exceeds 50.0KB limit.
@@ -220,9 +220,9 @@ Order supplies a readable general-to-specific sequence; it does not implement a 
 
 ### Project trust: the exact boundary
 
-Project trust gates input loading only; it provides no sandbox, Tool-call authorization layer, or prompt-injection defense. Pi's built-in Tools and extensions run with the operating-system permissions of the Pi process.
+Project trust decides which project resources Pi may load. It does not authorize Tool calls, sandbox the process, or defend against prompt injection. Pi's built-in Tools and extensions run with the operating-system permissions of the Pi process.
 
-`AGENTS.override.md`, `AGENTS.md`, and `CLAUDE.md` load regardless of the trust decision unless context loading is disabled. Trust protects project settings and executable or configurable resource channels; it does not label ordinary repository text as safe.
+`AGENTS.override.md`, `AGENTS.md`, and `CLAUDE.md` load regardless of the trust decision unless context loading is disabled. The loader applies project-trust gating to project settings and executable or configurable resource channels; it does not label ordinary repository text as safe.
 
 | Source | Untrusted project | Trusted project | Selection or merge rule |
 | --- | --- | --- | --- |
@@ -264,7 +264,7 @@ The callback options have replacement semantics at the collection boundary. `ski
 
 ### XML boundaries and replacement versus append
 
-If no explicit `systemPrompt` input exists, the loader selects trusted `<cwd>/.pi/SYSTEM.md` when present, otherwise `~/.pi/agent/SYSTEM.md`. It selects only one discovered replacement file. `APPEND_SYSTEM.md` follows the same project-first, global-fallback rule. An explicit `appendSystemPrompt` array can contain several strings or file paths; `AgentSession` joins the resolved values with blank lines.
+If no explicit `systemPrompt` input exists, discovery checks `<cwd>/.pi/SYSTEM.md` only when the project is trusted. It selects that project file when present and otherwise falls back to `~/.pi/agent/SYSTEM.md`; only one discovered replacement file is selected. Likewise, when no explicit `appendSystemPrompt` input exists, discovery checks project `.pi/APPEND_SYSTEM.md` only for a trusted project, then falls back to the global file. An explicit `appendSystemPrompt` array bypasses that discovery and can contain several strings or file paths; `AgentSession` joins the resolved values with blank lines.
 
 `buildSystemPrompt()` gives a custom prompt narrow replacement semantics: it replaces the default role, Tool-list prose, guidelines, and Pi-documentation block. Append text, context files, visible skill metadata, and the current working directory still follow it. Context files are wrapped with their paths:
 
@@ -284,7 +284,7 @@ XML makes source boundaries visible to the model. It does not enforce the instru
 
 ### Skills load metadata first and instructions on demand
 
-Pi discovers skills from user roots, trusted project roots, packages, settings, and explicit `--skill` paths. It recursively finds directories containing `SKILL.md`, validates frontmatter, canonicalizes paths, and warns on name collisions while keeping the first name encountered.
+Pi discovers skills from user roots, project roots enabled by project trust, packages, settings, and explicit `--skill` paths. It recursively finds directories containing `SKILL.md`, validates frontmatter, canonicalizes paths, and warns on name collisions while keeping the first name encountered.
 
 When `read` is active, `formatSkillsForPrompt()` injects model-visible metadata rather than every skill body:
 
@@ -533,7 +533,7 @@ source record
   → next model request
 ```
 
-Addition without a budget produces noise. Subtraction without markers produces false confidence. A summary that preserves paths, constraints, decisions, failed attempts, and unfinished work carries more actionable state than an equally sized narrative recap.
+Every added input consumes part of a defined byte or token budget. When content is omitted, Tool-result markers or summary-entry metadata record the omitted region or retained boundary. Summary templates retain paths, constraints, decisions, failed attempts, and unfinished work.
 
 Before handing off a context pipeline, test five concrete boundaries:
 
