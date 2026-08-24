@@ -1,6 +1,6 @@
 ---
 title: 'Chương 9: Nén ngữ cảnh khi cuộc hội thoại quá dài'
-description: Cách Pi chọn ranh giới history an toàn, ghi checkpoint có cấu trúc và dựng lại model context cho lần gọi tiếp theo.
+description: Cách Pi chọn ranh giới an toàn trong lịch sử, ghi điểm kiểm tra có cấu trúc và dựng lại ngữ cảnh cho lần gọi mô hình tiếp theo.
 translation_key: ch09-compaction
 language: vi
 chapter: 9
@@ -17,59 +17,59 @@ last_updated: '2026-08-24'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
-Chương 8 đã lập bản đồ các lớp phòng vệ quanh một model request. `transformContext` có thể lọc `AgentMessage[]` được project cho một lần gọi, nhưng không viết lại session history. Compaction hoạt động ở một ranh giới khác: Coding Agent tóm tắt vùng cũ hơn trên active session path, thêm một `CompactionEntry` bền vững, rồi dựng lại message của Agent từ checkpoint đó.
+Chương 8 đã mô tả các lớp bảo vệ quanh một lần gọi mô hình. `transformContext` có thể lọc `AgentMessage[]` được chiếu vào một lần gọi, nhưng không viết lại lịch sử phiên. Cơ chế nén hoạt động ở một ranh giới khác: Coding Agent tóm tắt vùng cũ hơn trên nhánh phiên đang hoạt động, thêm một `CompactionEntry` bền vững, rồi dựng lại các thông điệp của Agent từ điểm kiểm tra đó.
 
-Kết quả này có mất mát theo chủ đích. Phần việc gần đây được giữ nguyên văn; phần việc cũ tồn tại dưới dạng handoff có cấu trúc, gồm mục tiêu, constraint, tiến độ, quyết định, bước tiếp theo, context thiết yếu và một số metadata về thao tác file.
+Quá trình này chủ động chấp nhận mất mát. Phần việc gần đây được giữ nguyên văn; phần việc cũ trở thành bản bàn giao có cấu trúc, gồm mục tiêu, ràng buộc, tiến độ, quyết định, bước tiếp theo, ngữ cảnh thiết yếu và một số siêu dữ liệu về thao tác tệp.
 
-## 1. Vấn đề: history tăng, model window thì không
+## 1. Vấn đề: lịch sử vượt quá cửa sổ ngữ cảnh
 
-Mỗi request gồm system prompt, định nghĩa Tool đang active và message projection hiện tại. Tool result có thể làm phần message tăng rất nhanh. Ví dụ, một session có 50 turn, trung bình 3.000 token mỗi turn, đã đóng góp `50 × 3.000 = 150.000` token trước khi cộng system prompt hoặc Tool schema.
+Mỗi yêu cầu gồm lời nhắc hệ thống, định nghĩa các Tool đang dùng và danh sách thông điệp hiện tại được chiếu vào yêu cầu. Kết quả Tool có thể làm danh sách này tăng rất nhanh. Ví dụ, một phiên có 50 lượt, trung bình 3.000 token mỗi lượt, đã chiếm `50 × 3.000 = 150.000` token trước khi tính lời nhắc hệ thống hoặc lược đồ Tool.
 
-Xóa các turn cũ nhất sẽ giải phóng chỗ, nhưng đồng thời xóa mục tiêu ban đầu, quyết định trước đó, cách làm đã thất bại và những path đã thay đổi. Pi thay phần projection cũ của request bằng summary, trong khi vẫn giữ các session entry gốc trong JSONL tree.
+Xóa các lượt cũ nhất sẽ giải phóng chỗ, nhưng cũng làm mất mục tiêu ban đầu, quyết định trước đó, cách làm đã thất bại và những đường dẫn đã thay đổi. Pi thay phần lịch sử cũ trong yêu cầu bằng một bản tóm tắt, còn các mục phiên gốc vẫn nằm trong cây JSONL.
 
-Phép tính sau chỉ là ví dụ, không phải tỷ lệ nén được bảo đảm. Nếu active context giảm từ 185.000 token xuống một summary 10.000 token cộng 20.000 token gần đây, projection mới là `10.000 + 20.000 = 30.000` token. Request tiếp theo giảm 155.000 token và còn 170.000 token trống trong window 200.000 token.
+Phép tính sau chỉ là ví dụ, không bảo đảm một tỷ lệ nén cố định. Nếu ngữ cảnh đang hoạt động giảm từ 185.000 token xuống một bản tóm tắt 10.000 token cộng 20.000 token gần đây, phép chiếu mới là `10.000 + 20.000 = 30.000` token. Yêu cầu tiếp theo bớt 155.000 token và còn 170.000 token trống trong cửa sổ 200.000 token.
 
 ```text
-Trước: 185.000 active token
-┌──────────── projection cũ: 165.000 ───────────────┬── gần đây: 20.000 ─┐
-│ user, assistant và Tool message nguyên bản        │ giữ nguyên văn     │
+Trước: 185.000 token đang hoạt động
+┌──────────── lịch sử cũ: 165.000 ──────────────┬── gần đây: 20.000 ─┐
+│ thông điệp người dùng, trợ lý và Tool nguyên bản  │ giữ nguyên văn     │
 └───────────────────────────────────────────────────┴─────────────────────┘
 
-Sau: ví dụ 30.000 active token
-┌── structured summary: 10.000 ──┬── gần đây: 20.000 ─┐
-│ mục tiêu, state, quyết định     │ giữ nguyên văn     │
-└─────────────────────────────────┴─────────────────────┘
+Sau: ví dụ 30.000 token đang hoạt động
+┌── bản tóm tắt có cấu trúc: 10.000 ──┬── gần đây: 20.000 ─┐
+│ mục tiêu, trạng thái, quyết định     │ giữ nguyên văn     │
+└──────────────────────────────────────┴─────────────────────┘
 ```
 
-Kích thước summary thay đổi theo cuộc hội thoại, model và response. Pi giới hạn main summary response ở giá trị nhỏ hơn giữa `floor(0.8 × reserveTokens)` và `model.maxTokens`; nó không cam kết summary luôn có 10.000 token.
+Kích thước bản tóm tắt thay đổi theo cuộc hội thoại, mô hình và phản hồi. Pi giới hạn đầu ra của bản tóm tắt chính ở giá trị nhỏ hơn giữa `floor(0.8 × reserveTokens)` và `model.maxTokens`; con số 10.000 token trong ví dụ không phải mức cố định.
 
-### Ranh giới run: kiểm tra tự động và ngắt thủ công
+### Ranh giới lượt chạy: kiểm tra tự động và ngắt thủ công
 
-Cách hiểu trong bản cũ là “giữa hai turn.” Pi hiện tại chính xác hơn. Sau khi `agent.prompt()` kết thúc và `agent_end` đã được phát, `_handlePostAgentRun()` kiểm tra assistant message cuối. Pi còn kiểm tra assistant message cuối trước khi nhận prompt tiếp theo, nhờ đó bắt được response đã bị abort mà bước kiểm tra sau run thông thường bỏ qua.
+Bản cũ mô tả thời điểm này là “giữa hai lượt”. Pi hiện tại có hai điểm kiểm tra cụ thể. Sau khi `agent.prompt()` kết thúc và `agent_end` được phát, `_handlePostAgentRun()` kiểm tra thông điệp cuối của trợ lý. Pi cũng kiểm tra thông điệp đó trước khi nhận lời nhắc tiếp theo, nhờ vậy phát hiện được phản hồi đã bị hủy mà bước kiểm tra sau lượt chạy thông thường bỏ qua.
 
-Manual compaction đi theo đường riêng. `AgentSession.compact(customInstructions?)` gọi `abort()` cho operation hiện tại của Agent trước, rồi mới bắt đầu compaction thủ công. Nó không tự động tiếp tục turn vừa bị ngắt.
+Nén thủ công đi theo đường riêng. `AgentSession.compact(customInstructions?)` gọi `abort()` cho thao tác hiện tại của Agent trước, rồi mới bắt đầu nén. Phương thức này không tự động tiếp tục lượt vừa bị ngắt.
 
 ```text
 đường tự động
-Agent run → message_end lưu message → agent_end → _checkCompaction()
-                                            ├─ không làm gì → settle
-                                            └─ compact → dựng lại Agent message
+lượt chạy Agent → message_end lưu thông điệp → agent_end → _checkCompaction()
+                                                      ├─ không làm gì → kết thúc
+                                                      └─ nén → dựng lại thông điệp Agent
 
-đường trước prompt
-prompt tiếp theo → xét assistant cuối, kể cả aborted → có thể compact → gửi user message
+đường trước lời nhắc
+lời nhắc tiếp theo → xét trợ lý cuối, kể cả khi đã hủy → có thể nén → gửi thông điệp người dùng
 
 đường thủ công
-/compact [instructions] hoặc AgentSession.compact()
-  → abort Agent operation hiện tại → compact → giữ trạng thái idle
+/compact [chỉ dẫn] hoặc AgentSession.compact()
+  → hủy thao tác Agent hiện tại → nén → giữ trạng thái chờ
 ```
 
-Sau bước dispatch, các đường này dùng chung quy trình prepare, hook, tạo summary, append và reconstruction.
+Sau khi được phân luồng, các đường này dùng chung quy trình chuẩn bị, chạy hook, tạo bản tóm tắt, ghi nối tiếp và dựng lại ngữ cảnh.
 
-## 2. Khi nào Pi thực hiện compaction
+## 2. Khi nào Pi thực hiện nén
 
-### Threshold, giá trị mặc định và thứ tự ưu tiên của setting
+### Ngưỡng, giá trị mặc định và thứ tự ưu tiên của thiết lập
 
-Đường threshold dùng phép so sánh nghiêm ngặt sau:
+Đường kiểm tra ngưỡng dùng phép so sánh nghiêm ngặt sau:
 
 ```typescript
 import {
@@ -84,9 +84,9 @@ shouldCompact(contextTokens, contextWindow, DEFAULT_COMPACTION_SETTINGS); // tru
 // 183_617 > 200_000 - 16_384 = 183_616
 ```
 
-Giá trị mặc định hiện tại là `reserveTokens: 16384` và `keepRecentTokens: 20000`. `reserveTokens` chừa chỗ cho response; `keepRecentTokens` hướng dẫn quá trình tìm cut point theo chiều ngược. Trường hợp bằng nhau không kích hoạt: với window 200.000 token, 183.616 vẫn chưa thỏa boundary `>`.
+Giá trị mặc định hiện tại là `reserveTokens: 16384` và `keepRecentTokens: 20000`. `reserveTokens` chừa chỗ cho phản hồi; `keepRecentTokens` định hướng quá trình tìm điểm cắt theo chiều ngược. Trường hợp bằng nhau không kích hoạt: với cửa sổ 200.000 token, 183.616 vẫn chưa vượt qua ranh giới `>`.
 
-Coding Agent đọc global setting từ `~/.pi/agent/settings.json`. File `.pi/settings.json` của project đã được trust sẽ được deep-merge lên trên, nên project có thể thay một field compaction lồng nhau mà không phải chép các field còn lại. Setting của project chưa được trust sẽ bị bỏ qua. Sau đó, code SDK có thể gọi `SettingsManager.applyOverrides()`; giá trị lồng nhau ở đây có ưu tiên cao hơn setting đã merge từ file. Mỗi field còn thiếu tự fallback về giá trị mặc định tương ứng.
+Coding Agent đọc thiết lập toàn cục từ `~/.pi/agent/settings.json`. Tệp `.pi/settings.json` của dự án đã được tin cậy sẽ được hợp nhất sâu lên trên, nên dự án có thể thay một trường cấu hình nén lồng nhau mà không phải chép các trường còn lại. Pi bỏ qua tệp thiết lập của dự án chưa được tin cậy. Sau đó, mã SDK có thể gọi `SettingsManager.applyOverrides()`; các giá trị lồng nhau ở đây có ưu tiên cao hơn thiết lập đã hợp nhất từ tệp. Trường nào còn thiếu sẽ dùng giá trị mặc định tương ứng.
 
 ```json
 {
@@ -98,127 +98,129 @@ Coding Agent đọc global setting từ `~/.pi/agent/settings.json`. File `.pi/s
 }
 ```
 
-`enabled: false` tắt đường threshold và overflow tự động vì `_checkCompaction()` return ngay. Nó không tắt `AgentSession.compact()`, `/compact`, RPC/SDK `compact()` hoặc lời gọi `ctx.compact()` từ Extension.
+`enabled: false` tắt đường ngưỡng và tràn ngữ cảnh tự động vì `_checkCompaction()` trả về ngay. Thiết lập này không tắt `AgentSession.compact()`, `/compact`, RPC/SDK `compact()` hoặc lời gọi `ctx.compact()` từ Extension.
 
-### Current usage ưu tiên dữ liệu từ provider
+### Mức sử dụng hiện tại ưu tiên dữ liệu từ nhà cung cấp
 
-Mô tả cũ coi `chars / 4` là kích thước context hiện tại. Pi `0.84.2` ưu tiên `usage` của assistant hợp lệ gần nhất. `calculateContextTokens()` lấy `usage.totalTokens` nếu giá trị này khác 0; nếu không, hàm cộng `input + output + cacheRead + cacheWrite`.
+Mô tả cũ dùng `chars / 4` làm kích thước ngữ cảnh hiện tại. Pi `0.84.2` ưu tiên `usage` hợp lệ gần nhất của trợ lý. `calculateContextTokens()` lấy `usage.totalTokens` khi giá trị này khác 0; nếu không, hàm cộng `input + output + cacheRead + cacheWrite`.
 
-Với assistant response bình thường có usage khác 0, `_checkCompaction()` kiểm tra trực tiếp giá trị đó. Với error response hoặc usage toàn 0, `estimateContextTokens()` tìm assistant usage gần nhất không thuộc response lỗi hay aborted trong active message, rồi cộng ước lượng của những message theo sau. Nếu không có usage hợp lệ, hàm ước lượng toàn bộ message.
+Với phản hồi bình thường của trợ lý có mức sử dụng khác 0, `_checkCompaction()` kiểm tra trực tiếp giá trị đó. Với phản hồi lỗi hoặc mức sử dụng toàn 0, `estimateContextTokens()` tìm mức sử dụng gần nhất của trợ lý không thuộc phản hồi lỗi hay bị hủy trong danh sách thông điệp đang hoạt động, rồi cộng ước lượng của các thông điệp theo sau. Nếu không có mức sử dụng hợp lệ, hàm ước lượng toàn bộ danh sách.
 
 ```text
-latest assistant usage hợp lệ
+mức sử dụng hợp lệ mới nhất của trợ lý
   contextTokens = totalTokens
                hoặc input + output + cacheRead + cacheWrite
 
-usage hợp lệ trước đó + trailing message
-  contextTokens = token từ usage + estimateTokens(trailing message)
+mức sử dụng hợp lệ trước đó + thông điệp theo sau
+  contextTokens = token từ usage + estimateTokens(thông điệp theo sau)
 
-không có usage hợp lệ
-  contextTokens = Σ estimateTokens(toàn bộ active message)
+không có mức sử dụng hợp lệ
+  contextTokens = Σ estimateTokens(toàn bộ thông điệp đang hoạt động)
 ```
 
-`estimateTokens()` áp dụng `ceil(chars / 4)` cho nội dung text. Hàm đếm assistant text, thinking, tên Tool call và JSON argument; Bash command cùng output; summary; và nội dung user, custom hoặc Tool result. Mỗi image tương đương 4.800 ký tự ước lượng. Heuristic này có thể ước lượng cao hoặc thấp tùy ngôn ngữ và nội dung, nên nó chỉ là fallback và thước đo cho cut point, không phải tokenizer chính xác.
+`estimateTokens()` áp dụng `ceil(chars / 4)` cho nội dung văn bản. Hàm đếm văn bản và phần suy luận của trợ lý, tên lời gọi Tool và đối số JSON; lệnh Bash cùng đầu ra; bản tóm tắt; cũng như nội dung của người dùng, Tool tùy chỉnh hoặc kết quả Tool. Mỗi ảnh tương đương 4.800 ký tự ước lượng. Cách tính này có thể cao hoặc thấp hơn thực tế tùy ngôn ngữ và nội dung, nên Pi chỉ dùng nó làm phương án dự phòng và thước đo cho điểm cắt, không coi nó là bộ tách token chính xác.
 
-Sau compaction, assistant usage có trước checkpoint đã cũ. Bước kiểm tra tự động từ chối nguồn usage có timestamp bằng hoặc sớm hơn compaction gần nhất. Public API `getContextUsage()` cũng trả `{ tokens: null, percent: null }` cho tới khi một assistant response hợp lệ sau checkpoint cung cấp usage mới.
+Sau khi nén, mức sử dụng của trợ lý có trước điểm kiểm tra đã lỗi thời. Bước kiểm tra tự động không dùng nguồn `usage` có mốc thời gian bằng hoặc sớm hơn lần nén gần nhất. API công khai `getContextUsage()` cũng trả `{ tokens: null, percent: null }` cho tới khi một phản hồi hợp lệ của trợ lý sau điểm kiểm tra cung cấp mức sử dụng mới.
 
 ### Ba trường hợp tự động và một đường thủ công
 
-Automatic dispatcher phân biệt nhiều hơn hai trường hợp “phòng ngừa” và “khẩn cấp”:
+Bộ phân luồng tự động xử lý bốn trường hợp sau:
 
-| Đường | Cách phát hiện | Pi làm gì sau compaction |
+| Đường | Cách phát hiện | Pi làm gì sau khi nén |
 | --- | --- | --- |
-| Threshold | Usage hợp lệ hoặc ước lượng thỏa threshold nghiêm ngặt | Giữ completed response; không retry |
-| Overflow, response đã hoàn tất | Response từ cùng model báo overflow nhưng có `stopReason: "stop"` | Giữ response; không retry |
-| Overflow hoặc recoverable length | Overflow error từ cùng model, hoặc `length` stop có thể phục hồi dưới output limit mong muốn của model | Bỏ assistant lỗi/bị cắt khỏi Agent state, compact rồi retry một lần |
-| Manual | `/compact [instructions]`, RPC/SDK `compact()` hoặc Extension `ctx.compact()` | Abort run hiện tại trước; không tự động tiếp tục run đó |
+| Ngưỡng | Mức sử dụng hợp lệ hoặc giá trị ước lượng vượt ngưỡng nghiêm ngặt | Giữ phản hồi đã hoàn tất; không thử lại |
+| Tràn ngữ cảnh, phản hồi đã hoàn tất | Phản hồi từ cùng mô hình báo tràn nhưng có `stopReason: "stop"` | Giữ phản hồi; không thử lại |
+| Tràn ngữ cảnh hoặc độ dài có thể phục hồi | Lỗi tràn từ cùng mô hình, hoặc lý do dừng `length` có thể phục hồi dưới giới hạn đầu ra mong muốn của mô hình | Bỏ thông điệp trợ lý bị lỗi hoặc bị cắt khỏi trạng thái Agent, nén rồi thử lại một lần |
+| Thủ công | `/compact [instructions]`, RPC/SDK `compact()` hoặc Extension `ctx.compact()` | Hủy lượt chạy hiện tại trước; không tự động tiếp tục lượt đó |
 
-Overflow recovery chỉ được compact-and-retry một lần. Assistant lỗi hoặc bị cắt đã được lưu qua `message_end`; Pi bỏ nó khỏi retry context trong memory, không xóa khỏi session tree. Sau khi rebuild, Pi lại bỏ terminal assistant đó nếu projection đưa nó về cuối message list, vì `agent.continue()` cần một state có thể tiếp tục.
+Pi chỉ nén rồi thử lại một lần để phục hồi khi tràn ngữ cảnh. Thông điệp trợ lý bị lỗi hoặc bị cắt đã được lưu qua `message_end`; Pi bỏ nó khỏi ngữ cảnh thử lại trong bộ nhớ, nhưng không xóa khỏi cây phiên. Sau khi dựng lại, Pi tiếp tục bỏ thông điệp trợ lý ở cuối nếu phép chiếu đưa nó trở lại vị trí đó, vì `agent.continue()` cần một trạng thái có thể tiếp tục.
 
-Same-model guard áp dụng cho việc phát hiện overflow và recoverable length. Threshold accounting vẫn đi theo đường provider usage hoặc estimate riêng đã mô tả ở trên. Guard này ngăn overflow cũ từ model có window nhỏ hơn ép recovery sau khi người dùng đổi model.
+Điều kiện cùng mô hình áp dụng khi phát hiện tràn ngữ cảnh và độ dài có thể phục hồi. Việc tính ngưỡng vẫn dùng mức sử dụng do nhà cung cấp trả về hoặc phép ước lượng riêng đã mô tả ở trên. Điều kiện này ngăn lỗi tràn cũ từ một mô hình có cửa sổ nhỏ hơn kích hoạt phục hồi sau khi người dùng đổi mô hình.
 
-## 3. Pi cắt active path ở đâu
+## 3. Pi cắt nhánh đang hoạt động ở đâu
 
-### Cut point hợp lệ giữ đúng Tool protocol
+### Điểm cắt hợp lệ giữ đúng giao thức Tool
 
-Tool result thuộc về assistant Tool call đã yêu cầu nó. Nếu retained region bắt đầu tại Tool result, model có thể thấy result mà không thấy call. Vì vậy, `findValidCutPoints()` chấp nhận các message role có mặt trong context gồm user, assistant, Bash-execution, custom, branch-summary và compaction-summary, nhưng không bao giờ chấp nhận `toolResult`. Session entry có type `compaction` cũng bị bỏ qua khi chọn candidate.
+Kết quả Tool thuộc về lời gọi Tool của trợ lý đã yêu cầu nó. Nếu vùng giữ lại bắt đầu tại kết quả Tool, mô hình có thể thấy kết quả mà không thấy lời gọi. Vì vậy, `findValidCutPoints()` chấp nhận các vai trò thông điệp có trong ngữ cảnh gồm `user`, `assistant`, `bashExecution`, `custom`, `branchSummary` và `compactionSummary`, nhưng không bao giờ chấp nhận `toolResult`. Pi cũng bỏ qua mục phiên có kiểu `compaction` khi chọn ứng viên.
 
 ```text
-entry:   0       1       2        3       4       5        6
-       header   user  assistant  tool    user  assistant  tool
-candidate:       ✓       ✓        ✗       ✓       ✓        ✗
+mục:      0       1       2        3       4       5        6
+         đầu    người    trợ lý   Tool   người    trợ lý   Tool
+                 dùng                    dùng
+ứng viên:         ✓       ✓        ✗       ✓       ✓        ✗
 
-Nếu giữ entry 5, Tool result ở entry 6 vẫn nằm sau nó.
+Nếu giữ mục 5, kết quả Tool ở mục 6 vẫn nằm sau lời gọi tương ứng.
 ```
 
-Entry không project vào context, chẳng hạn label hoặc model change, không tạo message cut point. Sau khi chọn điểm cắt, Pi quét ngược qua metadata liền kề nhưng không hiện trong context để giữ chúng ở phía retained. Quá trình dừng khi gặp entry có mặt trong context hoặc compaction boundary cũ.
+Những mục không được chiếu vào ngữ cảnh, chẳng hạn nhãn hoặc lần đổi mô hình, không tạo điểm cắt thông điệp. Sau khi chọn điểm cắt, Pi quét ngược qua siêu dữ liệu liền kề không xuất hiện trong ngữ cảnh để giữ chúng ở phía được giữ lại. Quá trình dừng khi gặp một mục có mặt trong ngữ cảnh hoặc ranh giới nén cũ.
 
-### `firstKeptEntryId` là điểm đầu của retained region
+### `firstKeptEntryId` là điểm đầu của vùng giữ lại
 
-Boundary xác định session entry đầu tiên được giữ, thay vì entry cuối cùng được tóm tắt. Cắt tại user sẽ giữ user message đó và mọi thứ phía sau. Cắt tại assistant sẽ giữ assistant message đó cùng Tool result theo sau, rồi ghi metadata về split turn cho phần trước của cùng turn.
+Ranh giới xác định mục phiên đầu tiên được giữ, thay vì mục cuối cùng được tóm tắt. Cắt tại một thông điệp người dùng sẽ giữ thông điệp đó và mọi thứ phía sau. Cắt tại một thông điệp trợ lý sẽ giữ thông điệp trợ lý cùng các kết quả Tool theo sau, rồi ghi siêu dữ liệu về phần đầu của lượt bị tách.
 
 ```text
-cắt tại user entry 4
+cắt tại mục người dùng số 4
 
 0       1       2       3      [4]      5       6
-header  user    assistant tool   user    assistant tool
-        └──── được tóm tắt ──┘   └──── giữ nguyên văn ──────┘
-                                  firstKeptEntryId = id(entry 4)
+đầu   người    trợ lý   Tool   người    trợ lý   Tool
+       dùng                   dùng
+       └──── được tóm tắt ──┘  └──── giữ nguyên văn ──────┘
+                                  firstKeptEntryId = id(mục 4)
 ```
 
-`firstKeptEntryId` xác định một entry trong session tree thay vì vị trí của array. Nhờ đó reconstruction có thể resolve boundary sau khi reload và trên parent-linked path. Nếu legacy session không cung cấp được id cho entry đã chọn, preparation trả `undefined` thay vì ghi một checkpoint không thể dùng.
+`firstKeptEntryId` xác định một mục trong cây phiên thay vì vị trí trong mảng. Nhờ đó, bước dựng lại có thể tìm đúng ranh giới sau khi tải lại và trên đường dẫn liên kết qua các mục cha. Nếu một phiên cũ không cung cấp được mã cho mục đã chọn, bước chuẩn bị trả `undefined` thay vì ghi một điểm kiểm tra không thể dùng.
 
-### Đi ngược theo budget và boundary của lần compaction tiếp theo
+### Đi ngược theo ngân sách và ranh giới của lần nén tiếp theo
 
-Cut search đi từ `boundaryEnd - 1` về `boundaryStart`, cộng token ước lượng của mọi message mà từng entry project ra. Khi tổng đạt `keepRecentTokens`, nó chọn cut point hợp lệ gần nhất tại hoặc sau vị trí đó. Nếu không có message nào làm tổng chạm budget, candidate ban đầu vẫn là cut point hợp lệ sớm nhất; preparation sau đó trả `undefined` nếu kết quả không còn gì để tóm tắt.
+Quá trình tìm điểm cắt đi từ `boundaryEnd - 1` về `boundaryStart`, cộng số token ước lượng của mọi thông điệp mà từng mục chiếu ra. Khi tổng đạt `keepRecentTokens`, thuật toán chọn điểm cắt hợp lệ gần nhất tại hoặc sau vị trí đó. Nếu tổng không đạt ngân sách, ứng viên ban đầu vẫn là điểm cắt hợp lệ sớm nhất; bước chuẩn bị sau đó trả `undefined` nếu không còn gì để tóm tắt.
 
-Pseudocode có ghi nguồn dưới đây rút gọn thuật toán hiện tại. Bước kéo metadata về phía retained và phát hiện split turn diễn ra sau phần lựa chọn được thể hiện ở đây.
+Mã giả có ghi nguồn dưới đây rút gọn thuật toán hiện tại. Sau phần lựa chọn này, Pi còn kéo siêu dữ liệu sang phía giữ lại và phát hiện lượt bị tách.
 
 ```text
-PSEUDOCODE dựa trên findCutPoint(), compaction.ts dòng 403–460
+Mã giả dựa trên findCutPoint(), compaction.ts dòng 403–460
 
-cutPoints = entry hiện trong context và hợp lệ, loại Tool result
-cutIndex = cut point sớm nhất
+cutPoints = các mục có trong ngữ cảnh và hợp lệ, loại kết quả Tool
+cutIndex = điểm cắt sớm nhất
 accumulated = 0
 
-với từng entry từ mới nhất về boundaryStart:
-  accumulated += token ước lượng của message do entry project ra
+với từng mục từ mới nhất về boundaryStart:
+  accumulated += token ước lượng của thông điệp do mục đó chiếu ra
   nếu accumulated >= keepRecentTokens:
-    cutIndex = cut point đầu tiên có index tại hoặc sau entry này
+    cutIndex = điểm cắt đầu tiên có chỉ số tại hoặc sau mục này
     dừng
 
-đưa metadata liền kề không hiện trong context về trước cutIndex
+đưa siêu dữ liệu liền kề không hiện trong ngữ cảnh về trước cutIndex
 suy ra turnStartIndex và isSplitTurn
-trả firstKeptEntryIndex, turnStartIndex, isSplitTurn
+trả về firstKeptEntryIndex, turnStartIndex, isSplitTurn
 ```
 
-Trong lần compaction đầu, `boundaryStart` là đầu active branch path. Ở lần sau, Pi tìm `CompactionEntry` trước đó và bắt đầu tại `firstKeptEntryId` của entry này. Nếu id đó không có trên active path, Pi fallback về entry sau compaction trước. Vì vậy, message từng sống sót qua cut cũ có thể đi vào summary tiếp theo thay vì bị tách khỏi checkpoint đang được cập nhật.
+Trong lần nén đầu, `boundaryStart` là đầu đường dẫn của nhánh đang hoạt động. Ở lần sau, Pi tìm `CompactionEntry` trước đó và bắt đầu tại `firstKeptEntryId` của mục này. Nếu mã đó không có trên nhánh đang hoạt động, Pi dùng mục nằm sau lần nén trước làm phương án dự phòng. Nhờ vậy, thông điệp từng sống sót qua điểm cắt cũ có thể đi vào bản tóm tắt tiếp theo thay vì bị tách khỏi điểm kiểm tra đang được cập nhật.
 
 ```text
-checkpoint trước
-  summary A + entry từ firstKept(A) trở đi
+điểm kiểm tra trước
+  bản tóm tắt A + mục từ firstKept(A) trở đi
 
-preparation tiếp theo
-  previousSummary = summary A
-  boundaryStart   = firstKept(A), hoặc entry sau compaction A nếu fallback
-  cut mới         = firstKept(B)
+chuẩn bị lần tiếp theo
+  previousSummary = bản tóm tắt A
+  boundaryStart   = firstKept(A), hoặc mục sau lần nén A nếu phải dự phòng
+  điểm cắt mới    = firstKept(B)
 
-message [boundaryStart, cut mới) → input cho summary mới
-message [cut mới, current leaf]   → retained region
+thông điệp [boundaryStart, điểm cắt mới) → đầu vào cho bản tóm tắt mới
+thông điệp [điểm cắt mới, lá hiện tại]   → vùng giữ lại
 ```
 
-## 4. Nội dung thay thế message cũ
+## 4. Nội dung thay thế các thông điệp cũ
 
-### Checkpoint cố định gồm sáu section
+### Điểm kiểm tra cố định gồm sáu mục
 
-Pi yêu cầu summarizing model tạo checkpoint để tiếp tục công việc. Các label chính xác bên dưới nằm trong fenced template để không trở thành heading trên thanh điều hướng của trang:
+Pi yêu cầu mô hình tóm tắt tạo một điểm kiểm tra để tiếp tục công việc. Các nhãn chính xác bên dưới nằm trong khối mẫu, nên chúng không trở thành tiêu đề trên thanh điều hướng của trang:
 
 ```markdown
 ## Goal
 [Người dùng đang muốn hoàn thành việc gì?]
 
 ## Constraints & Preferences
-- [Yêu cầu hoặc preference, hoặc "(none)"]
+- [Ràng buộc hoặc tùy chọn ưu tiên, hoặc "(none)"]
 
 ## Progress
 ### Done
@@ -228,10 +230,10 @@ Pi yêu cầu summarizing model tạo checkpoint để tiếp tục công việc
 - [ ] [Phần việc hiện tại]
 
 ### Blocked
-- [Blocker hiện tại]
+- [Trở ngại hiện tại]
 
 ## Key Decisions
-- **[Decision]**: [Rationale ngắn]
+- **[Quyết định]**: [Lý do ngắn]
 
 ## Next Steps
 1. [Các bước tiếp tục theo thứ tự]
@@ -240,16 +242,16 @@ Pi yêu cầu summarizing model tạo checkpoint để tiếp tục công việc
 - [Dữ liệu, ví dụ hoặc tham chiếu chính xác cần để tiếp tục]
 ```
 
-Prompt yêu cầu rõ phải giữ chính xác file path, tên function và error message. Các slot cố định giảm khả năng một chi tiết hấp dẫn lấn át mục tiêu ban đầu hoặc hành động cần làm tiếp. Model vẫn có thể bỏ sót hoặc làm sai lệch thông tin, nên retained tail và session history có thể kiểm tra vẫn là một phần của thiết kế.
+Lời nhắc yêu cầu giữ nguyên đường dẫn tệp, tên hàm và thông báo lỗi. Các mục cố định giảm khả năng một chi tiết nổi bật lấn át mục tiêu ban đầu hoặc hành động cần làm tiếp. Mô hình vẫn có thể bỏ sót hoặc làm sai lệch thông tin, nên phần đuôi được giữ nguyên và lịch sử phiên có thể kiểm tra vẫn là một phần của thiết kế.
 
-### Serialization và summary request
+### Tuần tự hóa và yêu cầu tạo bản tóm tắt
 
-`generateSummaryWithUsage()` chạy `convertToLlm()` của Coding Agent trên vùng `AgentMessage[]` đã chọn trước. Sau đó nó serialize các message tương thích thành text có label để summarizer coi chúng là dữ liệu cần đọc, không phải cuộc hội thoại cần tiếp tục.
+`generateSummaryWithUsage()` chạy `convertToLlm()` của Coding Agent trên vùng `AgentMessage[]` đã chọn. Sau đó, hàm tuần tự hóa các thông điệp tương thích thành văn bản có nhãn để mô hình tóm tắt đọc chúng như dữ liệu nguồn, thay vì tiếp tục cuộc hội thoại.
 
 ```text
 [User]: Sửa lỗi xác thực trong src/auth.ts
 
-[Assistant thinking]: Kiểm tra call path trước khi sửa.
+[Assistant thinking]: Kiểm tra đường gọi trước khi sửa.
 
 [Assistant tool calls]: read(path="src/auth.ts")
 
@@ -258,33 +260,33 @@ Prompt yêu cầu rõ phải giữ chính xác file path, tên function và erro
 [Assistant]: deriveKey() chưa nhận salt.
 ```
 
-Mỗi Tool result đã serialize giữ tối đa 2.000 ký tự, sau đó có marker ghi số ký tự bị bỏ. Giới hạn này chỉ áp dụng cho summarization request; nó không viết lại Tool-result entry đã lưu.
+Mỗi kết quả Tool sau khi tuần tự hóa giữ tối đa 2.000 ký tự, rồi thêm một dấu đánh dấu số ký tự đã lược bỏ. Giới hạn này chỉ áp dụng cho yêu cầu tóm tắt; nó không viết lại mục kết quả Tool đã lưu.
 
-Request dùng `SUMMARIZATION_SYSTEM_PROMPT`, tắt Tool call bằng `toolChoice: "none"`, tắt ghi prompt cache bằng `cacheRetention: "none"`, và dùng routing session id mới nếu caller không cấp id. Lỗi tạm thời của summary stream tuân theo retry policy đã cấu hình; deterministic error và abort return ngay. Main summary dùng một model request. Split turn có thể cần một main-history request rồi một turn-prefix request; Pi hiện tại chạy chúng tuần tự.
+Yêu cầu dùng `SUMMARIZATION_SYSTEM_PROMPT`, tắt lời gọi Tool bằng `toolChoice: "none"`, tắt ghi bộ nhớ đệm lời nhắc bằng `cacheRetention: "none"`, và tạo mã phiên định tuyến mới nếu bên gọi không cấp mã. Lỗi tạm thời trong luồng tóm tắt tuân theo chính sách thử lại đã cấu hình; lỗi tất định và thao tác hủy trả về ngay. Bản tóm tắt chính dùng một lần gọi mô hình. Lượt bị tách có thể cần một yêu cầu cho lịch sử chính, sau đó là một yêu cầu cho phần đầu lượt; Pi hiện chạy hai yêu cầu này tuần tự.
 
-### Incremental summary có quy tắc input chính xác
+### Bản tóm tắt tăng dần có quy tắc đầu vào chính xác
 
-Khi `prepareCompaction()` tìm thấy compaction cũ, nó chép `summary` của entry đó vào `previousSummary`. Với compaction không split, hoặc split compaction có complete message cũ để tóm tắt, `generateSummaryWithUsage()` bọc message mới trong `<conversation>` và checkpoint trước trong `<previous-summary>`, rồi chuyển từ initial prompt sang update instructions.
+Khi `prepareCompaction()` tìm thấy lần nén cũ, hàm chép `summary` của mục đó vào `previousSummary`. Với lần nén không tách lượt, hoặc lần nén tách lượt có thông điệp cũ hoàn chỉnh để tóm tắt, `generateSummaryWithUsage()` bọc các thông điệp mới trong `<conversation>` và điểm kiểm tra trước trong `<previous-summary>`, rồi chuyển từ lời nhắc ban đầu sang chỉ dẫn cập nhật.
 
 ```text
-lần compaction đầu
-  message 1…30 → summary A
+lần nén đầu
+  thông điệp 1…30 → bản tóm tắt A
 
-lần compaction sau
-  <conversation>message được A giữ nhưng nay nằm trước cut B</conversation>
-  <previous-summary>summary A</previous-summary>
-  → summary B
+lần nén sau
+  <conversation>thông điệp được A giữ nhưng nay nằm trước điểm cắt B</conversation>
+  <previous-summary>bản tóm tắt A</previous-summary>
+  → bản tóm tắt B
 ```
 
-Update instructions yêu cầu giữ thông tin cũ, thêm tiến độ và quyết định, chuyển phần đã hoàn thành, cập nhật next step, đồng thời cho phép bỏ thông tin không còn liên quan. Vì vậy, “incremental” là cập nhật do LLM thực hiện theo chỉ dẫn, không phải nối byte nguyên trạng.
+Chỉ dẫn cập nhật yêu cầu giữ thông tin cũ, thêm tiến độ và quyết định, chuyển phần đã hoàn thành, cập nhật bước tiếp theo, đồng thời cho phép bỏ thông tin không còn liên quan. “Tăng dần” ở đây là bản cập nhật do LLM thực hiện theo chỉ dẫn, không phải phép nối byte nguyên trạng.
 
-Trong split turn, main-history request chỉ nhận `previousSummary` khi `messagesToSummarize` không rỗng. Nếu split interval không có complete message cũ, `compact()` hiện tại dùng literal `No prior history.` trước turn-prefix summary và không tạo request riêng để đưa `previousSummary` vào.
+Trong lượt bị tách, yêu cầu tóm tắt lịch sử chính chỉ nhận `previousSummary` khi `messagesToSummarize` không rỗng. Nếu đoạn bị tách không có thông điệp cũ hoàn chỉnh, `compact()` hiện dùng nguyên văn `No prior history.` trước bản tóm tắt phần đầu lượt và không tạo yêu cầu riêng để đưa `previousSummary` vào.
 
-### Metadata thao tác file có phạm vi hẹp và được tích lũy
+### Siêu dữ liệu thao tác tệp có phạm vi hẹp và được tích lũy
 
-Default compaction chỉ xét assistant Tool call có tên chính xác `read`, `write` và `edit` khi argument chứa `path` kiểu string. Nó mang `details` của compaction trước do Pi sinh ra đi tiếp, rồi thêm operation từ cả main summary region lẫn split-turn prefix.
+Cơ chế nén mặc định chỉ xét lời gọi Tool của trợ lý có tên chính xác `read`, `write` hoặc `edit` khi đối số chứa `path` kiểu chuỗi. Nó mang `details` của lần nén trước do Pi tạo sang lần tiếp theo, rồi bổ sung thao tác từ cả vùng tóm tắt chính lẫn phần đầu của lượt bị tách.
 
-`computeFileLists()` sắp xếp kết quả. Path xuất hiện trong `write` hoặc `edit` đi vào `modifiedFiles`; path đó bị loại khỏi `readFiles`, nên danh sách này chỉ còn file chỉ đọc. Pi không suy luận side effect từ Bash hay convention của custom Tool. Entry trước do Extension tạo (`fromHook: true`) có thể dùng schema `details` khác, vì vậy built-in extraction không giả định nó chứa file list của Pi.
+`computeFileLists()` sắp xếp kết quả. Đường dẫn xuất hiện trong `write` hoặc `edit` đi vào `modifiedFiles`; đường dẫn đó bị loại khỏi `readFiles`, nên danh sách này chỉ còn tệp chỉ đọc. Pi không suy luận tác dụng phụ từ Bash hoặc quy ước của Tool tùy chỉnh. Mục trước do Extension tạo (`fromHook: true`) có thể dùng lược đồ `details` khác, vì vậy cơ chế trích xuất tích hợp sẵn không giả định mục đó chứa danh sách tệp của Pi.
 
 ```text
 <read-files>
@@ -296,17 +298,17 @@ src/auth.ts
 </modified-files>
 ```
 
-Các tag này chỉ được nối vào summary khi danh sách tương ứng không rỗng. Hai array đó cũng được lưu trong `details` của built-in entry, giúp compaction built-in tiếp theo mang dữ liệu đi tiếp mà không phải parse prose.
+Các thẻ này chỉ được nối vào bản tóm tắt khi danh sách tương ứng không rỗng. Hai mảng cũng được lưu trong `details` của mục do Pi tạo, giúp lần nén tích hợp sẵn tiếp theo mang dữ liệu đi tiếp mà không phải phân tích văn xuôi.
 
-## 5. Trường hợp biên: một turn lớn hơn retained budget
+## 5. Trường hợp biên: một lượt lớn hơn ngân sách giữ lại
 
-Một turn bắt đầu tại user-like message và kéo dài qua assistant cùng Tool-result message tiếp theo cho tới user-like start kế tiếp. Pi coi role user, Bash-execution, custom, branch-summary và compaction-summary là turn start. Assistant và Tool result không bắt đầu turn.
+Một lượt bắt đầu bằng một thông điệp mở đầu lượt và kéo dài qua các thông điệp trợ lý cùng kết quả Tool tiếp theo cho tới điểm bắt đầu lượt kế tiếp. Pi coi các vai trò `user`, `bashExecution`, `custom`, `branchSummary` và `compactionSummary` là điểm bắt đầu lượt. Vai trò `assistant` và `toolResult` không bắt đầu lượt.
 
-### Vì sao cho phép assistant cut point
+### Vì sao cho phép điểm cắt tại trợ lý
 
-Nếu chỉ giữ user cut point, mỗi turn luôn trọn vẹn, nhưng một turn lớn có thể làm retained region vượt xa `keepRecentTokens`. Assistant cut point cho thuật toán một boundary dùng được bên trong turn đó, đồng thời vẫn giữ Tool result theo sau cùng call tương ứng.
+Nếu chỉ cắt tại người dùng, mỗi lượt luôn trọn vẹn, nhưng một lượt lớn có thể làm vùng giữ lại vượt xa `keepRecentTokens`. Điểm cắt tại trợ lý cho thuật toán một ranh giới dùng được bên trong lượt đó, đồng thời vẫn giữ các kết quả Tool theo sau lời gọi tương ứng.
 
-Result shape hiện tại thể hiện hệ quả này trực tiếp. Đây là type excerpt bám sát source, không thay thế việc import `CutPointResult` đã export:
+Cấu trúc kết quả hiện tại thể hiện rõ hệ quả này. Đoạn khai báo kiểu sau bám sát mã nguồn, nhưng không thay thế việc nhập `CutPointResult` đã được xuất:
 
 ```typescript
 interface CutPointResult {
@@ -316,40 +318,41 @@ interface CutPointResult {
 }
 ```
 
-Nếu entry được chọn tự bắt đầu một turn, `turnStartIndex` là `-1` và `isSplitTurn` là false. Nếu không, Pi quét ngược tới turn-start entry gần nhất trong compaction boundary hiện tại.
+Nếu mục được chọn tự bắt đầu một lượt, `turnStartIndex` là `-1` và `isSplitTurn` là `false`. Nếu không, Pi quét ngược tới mục bắt đầu lượt gần nhất trong ranh giới nén hiện tại.
 
 ```text
-một turn quá lớn
+một lượt quá lớn
 
-entry:   1      2       3       4       5       6      [7]      8
-       user  assistant  tool  assistant  tool    tool  assistant  tool
-        ↑                                             ↑
-  turnStartIndex                              firstKeptEntryId
-        └──────── turnPrefixMessages: 1…6 ────────────┘
-                                                      └─ kept: 7…8
+mục:       1       2       3       4       5       6      [7]      8
+        người    trợ lý   Tool    trợ lý   Tool    Tool    trợ lý   Tool
+         dùng
+          ↑                                                ↑
+    turnStartIndex                                 firstKeptEntryId
+          └────────── turnPrefixMessages: 1…6 ─────────────┘
+                                                           └─ giữ: 7…8
 ```
 
-User request thuộc `turnPrefixMessages`, không thuộc main history summary. Các complete turn cũ kết thúc trước `turnStartIndex` và đi vào `messagesToSummarize`.
+Yêu cầu của người dùng thuộc `turnPrefixMessages`, không thuộc bản tóm tắt lịch sử chính. Các lượt cũ hoàn chỉnh kết thúc trước `turnStartIndex` và đi vào `messagesToSummarize`.
 
-### Prefix checkpoint nối lại split turn
+### Điểm kiểm tra phần đầu nối lại lượt bị tách
 
-Prefix request dùng output cap nhỏ hơn, tức giá trị nhỏ hơn giữa `floor(0.5 × reserveTokens)` và `model.maxTokens`, cùng template riêng sau:
+Yêu cầu cho phần đầu lượt dùng giới hạn đầu ra nhỏ hơn, tức giá trị nhỏ hơn giữa `floor(0.5 × reserveTokens)` và `model.maxTokens`, cùng mẫu riêng sau:
 
 ```markdown
 ## Original Request
-[Người dùng đã yêu cầu gì trong turn này?]
+[Người dùng đã yêu cầu gì trong lượt này?]
 
 ## Early Progress
-- [Quyết định và phần việc chính đã hoàn thành trong prefix]
+- [Quyết định và phần việc chính đã hoàn thành trong phần đầu]
 
 ## Context for Suffix
 - [Thông tin cần để hiểu phần việc gần đây được giữ lại]
 ```
 
-Khi có complete message cũ, Pi tạo hoặc cập nhật six-section history summary trước. Sau đó nó tạo prefix summary. Usage từ hai request được cộng theo từng field. Text được lưu nối hai phần bằng separator và label `Turn Context (split turn)`.
+Khi có thông điệp cũ hoàn chỉnh, Pi trước tiên tạo hoặc cập nhật bản tóm tắt lịch sử sáu mục. Sau đó, Pi tạo bản tóm tắt phần đầu lượt. Mức sử dụng của hai yêu cầu được cộng theo từng trường. Văn bản được lưu bằng cách nối hai phần qua dấu phân cách và nhãn `Turn Context (split turn)`.
 
 ```text
-[six-section history summary, hoặc "No prior history."]
+[bản tóm tắt lịch sử sáu mục, hoặc "No prior history."]
 
 ---
 
@@ -357,17 +360,17 @@ Turn Context (split turn):
 
 [Original Request / Early Progress / Context for Suffix]
 
-sau đó, trong projected context:
-[assistant tại firstKeptEntryId] [Tool result của nó] [message về sau]
+sau đó, trong ngữ cảnh được chiếu:
+[trợ lý tại firstKeptEntryId] [kết quả Tool của nó] [thông điệp về sau]
 ```
 
-Split vẫn làm mất thông tin, nhưng model tiếp theo nhận original request và phần việc đầu dưới dạng structured context trước khi thấy suffix nguyên văn.
+Việc tách lượt vẫn làm mất thông tin, nhưng mô hình tiếp theo nhận yêu cầu ban đầu và phần việc đầu dưới dạng ngữ cảnh có cấu trúc trước khi thấy phần đuôi nguyên văn.
 
-## 6. Persistence, reconstruction và lifecycle event
+## 6. Lưu trữ, dựng lại và sự kiện vòng đời
 
-### `CompactionEntry` là checkpoint được lưu
+### `CompactionEntry` là điểm kiểm tra được lưu
 
-`SessionManager.appendCompaction()` thêm một child của current leaf rồi đưa leaf tới entry mới. Nó không xóa những entry vừa được tóm tắt. Public type của Coding Agent tại revision đã pin có shape sau:
+`SessionManager.appendCompaction()` thêm một mục con vào lá hiện tại rồi chuyển lá sang mục mới. Phương thức này không xóa các mục vừa được tóm tắt. Kiểu công khai của Coding Agent tại phiên bản mã nguồn đã ghim có cấu trúc sau:
 
 ```typescript
 import type { Usage } from "@earendil-works/pi-ai";
@@ -386,7 +389,7 @@ interface CompactionEntry<T = unknown> {
 }
 ```
 
-`timestamp` là ISO string trong session được lưu, không phải numeric timestamp của `AgentMessage` đã project. `fromHook` là tên field tương thích ngược dành cho result do Extension cung cấp. `details` phải serialize được thành JSON nếu session dùng JSONL storage.
+`timestamp` là chuỗi ISO trong phiên đã lưu, khác với mốc thời gian dạng số của `AgentMessage` được chiếu. `fromHook` là tên trường tương thích ngược dành cho kết quả do Extension cung cấp. `details` phải tuần tự hóa được thành JSON nếu phiên được lưu dưới dạng JSONL.
 
 ```json
 {
@@ -405,66 +408,66 @@ interface CompactionEntry<T = unknown> {
 }
 ```
 
-`tokensBefore` được tính trong preparation từ `estimateContextTokens(buildSessionContext(pathEntries).messages)`. Nó đo active context được rebuild và sắp bị thay thế, dùng provider usage khi hợp lệ và ước lượng khi cần. Nó không phải token count của mọi JSONL entry, byte size của session file hay usage của summary request. `usage` của bước tạo summary được lưu riêng và được cộng vào tổng token cùng cost của toàn session.
+`tokensBefore` được tính trong bước chuẩn bị từ `estimateContextTokens(buildSessionContext(pathEntries).messages)`. Giá trị này đo ngữ cảnh đang hoạt động đã được dựng lại và sắp bị thay thế, dùng mức sử dụng từ nhà cung cấp khi hợp lệ và phép ước lượng khi cần. Nó không phải số token của mọi mục JSONL, kích thước tệp phiên theo byte hay mức sử dụng của yêu cầu tóm tắt. `usage` của bước tạo bản tóm tắt được lưu riêng và cộng vào tổng token cùng chi phí của toàn phiên.
 
-### Stored tree, active projection và per-call transform là các state khác nhau
+### Cây đã lưu, phép chiếu đang hoạt động và biến đổi từng lần gọi là ba trạng thái khác nhau
 
-Session tree giữ raw entry cũ, kept entry, compaction entry và child về sau. `buildContextEntries()` chỉ đi theo parent path của leaf đã chọn, tìm compaction gần nhất trên path đó rồi trả:
+Cây phiên giữ các mục thô cũ, mục được giữ lại, mục nén và các mục con về sau. `buildContextEntries()` chỉ đi theo đường liên kết cha của lá đã chọn, tìm lần nén gần nhất trên đường đó rồi trả về:
 
 ```text
-selected path đã lưu
-raw entry cũ → firstKept → recent entry → CompactionEntry → later entry
+đường đã chọn trong dữ liệu lưu
+mục thô cũ → firstKept → mục gần đây → CompactionEntry → mục về sau
 
-active context entry
-CompactionEntry → firstKept → recent entry → later entry
+các mục ngữ cảnh đang hoạt động
+CompactionEntry → firstKept → mục gần đây → mục về sau
 
-active AgentMessage[]
-CompactionSummaryMessage → retained message → later message
+AgentMessage[] đang hoạt động
+CompactionSummaryMessage → thông điệp được giữ → thông điệp về sau
 ```
 
-`CompactionEntry` gần nhất trở thành `CompactionSummaryMessage` có numeric message timestamp. Sau đó, `convertToLlm()` của Coding Agent chuyển nó thành Pi AI user message với text được bọc trong compaction preamble cố định và tag `<summary>`.
+`CompactionEntry` gần nhất trở thành `CompactionSummaryMessage` có mốc thời gian thông điệp dạng số. Sau đó, `convertToLlm()` của Coding Agent chuyển nó thành thông điệp người dùng của Pi AI, với văn bản được bọc trong lời dẫn nén cố định và thẻ `<summary>`.
 
 ```text
 The conversation history before this point was compacted into the following summary:
 
 <summary>
-[stored summary]
+[bản tóm tắt đã lưu]
 </summary>
 ```
 
-Projection này diễn ra khi session được load và sau compaction. Trong mỗi model call, Agent core tiếp tục áp dụng hook `transformContext` của Chương 8 lên `AgentMessage[]` đó, rồi chạy `convertToLlm()` của Coding Agent. Hook có thể lọc projection của một request; nó không append `CompactionEntry`, đổi `firstKeptEntryId` hay xóa stored tree.
+Phép chiếu này diễn ra khi tải phiên và sau khi nén. Trong mỗi lần gọi mô hình, lõi Agent tiếp tục áp dụng hook `transformContext` của Chương 8 lên `AgentMessage[]` đó, rồi chạy `convertToLlm()` của Coding Agent. Hook có thể lọc phép chiếu của một yêu cầu; nó không ghi thêm `CompactionEntry`, đổi `firstKeptEntryId` hay xóa cây đã lưu.
 
-Generic Agent runtime trong monorepo có compaction schema riêng với `retainedTail` đã materialize. Coding Agent `SessionManager` tại revision đã pin dùng `firstKeptEntryId`. Không thêm `retainedTail` vào type `CompactionEntry` của Coding Agent hoặc giả định hai persistence contract dựng context giống nhau.
+Bộ thực thi Agent dùng chung trong kho mã có lược đồ nén riêng, với `retainedTail` đã được cụ thể hóa. Coding Agent `SessionManager` tại phiên bản mã nguồn đã ghim dùng `firstKeptEntryId`. Không thêm `retainedTail` vào kiểu `CompactionEntry` của Coding Agent hoặc giả định hai hợp đồng lưu trữ dựng ngữ cảnh giống nhau.
 
-### Public event và Extension hook phục vụ consumer khác nhau
+### Sự kiện công khai và hook Extension phục vụ các thành phần khác nhau
 
-Consumer của `AgentSession.subscribe()` thấy `compaction_start` và `compaction_end`. Start event có `reason: "manual" | "threshold" | "overflow"`. End event luôn có reason đó cùng `result`, `aborted`, `willRetry` và `errorMessage` tùy chọn.
+Thành phần đăng ký qua `AgentSession.subscribe()` nhận `compaction_start` và `compaction_end`. Sự kiện bắt đầu có `reason: "manual" | "threshold" | "overflow"`. Sự kiện kết thúc luôn mang cùng `reason`, cùng các trường tùy chọn `result`, `aborted`, `willRetry` và `errorMessage`.
 
 Extension có ba hook riêng:
 
-- `session_before_compact` được await và có thể trả `{ cancel: true }` hoặc custom `compaction` result.
-- `session_compact` được await sau khi entry đã append và Agent message đã rebuild.
-- `session_compact_failed` được await sau failure hoặc abort và mang terminal status.
+- `session_before_compact` được chờ hoàn tất và có thể trả `{ cancel: true }` hoặc kết quả nén tùy chỉnh.
+- `session_compact` được chờ hoàn tất sau khi mục mới đã được ghi và các thông điệp Agent đã được dựng lại.
+- `session_compact_failed` được chờ hoàn tất sau lỗi hoặc thao tác hủy và mang trạng thái kết thúc.
 
-Public session start/end event được emit đồng bộ tới subscriber. Extension hook được dispatch qua `ExtensionRunner`; cancel result dừng các handler phía sau, còn non-cancel result cuối cùng sẽ thắng. Nếu không có handler nào trả custom result, built-in compactor tiếp tục nắm quyền xử lý. Hook ném lỗi sẽ được báo thành Extension error và dispatch vẫn tiếp tục.
+Các sự kiện bắt đầu và kết thúc công khai của phiên được phát đồng bộ tới bên đăng ký. Hook Extension được phân luồng qua `ExtensionRunner`; kết quả hủy sẽ dừng các trình xử lý phía sau, còn kết quả không hủy cuối cùng sẽ được dùng. Nếu không có trình xử lý nào trả kết quả tùy chỉnh, bộ nén tích hợp sẵn tiếp tục xử lý. Hook ném lỗi sẽ được báo thành lỗi Extension, còn quá trình phân luồng vẫn tiếp tục.
 
 ```text
-manual: compaction_start
-  → validate model/auth → prepare → session_before_compact
-  → built-in hoặc custom result → append entry → rebuild Agent message
-  → session_compact → compaction_end(success)
+thủ công: compaction_start
+  → kiểm tra mô hình/xác thực → chuẩn bị → session_before_compact
+  → kết quả tích hợp sẵn hoặc tùy chỉnh → ghi mục → dựng lại thông điệp Agent
+  → session_compact → compaction_end(thành công)
 
-automatic: prepare trước → compaction_start
-  → session_before_compact → built-in hoặc custom result
-  → append entry → rebuild Agent message → session_compact
-  → compaction_end(success, willRetry)
+tự động: chuẩn bị trước → compaction_start
+  → session_before_compact → kết quả tích hợp sẵn hoặc tùy chỉnh
+  → ghi mục → dựng lại thông điệp Agent → session_compact
+  → compaction_end(thành công, willRetry)
 
-terminal failure hoặc abort sau start
+lỗi kết thúc hoặc thao tác hủy sau khi bắt đầu
   → compaction_end(result: undefined, aborted/errorMessage)
   → session_compact_failed
 ```
 
-Extension dưới đây ghi nhận cả ba hook outcome mà không thay built-in summary:
+Extension dưới đây ghi nhận kết quả của cả ba hook mà không thay bản tóm tắt tích hợp sẵn:
 
 ```typescript
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -488,109 +491,109 @@ export default function compactionAudit(pi: ExtensionAPI) {
 }
 ```
 
-Replacement trả từ `session_before_compact` phải có `summary`, `firstKeptEntryId` và `tokensBefore`; `usage` cùng `details` là tùy chọn. Pi không chạy lại cut-point validation cho replacement đó, nên handler thường phải chép `firstKeptEntryId` và `tokensBefore` đã prepare. Extension nhận prepared boundary, hai vùng message, previous summary, file operation, reason, retry intent, branch entry và `AbortSignal` đang active. Custom model call nên truyền signal này và trả provider usage.
+Kết quả thay thế từ `session_before_compact` phải có `summary`, `firstKeptEntryId` và `tokensBefore`; `usage` cùng `details` là tùy chọn. Pi không kiểm tra lại điểm cắt cho kết quả đó, nên trình xử lý thường phải chép `firstKeptEntryId` và `tokensBefore` đã chuẩn bị. Extension nhận ranh giới đã chuẩn bị, hai vùng thông điệp, bản tóm tắt trước, thao tác tệp, lý do, ý định thử lại, các mục nhánh và `AbortSignal` đang hoạt động. Lần gọi mô hình tùy chỉnh nên truyền tín hiệu này và trả về mức sử dụng do nhà cung cấp báo cáo.
 
-### Semantics của failure, cancellation và retry
+### Quy tắc khi lỗi, hủy và thử lại
 
-Manual `compact()` abort Agent run trước, emit `compaction_start`, rồi reject promise nếu thiếu model, không có gì để compact, hook cancel, signal abort hoặc summary thất bại. Hook cancellation trở thành `Error("Compaction cancelled")`. `compaction_end` tương ứng có `aborted: true`, không có `errorMessage` và `willRetry: false`; `session_compact_failed` nhận cùng trạng thái kết thúc.
+Lệnh `compact()` thủ công hủy lượt chạy Agent trước, phát `compaction_start`, rồi kết thúc bằng lỗi nếu thiếu mô hình, không có gì để nén, hook yêu cầu hủy, tín hiệu bị hủy hoặc bước tóm tắt thất bại. Lệnh hủy từ hook trở thành `Error("Compaction cancelled")`. `compaction_end` tương ứng có `aborted: true`, không có `errorMessage` và có `willRetry: false`; `session_compact_failed` nhận cùng trạng thái kết thúc.
 
-`abortCompaction()` abort controller của manual hoặc automatic compaction. Built-in summary call nhận signal đó. Pi kiểm tra signal lần nữa trước khi append, nên trường hợp abort sau khi tạo summary nhưng trước persistence sẽ không ghi checkpoint.
+`abortCompaction()` hủy bộ điều khiển của lần nén thủ công hoặc tự động. Lần gọi tóm tắt tích hợp sẵn nhận tín hiệu đó. Pi kiểm tra tín hiệu lần nữa trước khi ghi, nên thao tác hủy sau khi tạo bản tóm tắt nhưng trước khi lưu sẽ không ghi điểm kiểm tra.
 
-Automatic cancellation hoặc abort trả `false` về post-run loop, emit terminal event, không ghi entry và tắt retry cho lần đó. Automatic failure khác được format thành `Auto-compaction failed: ...` hoặc `Context overflow recovery failed: ...`, rồi được emit, báo cho `session_compact_failed`, và được `_runAutoCompaction()` xử lý nội bộ thay vì throw cho caller. Nếu overflow vẫn xảy ra sau đúng một lần compact-and-retry, Pi emit terminal recovery failure và không compact hay retry thêm.
+Kết quả hủy từ hook hoặc tín hiệu hủy trong đường tự động trả `false` về vòng lặp sau lượt chạy, phát sự kiện kết thúc, không ghi mục mới và tắt thử lại cho lần đó. Các lỗi tự động khác được định dạng thành `Auto-compaction failed: ...` hoặc `Context overflow recovery failed: ...`, rồi được phát, báo cho `session_compact_failed` và được `_runAutoCompaction()` xử lý nội bộ thay vì ném cho bên gọi. Nếu ngữ cảnh vẫn tràn sau đúng một lần nén rồi thử lại, Pi phát lỗi phục hồi kết thúc và không nén hay thử thêm.
 
-Không có public `compaction_start` khi automatic preparation trả `undefined`; manual start xảy ra sớm hơn nên vẫn ghép với failure end cho trường hợp “Already compacted” hoặc “Nothing to compact.” Khi thành công, `compaction_end` chỉ được emit sau persistence, projection và `session_compact`. Manual path xóa controller trước end event để end listener có thể gửi queued prompt an toàn.
+Pi không phát `compaction_start` công khai khi bước chuẩn bị tự động trả `undefined`. Đường thủ công phát sự kiện bắt đầu sớm hơn, nên lỗi `Already compacted` hoặc `Nothing to compact (session too small)` vẫn có sự kiện kết thúc tương ứng. Khi thành công, Pi chỉ phát `compaction_end` sau khi lưu, chiếu lại ngữ cảnh và chạy `session_compact`. Đường thủ công xóa bộ điều khiển trước sự kiện kết thúc để trình lắng nghe có thể gửi lời nhắc đang chờ một cách an toàn.
 
-## 7. Chuỗi end-to-end hoàn chỉnh
+## 7. Chuỗi xử lý hoàn chỉnh từ đầu đến cuối
 
-Đường tự động hoàn chỉnh đi qua năm dạng biểu diễn: provider usage, session entry, message của summary request, checkpoint đã lưu và provider request tiếp theo.
+Đường tự động hoàn chỉnh đi qua năm dạng biểu diễn: mức sử dụng từ nhà cung cấp, mục phiên, thông điệp của yêu cầu tóm tắt, điểm kiểm tra đã lưu và yêu cầu tiếp theo gửi tới nhà cung cấp.
 
 ```text
-1. Agent response settle
-   message_end lưu assistant → agent_end → _handlePostAgentRun()
+1. Phản hồi Agent kết thúc
+   message_end lưu trợ lý → agent_end → _handlePostAgentRun()
 
 2. Phân loại
-   overflow/recoverable length từ cùng model HOẶC threshold từ current usage
+   tràn/độ dài có thể phục hồi từ cùng mô hình HOẶC ngưỡng từ mức sử dụng hiện tại
 
-3. Prepare
-   dựng active branch path
+3. Chuẩn bị
+   dựng đường dẫn của nhánh đang hoạt động
    → tính lại tokensBefore từ buildSessionContext(path).messages
-   → tìm previous-summary boundary
+   → tìm ranh giới của bản tóm tắt trước
    → đi ngược tới firstKeptEntryId
-   → chia messagesToSummarize / turnPrefixMessages / kept region
-   → thu built-in file operation
+   → chia messagesToSummarize / turnPrefixMessages / vùng giữ lại
+   → thu thập thao tác tệp tích hợp sẵn
 
-4. Intercept
-   compaction_start → await session_before_compact
-   → cancel, custom result hoặc built-in generation
+4. Can thiệp
+   compaction_start → chờ session_before_compact
+   → hủy, dùng kết quả tùy chỉnh hoặc tạo kết quả tích hợp sẵn
 
 5. Tóm tắt
-   convertToLlm → serializeConversation (Tool result giới hạn 2.000 ký tự)
-   → six-section initial/update request
-   → turn-prefix request tuần tự nếu cần
-   → nối file list đã sort và cộng usage
+   convertToLlm → serializeConversation (kết quả Tool giới hạn 2.000 ký tự)
+   → yêu cầu ban đầu/cập nhật theo sáu mục
+   → yêu cầu phần đầu lượt theo thứ tự nếu cần
+   → nối danh sách tệp đã sắp xếp và cộng mức sử dụng
 
-6. Persist
+6. Lưu
    SessionManager.appendCompaction(...)
-   → JSONL entry mới nối parent; entry cũ vẫn còn
+   → mục JSONL mới nối với mục cha; mục cũ vẫn còn
 
-7. Project
+7. Chiếu
    buildSessionContext()
-   → CompactionSummaryMessage + entry từ firstKeptEntryId + later entry
+   → CompactionSummaryMessage + mục từ firstKeptEntryId + mục về sau
    → thay agent.state.messages
 
 8. Thông báo và tiếp tục
    session_compact → compaction_end
-   → retry một overflow turn, phát queued message hoặc settle
+   → thử lại một lượt bị tràn, phát thông điệp đang chờ hoặc kết thúc
 
-9. Model call tiếp theo
+9. Lần gọi mô hình tiếp theo
    transformContext → convertToLlm
-   → system prompt + <summary> user message + recent message nguyên văn
+   → lời nhắc hệ thống + thông điệp người dùng <summary> + thông điệp gần đây nguyên văn
 ```
 
-Manual compaction đi vào bước 4 sau khi abort Agent run đang active và prepare cùng các vùng message. Nó không bao giờ đi vào nhánh automatic retry ở bước 8.
+Nén thủ công đi vào bước 4 sau khi hủy lượt chạy Agent đang hoạt động và chuẩn bị các vùng thông điệp. Đường này không đi vào nhánh thử lại tự động ở bước 8.
 
-## 8. Nguyên tắc thiết kế và kiểm tra handoff
+## 8. Nguyên tắc thiết kế và kiểm tra bàn giao
 
-### 1. Giữ recent suffix đúng protocol
+### 1. Giữ phần đuôi gần đây đúng giao thức
 
-Việc chọn theo chiều ngược thể hiện một ưu tiên: phần việc gần đây hữu ích hơn khi giữ nguyên văn so với phần việc cũ có cùng token cost. Valid cut point thêm một constraint cứng từ protocol. Retained Tool result không có call tương ứng là context sai cấu trúc, nên `keepRecentTokens` là target chứ không cho phép cắt tại token offset tùy ý.
+Việc chọn theo chiều ngược ưu tiên giữ nguyên văn phần việc gần đây hơn phần việc cũ có cùng chi phí token. Điểm cắt hợp lệ còn áp đặt một ràng buộc cứng của giao thức. Kết quả Tool được giữ lại mà thiếu lời gọi tương ứng sẽ tạo ngữ cảnh sai cấu trúc, nên `keepRecentTokens` chỉ là mục tiêu, không cho phép cắt tại một độ lệch token tùy ý.
 
-Hãy test thuộc tính này bằng một turn có nhiều Tool call gần boundary. Xác nhận entry được chọn không bao giờ là Tool result, mọi retained Tool result vẫn theo sau assistant call, và assistant boundary tạo `turnPrefixMessages` bắt đầu đúng tại user-like entry.
+Hãy kiểm thử thuộc tính này bằng một lượt có nhiều lời gọi Tool gần ranh giới. Xác nhận mục được chọn không bao giờ là kết quả Tool, mọi kết quả Tool được giữ lại vẫn theo sau lời gọi của trợ lý, và ranh giới tại trợ lý tạo `turnPrefixMessages` bắt đầu đúng ở mục mở đầu lượt.
 
-### 2. Làm cho state transfer có mất mát vẫn kiểm tra được
+### 2. Giữ khả năng kiểm tra khi truyền trạng thái có mất mát
 
-Six-section template, split-turn template, `firstKeptEntryId`, `tokensBefore`, file list và summary `usage` mô tả nội dung đã đổi cùng cách tạo ra nó. Không có field nào chứng minh summary đã đầy đủ. Quality test cần kiểm tra checkpoint còn active goal, constraint của người dùng, quyết định đã chấp nhận, phần việc chưa xong, blocker, path, command và error cần cho hành động tiếp theo hay không.
+Mẫu sáu mục, mẫu cho lượt bị tách, `firstKeptEntryId`, `tokensBefore`, danh sách tệp và `usage` của bản tóm tắt cho biết nội dung đã thay đổi và cách Pi tạo ra nó. Không trường nào chứng minh bản tóm tắt đã đầy đủ. Kiểm thử chất lượng cần xác nhận điểm kiểm tra vẫn chứa mục tiêu đang thực hiện, ràng buộc của người dùng, quyết định đã chấp nhận, phần việc chưa xong, trở ngại, đường dẫn, lệnh và lỗi cần cho hành động tiếp theo.
 
-Không chép secret vào summary chỉ vì nó từng xuất hiện trong history. Compaction không xóa dữ liệu: raw entry vẫn còn trong session file, summary có thể lặp lại nội dung cũ, và generic Agent runtime có thể copy nội dung vào retained tail. Xóa dữ liệu vì compliance cần một storage rewrite chính xác, tách khỏi runtime mechanism này.
+Không chép bí mật vào bản tóm tắt chỉ vì nó từng xuất hiện trong lịch sử. Nén không xóa dữ liệu: các mục thô vẫn còn trong tệp phiên, bản tóm tắt có thể lặp lại nội dung cũ, và bộ thực thi Agent dùng chung có thể sao chép nội dung vào phần đuôi được giữ lại. Xóa dữ liệu để đáp ứng yêu cầu tuân thủ cần một thao tác viết lại kho lưu trữ chính xác, tách khỏi cơ chế thời gian chạy này.
 
-### 3. Tách persistence, projection và navigation
+### 3. Tách lưu trữ, phép chiếu và điều hướng
 
-Compaction thay active-path projection bằng cách thêm `CompactionEntry`. `transformContext` chỉ thay một request trong memory. Branch summarization giải quyết bài toán khác: khi tree navigation yêu cầu summary, Pi thêm `BranchSummaryEntry` tại target path để phần việc hữu ích từ branch sắp rời đi theo lần navigation. Nó không dùng compaction threshold hay `firstKeptEntryId`.
+Nén thay phép chiếu của nhánh đang hoạt động bằng cách thêm `CompactionEntry`. `transformContext` chỉ thay một yêu cầu trong bộ nhớ. Tóm tắt nhánh giải quyết bài toán khác: khi thao tác điều hướng cây yêu cầu bản tóm tắt, Pi thêm `BranchSummaryEntry` tại đường dẫn đích để phần việc hữu ích từ nhánh sắp rời đi được mang theo. Cơ chế này không dùng ngưỡng nén hay `firstKeptEntryId`.
 
-Trước khi handoff một compaction integration, hãy kiểm tra các trường hợp sau:
+Trước khi bàn giao một phần tích hợp nén, hãy kiểm tra các trường hợp sau:
 
-1. Boundary chính xác của threshold và hai giá trị mặc định hiện tại.
-2. Usage từ provider, fallback cho error/toàn 0 và việc từ chối stale usage sau compaction.
-3. Compaction đầu, compaction lặp lại, previous kept id bị thiếu và kết quả không có gì để tóm tắt.
-4. Whole-turn cut và split-turn cut, gồm Tool ordering cùng tổng usage của prefix summary.
-5. Thứ tự ưu tiên global/project/SDK setting, cộng trường hợp project chưa được trust.
-6. Manual success, manual cancellation, automatic hook cancellation, summary error, signal abort, overflow retry thành công và overflow lần hai thất bại.
-7. JSONL entry field, active context entry, projected `AgentMessage[]` và Pi AI `Message[]` cuối cùng dưới dạng bốn assertion riêng.
-8. `details` của built-in so với Extension, file chỉ đọc so với file đã sửa, và operation từ Bash/custom Tool cần metadata riêng.
+1. Ranh giới chính xác của ngưỡng và hai giá trị mặc định hiện tại.
+2. Mức sử dụng từ nhà cung cấp, phương án dự phòng cho lỗi hoặc toàn 0, và việc loại bỏ mức sử dụng cũ sau khi nén.
+3. Lần nén đầu, lần nén lặp lại, mã mục được giữ trước đó bị thiếu và trường hợp không còn gì để tóm tắt.
+4. Điểm cắt trọn lượt và điểm cắt giữa lượt, gồm thứ tự Tool cùng tổng mức sử dụng của bản tóm tắt phần đầu.
+5. Thứ tự ưu tiên của thiết lập toàn cục, dự án và SDK, cùng trường hợp dự án chưa được tin cậy.
+6. Thành công và hủy thủ công, hook tự động yêu cầu hủy, lỗi tóm tắt, tín hiệu hủy, thử lại sau tràn thành công và lần tràn thứ hai thất bại.
+7. Các trường của mục JSONL, mục ngữ cảnh đang hoạt động, `AgentMessage[]` được chiếu và `Message[]` cuối cùng của Pi AI dưới dạng bốn phép kiểm tra riêng.
+8. `details` tích hợp sẵn so với Extension, tệp chỉ đọc so với tệp đã sửa, và thao tác từ Bash hoặc Tool tùy chỉnh cần siêu dữ liệu riêng.
 
 ## 9. Trạm tiếp theo
 
-[Chương 10](ch10-session.md) đi theo parent-linked JSONL tree phía sau `getBranch()`, `appendCompaction()`, `buildContextEntries()`, rewind và branch navigation. Storage model đó giải thích vì sao compaction có thể bỏ entry cũ khỏi model request tiếp theo mà không xóa chúng.
+[Chương 10](ch10-session.md) đi sâu vào cây JSONL liên kết qua các mục cha mà `getBranch()`, `appendCompaction()` và `buildContextEntries()` sử dụng, cùng thao tác quay lại và điều hướng nhánh. Mô hình lưu trữ đó giải thích vì sao cơ chế nén có thể bỏ các mục cũ khỏi yêu cầu mô hình tiếp theo mà không xóa chúng.
 
-Các implementation reference của chương này được pin tại Pi `0.84.2`, commit `a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c`:
+Các tham chiếu triển khai của chương này được ghim tại Pi `0.84.2`, commit `a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c`:
 
-- [Giá trị mặc định, token accounting, cut point, template, preparation và generation của compaction](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/compaction/compaction.ts#L126-L997)
-- [Summary serialization và theo dõi file operation](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/compaction/utils.ts#L12-L158)
-- [`CompactionEntry`, append và active-path projection](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/session-manager.ts#L46-L80), cùng [`buildSessionContext()`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/session-manager.ts#L379-L469)
-- [Lifecycle, retry, abort và failure path thủ công/tự động](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/agent-session.ts#L1818-L2359)
-- [Contract của Extension compaction event](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/extensions/types.ts#L288-L300) và [hook](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/extensions/types.ts#L591-L627)
-- [Chuyển đổi compaction-summary message](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/messages.ts#L11-L17) và [thứ tự per-call transform](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/agent-loop.ts#L277-L302)
-- [Merge global/project setting và SDK override](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/settings-manager.ts#L150-L169), cùng [giá trị compaction hiệu dụng](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/settings-manager.ts#L825-L852)
-- [Schema `retainedTail` của generic Agent](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/harness/session/types.ts#L39-L51), khác với Coding Agent `SessionManager`
+- [Giá trị mặc định, cách tính token, điểm cắt, mẫu, bước chuẩn bị và tạo kết quả nén](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/compaction/compaction.ts#L126-L997)
+- [Tuần tự hóa bản tóm tắt và theo dõi thao tác tệp](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/compaction/utils.ts#L12-L158)
+- [`CompactionEntry`, thao tác ghi và phép chiếu nhánh đang hoạt động](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/session-manager.ts#L46-L80), cùng [`buildSessionContext()`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/session-manager.ts#L379-L469)
+- [Đường xử lý vòng đời, thử lại, hủy và thất bại trong chế độ thủ công hoặc tự động](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/agent-session.ts#L1818-L2359)
+- [Hợp đồng sự kiện nén của Extension](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/extensions/types.ts#L288-L300) và [các hook](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/extensions/types.ts#L591-L627)
+- [Chuyển đổi thông điệp tóm tắt nén](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/messages.ts#L11-L17) và [thứ tự biến đổi cho từng lần gọi](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/agent-loop.ts#L277-L302)
+- [Hợp nhất thiết lập toàn cục/dự án và giá trị ghi đè từ SDK](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/settings-manager.ts#L150-L169), cùng [giá trị nén có hiệu lực](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/settings-manager.ts#L825-L852)
+- [Lược đồ `retainedTail` của Agent dùng chung](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/harness/session/types.ts#L39-L51), khác với Coding Agent `SessionManager`
 
-> **Tiếp theo:** [Chương 10: Quản lý Session](ch10-session.md)
+> **Tiếp theo:** [Chương 10: Quản lý phiên](ch10-session.md)
