@@ -500,7 +500,31 @@ The thinner pre-restoration Chapter 4 pages contained concise `Models` lookup/ca
 
 This appendix compares the Chapter 5 pair at `b10130f` with the restored English and Vietnamese pages. It records 100 pair-level decisions: 35 baseline H2–H4 headings and 65 unique artifacts or arguments. They reconcile exactly as `77 restored + 2 merged + 21 technically-invalid + 0 duplicate = 100`. Every technically invalid item was replaced in place with its current teaching equivalent; no item was deleted for brevity.
 
-Final English has 4,542 prose words, 99.5% of its 4,564-word baseline. Final Vietnamese has 5,014 prose words, 99.3% of its 5,048-word baseline. Both pages have H2/H3/H4 `7/29/0`, 33 paired fences with languages `json`, `typescript`, `typescript`, `typescript`, `typescript`, `typescript`, `typescript`, `typescript`, `text`, `json`, `text`, `jsonc`, `text`, `typescript`, `typescript`, `typescript`, `text`, `typescript`, `typescript`, `typescript`, `typescript`, `text`, `typescript`, `text`, `typescript`, `text`, `text`, `typescript`, `typescript`, `typescript`, `text`, `typescript`, `text`, five tables, and no Mermaid block. The additional current H3 isolates `defineTool()` from `pi.registerTool()` and is outside the baseline heading decisions. No preservation-manifest deletion allowance is needed.
+Final English has 4,566 prose words, 100.0% of its 4,564-word baseline. Final Vietnamese has 6,566 prose words, 130.1% of its 5,048-word baseline. Both pages have H2/H3/H4 `7/29/0`, 33 paired fences, five tables, and no Mermaid block. The fence-language sequence is identical in both locales:
+
+```text
+01 json
+02–08 typescript
+09 text
+10 json
+11 text
+12 jsonc
+13 text
+14–16 typescript
+17 text
+18–21 typescript
+22 text
+23 typescript
+24 text
+25 typescript
+26–27 text
+28–30 typescript
+31 text
+32 typescript
+33 text
+```
+
+The additional current H3 isolates `defineTool()` from `pi.registerTool()` and is outside the baseline heading decisions. No preservation-manifest deletion allowance is needed.
 
 ### Baseline section outcomes
 

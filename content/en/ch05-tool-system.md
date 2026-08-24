@@ -987,6 +987,6 @@ Tool execution is therefore a controlled protocol around an effect. The schema l
 
 Chapter 6 follows those messages across the richer Agent transcript and the provider conversion boundary. It explains why Tool details can serve the UI while only text and image content enter the normal model-facing result.
 
-Source review for this chapter is pinned to Pi `0.84.2` at commit `a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c`. Primary files are `packages/ai/src/types.ts` and `utils/validation.ts`; `packages/agent/src/types.ts`, `agent-loop.ts`, and `agent.ts`; `packages/coding-agent/src/core/extensions/types.ts`, `runner.ts`, `wrapper.ts`, and `loader.ts`; `core/agent-session.ts`; and the Tool implementations under `packages/coding-agent/src/core/tools/`.
+Source review for this chapter is pinned to Pi `0.84.2` at commit `a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c`. Primary paths are `packages/ai/src/types.ts`, `packages/ai/src/utils/validation.ts`, `packages/agent/src/types.ts`, `packages/agent/src/agent-loop.ts`, `packages/agent/src/agent.ts`, `packages/coding-agent/src/core/extensions/types.ts`, `packages/coding-agent/src/core/extensions/runner.ts`, `packages/coding-agent/src/core/extensions/wrapper.ts`, `packages/coding-agent/src/core/extensions/loader.ts`, `packages/coding-agent/src/core/agent-session.ts`, and the Tool implementations under `packages/coding-agent/src/core/tools/`.
 
 [Chapter 6: Message system](ch06-messages.md)
