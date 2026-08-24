@@ -9,9 +9,9 @@ last_updated: '2026-08-24'
 ---
 These definitions follow the current Pi packages. Code identifiers, package names, commands, paths, configuration keys, and environment variables are always preserved exactly.
 
-:::note[Translation rule]
+:::note[Why a glossary]
 
-The Vietnamese edition keeps product names and code identifiers unchanged. A general concept may be translated when its first use also gives the canonical English term.
+Pi uses a small technical vocabulary consistently across its packages. These definitions make the source faster to read and keep the English and Vietnamese pages aligned. Preserve exact identifiers and package names. If a term is not listed here, read it as ordinary English unless the source defines it more narrowly. The Vietnamese edition may translate a general concept after giving its canonical English term on first use.
 
 :::
 

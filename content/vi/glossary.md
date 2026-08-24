@@ -9,9 +9,9 @@ last_updated: '2026-08-24'
 ---
 Các định nghĩa dưới đây bám theo package Pi hiện tại. Identifier, tên package, command, đường dẫn, configuration key và biến môi trường luôn được giữ nguyên.
 
-:::note[Quy tắc dịch]
+:::note[Vì sao cần bảng thuật ngữ]
 
-Bản tiếng Việt giữ nguyên tên sản phẩm và identifier trong code. Khái niệm thông thường có thể được dịch, nhưng lần xuất hiện đầu tiên phải kèm thuật ngữ tiếng Anh chuẩn.
+Pi sử dụng nhất quán một nhóm thuật ngữ kỹ thuật nhỏ trong các package. Những định nghĩa này giúp đọc mã nguồn nhanh hơn và giữ hai bản tiếng Anh, tiếng Việt đồng bộ. Luôn giữ nguyên identifier và tên package. Nếu một thuật ngữ không có trong danh sách, hãy hiểu theo nghĩa tiếng Anh thông thường, trừ khi mã nguồn định nghĩa hẹp hơn. Bản tiếng Việt có thể dịch khái niệm chung sau khi nêu thuật ngữ tiếng Anh chuẩn ở lần xuất hiện đầu tiên.
 
 :::
 

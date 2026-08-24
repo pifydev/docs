@@ -19,10 +19,13 @@ Trang này ghi các thay đổi của website tài liệu Pify. Để xem releas
 
 - Thay các thử nghiệm triển khai Astro và GitBook trước đó bằng ứng dụng Fumadocs self-hosted trên Vercel.
 - Thêm route Anh/Việt, navigation bản địa hóa, search, SEO metadata, syntax highlighting, Mermaid renderer và end-to-end test song ngữ.
+- Xuất bản Hướng dẫn nhanh, bảng thuật ngữ, nhật ký thay đổi, 5 hướng dẫn theo tác vụ, các trang tham khảo về API/cấu hình/biến môi trường và FAQ.
+- Thêm tiêu đề code block và line highlighting qua Fumadocs renderer.
 - Sửa các link tài liệu theo locale để route sạch không còn lộ đuôi `.md`.
 - Thêm logo Pify, favicon thích ứng, giấy phép GPLv3, hướng dẫn đóng góp và tài liệu triển khai.
 
 ## 2026-08-20
 
-- Import 10 chương tiếng Anh và tiếng Việt đầu tiên từ dự án dịch Pi Agent Book.
+- Import 10 chương tiếng Anh và tiếng Việt đầu tiên từ dự án dịch Pi Agent Book; bản Pi Agent Book tiếng Trung là nguồn chuẩn cho lần dịch đầu tiên đó.
 - Thêm navigation ban đầu và metadata về nguồn tài liệu.
+- Thêm trang 404 tùy chỉnh và tạo sitemap.
