@@ -457,10 +457,10 @@ node --env-file=.env --import tsx agent-session.ts
 
 ### Extension route
 
-Do not run `agent-session.ts` for this route. From the project root, first review `.pi/extensions/weather.ts` because Extensions execute with the Pi process's permissions. The Coding Agent CLI creates a `DefaultResourceLoader`, which discovers that project-local file only after the project is trusted. The installed `@earendil-works/pi-coding-agent` package declares its `pi` executable at `dist/bundle/cli.js`, so launch that local bin while loading `.env`:
+Do not run `agent-session.ts` for this route. From the project root, first review `.pi/extensions/weather.ts` because Extensions execute with the Pi process's permissions. The Coding Agent CLI creates a `DefaultResourceLoader`, which discovers that project-local file only after the project is trusted. The published npm artifact is authoritative for this launch command: its metadata maps the `pi` executable to `dist/cli.js`. The pinned source manifest still names `dist/bundle/cli.js`, but that path is absent from the published tarball. Launch the published local bin while loading `.env`:
 
 ```bash
-node --env-file=.env ./node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js "What is the weather in Tokyo?"
+node --env-file=.env ./node_modules/@earendil-works/pi-coding-agent/dist/cli.js "What is the weather in Tokyo?"
 ```
 
 At interactive startup, approve the project-trust prompt only after reviewing the project resources; declining trust skips the project-local Extension. The pinned [Extensions guide](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/docs/extensions.md#extension-locations) documents discovery locations, reload behavior, and the same trust boundary.

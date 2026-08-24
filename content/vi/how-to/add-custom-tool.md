@@ -457,10 +457,10 @@ node --env-file=.env --import tsx agent-session.ts
 
 ### Cách dùng Extension
 
-Không chạy `agent-session.ts` cho cách này. Từ thư mục gốc của dự án, trước hết hãy review `.pi/extensions/weather.ts` vì Extension chạy với quyền của process Pi. Coding Agent CLI tạo một `DefaultResourceLoader`, và loader này chỉ phát hiện file cục bộ sau khi dự án được trust. Package `@earendil-works/pi-coding-agent` đã cài khai báo executable `pi` tại `dist/bundle/cli.js`; hãy chạy local bin đó đồng thời nạp `.env`:
+Không chạy `agent-session.ts` cho cách này. Từ thư mục gốc của dự án, trước hết hãy review `.pi/extensions/weather.ts` vì Extension chạy với quyền của process Pi. Coding Agent CLI tạo một `DefaultResourceLoader`, và loader này chỉ phát hiện file cục bộ sau khi dự án được trust. Package đã phát hành trên npm là nguồn quyết định cho lệnh khởi chạy này: metadata của package ánh xạ executable `pi` tới `dist/cli.js`. Manifest trong source đã ghim vẫn ghi `dist/bundle/cli.js`, nhưng tarball trên npm không có đường dẫn đó. Hãy chạy local bin từ package đã phát hành và nạp `.env`:
 
 ```bash
-node --env-file=.env ./node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js "What is the weather in Tokyo?"
+node --env-file=.env ./node_modules/@earendil-works/pi-coding-agent/dist/cli.js "What is the weather in Tokyo?"
 ```
 
 Khi CLI khởi động ở chế độ interactive, chỉ chấp nhận project-trust prompt sau khi review các resource của dự án; nếu từ chối, Pi sẽ bỏ qua Extension cục bộ. [Hướng dẫn Extensions](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/docs/extensions.md#extension-locations) đã ghim mô tả các vị trí được phát hiện, cách reload và ranh giới trust đó.
