@@ -38,14 +38,14 @@ test("content workflow validates the Fumadocs source tree", async () => {
   assert.ok(workflow.on.push.paths.includes("content/**"));
   assert.deepEqual(workflowCommands(workflow, "quality"), [
     "npm ci",
-    "npm run test:content",
-    "npm run test:unit",
-    "npm run lint:sync",
-    "npm run lint:frontmatter",
-    "npm run lint:content",
-    "npm run lint:mermaid",
-    "npm run lint:app",
+    "npm run quality:content",
   ]);
+  const packageJSON = JSON.parse(
+    await readFile(new URL("package.json", repositoryRoot), "utf8"),
+  );
+  assert.match(packageJSON.scripts["lint:content"], /--require-reviewed/);
+  assert.match(packageJSON.scripts["quality:content"], /test:editorial/);
+  assert.match(packageJSON.scripts["quality:content"], /lint:editorial/);
   assert.doesNotMatch(source, /GitBook|src\/content\/docs|lint:gitbook/i);
 });
 

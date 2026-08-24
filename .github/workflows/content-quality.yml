@@ -47,10 +47,4 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run test:content
-      - run: npm run test:unit
-      - run: npm run lint:sync
-      - run: npm run lint:frontmatter
-      - run: npm run lint:content
-      - run: npm run lint:mermaid
-      - run: npm run lint:app
+      - run: npm run quality:content

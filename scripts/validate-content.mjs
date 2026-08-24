@@ -173,7 +173,33 @@ function sameArray(left, right) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
-export async function validateRepository(rootURL) {
+export function reviewMetadataErrors(
+  relativePath,
+  metadata,
+  { requireReviewed = false } = {},
+) {
+  if (!requireReviewed) return [];
+
+  const errors = [];
+  if (metadata.status !== "reviewed") {
+    errors.push(`${relativePath}: status must be reviewed`);
+  }
+  if (
+    typeof metadata.reviewed_by !== "string" ||
+    metadata.reviewed_by.trim() === ""
+  ) {
+    errors.push(`${relativePath}: reviewed_by is required`);
+  }
+  if (
+    typeof metadata.last_updated !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(metadata.last_updated)
+  ) {
+    errors.push(`${relativePath}: last_updated must use YYYY-MM-DD`);
+  }
+  return errors;
+}
+
+export async function validateRepository(rootURL, options = {}) {
   const root = fileURLToPath(rootURL);
   const errors = [];
   const manifestPath = path.join(root, "content/translation-manifest.json");
@@ -234,6 +260,13 @@ export async function validateRepository(rootURL) {
       if (!parsed[locale].data.title) {
         errors.push(`${locale}/${relativePath}: title is required`);
       }
+      errors.push(
+        ...reviewMetadataErrors(
+          `${locale}/${relativePath}`,
+          parsed[locale].data,
+          options,
+        ),
+      );
       if (/\{%\s*(?:hint|endhint)\b/.test(parsed[locale].content)) {
         errors.push(
           `${locale}/${relativePath}: GitBook hint syntax is not allowed`,
@@ -305,7 +338,9 @@ const invokedPath = process.argv[1]
   : "";
 
 if (invokedPath === import.meta.url) {
-  const errors = await validateRepository(new URL("..", import.meta.url));
+  const errors = await validateRepository(new URL("..", import.meta.url), {
+    requireReviewed: process.argv.includes("--require-reviewed"),
+  });
   if (errors.length > 0) {
     for (const error of errors) console.error(`- ${error}`);
     process.exit(1);

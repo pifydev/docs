@@ -3,7 +3,10 @@ import { access, readFile } from "node:fs/promises";
 import test from "node:test";
 
 import { extractMermaidBlocks } from "./lib/markdown.mjs";
-import { validateRepository } from "./validate-content.mjs";
+import {
+  reviewMetadataErrors,
+  validateRepository,
+} from "./validate-content.mjs";
 
 const repositoryRoot = new URL("../", import.meta.url);
 const manifestURL = new URL(
@@ -173,6 +176,38 @@ test("FAQ contribution guidance uses the canonical content tree", async () => {
 test("repository satisfies the Fumadocs content contract", async () => {
   const errors = await validateRepository(new URL("..", import.meta.url));
   assert.deepEqual(errors, []);
+});
+
+test("review gate requires reviewed status, reviewer, and review date", () => {
+  assert.deepEqual(
+    reviewMetadataErrors(
+      "vi/quickstart.md",
+      {
+        status: "translated",
+        reviewed_by: "",
+        last_updated: "2026/08/24",
+      },
+      { requireReviewed: true },
+    ),
+    [
+      "vi/quickstart.md: status must be reviewed",
+      "vi/quickstart.md: reviewed_by is required",
+      "vi/quickstart.md: last_updated must use YYYY-MM-DD",
+    ],
+  );
+
+  assert.deepEqual(
+    reviewMetadataErrors(
+      "en/quickstart.md",
+      {
+        status: "reviewed",
+        reviewed_by: "Pify maintainers",
+        last_updated: "2026-08-24",
+      },
+      { requireReviewed: true },
+    ),
+    [],
+  );
 });
 
 test("Mermaid extraction covers blocks outside numbered chapters", () => {
