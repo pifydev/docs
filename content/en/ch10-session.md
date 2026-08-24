@@ -430,10 +430,18 @@ When `/tree` leaves one path for another, `AgentSession.navigateTree()` can summ
 The following is lifecycle pseudocode, not the signature of one async method:
 
 ```text
-abandoned = collectEntriesForBranchSummary(oldLeafId, targetId)
-summary = await generateBranchSummary(abandoned, model, instructions, signal)
-summaryId = session.branchWithSummary(newLeafId, summary.text, summary.details,
-                                      summary.fromExtension, summary.usage)
+fromExtension = false
+result = await generateBranchSummary(entriesToSummarize, {
+  model: requestModel, apiKey, headers, env, signal,
+  customInstructions, replaceInstructions, reserveTokens,
+  streamFn, retry, callbacks
+})
+summaryText = result.summary
+summaryDetails = { readFiles: result.readFiles || [],
+                   modifiedFiles: result.modifiedFiles || [] }
+summaryUsage = result.usage
+summaryId = session.branchWithSummary(newLeafId, summaryText, summaryDetails,
+                                      fromExtension, summaryUsage)
 ```
 
 `branchWithSummary()` itself is synchronous. It captures the old leaf in `fromId`, moves to the requested target, appends a `BranchSummaryEntry` as a child of that target, and makes the summary entry the new leaf:
@@ -562,7 +570,7 @@ The first line is a v3 header. Every later line is one `SessionEntry`. This samp
 {"type":"session","version":3,"id":"01992742-9d1a-7aa0-b123-112233445566","timestamp":"2026-08-24T10:00:00.000Z","cwd":"/work/auth"}
 {"type":"model_change","id":"a1b2c3d4","parentId":null,"timestamp":"2026-08-24T10:00:05.000Z","provider":"anthropic","modelId":"claude-sonnet-4-6"}
 {"type":"message","id":"b2c3d4e5","parentId":"a1b2c3d4","timestamp":"2026-08-24T10:23:00.000Z","message":{"role":"user","content":"Why does salt verification fail in src/auth.ts?","timestamp":1787566980000}}
-{"type":"message","id":"c3d4e5f6","parentId":"b2c3d4e5","timestamp":"2026-08-24T10:23:30.000Z","message":{"role":"assistant","content":[{"type":"toolCall","id":"call_001","name":"read","arguments":{"path":"src/auth.ts"}}],"api":"anthropic-messages","provider":"anthropic","model":"claude-sonnet-4-6","usage":{"input":1250,"output":80,"cacheRead":0,"cacheWrite":0,"totalTokens":1330,"cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"total":0}},"stopReason":"toolUse","timestamp":1787567010000}}
+{"type":"message","id":"c3d4e5f6","parentId":"b2c3d4e5","timestamp":"2026-08-24T10:23:30.000Z","message":{"role":"assistant","content":[{"type":"text","text":"I'll inspect the verifier."},{"type":"toolCall","id":"call_001","name":"read","arguments":{"path":"src/auth.ts"}}],"api":"anthropic-messages","provider":"anthropic","model":"claude-sonnet-4-6","usage":{"input":1250,"output":80,"cacheRead":0,"cacheWrite":0,"totalTokens":1330,"cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"total":0}},"stopReason":"toolUse","timestamp":1787567010000}}
 {"type":"message","id":"d4e5f6a7","parentId":"c3d4e5f6","timestamp":"2026-08-24T10:23:31.000Z","message":{"role":"toolResult","toolCallId":"call_001","toolName":"read","content":[{"type":"text","text":"export function verifySalt(...) { ... }"}],"isError":false,"timestamp":1787567011000}}
 {"type":"message","id":"e5f6a7b8","parentId":"d4e5f6a7","timestamp":"2026-08-24T10:24:00.000Z","message":{"role":"assistant","content":[{"type":"text","text":"The comparison uses the wrong encoding."}],"api":"anthropic-messages","provider":"anthropic","model":"claude-sonnet-4-6","usage":{"input":1400,"output":40,"cacheRead":0,"cacheWrite":0,"totalTokens":1440,"cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"total":0}},"stopReason":"stop","timestamp":1787567040000}}
 {"type":"message","id":"f6a7b8c9","parentId":"b2c3d4e5","timestamp":"2026-08-24T10:30:00.000Z","message":{"role":"user","content":"Inspect the hash implementation first.","timestamp":1787567400000}}
@@ -714,9 +722,9 @@ Chapters 3 through 10 now connect the full runtime path: the loop emits messages
 
 Pi's extension system sits on both sides of this boundary. Extensions can append `custom` state, inject `custom_message` context, provide compaction or branch summaries, label entries, and observe navigation. The source files to read next are:
 
-- [`session-manager.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/session-manager.ts) for the v3 Coding Agent schema, tree, projection, writes, and public class;
-- [`branch-summarization.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/compaction/branch-summarization.ts) for common-ancestor collection and summary generation;
-- [`types.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/harness/session/types.ts) and [`jsonl/storage.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/harness/session/jsonl/storage.ts) for the separate generic harness;
-- [`sessions.md`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/docs/sessions.md) for current CLI behavior.
+- Coding Agent [`schema`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/session-manager.ts#L30-L153), [`projection`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/session-manager.ts#L334-L469), and [`SessionManager`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/session-manager.ts#L844-L1715) ranges;
+- branch-summary [`collection`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/compaction/branch-summarization.ts#L96-L145) and [`generation`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/compaction/branch-summarization.ts#L293-L379);
+- generic-harness [`entry and storage contracts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/harness/session/types.ts#L14-L326) and [`JSONL safety implementation`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/harness/session/jsonl/storage.ts#L23-L124);
+- [current CLI behavior, lines 5–139](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/docs/sessions.md#L5-L139).
 
 This chapter targets Pi `0.84.2` at commit `a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c`.
