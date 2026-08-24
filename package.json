@@ -23,7 +23,7 @@
     "test:e2e": "playwright test",
     "format:check": "prettier --check .",
     "lint": "npm run lint:sync && npm run lint:frontmatter && npm run lint:content && npm run lint:editorial && npm run lint:mermaid && npm run lint:app",
-    "quality:content": "npm run test:content && npm run test:editorial && npm run test:unit && npm run lint:sync && npm run lint:frontmatter && npm run lint:content && npm run lint:editorial && npm run lint:mermaid && npm run lint:app"
+    "quality:content": "npm run test:content && npm run test:preservation && npm run test:editorial && npm run test:unit && npm run lint:sync && npm run lint:frontmatter && npm run lint:content && npm run lint:editorial && npm run lint:mermaid && npm run lint:app"
   },
   "engines": {
     "node": ">=22 <23"
