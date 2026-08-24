@@ -1,89 +1,440 @@
 ---
 title: Add a model provider
-description: Register an OpenAI-compatible endpoint or a native provider without changing the agent loop.
+description: Add a model through models.json or a Provider, and implement a streaming API adapter only when the wire protocol is new.
 translation_key: how-to-plug-new-model
 language: en
+official_refs:
+  - "https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/docs/models.md"
+  - "https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/docs/custom-provider.md"
+  - "https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/ai/README.md#custom-providers"
+terms_used:
+  - Models
+  - Provider
+  - ModelRuntime
+  - ProviderConfig
+  - ProviderStreams
+  - AbortSignal
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-08-24'
+last_updated: "2026-08-24"
 ---
 
-Providers own authentication, model metadata, and streaming. Registering one through an extension makes its models available to the CLI and Coding Agent SDK without changing the agent loop.
+Most model additions describe an endpoint Pi already knows how to call. Start with `~/.pi/agent/models.json` or an Extension `ProviderConfig`; build a native `Provider` when you need provider-owned authentication or discovery; implement `ProviderStreams` only for a genuinely new wire protocol.
 
-## Choose an integration level
+:::tip[What you will have]
 
-Use the provider-config form for an OpenAI-compatible server, a proxy, or a known Pi API. Use `createProvider()` when you need custom authentication, model discovery, filtering, or streaming behavior.
+A local OpenAI-compatible model in the Pi catalog, accurate capability and cost metadata, commands that prove selection works, and a test probe for text, thinking, Tools, failure, retry, and cancellation.
 
-## Register an OpenAI-compatible server
+:::
 
-Create an extension:
+## Choose the integration route
 
-```ts title=".pi/extensions/local-provider.ts"
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+| Route | Use it when | Public surface |
+| --- | --- | --- |
+| `models.json` | A local server, proxy, or vendor speaks a supported Pi API. | `~/.pi/agent/models.json`; loaded by `ModelRuntime` and reloaded by `/model`. |
+| Extension config | The same APIs apply, but setup or discovery belongs in an Extension. | `pi.registerProvider(name, ProviderConfig)`. |
+| Native provider | You need custom auth resolution, catalog filtering, discovery, or mixed APIs. | `createProvider()` and `pi.registerProvider(provider)`. |
+| New API adapter | The service's request, response, or stream protocol is unsupported. | A `ProviderStreams` implementation passed to `createProvider()`. |
 
-export default function localProvider(pi: ExtensionAPI) {
+Do not revive the old process-global model/translator registry. Current applications own a `Models` collection; Coding Agent's public implementation is `ModelRuntime`. Built-in provider factories live under `@earendil-works/pi-ai/providers/*`, while API factories use `@earendil-works/pi-ai/api/*` subpath exports.
+
+## Prerequisites
+
+Pi `0.84.2` requires Node.js `>=22.19.0`. For the TypeScript examples, use ESM and install each package you import:
+
+```bash
+npm init -y
+npm pkg set type=module
+npm install @earendil-works/pi-ai@0.84.2 @earendil-works/pi-coding-agent@0.84.2
+npm install --save-dev typescript tsx @types/node
+```
+
+```json title="tsconfig.json"
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": ["node"]
+  },
+  "include": ["**/*.ts"]
+}
+```
+
+Start the OpenAI-compatible server at `http://127.0.0.1:1234/v1` and confirm its model ID with `GET /models`. Substitute its real URL, ID, limits, and capabilities below.
+
+## 1. Add a static OpenAI-compatible catalog
+
+Create `~/.pi/agent/models.json`. This is the smallest integration that survives restarts and remains editable without compiling an Extension:
+
+```json title="~/.pi/agent/models.json"
+{
+  "providers": {
+    "local-openai": {
+      "name": "Local OpenAI",
+      "baseUrl": "http://127.0.0.1:1234/v1",
+      "apiKey": "$LOCAL_OPENAI_API_KEY",
+      "api": "openai-completions",
+      "models": [
+        {
+          "id": "local-model",
+          "name": "Local Model",
+          "reasoning": false,
+          "input": ["text"],
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0
+          },
+          "contextWindow": 32768,
+          "maxTokens": 4096,
+          "compat": {
+            "supportsDeveloperRole": false,
+            "supportsReasoningEffort": false,
+            "supportsUsageInStreaming": false,
+            "supportsFinishReason": false,
+            "supportsStrictMode": false,
+            "maxTokensField": "max_tokens"
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
+Set the credential in the process that starts Pi:
+
+```bash
+export LOCAL_OPENAI_API_KEY="replace-me"
+pi --list-models local-openai
+```
+
+`apiKey` accepts a literal, `$ENV_VAR`, `${ENV_VAR}`, or a leading `!command`. Prefer an environment variable or `/login`; command-based resolution executes a local program and should only use a trusted, fixed command. A keyless local server still needs configured auth before its models become available: use a non-secret placeholder, store a key with `/login`, or pass `--api-key` for that invocation.
+
+Opening `/model` reloads `models.json`, so static edits do not require a restart. `ModelConfig` parses this file internally, but it is not a public package export; use `ModelRuntime.create({ modelsPath })` when an SDK application needs a custom path.
+
+## 2. Record metadata accurately
+
+Pi uses model metadata for selection, validation, request shaping, usage, and display. Do not copy a nearby model merely because the endpoint accepts OpenAI-shaped JSON.
+
+| Field | Meaning and rule |
+| --- | --- |
+| `id`, `name` | Send the exact server ID; use a stable human label. In `models.json`, `name` defaults to `id`. |
+| `api`, `baseUrl`, `provider` | Select the adapter and endpoint. `ModelRuntime` fills `provider` and inherited values; a resolved `Model` always has all three. |
+| `reasoning`, `thinkingLevelMap` | Enable only when the model emits reasoning. Map Pi levels to accepted provider values; use `null` for an unsupported level. |
+| `input` | Declare only accepted modalities: `text` and, when tested, `image`. |
+| `cost` | Per-million-token `input`, `output`, `cacheRead`, and `cacheWrite` rates. Optional `tiers` apply request-wide above an input-token threshold. Use zero when the endpoint is free/local. |
+| `contextWindow`, `maxTokens` | Total context capacity and maximum generated tokens. Both are token counts, not bytes or characters. |
+| `samplingParams`, `headers` | Optional model defaults and model-specific headers. Request values override sampling defaults. Keep secrets out of either field. |
+| `compat` | Explicit corrections for an OpenAI-compatible server's dialect. Defaults may be URL-derived, which is unsafe for an unknown local URL. |
+
+Common completions compatibility switches cover `developer` roles, `reasoning_effort`, streaming usage and `finish_reason`, the max-token field, strict/grammar Tools, replay rules for Tool results or reasoning content, thinking format, caching, routing, and session affinity. Set only flags you can demonstrate against the server. Metadata has no general `streaming` or `toolUse` boolean: every `Provider` streams, and Tool support is proven by an actual Tool call.
+
+## 3. Discover models with provider config
+
+Use an async Extension when the endpoint's model list changes. Validate the untrusted response and pass the supplied signal to `fetch`. The returned list replaces this Extension's models; if refresh throws, Pi keeps the previous list.
+
+```ts title=".pi/extensions/discover-local-models.ts"
+import type {
+  ExtensionAPI,
+  ProviderModelConfig,
+} from "@earendil-works/pi-coding-agent";
+
+interface ModelListItem {
+  id: string;
+}
+
+function isModelListItem(value: unknown): value is ModelListItem {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as { id?: unknown }).id === "string" &&
+    (value as { id: string }).id.trim().length > 0 &&
+    (value as { id: string }).id.length <= 256
+  );
+}
+
+async function discover(signal: AbortSignal): Promise<ProviderModelConfig[]> {
+  const response = await fetch("http://127.0.0.1:1234/v1/models", {
+    signal,
+  });
+  if (!response.ok) {
+    throw new Error(`Model discovery failed: HTTP ${response.status}`);
+  }
+
+  const body: unknown = await response.json();
+  const data =
+    typeof body === "object" && body !== null
+      ? (body as { data?: unknown }).data
+      : undefined;
+  if (
+    !Array.isArray(data) ||
+    data.length > 10_000 ||
+    !data.every(isModelListItem)
+  ) {
+    throw new Error("Model discovery returned an invalid data array");
+  }
+
+  return data.map((item) => ({
+    id: item.id,
+    name: item.id,
+    reasoning: false,
+    input: ["text"],
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: 32768,
+    maxTokens: 4096,
+    compat: {
+      supportsDeveloperRole: false,
+      supportsReasoningEffort: false,
+      supportsUsageInStreaming: false,
+      supportsFinishReason: false,
+      supportsStrictMode: false,
+      maxTokensField: "max_tokens",
+    },
+  }));
+}
+
+export default function discoverLocalModels(pi: ExtensionAPI) {
   pi.registerProvider("local-openai", {
     name: "Local OpenAI",
-    baseUrl: "http://localhost:1234/v1",
+    baseUrl: "http://127.0.0.1:1234/v1",
     apiKey: "$LOCAL_OPENAI_API_KEY",
     api: "openai-completions",
-    models: [
-      {
-        id: "local-model",
-        name: "Local Model",
-        reasoning: false,
-        input: ["text"],
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-        contextWindow: 128000,
-        maxTokens: 4096,
-      },
-    ],
+    refreshModels: ({ signal }) => discover(signal),
   });
 }
 ```
 
-Set the credential only if the server requires one:
+For provider-owned remote catalogs outside an Extension, call `await models.refresh({ allowNetwork: true, force: true, signal })`. Coding Agent also offers `pi update --models`; configured dynamic catalogs are cached for offline startup. `PI_OFFLINE` disables model network access. Refresh is optional; static providers need no refresh method.
 
-```bash
-export LOCAL_OPENAI_API_KEY="your-key"
+## 4. Build a native `Provider`
+
+Use `createProvider()` when the provider must own authentication, filter models by credential, or dispatch one or more Pi APIs. This example reuses the published OpenAI Completions adapter.
+
+```ts title=".pi/extensions/native-local-provider.ts"
+import {
+  createProvider,
+  envApiKeyAuth,
+  type Model,
+} from "@earendil-works/pi-ai";
+import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+
+const models: readonly Model<"openai-completions">[] = [
+  {
+    id: "local-model",
+    name: "Local Model",
+    provider: "local-native",
+    api: "openai-completions",
+    baseUrl: "http://127.0.0.1:1234/v1",
+    reasoning: false,
+    input: ["text"],
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: 32768,
+    maxTokens: 4096,
+    compat: {
+      supportsDeveloperRole: false,
+      supportsReasoningEffort: false,
+      supportsUsageInStreaming: false,
+      supportsFinishReason: false,
+      supportsStrictMode: false,
+      maxTokensField: "max_tokens",
+    },
+  },
+];
+
+const provider = createProvider({
+  id: "local-native",
+  name: "Local Native",
+  baseUrl: "http://127.0.0.1:1234/v1",
+  auth: {
+    apiKey: envApiKeyAuth("Local OpenAI API key", [
+      "LOCAL_OPENAI_API_KEY",
+    ]),
+  },
+  models,
+  api: openAICompletionsApi(),
+});
+
+export default function nativeLocalProvider(pi: ExtensionAPI) {
+  pi.registerProvider(provider);
+}
 ```
 
-When `models` is present, it replaces the provider's current model list. Every descriptor must reflect the endpoint's real context limit, output limit, input modes, reasoning support, and token cost.
+`envApiKeyAuth()` checks a stored credential first, then the listed environment variables. For a custom resolver, implement the public `ApiKeyAuth.resolve({ ctx, credential, signal })` method and read environment values through `ctx.env()`. Its `AuthResult` can return request auth, provider-scoped `env`, and a source label. There is no public `AuthResolver` type in `0.84.2`; do not import or invent one. SDK callers can inspect resolved state with `Models.getAuth()`.
 
-## Select and verify the model
+Built-in factories follow the same contract. For example, `openaiProvider()` is exported from `@earendil-works/pi-ai/providers/openai`. Use a factory when its catalog, auth, and API mix already match your service; use `createProvider()` for your own composition.
+
+## 5. Implement an API adapter only for a new protocol
+
+An API adapter converts Pi `Context` messages and Tools into the remote payload, then converts the response into one `AssistantMessageEventStream`. Model metadata stays in `Model`. This method surface is a reference excerpt, not a runnable adapter:
+
+```ts title="ProviderStreams contract (reference excerpt)"
+interface ProviderStreams {
+  stream(model, context, options?): AssistantMessageEventStream;
+  streamSimple(model, context, options?): AssistantMessageEventStream;
+  fetchDeferred?(model, handle, options?): AssistantMessageEventStream;
+  cancelDeferred?(model, handle, options?): Promise<void>;
+}
+```
+
+Source: pinned [`ProviderStreams`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/ai/src/types.ts#L262-L281). Parameter types are omitted in the excerpt; import the published interface for the exact signatures.
+
+`streamSimple()` is the provider-neutral entry point: it maps Pi reasoning levels, `toolChoice`, and optional thinking budgets before delegating to the adapter. A production adapter must preserve ordered `start`, indexed `text_*`, `thinking_*`, and `toolcall_*` events and finish with exactly one `done` or `error`. It must also report usage, classify context overflow, keep Tool-call IDs stable across replay, invoke request/response hooks, and stop network and parser work when `options.signal` aborts.
+
+Study a current adapter with the same transport before coding. Do not publish a sketch that parses arbitrary SSE lines or pushes only text deltas: that loses partial JSON Tool arguments, reasoning signatures, usage, finish reasons, error bodies, and abort behavior. Put the finished `ProviderStreams` object in `createProvider({ api })`; do not register a global translator.
+
+## 6. Select and inspect the model
+
+List the catalog, then select by the unambiguous `provider/id` form:
 
 ```bash
 pi --list-models local-openai
-pi --provider local-openai --model local-model
+pi --model local-openai/local-model --thinking off "Reply with exactly: provider ready"
 ```
 
-For an SDK integration, resolve the model through `ModelRuntime` or the `Models` collection used by your application. Do not construct a model with fields copied from another provider.
+In interactive mode, open `/model` and search for `local-openai`. The selector reloads `models.json` and refreshes configured dynamic providers. In an SDK application, resolve through the application's `Models` instance:
 
-## Redirect an existing provider
+```ts title="inspect-model.ts"
+import type { Models } from "@earendil-works/pi-ai";
+import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 
-Omit `models` to keep the built-in catalog and change only its endpoint or headers:
+const models: Models = await ModelRuntime.create({
+  allowModelNetwork: false,
+});
+const model = models.getModel("local-openai", "local-model");
+if (!model) throw new Error("local-openai/local-model was not loaded");
 
-```ts title=".pi/extensions/company-proxy.ts"
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+console.log({
+  provider: model.provider,
+  id: model.id,
+  api: model.api,
+  contextWindow: model.contextWindow,
+  maxTokens: model.maxTokens,
+  reasoning: model.reasoning,
+  input: model.input,
+  cost: model.cost,
+  compat: model.compat,
+});
+```
 
-export default function companyProxy(pi: ExtensionAPI) {
-  pi.registerProvider("anthropic", {
-    baseUrl: "https://ai-gateway.example.com/anthropic",
-    headers: { "X-Company-Token": "$COMPANY_AI_TOKEN" },
-  });
+If `getModel()` succeeds but the model is absent from `/model`, auth is not configured. Check `await models.getAuth(model)` or `pi auth check --provider local-openai` without printing the secret.
+
+## 7. Probe streaming, thinking, and Tools
+
+Run a real request for every capability you declare. This probe uses the `Models.streamSimple()` path that applies auth and provider defaults. It prints incremental output and fails on the stream's terminal error message.
+
+```ts title="verify-provider.ts"
+import {
+  Type,
+  type Context,
+  type Models,
+  type Tool,
+} from "@earendil-works/pi-ai";
+import { ModelRuntime } from "@earendil-works/pi-coding-agent";
+
+const mode = process.argv[2] ?? "text";
+if (!new Set(["text", "thinking", "tool"]).has(mode)) {
+  throw new Error("Use: text, thinking, or tool");
+}
+
+const models: Models = await ModelRuntime.create({
+  allowModelNetwork: false,
+});
+const model = models.getModel("local-openai", "local-model");
+if (!model) throw new Error("local-openai/local-model was not loaded");
+
+const echoTool: Tool = {
+  name: "echo_text",
+  description: "Return text unchanged. Use when explicitly asked to echo.",
+  parameters: Type.Object(
+    { text: Type.String() },
+    { additionalProperties: false },
+  ),
+};
+const prompts = {
+  text: "Reply with exactly: stream ok",
+  thinking: "Think briefly, then answer: what is 2 + 2?",
+  tool: "Call echo_text once with the text tool ok.",
+} as const;
+const context: Context = {
+  messages: [
+    {
+      role: "user",
+      content: [{ type: "text", text: prompts[mode as keyof typeof prompts] }],
+      timestamp: Date.now(),
+    },
+  ],
+  tools: mode === "tool" ? [echoTool] : undefined,
+};
+
+const controller = new AbortController();
+const timeout = setTimeout(() => controller.abort(), 30_000);
+const stream = models.streamSimple(model, context, {
+  signal: controller.signal,
+  reasoning: mode === "thinking" ? "low" : undefined,
+});
+
+try {
+  for await (const event of stream) {
+    if (event.type === "text_delta" || event.type === "thinking_delta") {
+      process.stdout.write(event.delta);
+    }
+    if (event.type === "toolcall_end") {
+      console.log("\ntool:", event.toolCall.name, event.toolCall.arguments);
+    }
+    if (event.type === "error") {
+      throw new Error(event.error.errorMessage ?? event.error.stopReason);
+    }
+  }
+  const result = await stream.result();
+  console.log("\nstop:", result.stopReason, "usage:", result.usage);
+} finally {
+  clearTimeout(timeout);
 }
 ```
 
-Configuration values support `$ENV_VAR` and `${ENV_VAR}` interpolation. Keep credentials in the environment or the Pi credential store, not in the extension source.
+```bash
+npx tsx verify-provider.ts text
+npx tsx verify-provider.ts thinking
+npx tsx verify-provider.ts tool
+```
 
-## Implement a native provider
+Run text first. Enable `reasoning` and a truthful `thinkingLevelMap` only after the thinking run emits thinking content or the protocol's documented reasoning representation. Add `image` only after an image request succeeds. Tool support requires a `toolcall_end` with the right name and parsed arguments; a normal text answer does not prove it.
 
-For a non-standard protocol, create a complete `Provider` with `createProvider()` and a matching API implementation, then pass it to `pi.registerProvider(provider)`. This is the advanced path because the adapter must preserve:
+## 8. Handle errors, retry, and cancellation
 
-- Pi message and content-block semantics;
-- tool calls and tool results;
-- incremental text, thinking, usage, and terminal events;
-- cancellation through `AbortSignal`;
-- provider error and context-overflow classification.
+Keep transport policy explicit. Direct API adapters default to no retries unless the caller sets `maxRetries`; the OpenAI adapters retry connection failures, HTTP `408`, `409`, `429`, and `5xx` responses unless the server's retry header says otherwise. Retry waits are abortable. Coding Agent's higher-level agent retry is separate, so avoid multiplying retries across both layers.
 
-Test plain text, tools, images, reasoning, cancellation, malformed responses, and context overflow before enabling the provider in production.
+An aborted request terminates with an assistant message whose `stopReason` is `"aborted"`; a provider failure uses `"error"` and an `errorMessage`. Consumers should still drain or await `stream.result()` and persist only the transcript state their application can safely replay. Never retry authentication failures, malformed Tool calls, or deterministic validation errors without changing the input.
+
+## Troubleshooting
+
+| Symptom | Check |
+| --- | --- |
+| Provider or model is missing | Validate `models.json`, use the exact provider ID, configure auth, then reopen `/model` or run `pi --list-models`. |
+| `401` or `403` | Check the environment of the Pi process, `/login`, `authHeader`, and whether the endpoint expects API-key or bearer auth. Do not log the resolved key. |
+| `404` | Confirm whether `baseUrl` includes `/v1`, and whether the selected `api` appends the route the server implements. |
+| Stream prints text but never finishes | The adapter must emit one terminal `done` or `error` and close the body on abort. Check `finish_reason` compatibility. |
+| Thinking is plain text or rejected | Correct `reasoning`, `thinkingLevelMap`, `thinkingFormat`, and `supportsReasoningEffort`; do not claim reasoning for a plain model. |
+| Tool call is text, empty, or malformed | Test the server's Tool schema and streamed argument deltas. Review strict-mode, Tool-result-name, and replay compatibility flags. |
+| Usage or limits are wrong | Check streaming usage support and the real context/output limits. Wrong limits cause bad truncation and misleading cost totals. |
+| Dynamic refresh stalls | Pass `signal` to every fetch/read, bound remote work, keep the last good list on error, and honor `PI_OFFLINE`. |
+
+## Security checklist
+
+- Keep API keys and session tokens out of model metadata, source control, URLs, error text, and logs.
+- Treat discovery payloads, model IDs, headers, and Tool arguments as untrusted input. Validate shape and bound sizes before storing them.
+- Use HTTPS for remote providers. Pin the intended host; do not let model output choose `baseUrl`, credential commands, or proxy targets.
+- Give credential commands and OAuth flows their own review. Use `ApiKeyAuth.resolve()` with the supplied `AbortSignal`, and return only provider-scoped values the adapter needs.
+- Redact provider error bodies before exposing them to users or a model. They can contain credentials, request content, or gateway internals.
+- Test cancellation and retry under failure. A timed-out stream must release sockets, parsers, and child work.
+
+## Next
+
+Once selection and the three probes pass, use the model in the [Quickstart](../quickstart.md) agent. [Chapter 4: Model invocation](../ch04-model-invocation.md) traces the request and stream path. If a new protocol needs a custom Tool translation layer, review [Add a custom Tool](add-custom-tool.md) alongside the source adapter you are matching.
