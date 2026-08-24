@@ -282,16 +282,16 @@ while (true) {
 
 ### Mọi đường thoát
 
-| Đường thoát                  | Trigger                                                       | Cách xử lý queue                                                                                         |
-| ---------------------------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| Boundary ổn định bình thường | Không còn Tool continuation và queue message                  | Phát `agent_end`                                                                                         |
-| Hint terminate của batch     | Mọi Tool result đã finalize có `terminate: true`              | Bỏ automatic Tool continuation, sau đó vẫn kiểm tra steering và follow-up                                |
-| Graceful stop bằng hook      | `shouldStopAfterTurn` trả `true`                              | Thoát trước khi poll steering và follow-up                                                               |
-| Provider hard stop           | Final reason là `error` hoặc `aborted`                        | Bỏ `prepareNextTurn`, stop hook và queue                                                                 |
-| Deferred boundary            | Final reason là `deferred` và không có Tool call              | Chạy post-Turn hook và queue check bình thường; host sở hữu việc poll DeferredHandle                     |
-| Callback/runtime throw       | Transform, conversion hoặc hook “không được throw” lại reject | Raw low-level sequence không còn được bảo đảm; `Agent` bắt run failure và phát một failure turn tổng hợp |
+| Đường thoát                  | Trigger                                                       | Cách xử lý queue                                                                                                     |
+| ---------------------------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Boundary ổn định bình thường | Không còn Tool continuation và queue message                  | Phát `agent_end`                                                                                                     |
+| Hint terminate của batch     | Mọi Tool result đã finalize có `terminate: true`              | Bỏ automatic Tool continuation, sau đó vẫn kiểm tra steering và follow-up                                            |
+| Graceful stop bằng hook      | `shouldStopAfterTurn` trả `true`                              | Thoát trước khi poll steering và follow-up                                                                           |
+| Provider hard stop           | Final reason là `error` hoặc `aborted`                        | Bỏ `prepareNextTurn`, stop hook và queue                                                                             |
+| Deferred boundary            | Final reason là `deferred` và không có Tool call              | Chạy hook; nếu stop hook falsy, poll steering rồi chỉ poll follow-up tại boundary ổn định; host xử lý DeferredHandle |
+| Callback/runtime throw       | Transform, conversion hoặc hook “không được throw” lại reject | Raw low-level sequence không còn được bảo đảm; `Agent` bắt run failure và phát một failure turn tổng hợp             |
 
-Với message `deferred` không có Tool, “không poll” chỉ nói về `DeferredHandle`. Loop vẫn phát `turn_end`, chạy `prepareNextTurn`, áp dụng update của hook, chạy `shouldStopAfterTurn` rồi kiểm tra steering. Nếu không có steering message mở lại inner loop, nó kiểm tra follow-up tại boundary ổn định. Chỉ host mới fetch hoặc cancel deferred operation.
+Với message `deferred` không có Tool, “không poll” chỉ nói về `DeferredHandle`. Loop vẫn phát `turn_end`, chạy `prepareNextTurn`, áp dụng update của hook rồi chạy `shouldStopAfterTurn`. Nếu hook này trả truthy, loop phát `agent_end` và return trước khi poll cả hai queue. Chỉ kết quả falsy mới cho phép poll steering; nếu steering không mở lại inner loop, loop mới poll follow-up tại boundary ổn định. Chỉ host mới fetch hoặc cancel deferred operation.
 
 `Agent.abort()` signal provider request và Tool callback đang hoạt động. Cancellation phía provider thường thành một assistant message `aborted`. Nếu signal đến trong Tool processing, Tool đã start nhận signal; sequential preparation dừng sau khi quan sát abort, còn provider boundary tiếp theo nhận signal đã aborted. Tool phải tôn trọng signal thì cancellation mới kịp thời.
 

@@ -267,7 +267,7 @@ The thinner pre-restoration Chapter 2 pages also contained a seven-step request 
 
 This appendix compares the Chapter 3 pair at `b10130f` with the restored English and Vietnamese pages. It records 100 pair-level decisions: 37 baseline H2–H4 headings and 63 unique artifacts or arguments. They reconcile as `83 restored + 1 merged + 16 technically-invalid + 0 duplicate = 100`. No item was deleted for brevity.
 
-The final English page has 2,667 prose words, 87.19% of its 3,059-word baseline. The final Vietnamese page has 2,920 prose words, 88.16% of its 3,312-word baseline. Both pages have H2/H3/H4 `6/25/6`, 42 paired fences with an identical language sequence, 10 tables, and no Mermaid block. The additional fences and tables split dense historical diagrams and distinguish current control states; they do not reduce any baseline artifact. No preservation-manifest deletion allowance is needed.
+The final English page has 2,690 prose words, 87.94% of its 3,059-word baseline. The final Vietnamese page has 2,941 prose words, 88.80% of its 3,312-word baseline. Both pages have H2/H3/H4 `6/25/6`, 42 paired fences with an identical language sequence, 10 tables, and no Mermaid block. The additional fences and tables split dense historical diagrams and distinguish current control states; they do not reduce any baseline artifact. No preservation-manifest deletion allowance is needed.
 
 Technical review used these pinned files:
 
@@ -341,7 +341,7 @@ Every entry applies to the matching English and Vietnamese heading pair. The bas
 - A17 — Simplified code/comment saying “any tool terminate then stop” — `technically-invalid`; pinned `shouldTerminateToolBatch()` uses non-empty `every` over finalized results.
 - A18 — Gas/brake diagram driven solely by `stopReason` — `technically-invalid`; replaced by a state diagram spanning Tool blocks, hooks, queues, errors, abort, and deferred ownership.
 - A19 — Minimal-loop rationale and Agent-versus-Workflow distinction — `restored` without claiming Tool presence is the only production signal.
-- A20 — Exit-path table — `restored` and expanded from four to six evidenced paths; the deferred row now distinguishes host-owned `DeferredHandle` polling from the loop's ordinary `turn_end`, next-Turn hook, steering, and follow-up checks.
+- A20 — Exit-path table — `restored` and expanded from four to six evidenced paths; the deferred row distinguishes host-owned `DeferredHandle` handling from the loop's ordinary `turn_end` and next-Turn hooks, then records that steering and follow-up are polled only when `shouldStopAfterTurn` is falsy.
 - A21 — Simplest-loop pseudocode branching on `response.stopReason !== "toolUse"` — `technically-invalid` for current Pi; replaced by explicitly labeled pseudocode that selects complete Tool calls from content.
 - A22 — Coding Agent layering table assigning steering, follow-up, and turn hooks to Coding Agent — `technically-invalid` at the pin; the final table separates Agent Core mechanism from Coding Agent policy.
 - A23 — Argument that a small Agent can omit coding-product policy — `restored` with `Agent` as the reusable boundary.

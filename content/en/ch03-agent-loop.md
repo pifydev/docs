@@ -282,16 +282,16 @@ That loop is the ReAct rhythm: the model reasons into an action, the application
 
 ### All exit paths
 
-| Exit path              | Trigger                                                   | Queue behavior                                                                                                  |
-| ---------------------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| Normal stable boundary | No Tool continuation and no queued message                | Emits `agent_end`                                                                                               |
-| Batch termination hint | Every finalized Tool result has `terminate: true`         | Skips automatic Tool continuation, then still checks steering and follow-up                                     |
-| Graceful hook stop     | `shouldStopAfterTurn` returns `true`                      | Exits before steering and follow-up polling                                                                     |
-| Provider hard stop     | Final reason is `error` or `aborted`                      | Skips `prepareNextTurn`, stop hook, and queues                                                                  |
-| Deferred boundary      | Final reason is `deferred` and there are no Tool calls    | Runs the ordinary post-Turn hooks and queue checks; the host owns DeferredHandle polling                        |
-| Callback/runtime throw | A “must not throw” transform, conversion, or hook rejects | Raw low-level normal sequence is not guaranteed; `Agent` catches run failure and emits a synthetic failure turn |
+| Exit path              | Trigger                                                   | Queue behavior                                                                                                           |
+| ---------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Normal stable boundary | No Tool continuation and no queued message                | Emits `agent_end`                                                                                                        |
+| Batch termination hint | Every finalized Tool result has `terminate: true`         | Skips automatic Tool continuation, then still checks steering and follow-up                                              |
+| Graceful hook stop     | `shouldStopAfterTurn` returns `true`                      | Exits before steering and follow-up polling                                                                              |
+| Provider hard stop     | Final reason is `error` or `aborted`                      | Skips `prepareNextTurn`, stop hook, and queues                                                                           |
+| Deferred boundary      | Final reason is `deferred` and there are no Tool calls    | Runs hooks; if stop hook is falsy, polls steering, then follow-up only at a stable boundary; host handles DeferredHandle |
+| Callback/runtime throw | A “must not throw” transform, conversion, or hook rejects | Raw low-level normal sequence is not guaranteed; `Agent` catches run failure and emits a synthetic failure turn          |
 
-For a no-Tool `deferred` message, “does not poll” applies only to the `DeferredHandle`. The loop still emits `turn_end`, runs `prepareNextTurn`, applies its update, runs `shouldStopAfterTurn`, and checks steering. If no steering message reopens the inner loop, it checks follow-up at the stable boundary. The host alone fetches or cancels the deferred operation.
+For a no-Tool `deferred` message, “does not poll” applies only to the `DeferredHandle`. The loop still emits `turn_end`, runs `prepareNextTurn`, applies its update, then runs `shouldStopAfterTurn`. If that hook is truthy, the loop emits `agent_end` and returns before polling either queue. Only a falsy result permits the steering poll; if steering does not reopen the inner loop, the loop polls follow-up at the stable boundary. The host alone fetches or cancels the deferred operation.
 
 `Agent.abort()` signals the active provider request and Tool callbacks. Provider-side cancellation normally becomes an `aborted` assistant message. If the signal arrives during Tool processing, started Tools receive the signal; sequential preparation stops after the observed abort, and the next provider boundary receives the already-aborted signal. A Tool must honor its signal for cancellation to be prompt.
 
