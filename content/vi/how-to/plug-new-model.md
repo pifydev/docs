@@ -36,6 +36,8 @@ Một model tương thích OpenAI trong catalog của Pi, metadata đúng về k
 | Native provider | Cần tự xử lý auth, lọc catalog, discovery hoặc kết hợp nhiều API. | `createProvider()` và `pi.registerProvider(provider)`. |
 | API adapter mới | Request, response hoặc stream protocol của dịch vụ chưa được hỗ trợ. | Một implementation của `ProviderStreams` truyền vào `createProvider()`. |
 
+Chọn đúng một hướng: hoàn thành mục **1–2** cho catalog tĩnh, **2–3** cho Extension discovery, **2 và 4** cho native provider, hoặc **2, 4 và 5** cho wire protocol mới. Khi hoàn thành hướng đã chọn, chuyển thẳng đến **6. Chọn và xem model** và **7. Kiểm tra streaming, thinking và Tool**.
+
 Đừng khôi phục model/translator registry toàn cục đời cũ. Ứng dụng hiện tại sở hữu một collection `Models`; implementation công khai của Coding Agent là `ModelRuntime`. Factory của provider tích hợp nằm dưới `@earendil-works/pi-ai/providers/*`, còn factory của API dùng subpath export `@earendil-works/pi-ai/api/*`.
 
 ## Điều kiện cần
@@ -449,7 +451,14 @@ npx tsx verify-provider.ts tool
 
 Chạy text trước. Chỉ bật `reasoning` và `thinkingLevelMap` đúng sự thật sau khi lần chạy thinking phát thinking content hoặc representation reasoning được protocol ghi rõ. Chỉ thêm `image` sau khi request ảnh thành công. Khả năng dùng Tool đòi hỏi một `toolcall_end` có đúng tên và đối số đã parse; một câu trả lời text bình thường chưa chứng minh được điều đó.
 
-Lưu file tiếp theo cạnh chương trình kiểm tra endpoint thật. File này khởi động một endpoint OpenAI-compatible trên loopback, nên ba bài kiểm tra lỗi, retry và abort không cần server bên ngoài hay secret.
+Fixture xác định này là tùy chọn. Hãy dùng nó khi viết adapter hoặc kiểm tra hành vi retry, lỗi và cancellation. Lưu file cạnh chương trình kiểm tra endpoint thật. Fixture khởi động một endpoint OpenAI-compatible trên loopback nên không cần server bên ngoài hay secret.
+
+```bash
+npx tsx --test verify-provider-errors.test.ts
+```
+
+<Accordions type="single">
+<Accordion title="Mã fixture tùy chọn: lỗi, retry và abort">
 
 ```ts title="verify-provider-errors.test.ts"
 import assert from "node:assert/strict";
@@ -626,9 +635,8 @@ test("provider errors, retry, and abort use the real stream path", async (t) => 
 });
 ```
 
-```bash
-npx tsx --test verify-provider-errors.test.ts
-```
+</Accordion>
+</Accordions>
 
 ## 8. Xử lý lỗi, retry và cancellation
 

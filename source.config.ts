@@ -2,6 +2,7 @@ import { remarkAdmonition, remarkMdxMermaid } from "fumadocs-core/mdx-plugins";
 import { defineConfig } from "fumadocs-mdx/config";
 
 import { remarkCodeLanguage } from "./lib/code-language";
+import { remarkAccordion } from "./lib/remark-accordion";
 
 export default defineConfig({
   mdxOptions: {
@@ -14,6 +15,7 @@ export default defineConfig({
       fallbackLanguage: "plaintext",
     },
     remarkPlugins: [
+      remarkAccordion,
       remarkCodeLanguage,
       [
         remarkAdmonition,

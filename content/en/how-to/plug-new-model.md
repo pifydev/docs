@@ -36,6 +36,8 @@ A local OpenAI-compatible model in the Pi catalog, accurate capability and cost 
 | Native provider | You need custom auth resolution, catalog filtering, discovery, or mixed APIs. | `createProvider()` and `pi.registerProvider(provider)`. |
 | New API adapter | The service's request, response, or stream protocol is unsupported. | A `ProviderStreams` implementation passed to `createProvider()`. |
 
+Choose exactly one route: complete sections **1–2** for a static catalog, **2–3** for Extension discovery, **2 and 4** for a native provider, or **2, 4, and 5** for a new wire protocol. When that route is complete, skip to **6. Select and inspect the model** and **7. Probe streaming, thinking, and Tools**.
+
 Do not revive the old process-global model/translator registry. Current applications own a `Models` collection; Coding Agent's public implementation is `ModelRuntime`. Built-in provider factories live under `@earendil-works/pi-ai/providers/*`, while API factories use `@earendil-works/pi-ai/api/*` subpath exports.
 
 ## Prerequisites
@@ -449,7 +451,14 @@ npx tsx verify-provider.ts tool
 
 Run text first. Enable `reasoning` and a truthful `thinkingLevelMap` only after the thinking run emits thinking content or the protocol's documented reasoning representation. Add `image` only after an image request succeeds. Tool support requires a `toolcall_end` with the right name and parsed arguments; a normal text answer does not prove it.
 
-Save the next file beside the live probe. It starts a loopback OpenAI-compatible endpoint, so its failure, retry, and abort checks need no external server or secret.
+This deterministic fixture is optional. Use it when writing an adapter or verifying retry, error, and cancellation behavior. Save it beside the live probe. It starts a loopback OpenAI-compatible endpoint, so it needs no external server or secret.
+
+```bash
+npx tsx --test verify-provider-errors.test.ts
+```
+
+<Accordions type="single">
+<Accordion title="Optional fixture source: failure, retry, and abort">
 
 ```ts title="verify-provider-errors.test.ts"
 import assert from "node:assert/strict";
@@ -626,9 +635,8 @@ test("provider errors, retry, and abort use the real stream path", async (t) => 
 });
 ```
 
-```bash
-npx tsx --test verify-provider-errors.test.ts
-```
+</Accordion>
+</Accordions>
 
 ## 8. Handle errors, retry, and cancellation
 
