@@ -100,28 +100,79 @@ Choose between two operations:
 - `branch(entryId)` only moves the active leaf in the current manager. The next append becomes another child in the **same file**; existing entries remain untouched.
 - `createBranchedSession(leafId)` copies the root-to-leaf path into a **new file**. On a persistent manager it also switches that manager to the new file and session ID.
 
-```ts title="branch-session.ts"
+**A. Continue on a new branch in the same file.** This program requires a configured model and credentials. It moves the leaf, then `prompt()` appends the divergent user and assistant messages through the same manager:
+
+```ts title="branch-in-place.ts"
+import { isAbsolute } from "node:path";
+import {
+  createAgentSession,
+  ModelRuntime,
+  SessionManager,
+} from "@earendil-works/pi-coding-agent";
+
+const sessionPath = process.argv[2];
+const checkpointId = process.argv[3];
+if (!sessionPath || !isAbsolute(sessionPath) || !checkpointId) {
+  throw new Error(
+    "Usage: branch-in-place.ts /absolute/session.jsonl ENTRY_ID",
+  );
+}
+
+const sessionManager = SessionManager.open(sessionPath);
+if (!sessionManager.getEntry(checkpointId)) {
+  throw new Error("Unknown entry ID");
+}
+
+sessionManager.branch(checkpointId);
+const modelRuntime = await ModelRuntime.create();
+const { session } = await createAgentSession({
+  modelRuntime,
+  sessionManager,
+});
+
+try {
+  await session.prompt("Explore the alternative approach from this checkpoint.");
+  console.log({
+    activeFile: sessionManager.getSessionFile(),
+    activePath: sessionManager.getBranch().map((entry) => entry.id),
+  });
+} finally {
+  session.dispose();
+}
+```
+
+Run it with `npx tsx branch-in-place.ts /absolute/session.jsonl ENTRY_ID`.
+
+**B. Extract one path into a new file.** Open the original path in a separate manager; do not reuse the manager from workflow A. Save its file and ID before extraction because the call switches that manager:
+
+```ts title="extract-branch.ts"
 import { isAbsolute } from "node:path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 
 const sessionPath = process.argv[2];
 const checkpointId = process.argv[3];
 if (!sessionPath || !isAbsolute(sessionPath) || !checkpointId) {
-  throw new Error("Usage: branch-session.ts /absolute/session.jsonl ENTRY_ID");
+  throw new Error("Usage: extract-branch.ts /absolute/session.jsonl ENTRY_ID");
 }
 
 const manager = SessionManager.open(sessionPath);
 if (!manager.getEntry(checkpointId)) throw new Error("Unknown entry ID");
 
-manager.branch(checkpointId);
-console.log("same-file path", manager.getBranch().map((entry) => entry.id));
-
 const parentFile = manager.getSessionFile();
+const parentSessionId = manager.getSessionId();
 const extractedFile = manager.createBranchedSession(checkpointId);
-console.log({ parentFile, extractedFile, activeFile: manager.getSessionFile() });
+if (!parentFile || !extractedFile) throw new Error("Persistent file required");
+
+console.log({
+  parentFile,
+  parentSessionId,
+  extractedFile,
+  activeFile: manager.getSessionFile(),
+  activeSessionId: manager.getSessionId(),
+});
 ```
 
-Save `parentFile` before extraction if the caller still needs it. `forkFrom(sourcePath, targetCwd, sessionDir)` is the cross-project alternative: it creates a new file and copies the source file's full non-header history, while recording the source path as `parentSession`.
+Run it with `npx tsx extract-branch.ts /absolute/session.jsonl ENTRY_ID`. `forkFrom(sourcePath, targetCwd, sessionDir)` is the cross-project alternative: it creates a new file and copies the source file's full non-header history, while recording the source path as `parentSession`.
 
 ## 4. Walk the tree
 

@@ -100,28 +100,79 @@ Chọn một trong hai thao tác:
 - `branch(entryId)` chỉ di chuyển active leaf trong manager hiện tại. Lần append kế tiếp tạo một child khác trong **cùng file**; các entry cũ không đổi.
 - `createBranchedSession(leafId)` chép path từ root đến leaf vào **file mới**. Với persistent manager, thao tác này cũng chuyển chính manager sang file và session ID mới.
 
-```ts title="branch-session.ts"
+**A. Tiếp tục trên branch mới trong cùng file.** Chương trình này cần model và credential đã cấu hình. Nó di chuyển leaf, sau đó `prompt()` append user message và assistant message theo hướng mới qua cùng manager:
+
+```ts title="branch-in-place.ts"
+import { isAbsolute } from "node:path";
+import {
+  createAgentSession,
+  ModelRuntime,
+  SessionManager,
+} from "@earendil-works/pi-coding-agent";
+
+const sessionPath = process.argv[2];
+const checkpointId = process.argv[3];
+if (!sessionPath || !isAbsolute(sessionPath) || !checkpointId) {
+  throw new Error(
+    "Usage: branch-in-place.ts /absolute/session.jsonl ENTRY_ID",
+  );
+}
+
+const sessionManager = SessionManager.open(sessionPath);
+if (!sessionManager.getEntry(checkpointId)) {
+  throw new Error("Unknown entry ID");
+}
+
+sessionManager.branch(checkpointId);
+const modelRuntime = await ModelRuntime.create();
+const { session } = await createAgentSession({
+  modelRuntime,
+  sessionManager,
+});
+
+try {
+  await session.prompt("Explore the alternative approach from this checkpoint.");
+  console.log({
+    activeFile: sessionManager.getSessionFile(),
+    activePath: sessionManager.getBranch().map((entry) => entry.id),
+  });
+} finally {
+  session.dispose();
+}
+```
+
+Chạy bằng `npx tsx branch-in-place.ts /absolute/session.jsonl ENTRY_ID`.
+
+**B. Tách một path sang file mới.** Mở path gốc bằng một manager riêng; đừng tái sử dụng manager ở workflow A. Hãy lưu file và ID trước khi extraction vì lời gọi này sẽ chuyển manager đó:
+
+```ts title="extract-branch.ts"
 import { isAbsolute } from "node:path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 
 const sessionPath = process.argv[2];
 const checkpointId = process.argv[3];
 if (!sessionPath || !isAbsolute(sessionPath) || !checkpointId) {
-  throw new Error("Usage: branch-session.ts /absolute/session.jsonl ENTRY_ID");
+  throw new Error("Usage: extract-branch.ts /absolute/session.jsonl ENTRY_ID");
 }
 
 const manager = SessionManager.open(sessionPath);
 if (!manager.getEntry(checkpointId)) throw new Error("Unknown entry ID");
 
-manager.branch(checkpointId);
-console.log("same-file path", manager.getBranch().map((entry) => entry.id));
-
 const parentFile = manager.getSessionFile();
+const parentSessionId = manager.getSessionId();
 const extractedFile = manager.createBranchedSession(checkpointId);
-console.log({ parentFile, extractedFile, activeFile: manager.getSessionFile() });
+if (!parentFile || !extractedFile) throw new Error("Persistent file required");
+
+console.log({
+  parentFile,
+  parentSessionId,
+  extractedFile,
+  activeFile: manager.getSessionFile(),
+  activeSessionId: manager.getSessionId(),
+});
 ```
 
-Hãy lưu `parentFile` trước khi extraction nếu caller vẫn cần file cha. `forkFrom(sourcePath, targetCwd, sessionDir)` là lựa chọn cho project khác: nó tạo file mới, chép toàn bộ lịch sử không phải header của source file và ghi source path vào `parentSession`.
+Chạy bằng `npx tsx extract-branch.ts /absolute/session.jsonl ENTRY_ID`. `forkFrom(sourcePath, targetCwd, sessionDir)` là lựa chọn cho project khác: nó tạo file mới, chép toàn bộ lịch sử không phải header của source file và ghi source path vào `parentSession`.
 
 ## 4. Duyệt cây
 
