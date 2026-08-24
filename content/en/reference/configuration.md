@@ -75,7 +75,7 @@ console.log({
 
 `defaultProvider` and `defaultModel` identify the default model. `--model` takes precedence for a run; a resumed session can restore its recorded model when no explicit CLI model is supplied. `defaultThinkingLevel` accepts `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`. `thinkingBudgets` supplies token budgets for supported providers or compatible models.
 
-`hideThinkingBlock` hides thinking in the transcript. `showCacheMissNotices` shows notices for material cache misses and compaction or branch-summary usage. A model still decides which thinking levels and budgets it supports.
+`hideThinkingBlock` hides thinking in the transcript. `showCacheMissNotices` shows transcript notices for significant prompt-cache misses. A model still decides which thinking levels and budgets it supports.
 
 `enabledModels` supplies patterns for Ctrl+P model cycling; `--models` overrides that scope for one run. Provider endpoints and credentials do not belong in a `providers` settings object. Put supported endpoints in `~/.pi/agent/models.json` or a Provider configuration, and keep credentials in the supported authentication store or environment. See <a href="/en/how-to/plug-new-model">Add a model provider</a>.
 

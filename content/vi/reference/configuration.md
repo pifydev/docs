@@ -75,7 +75,7 @@ console.log({
 
 `defaultProvider` và `defaultModel` xác định model mặc định. `--model` được ưu tiên cho một lần chạy; session được resume có thể khôi phục model đã ghi khi không truyền model tường minh qua CLI. `defaultThinkingLevel` nhận `off`, `minimal`, `low`, `medium`, `high`, `xhigh` hoặc `max`. `thinkingBudgets` cung cấp token budget cho provider hoặc compatible model có hỗ trợ.
 
-`hideThinkingBlock` ẩn thinking khỏi transcript. `showCacheMissNotices` hiện thông báo cho cache miss đáng kể và mức dùng compaction hoặc branch summary. Model vẫn quyết định thinking level và budget nào được hỗ trợ.
+`hideThinkingBlock` ẩn thinking khỏi transcript. `showCacheMissNotices` hiện thông báo trong transcript cho prompt-cache miss đáng kể. Model vẫn quyết định thinking level và budget nào được hỗ trợ.
 
 `enabledModels` cung cấp pattern cho thao tác chuyển model bằng Ctrl+P; `--models` override scope đó trong một lần chạy. Provider endpoint và credential không nằm trong object setting `providers`. Hãy đặt endpoint được hỗ trợ trong `~/.pi/agent/models.json` hoặc Provider configuration, đồng thời giữ credential trong authentication store hoặc environment được hỗ trợ. Xem <a href="/vi/how-to/plug-new-model">Thêm một nhà cung cấp mô hình</a>.
 
