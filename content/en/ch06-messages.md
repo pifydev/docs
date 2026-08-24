@@ -323,7 +323,7 @@ At the pinned revision, the base Coding Agent converter applies these rules:
 | `branchSummary`                   | One `UserMessage` with `BRANCH_SUMMARY_PREFIX`, the summary, and closing `</summary>`              |
 | `compactionSummary`               | One `UserMessage` with `COMPACTION_SUMMARY_PREFIX`, the summary, and closing `</summary>`          |
 
-This source-faithful abridgement from `packages/coding-agent/src/core/messages.ts` preserves every case while shortening object formatting:
+This source-faithful abridgement from `packages/coding-agent/src/core/messages.ts` preserves all documented role branches; it omits only the defensive `default` exhaustiveness check and shortens object formatting:
 
 ```typescript
 export function convertToLlm(messages: AgentMessage[]): Message[] {

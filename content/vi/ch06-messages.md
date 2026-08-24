@@ -1,5 +1,5 @@
 ---
-title: "Chương 6: Message qua ranh giới model, Agent và session"
+title: "Chương 6: Message qua các ranh giới giữa model, Agent và session"
 description: Cách Pi biểu diễn message dành cho model, mở rộng AgentMessage, dựng lại session entry và chuyển đổi context trước mỗi lời gọi provider.
 translation_key: ch06-messages
 language: vi
@@ -138,7 +138,7 @@ export interface AssistantMessage {
 }
 ```
 
-`stopReason` nhận chính xác `"pending" | "stop" | "length" | "toolUse" | "error" | "aborted" | "deferred"`. Message tạm trong khi stream bắt đầu với `"pending"`; message đã chốt sẽ thay nó trong trạng thái Agent. Lỗi provider hoặc runtime trả qua giao thức stream kết thúc bằng `"error"` hoặc `"aborted"` cùng `errorMessage`. Phản hồi chạy bất đồng bộ còn có `DeferredHandle` khi provider hỗ trợ hoàn tất về sau.
+`stopReason` nhận chính xác `"pending" | "stop" | "length" | "toolUse" | "error" | "aborted" | "deferred"`. Message tạm trong khi stream bắt đầu với `"pending"`; message đã chốt sẽ thay nó trong trạng thái Agent. Lỗi provider hoặc runtime trả qua giao thức stream kết thúc bằng `"error"` hoặc `"aborted"` cùng `errorMessage`. Phản hồi bị hoãn cũng mang một `DeferredHandle` khi provider hỗ trợ hoàn tất về sau.
 
 Các giá trị dùng để duy trì ngữ cảnh giữa nhiều lượt phải được giữ nguyên. `textSignature`, `thinkingSignature`, `thoughtSignature` và `responseId` có thể mã hóa trạng thái của provider mà lượt sau cần phát lại. Code ứng dụng không nên phân tích hay dịch chúng, trừ khi phần triển khai Pi AI sở hữu giá trị đó có tài liệu về format. Thứ tự content cũng quan trọng vì cùng lý do: đưa Tool call lên trước reasoning hoặc text có thể làm thay đổi cả dữ liệu phát lại cho provider lẫn nội dung UI hiển thị.
 
@@ -323,7 +323,7 @@ Tại commit đã ghim, converter nền của Coding Agent áp dụng các quy t
 | `branchSummary`                   | Một `UserMessage` gồm `BRANCH_SUMMARY_PREFIX`, summary và thẻ đóng `</summary>`                  |
 | `compactionSummary`               | Một `UserMessage` gồm `COMPACTION_SUMMARY_PREFIX`, summary và thẻ đóng `</summary>`              |
 
-Đoạn trích bám sát source dưới đây lấy từ `packages/coding-agent/src/core/messages.ts`, giữ đủ mọi nhánh và chỉ rút gọn cách trình bày object:
+Đoạn trích bám sát source dưới đây lấy từ `packages/coding-agent/src/core/messages.ts` và giữ đủ mọi nhánh role đã được mô tả; nó chỉ bỏ bước kiểm tra tính đầy đủ ở nhánh `default` phòng vệ và rút gọn cách trình bày object:
 
 ```typescript
 export function convertToLlm(messages: AgentMessage[]): Message[] {

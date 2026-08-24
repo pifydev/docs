@@ -636,7 +636,7 @@ The thinner pre-restoration Chapter 5 pages contained a concise low-level `Agent
 
 ## Reviewed mapping appendix: Chapter 6
 
-Chapter 6 has 22 baseline H2–H3 decisions and 65 unique artifact or argument decisions: 87 total. The reconciliation is exact: 70 `restored` + 1 `merged` + 16 `technically-invalid` + 0 `duplicate` = 87. Every technically invalid item is replaced in place with current Pi `0.84.2` behavior, so `content/preservation-manifest.json` keeps its original 80% word threshold and has no Chapter 6 deletion allowance.
+Chapter 6 has 22 baseline H2–H3 decisions and 65 unique artifact or argument decisions: 87 total. The reconciliation is exact: 70 `restored` + 1 `merged` + 16 `technically-invalid` + 0 `duplicate` = 87. Final-to-baseline semantic-word preservation measured by `contentMetrics()` is EN 3,270 / 3,192 = 102.4% and VI 4,273 / 3,475 = 123.0%; each ratio compares one locale only. Every technically invalid item is replaced in place with current Pi `0.84.2` behavior, so `content/preservation-manifest.json` keeps its original 80% word threshold and has no Chapter 6 deletion allowance.
 
 ### Heading outcomes
 
