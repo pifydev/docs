@@ -104,7 +104,7 @@ test("switches the current page and keeps search results locale-scoped", async (
   await expect(page).toHaveURL(/\/en\/ch01-overview$/);
 
   const searchResponse = await request.get(
-    "/api/search?query=stopReason&locale=vi",
+    "/api/search?query=shouldStopAfterTurn&locale=vi",
   );
   expect(searchResponse.ok()).toBe(true);
   const results = (await searchResponse.json()) as Array<{ url: string }>;
@@ -119,7 +119,7 @@ test("switches the current page and keeps search results locale-scoped", async (
     .evaluate((element: HTMLButtonElement) => element.click());
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
-  await page.getByPlaceholder("Tìm kiếm").fill("stopReason");
+  await page.getByPlaceholder("Tìm kiếm").fill("shouldStopAfterTurn");
 
   const firstResult = dialog.locator("button[aria-selected]").first();
   await expect(firstResult).toContainText("Chương 3");
@@ -134,7 +134,6 @@ test("renders docs primitives, theme controls, and a usable mobile drawer", asyn
 }) => {
   await page.goto("/en/ch01-overview");
   await expect(page.locator(".pify-mermaid > div > svg")).toBeVisible();
-  await expect(page.locator("pre").first()).toBeVisible();
 
   const highlightedCode = page.locator(
     ".pify-docs-body figure.shiki code.language-typescript",
