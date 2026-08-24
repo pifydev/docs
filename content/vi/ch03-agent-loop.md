@@ -658,6 +658,7 @@ Thứ tự hai hook là một phần của contract. `transformContext` có th�
 Loop tạo một provider-facing wrapper mới cho mỗi Turn:
 
 ```typescript
+// Faithfully abridged from packages/agent/src/agent-loop.ts at a470b121.
 const llmContext: Context = {
   systemPrompt: context.systemPrompt,
   messages: llmMessages,
@@ -668,6 +669,7 @@ const llmContext: Context = {
 Nó resolve API key hiện hành rồi gọi function đã inject:
 
 ```typescript
+// Faithfully abridged from packages/agent/src/agent-loop.ts at a470b121.
 const response = await streamFunction(config.model, llmContext, {
   ...config,
   apiKey: resolvedApiKey,
@@ -735,6 +737,7 @@ Provider adapter sở hữu cách serialize cache control. Việc dựng lại o
 `streamAssistantResponse()` dành một slot transcript ở event `start`, thay slot đó bằng từng partial, rồi thay lần cuối bằng message hoàn chỉnh:
 
 ```typescript
+// Faithfully abridged from packages/agent/src/agent-loop.ts at a470b121.
 case "start":
   partialMessage = event.partial;
   context.messages.push(partialMessage);
@@ -773,6 +776,7 @@ Một slot tránh lưu mỗi token delta thành conversation message. Subscriber
 Hard-stop check chạy trước bước chọn Tool:
 
 ```typescript
+// Faithfully abridged from packages/agent/src/agent-loop.ts at a470b121.
 if (message.stopReason === "error" || message.stopReason === "aborted") {
   await emit({ type: "turn_end", message, toolResults: [] });
   await emit({ type: "agent_end", messages: newMessages });
@@ -796,6 +800,7 @@ Hai mode giữ conversation order theo cách khác nhau:
 Nếu bất kỳ Tool được gọi nào khai báo `executionMode: "sequential"`, toàn bộ assistant batch chạy sequential. Preflight resolve Tool, áp dụng `prepareArguments`, validate schema rồi gọi `beforeToolCall`:
 
 ```typescript
+// Faithfully abridged from packages/agent/src/agent-loop.ts at a470b121.
 const preparedToolCall = prepareToolCallArguments(tool, toolCall);
 const validatedArgs = validateToolArguments(tool, preparedToolCall);
 const beforeResult = await config.beforeToolCall?.(
@@ -807,6 +812,7 @@ const beforeResult = await config.beforeToolCall?.(
 Tool không tồn tại, argument sai, preflight code throw, call bị block và abort đã được quan sát đều trở thành immediate error result. `afterToolCall` chỉ chạy sau khi một Tool được phép đã thực thi; hook có thể thay `content`, `details`, `usage`, `isError` hoặc `terminate` trước final event:
 
 ```typescript
+// Faithfully abridged from packages/agent/src/agent-loop.ts at a470b121.
 const afterResult = await config.afterToolCall?.(
   {
     assistantMessage,
@@ -834,6 +840,7 @@ Với mỗi call đã finalize, Pi phát `tool_execution_end` rồi một cặp 
 Batch termination dùng `every`:
 
 ```typescript
+// Faithfully abridged from packages/agent/src/agent-loop.ts at a470b121.
 const terminate =
   finalizedCalls.length > 0 &&
   finalizedCalls.every((entry) => entry.result.terminate === true);
@@ -877,6 +884,7 @@ Settlement kéo dài qua thời điểm phát event. `agent_end` bảo đảm lo
 ### 4.8 Quay lại đầu vòng lặp
 
 ```typescript
+// Faithfully abridged from packages/agent/src/agent-loop.ts at a470b121.
 while (hasMoreToolCalls || pendingMessages.length > 0) {
   // one assistant response and its Tool batch
 }
@@ -889,6 +897,7 @@ Automatic continuation đến từ Tool batch không terminate. Steering continu
 Tại boundary ổn định, Agent Core chỉ poll follow-up queue:
 
 ```typescript
+// Faithfully abridged from packages/agent/src/agent-loop.ts at a470b121.
 const followUpMessages = (await config.getFollowUpMessages?.()) || [];
 if (followUpMessages.length > 0) {
   pendingMessages = followUpMessages;
