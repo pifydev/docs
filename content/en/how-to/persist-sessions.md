@@ -61,7 +61,7 @@ Run it with `npx tsx start-session.ts`. The agent appends completed messages and
 
 ## 2. Resume a session
 
-`continueRecent()` opens the newest session in the selected directory, or prepares a new one when none exists:
+`continueRecent(cwd, sessionDir?)` opens the newest session matching `cwd`, or prepares a new one when no matching session exists. With an explicit custom `sessionDir`, it filters candidate headers by their stored `cwd`; the default encoded-CWD directory is already project-scoped:
 
 ```ts title="resume-session.ts"
 import {
@@ -169,7 +169,7 @@ The following optional, no-secret fixture exercises the storage operations witho
 ```ts title="verify-sessions.ts"
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
@@ -239,8 +239,27 @@ try {
   );
   assert.equal(opened.getTree()[0]?.children[0]?.children.length, 2);
 
+  const nonmatchingCwd = join(root, "other-project");
+  await mkdir(nonmatchingCwd);
+  const nonmatching = SessionManager.create(nonmatchingCwd, sessionDir);
+  nonmatching.appendMessage(user("other question"));
+  nonmatching.appendMessage(assistant("other answer"));
+  const nonmatchingFile = nonmatching.getSessionFile();
+  assert.ok(nonmatchingFile);
+  const future = new Date(Date.now() + 60_000);
+  await utimes(nonmatchingFile, future, future);
+
   const continued = SessionManager.continueRecent(cwd, sessionDir);
   assert.equal(continued.getSessionFile(), sessionFile);
+  assert.equal(continued.getCwd(), cwd);
+
+  const missingCwd = join(root, "missing-project");
+  await mkdir(missingCwd);
+  const noMatch = SessionManager.continueRecent(missingCwd, sessionDir);
+  assert.equal(noMatch.getEntries().length, 0);
+  assert.equal(noMatch.getCwd(), missingCwd);
+  assert.notEqual(noMatch.getSessionFile(), nonmatchingFile);
+
   const parentFile = continued.getSessionFile();
   const parentId = continued.getSessionId();
   assert.ok(parentFile);

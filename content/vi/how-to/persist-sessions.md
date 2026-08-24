@@ -61,7 +61,7 @@ Chạy bằng `npx tsx start-session.ts`. Agent tự append message đã hoàn t
 
 ## 2. Resume session
 
-`continueRecent()` mở session mới nhất trong thư mục đã chọn, hoặc chuẩn bị session mới nếu chưa có file nào:
+`continueRecent(cwd, sessionDir?)` mở session mới nhất có `cwd` khớp, hoặc chuẩn bị session mới khi không có session khớp. Khi truyền custom `sessionDir`, hàm lọc các header ứng viên theo `cwd` đã lưu; thư mục encoded-CWD mặc định vốn đã giới hạn theo project:
 
 ```ts title="resume-session.ts"
 import {
@@ -169,7 +169,7 @@ Fixture tùy chọn dưới đây không cần secret và kiểm tra các thao t
 ```ts title="verify-sessions.ts"
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
@@ -239,8 +239,27 @@ try {
   );
   assert.equal(opened.getTree()[0]?.children[0]?.children.length, 2);
 
+  const nonmatchingCwd = join(root, "other-project");
+  await mkdir(nonmatchingCwd);
+  const nonmatching = SessionManager.create(nonmatchingCwd, sessionDir);
+  nonmatching.appendMessage(user("other question"));
+  nonmatching.appendMessage(assistant("other answer"));
+  const nonmatchingFile = nonmatching.getSessionFile();
+  assert.ok(nonmatchingFile);
+  const future = new Date(Date.now() + 60_000);
+  await utimes(nonmatchingFile, future, future);
+
   const continued = SessionManager.continueRecent(cwd, sessionDir);
   assert.equal(continued.getSessionFile(), sessionFile);
+  assert.equal(continued.getCwd(), cwd);
+
+  const missingCwd = join(root, "missing-project");
+  await mkdir(missingCwd);
+  const noMatch = SessionManager.continueRecent(missingCwd, sessionDir);
+  assert.equal(noMatch.getEntries().length, 0);
+  assert.equal(noMatch.getCwd(), missingCwd);
+  assert.notEqual(noMatch.getSessionFile(), nonmatchingFile);
+
   const parentFile = continued.getSessionFile();
   const parentId = continued.getSessionId();
   assert.ok(parentFile);
