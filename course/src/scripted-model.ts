@@ -9,12 +9,23 @@ import type {
   CourseToolCall,
 } from "./protocol";
 
+const claimedResponseIterators = new WeakSet<object>();
+
 export type ScriptedResponseFactory = (
   request: CourseModelRequest,
   signal: AbortSignal,
 ) => AsyncGenerator<CourseModelChunk, CourseModelResponse, void>;
 
-export type ScriptedModelErrorCode = "SCRIPT_EXHAUSTED";
+/** Stable fail-closed codes exposed by the course's scripted model. */
+export type ScriptedModelErrorCode =
+  /** No factory remains in the finite queue. */
+  | "SCRIPT_EXHAUSTED"
+  /** A chunk or response belongs to a request other than the active request. */
+  | "SCRIPT_REQUEST_MISMATCH"
+  /** A response contradicts the terminal semantics declared by stopReason. */
+  | "SCRIPT_INVALID_RESPONSE"
+  /** One response iterator was returned for more than one model call. */
+  | "SCRIPT_ITERATOR_REUSED";
 
 export class ScriptedModelError extends Error {
   public readonly code: ScriptedModelErrorCode;
@@ -92,6 +103,13 @@ export class ScriptedModel {
 
     const response = factory(request, signal);
     assertResponseIterator(response);
+    if (claimedResponseIterators.has(response)) {
+      throw new ScriptedModelError(
+        "SCRIPT_ITERATOR_REUSED",
+        "A scripted response iterator may be consumed by only one model call",
+      );
+    }
+    claimedResponseIterators.add(response);
     let responseFinished = false;
 
     try {
@@ -103,19 +121,24 @@ export class ScriptedModel {
         if (step.done) {
           responseFinished = true;
           const finalResponse = snapshotResponse(step.value);
+          assertRequestCorrelation(
+            "response",
+            finalResponse.requestId,
+            request.id,
+          );
+          assertTerminalSemantics(finalResponse);
           throwIfAborted(signal);
           stream.finish(finalResponse);
           return;
         }
 
         const chunk = snapshotChunk(step.value);
+        assertRequestCorrelation("chunk", chunk.requestId, request.id);
         throwIfAborted(signal);
         stream.push(chunk);
       }
     } finally {
-      if (!responseFinished && typeof response.return === "function") {
-        void response.return(undefined as never).catch(() => undefined);
-      }
+      if (!responseFinished) closeResponseQuietly(response);
     }
   }
 }
@@ -166,6 +189,26 @@ function assertResponseIterator(
       "A scripted response factory must return an async generator",
     );
   }
+}
+
+function closeResponseQuietly(
+  response: AsyncGenerator<CourseModelChunk, CourseModelResponse, void>,
+): void {
+  let close: typeof response.return;
+  try {
+    close = response.return;
+  } catch {
+    return;
+  }
+  if (typeof close !== "function") return;
+
+  let cleanup: ReturnType<typeof close>;
+  try {
+    cleanup = close.call(response, undefined as never);
+  } catch {
+    return;
+  }
+  void Promise.resolve(cleanup).catch(() => undefined);
 }
 
 function snapshotRequest(value: CourseModelRequest): CourseModelRequest {
@@ -281,6 +324,43 @@ function snapshotResponse(value: CourseModelResponse): CourseModelResponse {
     stopReason,
     usage: Object.freeze({ inputTokens, outputTokens }),
   });
+}
+
+function assertRequestCorrelation(
+  kind: "chunk" | "response",
+  actualRequestId: string,
+  expectedRequestId: string,
+): void {
+  if (actualRequestId === expectedRequestId) return;
+  throw new ScriptedModelError(
+    "SCRIPT_REQUEST_MISMATCH",
+    `Scripted ${kind} requestId "${actualRequestId}" does not match active request "${expectedRequestId}"`,
+  );
+}
+
+function assertTerminalSemantics(response: CourseModelResponse): void {
+  let hasToolCall = false;
+  const content = response.message.content;
+  const contentLength = content.length;
+  for (let index = 0; index < contentLength; index += 1) {
+    if (content[index].type === "toolCall") {
+      hasToolCall = true;
+      break;
+    }
+  }
+
+  if (response.stopReason === "toolCall" && !hasToolCall) {
+    throw new ScriptedModelError(
+      "SCRIPT_INVALID_RESPONSE",
+      "A toolCall response must contain at least one Tool-call block",
+    );
+  }
+  if (response.stopReason === "stop" && hasToolCall) {
+    throw new ScriptedModelError(
+      "SCRIPT_INVALID_RESPONSE",
+      "A stop response must not contain Tool-call blocks",
+    );
+  }
 }
 
 function assertTokenCount(

@@ -82,6 +82,14 @@ async function collect<Value>(source: AsyncIterable<Value>): Promise<Value[]> {
   return values;
 }
 
+async function settleStream(
+  stream: AsyncIterable<CourseModelChunk> & {
+    readonly result: Promise<CourseModelResponse>;
+  },
+) {
+  return Promise.allSettled([collect(stream), stream.result]);
+}
+
 async function runText(model: ScriptedModel, requestId: string) {
   const stream = model.stream(
     {
@@ -363,6 +371,304 @@ test("propagates response-factory failures through events and result", async () 
   await expect(collect(stream)).rejects.toBe(failure);
   await expect(stream.result).rejects.toBe(failure);
 });
+
+test("rejects a chunk correlated to a different request", async () => {
+  const model = new ScriptedModel([
+    async function* (request) {
+      yield {
+        type: "textDelta",
+        requestId: "request-from-another-run",
+        delta: "must not escape",
+      };
+      return responseFor(request.id, "unreachable");
+    },
+  ]);
+  const stream = model.stream(
+    {
+      id: "request-active",
+      messages: [
+        { id: "message-active", role: "user", content: "Stay correlated." },
+      ],
+    },
+    new AbortController().signal,
+  );
+
+  const [events, result] = await settleStream(stream);
+  expect(events).toMatchObject({
+    status: "rejected",
+    reason: { code: "SCRIPT_REQUEST_MISMATCH" },
+  });
+  expect(result).toMatchObject({
+    status: "rejected",
+    reason: { code: "SCRIPT_REQUEST_MISMATCH" },
+  });
+});
+
+test("rejects a final response correlated to a different request", async () => {
+  const model = new ScriptedModel([
+    async function* () {
+      return responseFor("request-from-another-run", "must not complete");
+    },
+  ]);
+  const stream = model.stream(
+    {
+      id: "request-active-final",
+      messages: [
+        {
+          id: "message-active-final",
+          role: "user",
+          content: "Finish this request only.",
+        },
+      ],
+    },
+    new AbortController().signal,
+  );
+
+  const [events, result] = await settleStream(stream);
+  expect(events).toMatchObject({
+    status: "rejected",
+    reason: { code: "SCRIPT_REQUEST_MISMATCH" },
+  });
+  expect(result).toMatchObject({
+    status: "rejected",
+    reason: { code: "SCRIPT_REQUEST_MISMATCH" },
+  });
+});
+
+test("requires toolCall stopReason to contain at least one Tool-call block", async () => {
+  const model = new ScriptedModel([
+    async function* (request) {
+      return {
+        ...responseFor(request.id, "text only"),
+        stopReason: "toolCall",
+      };
+    },
+  ]);
+  const stream = model.stream(
+    {
+      id: "request-invalid-tool-terminal",
+      messages: [
+        {
+          id: "message-invalid-tool-terminal",
+          role: "user",
+          content: "Call a Tool.",
+        },
+      ],
+    },
+    new AbortController().signal,
+  );
+
+  const [events, result] = await settleStream(stream);
+  expect(events).toMatchObject({
+    status: "rejected",
+    reason: { code: "SCRIPT_INVALID_RESPONSE" },
+  });
+  expect(result).toMatchObject({
+    status: "rejected",
+    reason: { code: "SCRIPT_INVALID_RESPONSE" },
+  });
+});
+
+test("requires stop stopReason to contain no Tool-call blocks", async () => {
+  const model = new ScriptedModel([
+    async function* (request) {
+      return {
+        id: "response-invalid-stop-terminal",
+        requestId: request.id,
+        message: {
+          id: "message-invalid-stop-terminal-response",
+          role: "assistant",
+          content: [
+            {
+              type: "toolCall",
+              id: "call-invalid-stop-terminal",
+              name: "add",
+              arguments: { left: 20, right: 22 },
+            },
+          ],
+        },
+        stopReason: "stop",
+        usage: { inputTokens: 5, outputTokens: 3 },
+      };
+    },
+  ]);
+  const stream = model.stream(
+    {
+      id: "request-invalid-stop-terminal",
+      messages: [
+        {
+          id: "message-invalid-stop-terminal",
+          role: "user",
+          content: "Do not stop before the Tool runs.",
+        },
+      ],
+    },
+    new AbortController().signal,
+  );
+
+  const [events, result] = await settleStream(stream);
+  expect(events).toMatchObject({
+    status: "rejected",
+    reason: { code: "SCRIPT_INVALID_RESPONSE" },
+  });
+  expect(result).toMatchObject({
+    status: "rejected",
+    reason: { code: "SCRIPT_INVALID_RESPONSE" },
+  });
+});
+
+test("rejects concurrent reuse of one response iterator without cross-wiring its first owner", async () => {
+  const entered = deferred<void>();
+  const release = deferred<void>();
+  const sharedResponse = (async function* () {
+    entered.resolve();
+    await release.promise;
+    yield {
+      type: "textDelta",
+      requestId: "request-first-owner",
+      delta: "owned by first",
+    } as const;
+    return responseFor("request-first-owner", "owned by first");
+  })();
+  const sharedFactory = (() => sharedResponse) as ScriptedResponseFactory;
+  const model = new ScriptedModel([sharedFactory, sharedFactory]);
+  const first = model.stream(
+    {
+      id: "request-first-owner",
+      messages: [
+        {
+          id: "message-first-owner",
+          role: "user",
+          content: "First owner.",
+        },
+      ],
+    },
+    new AbortController().signal,
+  );
+  const firstSettlement = settleStream(first);
+  await entered.promise;
+
+  const second = model.stream(
+    {
+      id: "request-second-owner",
+      messages: [
+        {
+          id: "message-second-owner",
+          role: "user",
+          content: "Second owner.",
+        },
+      ],
+    },
+    new AbortController().signal,
+  );
+  const secondSettlement = settleStream(second);
+  release.resolve();
+
+  const [[firstEvents, firstResult], [secondEvents, secondResult]] =
+    await Promise.all([firstSettlement, secondSettlement]);
+  expect(firstEvents).toMatchObject({
+    status: "fulfilled",
+    value: [{ delta: "owned by first" }],
+  });
+  expect(firstResult).toMatchObject({
+    status: "fulfilled",
+    value: { requestId: "request-first-owner" },
+  });
+  expect(secondEvents).toMatchObject({
+    status: "rejected",
+    reason: { code: "SCRIPT_ITERATOR_REUSED" },
+  });
+  expect(secondResult).toMatchObject({
+    status: "rejected",
+    reason: { code: "SCRIPT_ITERATOR_REUSED" },
+  });
+});
+
+test("rejects sequential reuse of a completed response iterator across model instances", async () => {
+  const sharedResponse = (async function* () {
+    yield {
+      type: "textDelta",
+      requestId: "request-shared-first",
+      delta: "first only",
+    } as const;
+    return responseFor("request-shared-first", "first only");
+  })();
+  const sharedFactory = (() => sharedResponse) as ScriptedResponseFactory;
+  const firstModel = new ScriptedModel([sharedFactory]);
+
+  await expect(
+    runText(firstModel, "request-shared-first"),
+  ).resolves.toMatchObject({ response: { requestId: "request-shared-first" } });
+  const secondModel = new ScriptedModel([sharedFactory]);
+  const reused = secondModel.stream(
+    {
+      id: "request-shared-second",
+      messages: [
+        {
+          id: "message-shared-second",
+          role: "user",
+          content: "Do not reuse it.",
+        },
+      ],
+    },
+    new AbortController().signal,
+  );
+  const [events, result] = await settleStream(reused);
+  expect(events).toMatchObject({
+    status: "rejected",
+    reason: { code: "SCRIPT_ITERATOR_REUSED" },
+  });
+  expect(result).toMatchObject({
+    status: "rejected",
+    reason: { code: "SCRIPT_ITERATOR_REUSED" },
+  });
+});
+
+test.each(["getter", "call"] as const)(
+  "preserves the primary iterator failure when cleanup return %s throws",
+  async (failureMode) => {
+    const primary = new Error(`primary failure before hostile ${failureMode}`);
+    const cleanup = new Error(`hostile ${failureMode} cleanup`);
+    const iterator: Record<PropertyKey, unknown> = {
+      next: async () => {
+        throw primary;
+      },
+      [Symbol.asyncIterator]() {
+        return this;
+      },
+    };
+    if (failureMode === "getter") {
+      Object.defineProperty(iterator, "return", {
+        get() {
+          throw cleanup;
+        },
+      });
+    } else {
+      iterator.return = () => {
+        throw cleanup;
+      };
+    }
+    const factory = (() => iterator) as unknown as ScriptedResponseFactory;
+    const model = new ScriptedModel([factory]);
+    const stream = model.stream(
+      {
+        id: `request-hostile-${failureMode}`,
+        messages: [
+          {
+            id: `message-hostile-${failureMode}`,
+            role: "user",
+            content: "Preserve the primary failure.",
+          },
+        ],
+      },
+      new AbortController().signal,
+    );
+
+    const [events, result] = await settleStream(stream);
+    expect(events).toEqual({ status: "rejected", reason: primary });
+    expect(result).toEqual({ status: "rejected", reason: primary });
+  },
+);
 
 test("ScriptedModelError exposes a stable readonly exhaustion code", () => {
   const error = new ScriptedModelError(
