@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { access, readFile } from "node:fs/promises";
+import { access, readFile, readdir } from "node:fs/promises";
 import test from "node:test";
 
 import matter from "gray-matter";
@@ -27,6 +27,10 @@ const checkpoints = [
   source,
   test: `course/test/${slug}.test.ts`,
 }));
+const courseFilenames = [
+  "index.mdx",
+  ...checkpoints.map(({ slug }) => `${slug}.md`),
+];
 
 const headingContracts = {
   en: [
@@ -100,48 +104,164 @@ function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function assertNoPerPageAttribution(source, label) {
-  const disallowedMetadata = Object.keys(matter(source).data).filter((key) =>
-    /^(?:source(?:_|$)|adapt(?:ed|ation)(?:_|$)|license$|author$)/i.test(key),
+function publicCourseFilenameErrors(directoryFilenames) {
+  const publicFilenames = directoryFilenames.filter((filename) =>
+    /\.(?:md|mdx)$/i.test(filename),
   );
+  const actual = new Set(publicFilenames);
+  const expected = new Set(courseFilenames);
+
+  return [
+    ...courseFilenames
+      .filter((filename) => !actual.has(filename))
+      .map((filename) => `missing public course file: ${filename}`),
+    ...publicFilenames
+      .filter((filename) => !expected.has(filename))
+      .sort()
+      .map((filename) => `unexpected public course file: ${filename}`),
+  ];
+}
+
+function assertNoPerPageAttribution(source, label) {
+  const parsed = matter(source);
+  const disallowedMetadata = Object.keys(parsed.data).filter((key) => {
+    const normalized = key.toLowerCase().replaceAll(/[^a-z0-9]/g, "");
+    return [
+      "source",
+      "adapted",
+      "adaptation",
+      "license",
+      "licensing",
+      "author",
+    ].some((prefix) => normalized.startsWith(prefix));
+  });
   assert.deepEqual(
     disallowedMetadata,
     [],
     `${label}: source, adaptation, author, and license metadata`,
   );
-  assert.doesNotMatch(source, /pi-textbook/i, `${label}: pi-textbook metadata`);
-  assert.doesNotMatch(
-    source,
-    /translated and adapted/i,
-    `${label}: adaptation notice`,
+
+  const noticePatterns = [
+    /pi-textbook/i,
+    /source(?:[_-]|\s+)commit/i,
+    /translated\s+(?:and|&)\s+adapted/i,
+    /translation\s+(?:and|&)\s+adaptation/i,
+    /(?:được\s+)?dịch\s+(?:và|&)\s+(?:điều chỉnh(?:\s+kỹ thuật)?|chuyển thể|hiệu chỉnh)/iu,
+    /^#{1,6}\s+(?:authors?|tác giả|licen[cs](?:e|ing)|giấy phép)\s*$/gimu,
+    /^(?:[-*>]\s*)?(?:\*\*|__)?(?:authors?|tác giả|licen[cs](?:e|ing)|giấy phép)\s*:(?:\*\*|__)?(?:\s+.*)?$/gimu,
+    /\bGPL[-\s]?(?:v(?:ersion)?\s*)?3(?:\.0)?(?:-only)?\b/i,
+    /GNU\s+General\s+Public\s+License(?:\s+(?:version|v))?\s*3(?:\.0)?/i,
+  ];
+  const matchedNotices = noticePatterns.filter((pattern) =>
+    pattern.test(parsed.content),
   );
-  assert.doesNotMatch(source, /source_commit/i, `${label}: source_commit`);
-  assert.doesNotMatch(
-    source,
-    /(?:^license\s*:|^##\s+(?:license|giấy phép)\s*$|GPL-3\.0-only)/gim,
-    `${label}: per-page license banner`,
+  assert.deepEqual(
+    matchedNotices,
+    [],
+    `${label}: per-page attribution notice or license banner`,
   );
 }
 
-test("all 32 localized public course files exist", async () => {
-  const filenames = [
-    "index.mdx",
-    ...checkpoints.map(({ slug }) => `${slug}.md`),
+test("attribution guard rejects normalized metadata key variants", () => {
+  const metadataKeys = [
+    "sourceUrl",
+    "source-url",
+    "adaptedFrom",
+    "adaptation-notice",
+    "licenseNotice",
+    "authorName",
   ];
-  const expected = [
-    ...filenames.map((filename) => `content/en/course/${filename}`),
-    ...filenames.map((filename) => `content/vi/course/${filename}`),
-  ];
-  const missing = [];
 
-  for (const relativePath of expected) {
-    if (!(await exists(relativePath))) missing.push(relativePath);
+  for (const key of metadataKeys) {
+    assert.throws(
+      () =>
+        assertNoPerPageAttribution(
+          `---\n${key}: hidden attribution\n---\n\nCourse body.\n`,
+          key,
+        ),
+      /metadata/i,
+      `${key} must be rejected after key normalization`,
+    );
+  }
+});
+
+test("attribution guard rejects English and Vietnamese notice variants", () => {
+  const notices = [
+    "## Author\n\nPify maintainers.\n",
+    "**Tác giả:** Pify maintainers.\n",
+    "Trang này được dịch và điều chỉnh kỹ thuật.\n",
+    "## Licensing\n\nSee the repository license.\n",
+    "### Giấy phép\n\nXem giấy phép của repository.\n",
+    "Released under GPLv3.\n",
+    "Released under GPL 3.0.\n",
+    "Released under the GNU General Public License version 3.\n",
+  ];
+
+  for (const notice of notices) {
+    assert.throws(
+      () => assertNoPerPageAttribution(notice, "body notice"),
+      /notice|banner/i,
+      `notice must be rejected: ${notice.split("\n", 1)[0]}`,
+    );
+  }
+});
+
+test("attribution guard allows ordinary prose and approved review metadata", () => {
+  const source = `---
+official_refs:
+  - https://github.com/earendil-works/pi
+translator: Pify maintainers
+reviewed_by: Pify maintainers
+---
+
+The Tool author chooses a stable ID. A provider may return licensing data as
+ordinary payload text, and the tác giả field can remain part of that example.
+`;
+
+  assert.doesNotThrow(() => assertNoPerPageAttribution(source, "ordinary"));
+});
+
+test("public course filename contract rejects missing and extra route files", () => {
+  const exactDirectory = ["meta.json", "draft.txt", ...courseFilenames];
+  assert.deepEqual(publicCourseFilenameErrors(exactDirectory), []);
+  assert.deepEqual(
+    publicCourseFilenameErrors(
+      exactDirectory.filter((filename) => filename !== "index.mdx"),
+    ),
+    ["missing public course file: index.mdx"],
+  );
+  assert.deepEqual(
+    publicCourseFilenameErrors([...exactDirectory, "unplanned-route.mdx"]),
+    ["unexpected public course file: unplanned-route.mdx"],
+  );
+  assert.deepEqual(
+    publicCourseFilenameErrors([...exactDirectory, "unplanned-route.MD"]),
+    ["unexpected public course file: unplanned-route.MD"],
+  );
+});
+
+test("course directories contain exactly 32 localized public files", async () => {
+  const errors = [];
+
+  for (const locale of ["en", "vi"]) {
+    const directory = `content/${locale}/course`;
+    const entries = await readdir(new URL(`${directory}/`, repositoryRoot), {
+      withFileTypes: true,
+    });
+    const filenames = entries
+      .filter((entry) => entry.isFile())
+      .map((entry) => entry.name);
+    errors.push(
+      ...publicCourseFilenameErrors(filenames).map(
+        (error) => `${directory}: ${error}`,
+      ),
+    );
   }
 
   assert.deepEqual(
-    missing,
+    errors,
     [],
-    `missing public course files:\n${missing.join("\n")}`,
+    `course directory contract errors:\n${errors.join("\n")}`,
   );
 });
 
@@ -203,12 +323,8 @@ test("every checkpoint satisfies the shared content contract", async () => {
 
 test("English and Vietnamese course pages keep structural parity", async () => {
   const errors = [];
-  const filenames = [
-    "index.mdx",
-    ...checkpoints.map(({ slug }) => `${slug}.md`),
-  ];
 
-  for (const filename of filenames) {
+  for (const filename of courseFilenames) {
     const enPath = `content/en/course/${filename}`;
     const viPath = `content/vi/course/${filename}`;
     if (!(await exists(enPath)) || !(await exists(viPath))) {
@@ -246,13 +362,9 @@ test("English and Vietnamese course pages keep structural parity", async () => {
 
 test("course pages do not carry per-page source or license notices", async () => {
   const errors = [];
-  const filenames = [
-    "index.mdx",
-    ...checkpoints.map(({ slug }) => `${slug}.md`),
-  ];
 
   for (const locale of ["en", "vi"]) {
-    for (const filename of filenames) {
+    for (const filename of courseFilenames) {
       const relativePath = `content/${locale}/course/${filename}`;
       if (!(await exists(relativePath))) continue;
       try {
