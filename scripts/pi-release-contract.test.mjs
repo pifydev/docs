@@ -147,8 +147,19 @@ function markdownSemanticSegments(source) {
   const lines = source.replaceAll("\r\n", "\n").split("\n");
   const segments = [];
   let paragraph = [];
+  const segment = (kind, text, fenceLanguages = []) => ({
+    kind,
+    text,
+    fenceLanguages,
+  });
+  const languagesIn = (text) =>
+    [...text.matchAll(/^\s*(?:```|~~~)\s*([\w+-]+)/gm)].map((match) =>
+      match[1].toLowerCase(),
+    );
   const flushParagraph = () => {
-    if (paragraph.length > 0) segments.push(paragraph.join("\n"));
+    if (paragraph.length > 0) {
+      segments.push(segment("prose", paragraph.join("\n")));
+    }
     paragraph = [];
   };
 
@@ -164,24 +175,32 @@ function markdownSemanticSegments(source) {
         index += 1;
         callout.push(lines[index]);
       }
-      segments.push(callout.join("\n"));
+      const text = callout.join("\n");
+      segments.push(segment("callout", text, languagesIn(text)));
       continue;
     }
-    const fence = /^\s*(```|~~~)/.exec(line)?.[1];
-    if (fence) {
+    const fenceMatch = /^\s*(```|~~~)\s*([\w+-]*)/.exec(line);
+    if (fenceMatch) {
       flushParagraph();
+      const [, fence, language] = fenceMatch;
       const code = [line];
       while (index + 1 < lines.length) {
         index += 1;
         code.push(lines[index]);
         if (new RegExp(`^\\s*${fence}`).test(lines[index])) break;
       }
-      segments.push(code.join("\n"));
+      segments.push(
+        segment(
+          "code",
+          code.join("\n"),
+          language ? [language.toLowerCase()] : [],
+        ),
+      );
       continue;
     }
     if (/^\s*\|/.test(line)) {
       flushParagraph();
-      segments.push(line);
+      segments.push(segment("table", line));
       continue;
     }
     if (line.trim() === "") {
@@ -195,19 +214,19 @@ function markdownSemanticSegments(source) {
 }
 
 function hasKnownUnreleasedTruncatedSummarySignature(segment) {
-  const normalized = segment.replace(/\s+/g, " ").trim();
+  const normalized = segment.text.replace(/\s+/g, " ").trim();
   const mentionsCompactionOrBranchSummary =
     /(?:compaction|branch)\s+summar(?:y|ies|ization)|(?:summar(?:y|ies|ization)|bản tóm tắt)\s+(?:compaction|branch|nhánh)/i.test(
       normalized,
     );
+  const hasSourceShapedFence = segment.fenceLanguages.some((language) =>
+    /^(?:cjs|js|javascript|jsx|mjs|ts|tsx|typescript)$/.test(language),
+  );
   const auditedSourceSignature =
+    hasSourceShapedFence &&
     mentionsCompactionOrBranchSummary &&
-    (/getSummarizationFailure/.test(normalized) ||
-      /stopReason\s*:\s*["']length["']/.test(normalized));
-  const auditedFailureText =
-    /compaction summary generation hit the token cap and the summary is incomplete/i.test(
-      normalized,
-    );
+    (/getSummarizationFailure\s*\(/.test(normalized) ||
+      /response\.stopReason\s*===\s*["']length["']/.test(normalized));
   const reviewedPhrases = [
     /Pi does not persist a length-limited summary/i,
     /Pi rejects a length-limited (?:compaction|branch) summary/i,
@@ -222,7 +241,6 @@ function hasKnownUnreleasedTruncatedSummarySignature(segment) {
 
   return (
     auditedSourceSignature ||
-    auditedFailureText ||
     reviewedPhrases.some((signature) => signature.test(normalized))
   );
 }
@@ -239,12 +257,12 @@ function assertTruncatedSummaryClaimsAreUnreleased(source, locale, context) {
 
   for (const claim of claims) {
     assert.match(
-      claim,
+      claim.text,
       /\{% hint style="warning" %\}/,
       `${context} must put truncated-summary rejection in a warning callout`,
     );
     assert.match(
-      claim,
+      claim.text,
       warning,
       `${context} must visibly label truncated-summary rejection as unreleased`,
     );
@@ -841,9 +859,6 @@ test("active docs do not present the renamed GoogleThinkingLevel identifier as c
 
 test("known truncated-summary signatures use a focused positive and negative matrix", () => {
   const guardedClaims = [
-    "Compaction summaries use `getSummarizationFailure` for a length-stopped generation.",
-    'For a compaction summary, `stopReason: "length"` marks the post-tag behavior.',
-    "Compaction summary generation hit the token cap and the summary is incomplete.",
     "Pi does not persist a length-limited summary.",
     "Pi rejects a length-limited branch summary.",
     "Pi rejects a truncated compaction summary instead of persisting it.",
@@ -856,6 +871,15 @@ test("known truncated-summary signatures use a focused positive and negative mat
     "Pi không lưu bản tóm tắt compaction khi đầu ra quá lớn.",
   ];
   const allowedClaims = [
+    "Compaction summaries use `getSummarizationFailure` for a length-stopped generation.",
+    'For a compaction summary, `stopReason: "length"` marks the post-tag behavior.',
+    "Compaction summary generation hit the token cap and the summary is incomplete.",
+    "At 0.84.3, a compaction summary does not use getSummarizationFailure.",
+    "Ở 0.84.3, bản tóm tắt compaction không sử dụng getSummarizationFailure.",
+    "getSummarizationFailure applies elsewhere; this compaction summary is unaffected.",
+    "getSummarizationFailure áp dụng ở nơi khác; bản tóm tắt compaction này không bị ảnh hưởng.",
+    "A historical note quotes “compaction summary generation hit the token cap and the summary is incomplete,” but explicitly says 0.84.3 does not have it.",
+    "Ghi chú lịch sử trích dẫn “compaction summary generation hit the token cap and the summary is incomplete,” nhưng nói rõ 0.84.3 không có hành vi này.",
     "Compaction does not truncate a single oversized Tool result at execution time.",
     "A truncated assistant response triggers compaction and one retry; it is not a compaction summary.",
     "At 0.84.3, a compaction summary can fail when the provider returns an incomplete response.",
@@ -877,21 +901,43 @@ test("known truncated-summary signatures use a focused positive and negative mat
     "Pi does not persist diagnostics for a compaction summary when provider output is too large.",
     "The compaction summary is invalid when JSON parsing fails. Its output size is logged for diagnostics.",
   ];
+  const guardedSourceFences = [
+    "```ts\n// compaction summary\nconst failure = getSummarizationFailure(response);\n```",
+    '```typescript\n// branch summary\nif (response.stopReason === "length") return failure;\n```',
+  ];
+  const allowedNonSourceFence =
+    "```text\ncompaction summary: getSummarizationFailure(response)\n```";
 
   for (const claim of guardedClaims) {
+    const [segment] = markdownSemanticSegments(claim);
     assert.equal(
-      hasKnownUnreleasedTruncatedSummarySignature(claim),
+      hasKnownUnreleasedTruncatedSummarySignature(segment),
       true,
       claim,
     );
   }
   for (const claim of allowedClaims) {
+    const [segment] = markdownSemanticSegments(claim);
     assert.equal(
-      hasKnownUnreleasedTruncatedSummarySignature(claim),
+      hasKnownUnreleasedTruncatedSummarySignature(segment),
       false,
       claim,
     );
   }
+  for (const source of guardedSourceFences) {
+    const [segment] = markdownSemanticSegments(source);
+    assert.equal(
+      hasKnownUnreleasedTruncatedSummarySignature(segment),
+      true,
+      source,
+    );
+  }
+  const [nonSourceSegment] = markdownSemanticSegments(allowedNonSourceFence);
+  assert.equal(
+    hasKnownUnreleasedTruncatedSummarySignature(nonSourceSegment),
+    false,
+    allowedNonSourceFence,
+  );
 });
 
 test("truncated-summary rejection claims require visual localized unreleased warnings", () => {
@@ -899,6 +945,8 @@ test("truncated-summary rejection claims require visual localized unreleased war
     "Pi rejects a truncated compaction summary instead of persisting it.";
   const vietnameseClaim =
     "Pi từ chối bản tóm tắt compaction bị cắt cụt và không lưu nó.";
+  const sourceClaim =
+    "```ts\n// compaction summary\nconst failure = getSummarizationFailure(response);\n```";
 
   assert.throws(
     () =>
@@ -906,6 +954,15 @@ test("truncated-summary rejection claims require visual localized unreleased war
         englishClaim,
         "en",
         "synthetic English claim",
+      ),
+    /must put truncated-summary rejection in a warning callout/,
+  );
+  assert.throws(
+    () =>
+      assertTruncatedSummaryClaimsAreUnreleased(
+        sourceClaim,
+        "en",
+        "synthetic audited source claim",
       ),
     /must put truncated-summary rejection in a warning callout/,
   );
@@ -942,6 +999,13 @@ test("truncated-summary rejection claims require visual localized unreleased war
       `{% hint style="warning" %}\n**Unreleased:** ${englishClaim}\n{% endhint %}`,
       "en",
       "synthetic English warning",
+    ),
+  );
+  assert.doesNotThrow(() =>
+    assertTruncatedSummaryClaimsAreUnreleased(
+      `{% hint style="warning" %}\n**Unreleased:** post-tag source only\n\n${sourceClaim}\n{% endhint %}`,
+      "en",
+      "synthetic audited source warning",
     ),
   );
   assert.doesNotThrow(() =>
