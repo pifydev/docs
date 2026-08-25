@@ -6,13 +6,13 @@ language: en
 chapter: 1
 source_url: "https://www.dgzhuya.com/modules/ch01-overview"
 official_refs:
-  - "https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/README.md"
-  - "https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/docs/quickstart.md"
-  - "https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/docs/models.md"
-  - "https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/docs/sdk.md"
-  - "https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/docs/extensions.md"
-  - "https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/ai/README.md"
-  - "https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/README.md"
+  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/README.md"
+  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/docs/quickstart.md"
+  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/docs/models.md"
+  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/docs/sdk.md"
+  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/docs/extensions.md"
+  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/ai/README.md"
+  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/README.md"
 terms_used:
   - Pi
   - Agent
@@ -29,7 +29,7 @@ terms_used:
   - Provider
   - SDK
 status: reviewed
-last_updated: "2026-08-24"
+last_updated: "2026-08-25"
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -38,7 +38,7 @@ reviewed_by: Pify maintainers
 
 :::info[Version scope]
 
-The facts and examples in this chapter were checked against upstream commit [`a470b121`](https://github.com/badlogic/pi-mono/commit/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c), package version `0.84.2`. All four foundational packages require Node.js `>=22.19.0`. Later releases may change package catalogs and APIs.
+The facts and examples in this chapter were checked against upstream commit [`4e58f324`](https://github.com/earendil-works/pi/commit/4e58f324fae8ebfa98a3d45181fb248072a2afac), package version `0.84.3`. All four foundational packages require Node.js `>=22.19.0`. Later releases may change package catalogs and APIs.
 
 :::
 
@@ -63,7 +63,7 @@ That three-part answer sets the order for this chapter. We first map the reposit
 Each word narrows the design:
 
 - **Coding Agent shell:** Pi joins a model, a system prompt, project context, Tools, and session state into an application that can read and change a codebase. “Shell” describes the frame and connection points while models and policies remain replaceable.
-- **Terminal:** the default interactive interface runs where developers already use shells, version control, and process tools. Regular TUI mode preserves terminal-owned scrollback. Version `0.84.2` also has an experimental fullscreen TUI mode with application-owned scrolling, so “terminal” no longer means only one rendering strategy.
+- **Terminal:** the default interactive interface runs where developers already use shells, version control, and process tools. Regular TUI mode preserves terminal-owned scrollback. Version `0.84.3` also has an experimental fullscreen TUI mode with application-owned scrolling, so “terminal” no longer means only one rendering strategy.
 - **Minimal default:** the model receives four Tools by default: `read`, `write`, `edit`, and `bash`. The built-in read-only helpers `grep`, `find`, and `ls` are available through Tool options. Features such as plan mode and sub-agents live outside the default product surface.
 - **Extensible:** Extensions can register Tools, commands, shortcuts, event hooks, providers, and UI. Skills, Prompt Templates, Themes, and Pi Packages cover reusable instructions, prompts, presentation, and distribution.
 
@@ -75,7 +75,7 @@ Fast-moving popularity and provider counts age badly, so this snapshot records f
 
 | Metric                    | Pinned value | What it tells you                                                                                     |
 | ------------------------- | ------------ | ----------------------------------------------------------------------------------------------------- |
-| Package version           | `0.84.2`     | The chapter describes one concrete release, not an unspecified `main` branch.                         |
+| Package version           | `0.84.3`     | The chapter describes one concrete release, not an unspecified `main` branch.                         |
 | Node.js runtime           | `>=22.19.0`  | The same engine requirement appears in the foundational package manifests.                            |
 | Default Tools             | 4            | `read`, `write`, `edit`, and `bash` form the default model-facing surface.                            |
 | Optional built-in helpers | 3            | `grep`, `find`, and `ls` can be selected through Tool options.                                        |
@@ -134,7 +134,7 @@ flowchart TB
 
 `@earendil-works/pi-tui` is orthogonal to the three-layer Agent stack. Its package has no runtime dependency on the other Pi packages, and its source imports none of them. The Coding Agent depends on TUI for interactive presentation, while a server or background worker can use Pi AI and Agent Core without a terminal.
 
-The current workspace also contains `@earendil-works/pi-protocol`, `@earendil-works/pi-client`, `@earendil-works/pi-telemetry`, a separate SQLite session backend, and `@earendil-works/pi-server`. They serve remote-session, telemetry, or persistence work rather than replacing the four foundations above. The server package describes itself as experimental at `0.84.2`; the old experimental `pi-orchestrator` from the baseline chapter is not present at the pinned commit.
+The current workspace also contains `@earendil-works/pi-protocol`, `@earendil-works/pi-client`, `@earendil-works/pi-telemetry`, a separate SQLite session backend, and `@earendil-works/pi-server`. They serve remote-session, telemetry, or persistence work rather than replacing the four foundations above. The server package describes itself as experimental at `0.84.3`; the old experimental `pi-orchestrator` from the baseline chapter is not present at the pinned commit.
 
 ## 3. View 1: as a coding agent: a useful daily tool
 
@@ -518,6 +518,6 @@ Pi's subtraction has a price: the team owns more policy, package review, and ope
 
 :::note[Reviewed source]
 
-This chapter describes Pi `0.84.2` at commit [`a470b121`](https://github.com/badlogic/pi-mono/tree/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c). Links in `official_refs` are pinned to that revision so the claims remain auditable after upstream `main` changes.
+This chapter describes Pi `0.84.3` at commit [`4e58f324`](https://github.com/earendil-works/pi/tree/4e58f324fae8ebfa98a3d45181fb248072a2afac). Links in `official_refs` are pinned to that revision so the claims remain auditable after upstream `main` changes.
 
 :::

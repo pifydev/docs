@@ -6,8 +6,8 @@ language: en
 chapter: 5
 source_url: "https://www.dgzhuya.com/modules/ch05-tool-system"
 official_refs:
-  - "https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/README.md#tools"
-  - "https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/docs/extensions.md#custom-tools"
+  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/README.md#tools"
+  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/docs/extensions.md#custom-tools"
 terms_used:
   - Tool
   - ToolCall
@@ -15,7 +15,7 @@ terms_used:
   - AgentTool
   - ToolDefinition
 status: reviewed
-last_updated: "2026-08-24"
+last_updated: "2026-08-25"
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -33,7 +33,7 @@ Chapter 3 followed an Agent turn from a model response to Tool execution and bac
 
 That block does not authorize an operation and does not contain executable code. The runtime still has to find the named Tool, prepare and validate untrusted arguments, apply product policy, honor cancellation, run the effect, report progress, finalize the result, and create the matching `ToolResultMessage`. A batch adds another question: which effects may overlap without corrupting shared state?
 
-Pi `0.84.2` answers those questions with three related type layers and a staged execution path. The historical five-step teaching model remains useful—prepare, validate, pre-hook, execute, post-hook—but the current implementation also defines scheduling, event order, cancellation boundaries, result construction, and batch-wide termination. This chapter follows that full path against pinned commit `a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c`.
+Pi `0.84.3` answers those questions with three related type layers and a staged execution path. The historical five-step teaching model remains useful—prepare, validate, pre-hook, execute, post-hook—but the current implementation also defines scheduling, event order, cancellation boundaries, result construction, and batch-wide termination. This chapter follows that full path against pinned commit `4e58f324fae8ebfa98a3d45181fb248072a2afac`.
 
 ## 1. Three type layers keep dependencies pointed inward
 
@@ -987,6 +987,6 @@ Tool execution is therefore a controlled protocol around an effect. The schema l
 
 Chapter 6 follows those messages across the richer Agent transcript and the provider conversion boundary. It explains why Tool details can serve the UI while only text and image content enter the normal model-facing result.
 
-Source review for this chapter is pinned to Pi `0.84.2` at commit `a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c`. Primary paths are `packages/ai/src/types.ts`, `packages/ai/src/utils/validation.ts`, `packages/agent/src/types.ts`, `packages/agent/src/agent-loop.ts`, `packages/agent/src/agent.ts`, `packages/coding-agent/src/core/extensions/types.ts`, `packages/coding-agent/src/core/extensions/runner.ts`, `packages/coding-agent/src/core/extensions/wrapper.ts`, `packages/coding-agent/src/core/extensions/loader.ts`, `packages/coding-agent/src/core/agent-session.ts`, and the Tool implementations under `packages/coding-agent/src/core/tools/`.
+Source review for this chapter is pinned to Pi `0.84.3` at commit `4e58f324fae8ebfa98a3d45181fb248072a2afac`. Primary paths are `packages/ai/src/types.ts`, `packages/ai/src/utils/validation.ts`, `packages/agent/src/types.ts`, `packages/agent/src/agent-loop.ts`, `packages/agent/src/agent.ts`, `packages/coding-agent/src/core/extensions/types.ts`, `packages/coding-agent/src/core/extensions/runner.ts`, `packages/coding-agent/src/core/extensions/wrapper.ts`, `packages/coding-agent/src/core/extensions/loader.ts`, `packages/coding-agent/src/core/agent-session.ts`, and the Tool implementations under `packages/coding-agent/src/core/tools/`.
 
 [Chapter 6: Message system](ch06-messages.md)

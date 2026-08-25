@@ -8,7 +8,7 @@ reviewed_by: Pify maintainers
 last_updated: '2026-08-25'
 ---
 
-Pi reads JSON settings at startup and when resources reload. This reference describes `@earendil-works/pi-coding-agent` 0.84.2 on Node.js 22.19 or newer.
+Pi reads JSON settings at startup and when resources reload. This reference describes `@earendil-works/pi-coding-agent` 0.84.3 on Node.js 22.19 or newer.
 
 ## Settings files and precedence
 
@@ -97,7 +97,7 @@ console.log({
 
 ### Tool selection
 
-`defaultTools` selects built-in tools at startup. When omitted, `read`, `bash`, `edit`, and `write` are active defaults; `grep`, `find`, and `ls` are also built in and can be selected. An empty array removes the built-in defaults but leaves extension and SDK custom tools available.
+`defaultTools` selects built-in tools at startup. When omitted, `read`, `bash`, `edit`, and `write` are active defaults; `grep`, `find`, and `ls` are also built in and can be selected, as can the optional native `powershell` tool on Windows. An empty array removes the built-in defaults but leaves extension and SDK custom tools available.
 
 `--tools` is a strict allowlist across built-in, extension, and custom tools. `--no-tools` disables all tools, `--no-builtin-tools` removes built-ins only, and `--exclude-tools` filters the result. A project array replaces the global array.
 

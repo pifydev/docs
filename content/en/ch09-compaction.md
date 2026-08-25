@@ -6,14 +6,14 @@ language: en
 chapter: 9
 source_url: 'https://www.dgzhuya.com/modules/ch09-compaction'
 official_refs:
-  - 'https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/docs/compaction.md'
+  - 'https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/docs/compaction.md'
 terms_used:
   - Context Compaction
   - CompactionEntry
   - BranchSummaryEntry
   - Session
 status: reviewed
-last_updated: '2026-08-24'
+last_updated: '2026-08-25'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -102,7 +102,7 @@ Coding Agent loads global settings from `~/.pi/agent/settings.json`. A trusted p
 
 ### Current usage comes from provider data first
 
-The older implementation description treated `chars / 4` as the current context size. Pi `0.84.2` prefers the last valid assistant `usage`. `calculateContextTokens()` takes `usage.totalTokens` when it is nonzero; otherwise it adds `input + output + cacheRead + cacheWrite`.
+The older implementation description treated `chars / 4` as the current context size. Pi `0.84.3` prefers the last valid assistant `usage`. `calculateContextTokens()` takes `usage.totalTokens` when it is nonzero; otherwise it adds `input + output + cacheRead + cacheWrite`.
 
 For a normal assistant response with nonzero usage, `_checkCompaction()` tests that value directly. For an error response or all-zero usage, `estimateContextTokens()` finds the last non-error, non-aborted assistant usage in the active messages and adds estimates for messages after it. If no valid usage exists, it estimates every message.
 
@@ -582,15 +582,15 @@ Before handing off a compaction integration, verify these cases:
 
 [Chapter 10](ch10-session.md) follows the parent-linked JSONL tree behind `getBranch()`, `appendCompaction()`, `buildContextEntries()`, rewind, and branch navigation. That storage model explains why compaction can omit old entries from the next model request without deleting them.
 
-The implementation references for this chapter are pinned to Pi `0.84.2` at `a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c`:
+The implementation references for this chapter are pinned to Pi `0.84.3` at `4e58f324fae8ebfa98a3d45181fb248072a2afac`:
 
-- [Compaction defaults, token accounting, cut points, templates, preparation, and generation](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/compaction/compaction.ts#L126-L997)
-- [Summary serialization and file-operation tracking](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/compaction/utils.ts#L12-L158)
-- [`CompactionEntry`, append, and active-path projection](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/session-manager.ts#L46-L80) and [`buildSessionContext()`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/session-manager.ts#L379-L469)
-- [Manual and automatic lifecycle, retry, abort, and failure paths](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/agent-session.ts#L1818-L2359)
-- [Extension compaction event contracts](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/extensions/types.ts#L288-L300) and [hooks](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/extensions/types.ts#L591-L627)
-- [Compaction-summary message conversion](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/messages.ts#L11-L17) and [per-call transform order](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/agent-loop.ts#L277-L302)
-- [Global/project setting merge and SDK overrides](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/settings-manager.ts#L150-L169) and [effective compaction defaults](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/settings-manager.ts#L825-L852)
-- [Generic Agent `retainedTail` schema](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/harness/session/types.ts#L39-L51), which is distinct from Coding Agent `SessionManager`
+- [Compaction defaults, token accounting, cut points, templates, preparation, and generation](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/compaction/compaction.ts#L126-L997)
+- [Summary serialization and file-operation tracking](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/compaction/utils.ts#L12-L158)
+- [`CompactionEntry`, append, and active-path projection](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/session-manager.ts#L46-L80) and [`buildSessionContext()`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/session-manager.ts#L379-L469)
+- [Manual and automatic lifecycle, retry, abort, and failure paths](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/agent-session.ts#L1818-L2359)
+- [Extension compaction event contracts](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/extensions/types.ts#L290-L302) and [hooks](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/extensions/types.ts#L593-L630)
+- [Compaction-summary message conversion](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/messages.ts#L11-L17) and [per-call transform order](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/agent-loop.ts#L277-L302)
+- [Global/project setting merge and SDK overrides](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/settings-manager.ts#L150-L169) and [effective compaction defaults](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/settings-manager.ts#L825-L852)
+- [Generic Agent `retainedTail` schema](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/harness/session/types.ts#L39-L51), which is distinct from Coding Agent `SessionManager`
 
 > **Next up:** [Chapter 10: Session Management](ch10-session.md)

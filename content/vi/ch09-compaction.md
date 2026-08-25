@@ -6,14 +6,14 @@ language: vi
 chapter: 9
 source_url: 'https://www.dgzhuya.com/modules/ch09-compaction'
 official_refs:
-  - 'https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/docs/compaction.md'
+  - 'https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/docs/compaction.md'
 terms_used:
   - Context Compaction
   - CompactionEntry
   - BranchSummaryEntry
   - Session
 status: reviewed
-last_updated: '2026-08-24'
+last_updated: '2026-08-25'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -102,7 +102,7 @@ Coding Agent đọc thiết lập toàn cục từ `~/.pi/agent/settings.json`. 
 
 ### Mức sử dụng hiện tại ưu tiên dữ liệu từ nhà cung cấp
 
-Mô tả cũ dùng `chars / 4` làm kích thước ngữ cảnh hiện tại. Pi `0.84.2` ưu tiên `usage` hợp lệ gần nhất của trợ lý. `calculateContextTokens()` lấy `usage.totalTokens` khi giá trị này khác 0; nếu không, hàm cộng `input + output + cacheRead + cacheWrite`.
+Mô tả cũ dùng `chars / 4` làm kích thước ngữ cảnh hiện tại. Pi `0.84.3` ưu tiên `usage` hợp lệ gần nhất của trợ lý. `calculateContextTokens()` lấy `usage.totalTokens` khi giá trị này khác 0; nếu không, hàm cộng `input + output + cacheRead + cacheWrite`.
 
 Với phản hồi bình thường của trợ lý có mức sử dụng khác 0, `_checkCompaction()` kiểm tra trực tiếp giá trị đó. Với phản hồi lỗi hoặc mức sử dụng toàn 0, `estimateContextTokens()` tìm mức sử dụng gần nhất của trợ lý không thuộc phản hồi lỗi hay bị hủy trong danh sách thông điệp đang hoạt động, rồi cộng ước lượng của các thông điệp theo sau. Nếu không có mức sử dụng hợp lệ, hàm ước lượng toàn bộ danh sách.
 
@@ -585,15 +585,15 @@ Trước khi bàn giao một phần tích hợp nén, hãy kiểm tra các trư�
 
 [Chương 10](ch10-session.md) đi sâu vào cây JSONL liên kết qua các mục cha mà `getBranch()`, `appendCompaction()` và `buildContextEntries()` sử dụng, cùng thao tác quay lại và điều hướng nhánh. Mô hình lưu trữ đó giải thích vì sao cơ chế nén có thể bỏ các mục cũ khỏi yêu cầu mô hình tiếp theo mà không xóa chúng.
 
-Các tham chiếu triển khai của chương này được ghim tại Pi `0.84.2`, commit `a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c`:
+Các tham chiếu triển khai của chương này được ghim tại Pi `0.84.3`, commit `4e58f324fae8ebfa98a3d45181fb248072a2afac`:
 
-- [Giá trị mặc định, cách tính token, điểm cắt, mẫu, bước chuẩn bị và tạo kết quả nén](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/compaction/compaction.ts#L126-L997)
-- [Tuần tự hóa bản tóm tắt và theo dõi thao tác tệp](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/compaction/utils.ts#L12-L158)
-- [`CompactionEntry`, thao tác ghi và phép chiếu nhánh đang hoạt động](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/session-manager.ts#L46-L80), cùng [`buildSessionContext()`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/session-manager.ts#L379-L469)
-- [Đường xử lý vòng đời, thử lại, hủy và thất bại trong chế độ thủ công hoặc tự động](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/agent-session.ts#L1818-L2359)
-- [Hợp đồng sự kiện nén của Extension](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/extensions/types.ts#L288-L300) và [các hook](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/extensions/types.ts#L591-L627)
-- [Chuyển đổi thông điệp tóm tắt nén](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/messages.ts#L11-L17) và [thứ tự biến đổi cho từng lần gọi](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/agent-loop.ts#L277-L302)
-- [Hợp nhất thiết lập toàn cục/dự án và giá trị ghi đè từ SDK](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/settings-manager.ts#L150-L169), cùng [giá trị nén có hiệu lực](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/settings-manager.ts#L825-L852)
-- [Lược đồ `retainedTail` của Agent dùng chung](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/harness/session/types.ts#L39-L51), khác với Coding Agent `SessionManager`
+- [Giá trị mặc định, cách tính token, điểm cắt, mẫu, bước chuẩn bị và tạo kết quả nén](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/compaction/compaction.ts#L126-L997)
+- [Tuần tự hóa bản tóm tắt và theo dõi thao tác tệp](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/compaction/utils.ts#L12-L158)
+- [`CompactionEntry`, thao tác ghi và phép chiếu nhánh đang hoạt động](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/session-manager.ts#L46-L80), cùng [`buildSessionContext()`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/session-manager.ts#L379-L469)
+- [Đường xử lý vòng đời, thử lại, hủy và thất bại trong chế độ thủ công hoặc tự động](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/agent-session.ts#L1818-L2359)
+- [Hợp đồng sự kiện nén của Extension](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/extensions/types.ts#L290-L302) và [các hook](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/extensions/types.ts#L593-L630)
+- [Chuyển đổi thông điệp tóm tắt nén](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/messages.ts#L11-L17) và [thứ tự biến đổi cho từng lần gọi](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/agent-loop.ts#L277-L302)
+- [Hợp nhất thiết lập toàn cục/dự án và giá trị ghi đè từ SDK](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/settings-manager.ts#L150-L169), cùng [giá trị nén có hiệu lực](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/settings-manager.ts#L825-L852)
+- [Lược đồ `retainedTail` của Agent dùng chung](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/harness/session/types.ts#L39-L51), khác với Coding Agent `SessionManager`
 
 > **Tiếp theo:** [Chương 10: Quản lý phiên](ch10-session.md)

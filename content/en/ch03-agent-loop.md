@@ -6,9 +6,9 @@ language: en
 chapter: 3
 source_url: "https://www.dgzhuya.com/modules/ch03-agent-loop"
 official_refs:
-  - "https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/agent-loop.ts"
-  - "https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/agent.ts"
-  - "https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/types.ts"
+  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/agent-loop.ts"
+  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/agent.ts"
+  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/types.ts"
 terms_used:
   - Agent Loop
   - Trace
@@ -18,12 +18,12 @@ terms_used:
   - Steering
   - Follow-up
 status: reviewed
-last_updated: "2026-08-24"
+last_updated: "2026-08-25"
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
 
-Chapter 2 separated model transport, the Agent runtime, and the coding product. The Agent Loop is the moving part inside that architecture. This chapter starts with why a loop exists, then follows one message through Pi 0.84.2: context preparation, streaming, Tool execution, queued instructions, termination, events, and final settlement.
+Chapter 2 separated model transport, the Agent runtime, and the coding product. The Agent Loop is the moving part inside that architecture. This chapter starts with why a loop exists, then follows one message through Pi 0.84.3: context preparation, streaming, Tool execution, queued instructions, termination, events, and final settlement.
 
 ## 1. Prelude: three ways to use an LLM
 
@@ -211,7 +211,7 @@ The loop also maintains `newMessages`, a run-local collector returned by the low
 
 ### What keeps the loop moving, and what ends it
 
-The historical implementation could be summarized too easily as “inspect `stopReason`.” Pi 0.84.2 uses several pieces of state:
+The historical implementation could be summarized too easily as “inspect `stopReason`.” Pi 0.84.3 uses several pieces of state:
 
 ```text
 assistant response
@@ -244,7 +244,7 @@ This explains why a termination report must name both the provider result and th
 The core decision is based on content and finalized Tool state, not one string:
 
 ```typescript
-// Abridged from packages/agent/src/agent-loop.ts at a470b121.
+// Abridged from packages/agent/src/agent-loop.ts at 4e58f324.
 const toolCalls = message.content.filter((part) => part.type === "toolCall");
 hasMoreToolCalls = false;
 
@@ -658,7 +658,7 @@ The order of the two hooks is part of the contract. `transformContext` can reaso
 The loop creates a fresh provider-facing wrapper for each Turn:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at a470b121.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 4e58f324.
 const llmContext: Context = {
   systemPrompt: context.systemPrompt,
   messages: llmMessages,
@@ -669,7 +669,7 @@ const llmContext: Context = {
 It resolves a current API key, then calls the injected function:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at a470b121.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 4e58f324.
 const response = await streamFunction(config.model, llmContext, {
   ...config,
   apiKey: resolvedApiKey,
@@ -737,7 +737,7 @@ Provider adapters own cache-control serialization. Rebuilding the small `Context
 `streamAssistantResponse()` reserves one transcript slot on `start`, replaces that slot with each partial, and finally replaces it with the completed message:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at a470b121.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 4e58f324.
 case "start":
   partialMessage = event.partial;
   context.messages.push(partialMessage);
@@ -776,7 +776,7 @@ One slot avoids storing every token delta as a conversation message. Subscribers
 The hard-stop check occurs before Tool selection:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at a470b121.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 4e58f324.
 if (message.stopReason === "error" || message.stopReason === "aborted") {
   await emit({ type: "turn_end", message, toolResults: [] });
   await emit({ type: "agent_end", messages: newMessages });
@@ -800,7 +800,7 @@ The two modes preserve conversation order in different ways:
 If any targeted Tool declares `executionMode: "sequential"`, the whole assistant batch runs sequentially. Preflight resolves the Tool, applies `prepareArguments`, validates the schema, and calls `beforeToolCall`:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at a470b121.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 4e58f324.
 const preparedToolCall = prepareToolCallArguments(tool, toolCall);
 const validatedArgs = validateToolArguments(tool, preparedToolCall);
 const beforeResult = await config.beforeToolCall?.(
@@ -812,7 +812,7 @@ const beforeResult = await config.beforeToolCall?.(
 Unknown Tools, invalid arguments, thrown preflight code, blocked calls, and observed aborts become immediate error results. `afterToolCall` runs only after an allowed Tool actually executes; it may replace `content`, `details`, `usage`, `isError`, or `terminate` before final events:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at a470b121.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 4e58f324.
 const afterResult = await config.afterToolCall?.(
   {
     assistantMessage,
@@ -840,7 +840,7 @@ For each finalized call, Pi emits `tool_execution_end`, then a `message_start`/`
 Batch termination uses `every`:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at a470b121.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 4e58f324.
 const terminate =
   finalizedCalls.length > 0 &&
   finalizedCalls.every((entry) => entry.result.terminate === true);
@@ -884,7 +884,7 @@ Settlement extends past event emission. `agent_end` guarantees that the loop wil
 ### 4.8 Back to the top of the loop
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at a470b121.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 4e58f324.
 while (hasMoreToolCalls || pendingMessages.length > 0) {
   // one assistant response and its Tool batch
 }
@@ -897,7 +897,7 @@ Automatic continuation comes from a non-terminating Tool batch. Steering continu
 At the stable boundary, Agent Core polls only the follow-up queue:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at a470b121.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 4e58f324.
 const followUpMessages = (await config.getFollowUpMessages?.()) || [];
 if (followUpMessages.length > 0) {
   pendingMessages = followUpMessages;
@@ -955,4 +955,4 @@ This separation lets a small domain Agent use `Agent` directly while the full co
 
 [Chapter 4](ch04-model-invocation.md) opens the `StreamFn` boundary: model collections, provider registration, request conversion, normalized streaming events, and error handling.
 
-> Version boundary: this walkthrough follows Pi `0.84.2` at commit `a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c` and Node.js `>=22.19.0`.
+> Version boundary: this walkthrough follows Pi `0.84.3` at commit `4e58f324fae8ebfa98a3d45181fb248072a2afac` and Node.js `>=22.19.0`.

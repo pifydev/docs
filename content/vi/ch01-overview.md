@@ -6,13 +6,13 @@ language: vi
 chapter: 1
 source_url: "https://www.dgzhuya.com/modules/ch01-overview"
 official_refs:
-  - "https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/README.md"
-  - "https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/docs/quickstart.md"
-  - "https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/docs/models.md"
-  - "https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/docs/sdk.md"
-  - "https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/docs/extensions.md"
-  - "https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/ai/README.md"
-  - "https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/README.md"
+  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/README.md"
+  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/docs/quickstart.md"
+  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/docs/models.md"
+  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/docs/sdk.md"
+  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/docs/extensions.md"
+  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/ai/README.md"
+  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/README.md"
 terms_used:
   - Pi
   - Agent
@@ -29,7 +29,7 @@ terms_used:
   - Provider
   - SDK
 status: reviewed
-last_updated: "2026-08-24"
+last_updated: "2026-08-25"
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -38,7 +38,7 @@ reviewed_by: Pify maintainers
 
 :::info[Phạm vi phiên bản]
 
-Các thông tin và ví dụ trong chương đã được đối chiếu với upstream commit [`a470b121`](https://github.com/badlogic/pi-mono/commit/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c), package version `0.84.2`. Cả bốn package nền tảng đều yêu cầu Node.js `>=22.19.0`. Catalog package và API có thể thay đổi ở các release sau.
+Các thông tin và ví dụ trong chương đã được đối chiếu với upstream commit [`4e58f324`](https://github.com/earendil-works/pi/commit/4e58f324fae8ebfa98a3d45181fb248072a2afac), package version `0.84.3`. Cả bốn package nền tảng đều yêu cầu Node.js `>=22.19.0`. Catalog package và API có thể thay đổi ở các release sau.
 
 :::
 
@@ -63,7 +63,7 @@ Câu trả lời ba phần đó quyết định thứ tự chương này. Ta l�
 Mỗi từ trong định nghĩa đều thu hẹp phạm vi thiết kế:
 
 - **Coding Agent shell:** Pi nối Model, system prompt, context của dự án, Tool và session state thành một ứng dụng có thể đọc rồi thay đổi codebase. Từ “shell” mô tả bộ khung và các điểm kết nối, còn Model và policy vẫn có thể thay thế.
-- **Terminal:** giao diện tương tác mặc định chạy ngay nơi developer đã dùng shell, version control và công cụ quản lý process. TUI mode thông thường giữ terminal-owned scrollback. Version `0.84.2` còn có fullscreen TUI mode thử nghiệm với application-owned scrolling, vì vậy “terminal” không còn đồng nghĩa với một chiến lược render duy nhất.
+- **Terminal:** giao diện tương tác mặc định chạy ngay nơi developer đã dùng shell, version control và công cụ quản lý process. TUI mode thông thường giữ terminal-owned scrollback. Version `0.84.3` còn có fullscreen TUI mode thử nghiệm với application-owned scrolling, vì vậy “terminal” không còn đồng nghĩa với một chiến lược render duy nhất.
 - **Mặc định tối giản:** Model nhận bốn Tool theo mặc định: `read`, `write`, `edit` và `bash`. Ba helper chỉ đọc `grep`, `find` và `ls` có sẵn qua Tool options. Các tính năng như plan mode và sub-agent nằm ngoài bề mặt sản phẩm mặc định.
 - **Có thể mở rộng:** Extension có thể đăng ký Tool, command, shortcut, event hook, Provider và UI. Skill, Prompt Template, Theme và Pi Package lần lượt phụ trách instruction tái sử dụng, prompt, presentation và distribution.
 
@@ -75,7 +75,7 @@ Số star hay số lượng Provider thay đổi nhanh, nên ảnh chụp này c
 
 | Chỉ số                   | Giá trị đã pin | Điều có thể rút ra                                                                                   |
 | ------------------------ | -------------- | ---------------------------------------------------------------------------------------------------- |
-| Package version          | `0.84.2`       | Chương mô tả một release cụ thể, không dựa trên nhánh `main` không xác định.                         |
+| Package version          | `0.84.3`       | Chương mô tả một release cụ thể, không dựa trên nhánh `main` không xác định.                         |
 | Node.js runtime          | `>=22.19.0`    | Cùng yêu cầu engine xuất hiện trong manifest của các package nền tảng.                               |
 | Tool mặc định            | 4              | `read`, `write`, `edit` và `bash` tạo thành bề mặt mặc định mà Model nhìn thấy.                      |
 | Helper tích hợp tùy chọn | 3              | Có thể chọn `grep`, `find` và `ls` qua Tool options.                                                 |
@@ -134,7 +134,7 @@ flowchart TB
 
 `@earendil-works/pi-tui` nằm trực giao với Agent stack ba layer. Package này không có runtime dependency vào những Pi package còn lại, và source cũng không import chúng. Coding Agent phụ thuộc TUI cho phần trình bày tương tác; server hoặc background worker vẫn có thể dùng Pi AI và Agent Core mà không cần terminal.
 
-Workspace hiện tại còn có `@earendil-works/pi-protocol`, `@earendil-works/pi-client`, `@earendil-works/pi-telemetry`, một SQLite session backend riêng và `@earendil-works/pi-server`. Chúng phục vụ remote session, telemetry hoặc persistence, không thay thế bốn package nền tảng phía trên. Package server tự mô tả là experimental ở `0.84.2`; `pi-orchestrator` thử nghiệm trong chương baseline cũ không còn ở commit đã pin.
+Workspace hiện tại còn có `@earendil-works/pi-protocol`, `@earendil-works/pi-client`, `@earendil-works/pi-telemetry`, một SQLite session backend riêng và `@earendil-works/pi-server`. Chúng phục vụ remote session, telemetry hoặc persistence, không thay thế bốn package nền tảng phía trên. Package server tự mô tả là experimental ở `0.84.3`; `pi-orchestrator` thử nghiệm trong chương baseline cũ không còn ở commit đã pin.
 
 ## 3. Góc nhìn 1: với tư cách Coding Agent: công cụ hằng ngày hữu dụng
 
@@ -518,6 +518,6 @@ Phép trừ của Pi có chi phí: team sở hữu nhiều policy, package revie
 
 :::note[Source đã review]
 
-Chương này mô tả Pi `0.84.2` tại commit [`a470b121`](https://github.com/badlogic/pi-mono/tree/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c). Các link trong `official_refs` được pin vào đúng revision đó để dữ kiện vẫn kiểm tra được sau khi upstream `main` thay đổi.
+Chương này mô tả Pi `0.84.3` tại commit [`4e58f324`](https://github.com/earendil-works/pi/tree/4e58f324fae8ebfa98a3d45181fb248072a2afac). Các link trong `official_refs` được pin vào đúng revision đó để dữ kiện vẫn kiểm tra được sau khi upstream `main` thay đổi.
 
 :::

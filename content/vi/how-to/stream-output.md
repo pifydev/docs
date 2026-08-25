@@ -18,10 +18,10 @@ Subscribe vào `AgentSession` trước khi gọi `prompt()`. Các event của se
 
 :::
 
-Các ví dụ dùng Node.js `>=22.19.0`, ESM và package phát hành ở phiên bản `0.84.2`:
+Các ví dụ dùng Node.js `>=22.19.0`, ESM và package phát hành ở phiên bản `0.84.3`:
 
 ```bash
-npm install @earendil-works/pi-coding-agent@0.84.2
+npm install @earendil-works/pi-coding-agent@0.84.3
 npm install --save-dev tsx typescript @types/node
 ```
 

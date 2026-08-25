@@ -1,6 +1,6 @@
 ---
 title: API reference
-description: A curated map of public Pi AI, Agent Core, and Coding Agent entry points at version 0.84.2.
+description: A curated map of public Pi AI, Agent Core, and Coding Agent entry points at version 0.84.3.
 translation_key: reference-api
 language: en
 status: reviewed
@@ -8,7 +8,7 @@ reviewed_by: Pify maintainers
 last_updated: '2026-08-25'
 ---
 
-This curated integration reference omits specialist and UI exports. It targets upstream commit `a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c`, the three `@earendil-works/*` packages at `0.84.2`, and Node.js `22.19` or newer.
+This curated integration reference omits specialist and UI exports. It targets upstream commit `4e58f324fae8ebfa98a3d45181fb248072a2afac`, the three `@earendil-works/*` packages at `0.84.3`, and Node.js `22.19` or newer.
 
 - `@earendil-works/pi-ai` owns provider collections, model metadata, authentication, messages, and LLM streams.
 - `@earendil-works/pi-agent-core` adds the agent loop, tool execution, state, queues, and lifecycle events.

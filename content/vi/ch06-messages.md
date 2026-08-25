@@ -6,11 +6,11 @@ language: vi
 chapter: 6
 source_url: "https://www.dgzhuya.com/modules/ch06-messages"
 official_refs:
-  - "https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/ai/src/types.ts"
-  - "https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/types.ts"
-  - "https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/agent-loop.ts"
-  - "https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/messages.ts"
-  - "https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/session-manager.ts"
+  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/ai/src/types.ts"
+  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/types.ts"
+  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/agent-loop.ts"
+  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/messages.ts"
+  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/session-manager.ts"
 terms_used:
   - Message
   - AgentMessage
@@ -18,14 +18,14 @@ terms_used:
   - ToolCall
   - ToolResultMessage
 status: reviewed
-last_updated: "2026-08-24"
+last_updated: "2026-08-25"
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
 
 Chương 5 kết thúc bằng một `ToolResultMessage`: model yêu cầu dùng Tool, Agent core xác thực rồi thực thi Tool, sau đó đưa kết quả trở lại hội thoại. Trong lời giải thích ấy, từ _message_ xuất hiện ở nhiều ranh giới khác nhau. Yêu cầu gửi tới provider, transcript đang chạy của Agent, giao diện terminal của Coding Agent và session JSONL được khôi phục không dùng chung một dạng biểu diễn cho mọi việc.
 
-Chương này theo dõi một lệnh Bash qua các ranh giới đó. Luồng đi cho thấy một cách thiết kế có thể áp dụng ở nơi khác: giữ dạng dữ liệu nguồn giàu thông tin nhất mà ứng dụng cần, rồi chỉ tạo dạng hẹp hơn dành cho model ngay trước khi gọi. Pi `0.84.2` hiện thực cách làm này bằng `Message`, `AgentMessage` có thể mở rộng, các bản ghi `SessionEntry` của Coding Agent, `transformContext` và `convertToLlm`.
+Chương này theo dõi một lệnh Bash qua các ranh giới đó. Luồng đi cho thấy một cách thiết kế có thể áp dụng ở nơi khác: giữ dạng dữ liệu nguồn giàu thông tin nhất mà ứng dụng cần, rồi chỉ tạo dạng hẹp hơn dành cho model ngay trước khi gọi. Pi `0.84.3` hiện thực cách làm này bằng `Message`, `AgentMessage` có thể mở rộng, các bản ghi `SessionEntry` của Coding Agent, `transformContext` và `convertToLlm`.
 
 ## 1. Mở đầu: theo dõi một Bash message
 
@@ -69,7 +69,7 @@ export type Message = UserMessage | AssistantMessage | ToolResultMessage;
 
 ### Cấu trúc chính xác của message và content
 
-Interface hoàn chỉnh sau lấy từ `packages/ai/src/types.ts` tại commit được ghim `a470b121` và cho thấy cấu trúc phía người dùng:
+Interface hoàn chỉnh sau lấy từ `packages/ai/src/types.ts` tại commit được ghim `4e58f324` và cho thấy cấu trúc phía người dùng:
 
 ```typescript
 export interface UserMessage {
@@ -215,7 +215,7 @@ Một sản phẩm Agent còn có những bên đọc dữ liệu khác ngoài p
 
 Nếu làm phẳng tất cả thành `UserMessage.content` ngay lúc tạo, lời gọi model sẽ thuận tiện nhưng mọi bên đọc về sau mất dữ liệu. UI sau khi khôi phục session không thể lấy lại exit code ban đầu hoặc chọn cách hiển thị summary. Nếu chỉ giữ đối tượng tùy chỉnh thì lại không thể gọi model, vì Pi AI chỉ chấp nhận ba role dùng chung.
 
-Vì vậy, Pi giữ message runtime giàu thông tin hơn rồi chỉ chiếu sang dạng hẹp ở cuối. Trong Coding Agent `0.84.2`, `packages/coding-agent/src/core/messages.ts` khai báo bốn role của ứng dụng:
+Vì vậy, Pi giữ message runtime giàu thông tin hơn rồi chỉ chiếu sang dạng hẹp ở cuối. Trong Coding Agent `0.84.3`, `packages/coding-agent/src/core/messages.ts` khai báo bốn role của ứng dụng:
 
 ```text
 AgentMessage
@@ -593,7 +593,7 @@ Trước khi chấp nhận một luồng custom message, hãy kiểm tra các b�
 
 ### Dữ liệu nguồn và phép chiếu cho model phục vụ các bên đọc khác nhau
 
-Bản cũ mô tả “hai bên đọc”: model và lớp chức năng. Pi `0.84.2` làm rõ thêm ranh giới lưu trữ, vì vậy có thể tách thành ba dạng dữ liệu:
+Bản cũ mô tả “hai bên đọc”: model và lớp chức năng. Pi `0.84.3` làm rõ thêm ranh giới lưu trữ, vì vậy có thể tách thành ba dạng dữ liệu:
 
 | Dạng dữ liệu                   | Bên đọc chính                                       | Cấu trúc                        | Có thể mất dữ liệu?                                                   |
 | ------------------------------ | --------------------------------------------------- | ------------------------------- | --------------------------------------------------------------------- |
@@ -625,4 +625,4 @@ Cùng luồng đó phát `message_start`, `message_update`, `message_end`, các 
 
 > Trước khi đọc tiếp, hãy lần theo một `ToolCall` qua `ToolResultMessage` có thứ tự tương ứng, bước lưu session, `transformContext` và lượt `convertToLlm` kế tiếp. Khi chủ sở hữu và ranh giới của từng bước đã rõ, chuỗi sự kiện trong Chương 7 sẽ gắn với một đường đi dữ liệu cụ thể.
 
-Phần rà soát source của chương được ghim vào Pi `0.84.2` tại commit `a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c`. Các đường dẫn chính gồm `packages/ai/src/types.ts`, `packages/ai/src/api/transform-messages.ts`, các phần triển khai provider dưới `packages/ai/src/api/`, `packages/agent/src/types.ts`, `packages/agent/src/agent-loop.ts`, `packages/agent/src/agent.ts`, `packages/coding-agent/src/core/messages.ts`, `packages/coding-agent/src/core/session-manager.ts`, `packages/coding-agent/src/core/sdk.ts`, `packages/coding-agent/src/core/agent-session.ts` và `packages/coding-agent/src/core/extensions/runner.ts`.
+Phần rà soát source của chương được ghim vào Pi `0.84.3` tại commit `4e58f324fae8ebfa98a3d45181fb248072a2afac`. Các đường dẫn chính gồm `packages/ai/src/types.ts`, `packages/ai/src/api/transform-messages.ts`, các phần triển khai provider dưới `packages/ai/src/api/`, `packages/agent/src/types.ts`, `packages/agent/src/agent-loop.ts`, `packages/agent/src/agent.ts`, `packages/coding-agent/src/core/messages.ts`, `packages/coding-agent/src/core/session-manager.ts`, `packages/coding-agent/src/core/sdk.ts`, `packages/coding-agent/src/core/agent-session.ts` và `packages/coding-agent/src/core/extensions/runner.ts`.

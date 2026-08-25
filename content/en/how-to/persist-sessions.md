@@ -18,7 +18,7 @@ Use `SessionManager` when a conversation must outlive the current process. It ow
 
 :::
 
-The examples target Node.js `>=22.19.0`, ESM, and `@earendil-works/pi-coding-agent@0.84.2`. Install it with `npm install @earendil-works/pi-coding-agent@0.84.2`, plus `tsx`, TypeScript, and Node types for the commands below.
+The examples target Node.js `>=22.19.0`, ESM, and `@earendil-works/pi-coding-agent@0.84.3`. Install it with `npm install @earendil-works/pi-coding-agent@0.84.3`, plus `tsx`, TypeScript, and Node types for the commands below.
 
 ## The session model
 

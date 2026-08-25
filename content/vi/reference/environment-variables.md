@@ -5,14 +5,14 @@ translation_key: reference-environment-variables
 language: vi
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-08-24'
+last_updated: '2026-08-25'
 ---
 
-Pi dùng environment variable ở ba nơi riêng biệt: cấu hình process của chính Pi, authentication cho provider đã chọn và environment của command do LLM-callable bash tool khởi chạy. Scope rất quan trọng: một variable được một provider nhận diện không tự động trở thành setting dùng trên toàn Pi.
+Pi dùng environment variable ở ba nơi riêng biệt: cấu hình process của chính Pi, authentication cho provider đã chọn và environment của command do các LLM-callable tool `bash` và `powershell` khởi chạy. Scope rất quan trọng: một variable được một provider nhận diện không tự động trở thành setting dùng trên toàn Pi.
 
 :::note[Thời điểm đọc giá trị]
 
-Phần lớn process flag có hiệu lực khi khởi động. Provider authentication được resolve khi Pi yêu cầu credential cho provider đã chọn. Thay đổi shell variable chỉ ảnh hưởng request sau nếu stored credential trong `auth.json` và configured `apiKey` trong `models.json` đều không được ưu tiên cho provider đó. Bash metadata được tạo lại cho từng tool command.
+Phần lớn process flag có hiệu lực khi khởi động. Provider authentication được resolve khi Pi yêu cầu credential cho provider đã chọn. Thay đổi shell variable chỉ ảnh hưởng request sau nếu stored credential trong `auth.json` và configured `apiKey` trong `models.json` đều không được ưu tiên cho provider đó. Shell-tool metadata được tạo lại cho từng tool command.
 
 :::
 
@@ -20,7 +20,7 @@ Phần lớn process flag có hiệu lực khi khởi động. Provider authenti
 
 Với built-in provider của Pi, thứ tự credential là CLI `--api-key` hoặc runtime override tường minh, API key hoặc OAuth credential khớp được lưu trong `auth.json`, `apiKey` đã cấu hình trong `models.json` (literal hoặc tham chiếu `$ENV` theo contract của file này), rồi ambient environment của built-in provider. Provider do extension định nghĩa có thể triển khai contract khác. Hãy dùng `/login` để ghi vào credential store được bảo vệ thay vì đưa secret vào file của project.
 
-| Provider | Environment credential được 0.84.2 nhận diện |
+| Provider | Environment credential được 0.84.3 nhận diện |
 |---|---|
 | Anthropic | `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_OAUTH_TOKEN`, `ANTHROPIC_API_KEY` |
 | Ant Ling, OpenAI, Azure OpenAI | `ANT_LING_API_KEY`, `OPENAI_API_KEY`, `AZURE_OPENAI_API_KEY` |
@@ -66,7 +66,7 @@ pi
 | `PI_SKIP_VERSION_CHECK` | Đặt thành `1` để chỉ bỏ qua request lấy phiên bản mới nhất |
 | `PI_TELEMETRY` | `1`/`true`/`yes` bật install/update telemetry và Pi provider-attribution header; `0`/`false`/`no` tắt chúng |
 
-Hãy dùng `--offline` hoặc giá trị truthy được hỗ trợ cho `PI_OFFLINE`. Muốn bật lại network work, hãy unset variable: một số path phía sau trong 0.84.2 chỉ kiểm tra `PI_OFFLINE` có tồn tại hay không, vì vậy `PI_OFFLINE=0` không an toàn và có thể vẫn hoạt động như offline. `PI_SKIP_VERSION_CHECK` có scope hẹp hơn offline mode. Đừng dựa vào cách viết không được tài liệu hóa cho `PI_TELEMETRY`.
+Hãy dùng `--offline` hoặc giá trị truthy được hỗ trợ cho `PI_OFFLINE`. Muốn bật lại network work, hãy unset variable: một số path phía sau trong 0.84.3 chỉ kiểm tra `PI_OFFLINE` có tồn tại hay không, vì vậy `PI_OFFLINE=0` không an toàn và có thể vẫn hoạt động như offline. `PI_SKIP_VERSION_CHECK` có scope hẹp hơn offline mode. Đừng dựa vào cách viết không được tài liệu hóa cho `PI_TELEMETRY`.
 
 ### Hành vi terminal và editor
 
@@ -80,7 +80,7 @@ Với Ctrl+G, setting `externalEditor` được ưu tiên, sau đó là `VISUAL`
 
 ### `PI_EXPERIMENTAL`
 
-`PI_EXPERIMENTAL=1` bật preferred strict JSON-schema sampling của 0.84.2 cho managed tool khi model/API hỗ trợ. Phép so sánh chính xác là `1`; `true` không được chấp nhận. Hành vi experimental có thể thay đổi giữa các release và không thay đổi project trust hay tool set đã chọn.
+`PI_EXPERIMENTAL=1` bật preferred strict JSON-schema sampling của 0.84.3 cho managed tool khi model/API hỗ trợ. Phép so sánh chính xác là `1`; `true` không được chấp nhận. Hành vi experimental có thể thay đổi giữa các release và không thay đổi project trust hay tool set đã chọn.
 
 ### Quy tắc về giá trị
 
@@ -88,7 +88,7 @@ Environment variable là chuỗi, nhưng Pi không coi mọi chuỗi khác rỗn
 
 ## Proxy và TLS
 
-Pi 0.84.2 cấu hình Undici `EnvHttpProxyAgent` cho traffic dùng fetch do Pi quản lý.
+Pi 0.84.3 cấu hình Undici `EnvHttpProxyAgent` cho traffic dùng fetch do Pi quản lý.
 
 | Variable | Hành vi |
 |---|---|
@@ -98,13 +98,13 @@ Pi 0.84.2 cấu hình Undici `EnvHttpProxyAgent` cho traffic dùng fetch do Pi q
 
 Undici cũng nhận dạng dạng chữ thường và ưu tiên dạng đó hơn dạng chữ hoa. Setting global `httpProxy` chỉ điền `HTTP_PROXY` và `HTTPS_PROXY` khi chúng chưa được đặt. Provider SDK như AWS hoặc Google có thể sở hữu transport riêng, vì vậy các variable này không bảo đảm cho mọi extension hoặc cloud client.
 
-`SSL_CERT_FILE` không được transport trong bản Pi 0.84.2 đã publish đọc hoặc cài đặt. Hãy cấu hình custom certificate trust qua Node runtime hoặc provider SDK đã chọn rồi kiểm tra riêng route đó; đừng giả định variable từ baseline này thay đổi TLS do Pi quản lý.
+`SSL_CERT_FILE` không được transport trong bản Pi 0.84.3 đã publish đọc hoặc cài đặt. Hãy cấu hình custom certificate trust qua Node runtime hoặc provider SDK đã chọn rồi kiểm tra riêng route đó; đừng giả định variable từ baseline này thay đổi TLS do Pi quản lý.
 
 ## Variable riêng cho provider
 
 ### Azure OpenAI
 
-Azure OpenAI Responses yêu cầu `AZURE_OPENAI_API_KEY` cùng `AZURE_OPENAI_BASE_URL` hoặc `AZURE_OPENAI_RESOURCE_NAME`. Control tùy chọn gồm `AZURE_OPENAI_API_VERSION` và `AZURE_OPENAI_DEPLOYMENT_NAME_MAP` phân tách bằng dấu phẩy. Variable `OPENAI_ORG_ID` chung trong baseline không được OpenAI provider của 0.84.2 sử dụng.
+Azure OpenAI Responses yêu cầu `AZURE_OPENAI_API_KEY` cùng `AZURE_OPENAI_BASE_URL` hoặc `AZURE_OPENAI_RESOURCE_NAME`. Control tùy chọn gồm `AZURE_OPENAI_API_VERSION` và `AZURE_OPENAI_DEPLOYMENT_NAME_MAP` phân tách bằng dấu phẩy. Variable `OPENAI_ORG_ID` chung trong baseline không được OpenAI provider của 0.84.3 sử dụng.
 
 ### Amazon Bedrock
 
@@ -127,11 +127,11 @@ export GOOGLE_CLOUD_LOCATION=us-central1
 
 Variable cũ `ANTHROPIC_BASE_URL` cũng không phải built-in override hiện tại. Hãy cấu hình endpoint được hỗ trợ trong `models.json` hoặc provider implementation thay vì dựa vào ambient alias.
 
-## Process marker và bash metadata
+## Process marker và shell-tool metadata
 
-CLI và RPC entry point đặt `AI_AGENT=pi` cùng `PI_CODING_AGENT=true`. Child process kế thừa chúng, nhưng đây không phải session identifier và bản nhúng SDK không tự động đặt chúng. Bản publish 0.84.2 không phát marker cũ `PI_PARENT_SESSION`.
+CLI và RPC entry point đặt `AI_AGENT=pi` cùng `PI_CODING_AGENT=true`. Child process kế thừa chúng, nhưng đây không phải session identifier và bản nhúng SDK không tự động đặt chúng. Bản publish 0.84.3 không phát marker cũ `PI_PARENT_SESSION`.
 
-Command do LLM-callable bash tool của Pi chạy nhận session context mới:
+Command do các LLM-callable tool `bash` và `powershell` của Pi chạy nhận session context mới:
 
 | Variable | Giá trị |
 |---|---|
@@ -141,7 +141,7 @@ Command do LLM-callable bash tool của Pi chạy nhận session context mới:
 | `PI_MODEL` | Pi model ID đang chọn |
 | `PI_REASONING_LEVEL` | Level thực tế: `off`, `minimal`, `low`, `medium`, `high`, `xhigh` hoặc `max` |
 
-Giá trị được resolve trước mỗi bash-tool command, sau khi đổi model hoặc reasoning. Chúng không được inject vào command `!` hoặc `!!` do người dùng nhập. Custom tool được đăng ký với Pi expose các giá trị này trước `spawnHook`, vì vậy hãy giữ environment nhận được khi thêm field:
+Giá trị được resolve trước mỗi shell-tool command, sau khi đổi model hoặc reasoning. Chúng không được inject vào command `!` hoặc `!!` do người dùng nhập. Custom shell tool được tạo bằng `createBashTool()` hoặc `createPowerShellTool()` expose các giá trị này trước `spawnHook`, vì vậy hãy giữ environment nhận được khi thêm field:
 
 ```ts title="Giữ Pi metadata trong custom bash tool"
 import { createBashTool } from "@earendil-works/pi-coding-agent";
@@ -168,7 +168,7 @@ export const isolatedBashTool = createBashTool(process.cwd(), {
 ## Lỗi thường gặp và bảo mật
 
 - Không đưa API key vào shell file được commit, `settings.json`, mã nguồn extension, log, prompt hoặc transcript. Ưu tiên `/login`, secret manager hoặc process injection có scope hẹp; hãy nhớ child process kế thừa giá trị được export.
-- Tên hiện tại phải chính xác. `PI_HOME`, `PI_LOG_LEVEL`, `PI_PARENT_SESSION`, `GOOGLE_API_KEY`, `GOOGLE_VERTEX_API_KEY`, `GITHUB_TOKEN`, `OPENAI_ORG_ID`, `ANTHROPIC_BASE_URL` và tên `CLOUDflare_*` viết sai không phải compatibility alias trong bản publish 0.84.2.
+- Tên hiện tại phải chính xác. `PI_HOME`, `PI_LOG_LEVEL`, `PI_PARENT_SESSION`, `GOOGLE_API_KEY`, `GOOGLE_VERTEX_API_KEY`, `GITHUB_TOKEN`, `OPENAI_ORG_ID`, `ANTHROPIC_BASE_URL` và tên `CLOUDflare_*` viết sai không phải compatibility alias trong bản publish 0.84.3.
 - Stored provider credential và `apiKey` đã cấu hình trong `models.json` đều được ưu tiên hơn ambient variable. Hãy logout hoặc cập nhật stored entry, đồng thời xóa hoặc đổi configured key, trước khi mong shell key vừa rotate được chọn.
 - `PI_EXPERIMENTAL` không liên quan đến provider authentication và không phải switch permission hay “yolo”.
 - Không in toàn bộ environment dump khi debug. Chỉ kiểm tra non-secret marker hoặc từng metadata field, đồng thời coi `PI_SESSION_FILE` là local data nhạy cảm.

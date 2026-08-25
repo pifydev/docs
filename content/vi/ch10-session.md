@@ -6,7 +6,7 @@ language: vi
 chapter: 10
 source_url: "https://www.dgzhuya.com/modules/ch10-session"
 official_refs:
-  - "https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/docs/sessions.md"
+  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/docs/sessions.md"
 terms_used:
   - Session
   - Session Tree
@@ -15,7 +15,7 @@ terms_used:
   - CompactionEntry
   - BranchSummaryEntry
 status: reviewed
-last_updated: "2026-08-24"
+last_updated: "2026-08-25"
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -616,7 +616,7 @@ Manager của Coding Agent gọi API file đồng bộ và không có khóa file
 
 ## 7. Tách hai tầng lưu trữ và dùng SessionManager
 
-Pi 0.84.2 có hai hệ thống session cùng chia sẻ một số ý tưởng nhưng không tương thích về quy ước:
+Pi 0.84.3 có hai hệ thống session cùng chia sẻ một số ý tưởng nhưng không tương thích về quy ước:
 
 | Thuộc tính                  | Bộ khung Pi Agent Core                                               | `SessionManager` của Coding Agent                                        |
 | --------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------ |
@@ -722,9 +722,9 @@ Từ Chương 3 đến Chương 10, đường chạy đã nối liền: vòng l�
 
 Hệ thống Extension của Pi nằm ở cả hai phía ranh giới này. Extension có thể append trạng thái `custom`, đưa context `custom_message` vào, cung cấp bản tóm tắt compaction hoặc branch, gắn label cho entry và quan sát điều hướng. Các file mã nguồn nên đọc tiếp gồm:
 
-- các phần [`lược đồ`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/session-manager.ts#L30-L153), [`phép chiếu`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/session-manager.ts#L334-L469) và [`SessionManager`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/session-manager.ts#L844-L1715) của Coding Agent;
-- phần [`thu thập entry`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/compaction/branch-summarization.ts#L96-L145) và [`sinh bản tóm tắt`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/compaction/branch-summarization.ts#L293-L379);
-- [`quy ước entry và lưu trữ`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/harness/session/types.ts#L14-L326) cùng [`cơ chế an toàn JSONL`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/harness/session/jsonl/storage.ts#L23-L124) của bộ khung tổng quát;
-- [hành vi CLI hiện tại, dòng 5–139](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/docs/sessions.md#L5-L139).
+- các phần [`lược đồ`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/session-manager.ts#L30-L153), [`phép chiếu`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/session-manager.ts#L334-L469) và [`SessionManager`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/session-manager.ts#L844-L1715) của Coding Agent;
+- phần [`thu thập entry`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/compaction/branch-summarization.ts#L96-L145) và [`sinh bản tóm tắt`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/compaction/branch-summarization.ts#L293-L379);
+- [`quy ước entry và lưu trữ`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/harness/session/types.ts#L14-L326) cùng [`cơ chế an toàn JSONL`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/harness/session/jsonl/storage.ts#L23-L124) của bộ khung tổng quát;
+- [hành vi CLI hiện tại, dòng 5–139](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/docs/sessions.md#L5-L139).
 
-Chương này bám theo Pi `0.84.2` tại commit `a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c`.
+Chương này bám theo Pi `0.84.3` tại commit `4e58f324fae8ebfa98a3d45181fb248072a2afac`.

@@ -6,7 +6,7 @@ language: en
 chapter: 10
 source_url: "https://www.dgzhuya.com/modules/ch10-session"
 official_refs:
-  - "https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/docs/sessions.md"
+  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/docs/sessions.md"
 terms_used:
   - Session
   - Session Tree
@@ -15,7 +15,7 @@ terms_used:
   - CompactionEntry
   - BranchSummaryEntry
 status: reviewed
-last_updated: "2026-08-24"
+last_updated: "2026-08-25"
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -616,7 +616,7 @@ The generic Pi Agent Core `JsonlSessionStorage` has different safety code: it se
 
 ## 7. Separate the two persistence layers and use SessionManager
 
-Pi 0.84.2 contains two session systems with related ideas and incompatible contracts:
+Pi 0.84.3 contains two session systems with related ideas and incompatible contracts:
 
 | Property              | Pi Agent Core harness                                                          | Coding Agent `SessionManager`                                               |
 | --------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
@@ -722,9 +722,9 @@ Chapters 3 through 10 now connect the full runtime path: the loop emits messages
 
 Pi's extension system sits on both sides of this boundary. Extensions can append `custom` state, inject `custom_message` context, provide compaction or branch summaries, label entries, and observe navigation. The source files to read next are:
 
-- Coding Agent [`schema`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/session-manager.ts#L30-L153), [`projection`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/session-manager.ts#L334-L469), and [`SessionManager`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/session-manager.ts#L844-L1715) ranges;
-- branch-summary [`collection`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/compaction/branch-summarization.ts#L96-L145) and [`generation`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/compaction/branch-summarization.ts#L293-L379);
-- generic-harness [`entry and storage contracts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/harness/session/types.ts#L14-L326) and [`JSONL safety implementation`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/harness/session/jsonl/storage.ts#L23-L124);
-- [current CLI behavior, lines 5–139](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/docs/sessions.md#L5-L139).
+- Coding Agent [`schema`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/session-manager.ts#L30-L153), [`projection`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/session-manager.ts#L334-L469), and [`SessionManager`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/session-manager.ts#L844-L1715) ranges;
+- branch-summary [`collection`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/compaction/branch-summarization.ts#L96-L145) and [`generation`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/compaction/branch-summarization.ts#L293-L379);
+- generic-harness [`entry and storage contracts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/harness/session/types.ts#L14-L326) and [`JSONL safety implementation`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/harness/session/jsonl/storage.ts#L23-L124);
+- [current CLI behavior, lines 5–139](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/docs/sessions.md#L5-L139).
 
-This chapter targets Pi `0.84.2` at commit `a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c`.
+This chapter targets Pi `0.84.3` at commit `4e58f324fae8ebfa98a3d45181fb248072a2afac`.

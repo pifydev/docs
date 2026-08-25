@@ -150,7 +150,7 @@ Run it with `npx tsx inspect-system-prompt.ts`; the example deliberately ignores
 
 The optional fixture below creates isolated files, performs no provider request, and checks context order, the same-directory override, trusted and untrusted project prompt files, explicit CLI-style source selection, effective builder output, and `session.reload()`.
 
-Run it with `npx tsx verify-system-prompt.ts` on Node `>=22.19.0` after installing `@earendil-works/pi-coding-agent@0.84.2`, `tsx`, and TypeScript.
+Run it with `npx tsx verify-system-prompt.ts` on Node `>=22.19.0` after installing `@earendil-works/pi-coding-agent@0.84.3`, `tsx`, and TypeScript.
 
 <Accordions type="single">
 <Accordion title="Optional deterministic resource-loader fixture">

@@ -18,7 +18,7 @@ Dùng `SessionManager` khi hội thoại phải tồn tại lâu hơn process hi
 
 :::
 
-Các ví dụ dùng Node.js `>=22.19.0`, ESM và `@earendil-works/pi-coding-agent@0.84.2`. Cài bằng `npm install @earendil-works/pi-coding-agent@0.84.2`; thêm `tsx`, TypeScript và Node types để chạy các lệnh bên dưới.
+Các ví dụ dùng Node.js `>=22.19.0`, ESM và `@earendil-works/pi-coding-agent@0.84.3`. Cài bằng `npm install @earendil-works/pi-coding-agent@0.84.3`; thêm `tsx`, TypeScript và Node types để chạy các lệnh bên dưới.
 
 ## Mô hình session
 

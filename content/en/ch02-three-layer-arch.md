@@ -6,7 +6,7 @@ language: en
 chapter: 2
 source_url: 'https://www.dgzhuya.com/modules/ch02-three-layer-arch'
 official_refs:
-  - 'https://github.com/badlogic/pi-mono/tree/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages'
+  - 'https://github.com/earendil-works/pi/tree/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages'
 terms_used:
   - Model
   - Provider
@@ -27,7 +27,7 @@ terms_used:
   - TypeBox
   - TSchema
 status: reviewed
-last_updated: '2026-08-24'
+last_updated: '2026-08-25'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -37,7 +37,7 @@ reviewed_by: Pify maintainers
 
 ## 1. You just opened an Agent codebase
 
-Suppose you cloned the Pi repository at revision `a470b121` and opened `packages/`. The relevant part of the tree looks like this:
+Suppose you cloned the Pi repository at revision `4e58f324` and opened `packages/`. The relevant part of the tree looks like this:
 
 ```text
 repo/
@@ -74,7 +74,7 @@ Set dependency arrows aside for a moment. Read each package from its own public 
 
 `@earendil-works/pi-ai`, in `packages/ai/`, answers: how can one application call models from different providers through shared types and streaming contracts?
 
-Its manifest describes a “Unified LLM API with automatic model discovery and provider configuration.” At revision `a470b121`, the package owns four related concepts:
+Its manifest describes a “Unified LLM API with automatic model discovery and provider configuration.” At revision `4e58f324`, the package owns four related concepts:
 
 1. `Model<TApi>` describes a concrete model, including its provider, API protocol, input modes, context window, token limit, costs, headers, and compatibility settings.
 2. `Provider<TApi>` owns a provider ID, authentication behavior, a synchronous model catalog, optional refresh behavior, and its `stream()` and `streamSimple()` implementations.
@@ -84,7 +84,7 @@ Its manifest describes a “Unified LLM API with automatic model discovery and p
 The root entry is intentionally side-effect free. Provider factories live behind package subpaths, while `createModels()` and the shared domain types stay at the root:
 
 ```typescript
-// packages/ai/src/index.ts (selected exports at a470b121)
+// packages/ai/src/index.ts (selected exports at 4e58f324)
 export type { Static, TSchema } from "typebox";
 export { Type } from "typebox";
 export * from "./models.ts";
@@ -114,7 +114,7 @@ Its manifest calls it a “General-purpose agent with transport abstraction, sta
 The public entry point reflects that split:
 
 ```typescript
-// packages/agent/src/index.ts (selected exports at a470b121)
+// packages/agent/src/index.ts (selected exports at 4e58f324)
 export * from "./agent.ts";
 export * from "./agent-loop.ts";
 export * from "./harness/compaction/compaction.ts";
@@ -217,10 +217,10 @@ The coding package depends directly on all three foundational packages in the te
 ```jsonc
 {
   "dependencies": {
-    // Selected foundational dependencies from package.json at a470b121.
-    "@earendil-works/pi-agent-core": "^0.84.2",
-    "@earendil-works/pi-ai": "^0.84.2",
-    "@earendil-works/pi-tui": "^0.84.2"
+    // Selected foundational dependencies from package.json at 4e58f324.
+    "@earendil-works/pi-agent-core": "^0.84.3",
+    "@earendil-works/pi-ai": "^0.84.3",
+    "@earendil-works/pi-tui": "^0.84.3"
   }
 }
 ```
@@ -233,12 +233,12 @@ The full manifest also lists `@earendil-works/pi-client` and `@earendil-works/pi
 
 Some direct imports exist because public product APIs mention `Model`, `Provider`, `Usage`, `Context`, `ImageContent`, and other Pi AI types. TypeScript must resolve those types even when a given import disappears from emitted JavaScript.
 
-The dependency is also present at runtime. Coding Agent compares models, extracts message content, creates IDs, retries assistant calls, and implements `ModelRuntime` and `ModelRegistry` over Pi AI contracts. Describing the edge as “only a type re-export” would be inaccurate at `a470b121`.
+The dependency is also present at runtime. Coding Agent compares models, extracts message content, creates IDs, retries assistant calls, and implements `ModelRuntime` and `ModelRegistry` over Pi AI contracts. Describing the edge as “only a type re-export” would be inaccurate at `4e58f324`.
 
 Agent Core shows the progressive foundation most clearly:
 
 ```typescript
-// packages/agent/src/types.ts (imports abridged, a470b121)
+// packages/agent/src/types.ts (imports abridged, 4e58f324)
 import type {
   Api,
   AssistantMessageEventStream,
@@ -352,7 +352,7 @@ Coding Agent assembles types around a complete user workflow. `AgentSession` coo
 For Tools, the product-facing `ToolDefinition` is deliberately separate from `AgentTool`. Their model-facing metadata overlaps, but their execution signatures do not: `ToolDefinition.execute` requires a fifth `ctx: ExtensionContext` parameter. A `ToolDefinition` therefore cannot be passed directly to Agent Core as an `AgentTool`.
 
 ```typescript
-// Selected exact fields and signatures from extensions/types.ts at a470b121.
+// Selected exact fields and signatures from extensions/types.ts at 4e58f324.
 export interface ToolDefinition<
   TParams extends TSchema = TSchema,
   TDetails = unknown,
@@ -390,7 +390,7 @@ export interface ToolDefinition<
 The product boundary becomes a runtime Tool through an explicit adapter in `packages/coding-agent/src/core/tools/tool-definition-wrapper.ts`:
 
 ```typescript
-// Selected from tool-definition-wrapper.ts at a470b121.
+// Selected from tool-definition-wrapper.ts at 4e58f324.
 export function wrapToolDefinition<TDetails = unknown>(
   definition: ToolDefinition<any, TDetails>,
   ctxFactory?: () => ExtensionContext,
@@ -425,7 +425,7 @@ The adapter copies the `AgentTool` fields and replaces `execute` with a function
 The loader also preserves the registrations from each loaded Extension as one aggregate. This is the current interface, with no fields omitted:
 
 ```typescript
-// packages/coding-agent/src/core/extensions/types.ts at a470b121.
+// packages/coding-agent/src/core/extensions/types.ts at 4e58f324.
 export interface Extension {
   path: string;
   resolvedPath: string;
@@ -625,6 +625,6 @@ Chapter 3 follows one prompt through the Agent Loop: why a loop is needed, how s
 
 > **Reading order:** Chapters 1–6 build the core mechanism in sequence. Chapters 7 onward isolate advanced engineering concerns and can be read as focused references.
 
-> **Version note:** This chapter describes Pi `0.84.2` at commit `a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c`. Package names, exports, dependencies, and experimental labels were checked against that revision.
+> **Version note:** This chapter describes Pi `0.84.3` at commit `4e58f324fae8ebfa98a3d45181fb248072a2afac`. Package names, exports, dependencies, and experimental labels were checked against that revision.
 
 > **Next up:** [Chapter 3: Agent Loop](ch03-agent-loop.md)

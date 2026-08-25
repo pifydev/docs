@@ -18,10 +18,10 @@ Subscribe to an `AgentSession` before calling `prompt()`. Its events let a CLI o
 
 :::
 
-The examples target Node.js `>=22.19.0`, ESM, and the published package at `0.84.2`:
+The examples target Node.js `>=22.19.0`, ESM, and the published package at `0.84.3`:
 
 ```bash
-npm install @earendil-works/pi-coding-agent@0.84.2
+npm install @earendil-works/pi-coding-agent@0.84.3
 npm install --save-dev tsx typescript @types/node
 ```
 

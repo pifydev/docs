@@ -5,7 +5,7 @@ translation_key: faq
 language: en
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-08-24'
+last_updated: '2026-08-25'
 ---
 These answers cover Pi and this documentation project. Open a [GitHub issue](https://github.com/pifydev/docs/issues) if your question is not listed.
 
@@ -35,7 +35,7 @@ Read chapters 1 through 3 in order for the project overview, package architectur
 
 ### Which Pi revision does this documentation describe?
 
-The editorial review ledger records the exact upstream commit used for verification. The current review is pinned to [`a470b121`](https://github.com/badlogic/pi-mono/commit/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c). Recheck the upstream source before relying on a version-sensitive API or default.
+The editorial review ledger records the exact upstream commit used for verification. The current review is pinned to [`4e58f324`](https://github.com/earendil-works/pi/commit/4e58f324fae8ebfa98a3d45181fb248072a2afac). Recheck the upstream source before relying on a version-sensitive API or default.
 
 ### Why do examples use TypeScript?
 

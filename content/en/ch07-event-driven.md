@@ -6,21 +6,21 @@ language: en
 chapter: 7
 source_url: 'https://www.dgzhuya.com/modules/ch07-event-driven'
 official_refs:
-  - 'https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/README.md#event-flow'
-  - 'https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/docs/extensions.md#events'
+  - 'https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/README.md#event-flow'
+  - 'https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/docs/extensions.md#events'
 terms_used:
   - Event
   - Agent
   - Tool
   - Stream
 status: reviewed
-last_updated: '2026-08-24'
+last_updated: '2026-08-25'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
 The first six chapters followed data through the model, Agent loop, Tools, and message boundaries. Events were present at every step, but three questions remained: how does a transition reach outside code, which consumers receive it, and when must the Agent wait for them?
 
-This chapter answers those questions across three surfaces in Pi 0.84.2:
+This chapter answers those questions across three surfaces in Pi 0.84.3:
 
 - `AgentEvent` from `@earendil-works/pi-agent-core` describes one low-level run;
 - `AgentSessionEvent` from `@earendil-works/pi-coding-agent` adds product concerns such as retries and compaction;
@@ -93,7 +93,7 @@ Pi still calls listener functions internally. Decoupling comes from ownership: A
 | Tool | `tool_execution_update` | `toolCallId`, `toolName`, `args`, `partialResult` |
 | Tool | `tool_execution_end` | `toolCallId`, `toolName`, `result`, `isError` |
 
-The following is a source-faithful excerpt from [`packages/agent/src/types.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/types.ts#L428), formatted over more lines but not simplified:
+The following is a source-faithful excerpt from [`packages/agent/src/types.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/types.ts#L428), formatted over more lines but not simplified:
 
 ```typescript
 export type AgentEvent =
@@ -210,7 +210,7 @@ Use the nested discriminant before reading `delta`. `text_start`, `text_end`, an
 | `summarization_retry_finished` | none |
 | `bash_execution_update` | optional `id`, `delta: string` |
 
-The normalized inventory below is based on [`packages/coding-agent/src/core/agent-session.ts`, lines 142–185](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/agent-session.ts#L142-L185). It refers back to the core union, collapses multiline formatting, and deliberately removes the second identical `auto_retry_end` arm. It is not a verbatim source excerpt:
+The normalized inventory below is based on [`packages/coding-agent/src/core/agent-session.ts`, lines 142–185](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/agent-session.ts#L142-L185). It refers back to the core union, collapses multiline formatting, and deliberately removes the second identical `auto_retry_end` arm. It is not a verbatim source excerpt:
 
 ```typescript
 type AgentSessionEvent =
@@ -273,7 +273,7 @@ The `Set` of listeners is traversed in registration order. Pi awaits one listene
 
 ### State is reduced before subscribers run
 
-`Agent.processEvents()` changes public runtime state first, then calls listeners. This excerpt is pseudocode, condensed from [`packages/agent/src/agent.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/agent.ts#L538):
+`Agent.processEvents()` changes public runtime state first, then calls listeners. This excerpt is pseudocode, condensed from [`packages/agent/src/agent.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/agent.ts#L538):
 
 ```typescript
 // Pseudocode: omitted cases retain the same state-before-delivery order.
@@ -312,9 +312,9 @@ This ordering creates concrete barriers. Assistant `message_end` delivery finish
 
 ### Tool progress is concurrent delivery followed by a barrier
 
-Historical Pi documentation described `tool_execution_update` listeners as never awaited. Pi 0.84.2 uses a two-part rule. The Tool's synchronous `onUpdate` callback starts delivery without awaiting it, so a Tool may report another update while subscribers process the previous one. Every delivery promise is collected, and all of them must settle before result postprocessing continues.
+Historical Pi documentation described `tool_execution_update` listeners as never awaited. Pi 0.84.3 uses a two-part rule. The Tool's synchronous `onUpdate` callback starts delivery without awaiting it, so a Tool may report another update while subscribers process the previous one. Every delivery promise is collected, and all of them must settle before result postprocessing continues.
 
-The following is source-faithful pseudocode derived from [`executePreparedToolCall()`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/agent-loop.ts#L670):
+The following is source-faithful pseudocode derived from [`executePreparedToolCall()`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/agent-loop.ts#L670):
 
 ```typescript
 // Pseudocode: exact ordering, abbreviated payload construction.
@@ -482,7 +482,7 @@ export default function protectProduction(pi: ExtensionAPI) {
 }
 ```
 
-`terminate` applies to the blocked call here. Pinned [`shouldTerminateToolBatch()`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/agent-loop.ts#L582-L584) evaluates termination only after the current batch has produced all of its finalized results. A non-empty result set in which every result has `terminate: true` sets the batch's termination decision; the flag never stops the current batch early.
+`terminate` applies to the blocked call here. Pinned [`shouldTerminateToolBatch()`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/agent-loop.ts#L582-L584) evaluates termination only after the current batch has produced all of its finalized results. A non-empty result set in which every result has `terminate: true` sets the batch's termination decision; the flag never stops the current batch early.
 
 ### Preprocess model context without changing history
 
@@ -615,7 +615,7 @@ turn_end
 
 ### Sequential and parallel batches
 
-Sequential mode finishes one call's immediate preflight outcome or full prepared pipeline, emits its end event and result-message lifecycle, and only then starts the next call. Pinned [`executeToolCallsParallel()`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/agent-loop.ts#L489-L552) separates a source-order scan from concurrent prepared pipelines:
+Sequential mode finishes one call's immediate preflight outcome or full prepared pipeline, emits its end event and result-message lifecycle, and only then starts the next call. Pinned [`executeToolCallsParallel()`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/agent-loop.ts#L489-L552) separates a source-order scan from concurrent prepared pipelines:
 
 1. Pi emits `tool_execution_start` and runs preflight sequentially in the assistant message's Tool-call order. A lookup, preparation, validation, hook, or abort failure is an immediate result, so its `tool_execution_end` is also emitted during this scan. Pi then continues scanning later calls unless abort is observed.
 2. After the scan, prepared Tool executions start concurrently. Each normal pipeline awaits Tool execution, every collected progress delivery, and `afterToolCall` finalization before emitting `tool_execution_end`.
@@ -664,4 +664,4 @@ For another event-driven system, carry over five tests:
 
 Events reveal when context is prepared, messages stream, and Tool results return. They do not decide which instructions, history, resources, or Tool outputs enter the next model call. [Chapter 8](ch08-context-engineering.md) follows that context-engineering pipeline, from system-prompt assembly and Tool-output limits to compaction and branch summaries.
 
-> **Pinned source index:** Pi `0.84.2`, commit `a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c`: [`packages/ai/src/types.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/ai/src/types.ts#L527), [`packages/agent/src/types.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/types.ts#L421), [`packages/agent/src/agent-loop.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/agent-loop.ts#L281), [`packages/agent/src/agent.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/agent.ts#L240), [`packages/coding-agent/src/core/agent-session.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/agent-session.ts#L142), and [`packages/coding-agent/src/core/extensions/runner.ts`](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/src/core/extensions/runner.ts#L801).
+> **Pinned source index:** Pi `0.84.3`, commit `4e58f324fae8ebfa98a3d45181fb248072a2afac`: [`packages/ai/src/types.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/ai/src/types.ts#L527), [`packages/agent/src/types.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/types.ts#L421), [`packages/agent/src/agent-loop.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/agent-loop.ts#L281), [`packages/agent/src/agent.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/agent.ts#L240), [`packages/coding-agent/src/core/agent-session.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/agent-session.ts#L142), and [`packages/coding-agent/src/core/extensions/runner.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/extensions/runner.ts#L801).

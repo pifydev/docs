@@ -6,7 +6,7 @@ language: vi
 chapter: 2
 source_url: 'https://www.dgzhuya.com/modules/ch02-three-layer-arch'
 official_refs:
-  - 'https://github.com/badlogic/pi-mono/tree/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages'
+  - 'https://github.com/earendil-works/pi/tree/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages'
 terms_used:
   - Model
   - Provider
@@ -27,7 +27,7 @@ terms_used:
   - TypeBox
   - TSchema
 status: reviewed
-last_updated: '2026-08-24'
+last_updated: '2026-08-25'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -37,7 +37,7 @@ reviewed_by: Pify maintainers
 
 ## 1. Bạn vừa mở một codebase Agent
 
-Giả sử bạn vừa clone repository Pi tại revision `a470b121` rồi mở thư mục `packages/`. Phần cây thư mục liên quan trông như sau:
+Giả sử bạn vừa clone repository Pi tại revision `4e58f324` rồi mở thư mục `packages/`. Phần cây thư mục liên quan trông như sau:
 
 ```text
 repo/
@@ -74,7 +74,7 @@ Tạm gác mũi tên dependency sang một bên. Hãy đọc từng package từ
 
 `@earendil-works/pi-ai`, nằm trong `packages/ai/`, trả lời câu hỏi: làm sao một ứng dụng có thể gọi model từ nhiều provider qua các type và streaming contract dùng chung?
 
-Manifest mô tả package này là “Unified LLM API with automatic model discovery and provider configuration”. Tại revision `a470b121`, package sở hữu bốn nhóm khái niệm liên quan:
+Manifest mô tả package này là “Unified LLM API with automatic model discovery and provider configuration”. Tại revision `4e58f324`, package sở hữu bốn nhóm khái niệm liên quan:
 
 1. `Model<TApi>` mô tả một model cụ thể, gồm provider, API protocol, input mode, context window, token limit, chi phí, header và thiết lập tương thích.
 2. `Provider<TApi>` sở hữu provider ID, cách xác thực, model catalog đồng bộ, hành vi refresh tùy chọn cùng implementation của `stream()` và `streamSimple()`.
@@ -84,7 +84,7 @@ Manifest mô tả package này là “Unified LLM API with automatic model disco
 Root entry được giữ side-effect free có chủ đích. Provider factory nằm sau package subpath, còn `createModels()` và các domain type dùng chung nằm ở root:
 
 ```typescript
-// packages/ai/src/index.ts (một số export tại a470b121)
+// packages/ai/src/index.ts (một số export tại 4e58f324)
 export type { Static, TSchema } from "typebox";
 export { Type } from "typebox";
 export * from "./models.ts";
@@ -114,7 +114,7 @@ Manifest gọi đây là “General-purpose agent with transport abstraction, st
 Public entry point phản ánh sự phân chia đó:
 
 ```typescript
-// packages/agent/src/index.ts (một số export tại a470b121)
+// packages/agent/src/index.ts (một số export tại 4e58f324)
 export * from "./agent.ts";
 export * from "./agent-loop.ts";
 export * from "./harness/compaction/compaction.ts";
@@ -217,10 +217,10 @@ Coding package phụ thuộc trực tiếp vào cả ba package nền tảng tro
 ```jsonc
 {
   "dependencies": {
-    // Các dependency nền tảng được chọn từ package.json tại a470b121.
-    "@earendil-works/pi-agent-core": "^0.84.2",
-    "@earendil-works/pi-ai": "^0.84.2",
-    "@earendil-works/pi-tui": "^0.84.2"
+    // Các dependency nền tảng được chọn từ package.json tại 4e58f324.
+    "@earendil-works/pi-agent-core": "^0.84.3",
+    "@earendil-works/pi-ai": "^0.84.3",
+    "@earendil-works/pi-tui": "^0.84.3"
   }
 }
 ```
@@ -233,12 +233,12 @@ Manifest đầy đủ còn liệt kê `@earendil-works/pi-client` và `@earendil
 
 Một số direct import tồn tại vì public API của sản phẩm nhắc đến `Model`, `Provider`, `Usage`, `Context`, `ImageContent` và các type Pi AI khác. TypeScript vẫn phải resolve những type đó ngay cả khi import cụ thể biến mất khỏi JavaScript được emit.
 
-Dependency cũng tồn tại lúc runtime. Coding Agent so sánh model, lấy text từ nội dung message, tạo ID, retry assistant call và hiện thực `ModelRuntime` cùng `ModelRegistry` trên contract của Pi AI. Mô tả cạnh này là “chỉ re-export type” sẽ sai ở revision `a470b121`.
+Dependency cũng tồn tại lúc runtime. Coding Agent so sánh model, lấy text từ nội dung message, tạo ID, retry assistant call và hiện thực `ModelRuntime` cùng `ModelRegistry` trên contract của Pi AI. Mô tả cạnh này là “chỉ re-export type” sẽ sai ở revision `4e58f324`.
 
 Agent Core cho thấy nền tảng được mở rộng dần rõ nhất:
 
 ```typescript
-// packages/agent/src/types.ts (lược bớt import, a470b121)
+// packages/agent/src/types.ts (lược bớt import, 4e58f324)
 import type {
   Api,
   AssistantMessageEventStream,
@@ -352,7 +352,7 @@ Coding Agent lắp các type quanh một workflow hoàn chỉnh cho người dù
 Với Tool, `ToolDefinition` hướng sản phẩm được tách hẳn khỏi `AgentTool`. Metadata dành cho model của hai type có phần trùng nhau, nhưng execution signature thì khác: `ToolDefinition.execute` bắt buộc có tham số thứ năm `ctx: ExtensionContext`. Vì vậy không thể truyền trực tiếp một `ToolDefinition` cho Agent Core dưới dạng `AgentTool`.
 
 ```typescript
-// Các field và signature được trích chính xác từ extensions/types.ts tại a470b121.
+// Các field và signature được trích chính xác từ extensions/types.ts tại 4e58f324.
 export interface ToolDefinition<
   TParams extends TSchema = TSchema,
   TDetails = unknown,
@@ -390,7 +390,7 @@ export interface ToolDefinition<
 Product boundary trở thành runtime Tool qua adapter tường minh trong `packages/coding-agent/src/core/tools/tool-definition-wrapper.ts`:
 
 ```typescript
-// Trích từ tool-definition-wrapper.ts tại a470b121.
+// Trích từ tool-definition-wrapper.ts tại 4e58f324.
 export function wrapToolDefinition<TDetails = unknown>(
   definition: ToolDefinition<any, TDetails>,
   ctxFactory?: () => ExtensionContext,
@@ -425,7 +425,7 @@ Adapter sao chép các field của `AgentTool` rồi thay `execute` bằng funct
 Loader còn giữ các registration của từng Extension đã nạp trong một aggregate. Đây là interface hiện hành, không lược bỏ field nào:
 
 ```typescript
-// packages/coding-agent/src/core/extensions/types.ts tại a470b121.
+// packages/coding-agent/src/core/extensions/types.ts tại 4e58f324.
 export interface Extension {
   path: string;
   resolvedPath: string;
@@ -625,6 +625,6 @@ Chương 3 theo dõi một prompt đi qua Agent Loop: vì sao cần vòng lặp,
 
 > **Thứ tự đọc:** Chương 1–6 xây cơ chế lõi theo trình tự. Từ Chương 7 trở đi, mỗi chương tách một vấn đề kỹ thuật nâng cao và có thể dùng như tài liệu tra cứu theo chủ đề.
 
-> **Ghi chú phiên bản:** Chương này mô tả Pi `0.84.2` tại commit `a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c`. Tên package, export, dependency và nhãn thử nghiệm đều đã được kiểm tra theo revision đó.
+> **Ghi chú phiên bản:** Chương này mô tả Pi `0.84.3` tại commit `4e58f324fae8ebfa98a3d45181fb248072a2afac`. Tên package, export, dependency và nhãn thử nghiệm đều đã được kiểm tra theo revision đó.
 
 > **Chương tiếp theo:** [Chương 3: Agent Loop](ch03-agent-loop.md)

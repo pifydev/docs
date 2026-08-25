@@ -6,9 +6,9 @@ language: vi
 chapter: 3
 source_url: "https://www.dgzhuya.com/modules/ch03-agent-loop"
 official_refs:
-  - "https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/agent-loop.ts"
-  - "https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/agent.ts"
-  - "https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/src/types.ts"
+  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/agent-loop.ts"
+  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/agent.ts"
+  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/types.ts"
 terms_used:
   - Agent Loop
   - Trace
@@ -18,12 +18,12 @@ terms_used:
   - Steering
   - Follow-up
 status: reviewed
-last_updated: "2026-08-24"
+last_updated: "2026-08-25"
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
 
-Chương 2 đã tách model transport, Agent runtime và sản phẩm coding. Agent Loop là phần chuyển động bên trong kiến trúc đó. Chương này bắt đầu từ lý do cần vòng lặp, rồi theo một message qua Pi 0.84.2: chuẩn bị context, streaming, thực thi Tool, chỉ dẫn trong hàng chờ, termination, event và thời điểm run settle hoàn toàn.
+Chương 2 đã tách model transport, Agent runtime và sản phẩm coding. Agent Loop là phần chuyển động bên trong kiến trúc đó. Chương này bắt đầu từ lý do cần vòng lặp, rồi theo một message qua Pi 0.84.3: chuẩn bị context, streaming, thực thi Tool, chỉ dẫn trong hàng chờ, termination, event và thời điểm run settle hoàn toàn.
 
 ## 1. Mở đầu: ba cách dùng LLM
 
@@ -211,7 +211,7 @@ Vòng lặp còn giữ `newMessages`, một collector cục bộ của run đư�
 
 ### Điều gì làm vòng lặp chạy tiếp, và điều gì kết thúc nó
 
-Implementation cũ dễ bị tóm tắt quá mức thành “kiểm tra `stopReason`”. Pi 0.84.2 dùng nhiều mảnh state:
+Implementation cũ dễ bị tóm tắt quá mức thành “kiểm tra `stopReason`”. Pi 0.84.3 dùng nhiều mảnh state:
 
 ```text
 assistant response
@@ -244,7 +244,7 @@ Vì vậy báo cáo termination phải nêu cả provider result lẫn runtime s
 Quyết định cốt lõi dựa vào content và state của Tool đã finalize, không dựa vào một string:
 
 ```typescript
-// Abridged from packages/agent/src/agent-loop.ts at a470b121.
+// Abridged from packages/agent/src/agent-loop.ts at 4e58f324.
 const toolCalls = message.content.filter((part) => part.type === "toolCall");
 hasMoreToolCalls = false;
 
@@ -658,7 +658,7 @@ Thứ tự hai hook là một phần của contract. `transformContext` có th�
 Loop tạo một provider-facing wrapper mới cho mỗi Turn:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at a470b121.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 4e58f324.
 const llmContext: Context = {
   systemPrompt: context.systemPrompt,
   messages: llmMessages,
@@ -669,7 +669,7 @@ const llmContext: Context = {
 Nó resolve API key hiện hành rồi gọi function đã inject:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at a470b121.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 4e58f324.
 const response = await streamFunction(config.model, llmContext, {
   ...config,
   apiKey: resolvedApiKey,
@@ -737,7 +737,7 @@ Provider adapter sở hữu cách serialize cache control. Việc dựng lại o
 `streamAssistantResponse()` dành một slot transcript ở event `start`, thay slot đó bằng từng partial, rồi thay lần cuối bằng message hoàn chỉnh:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at a470b121.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 4e58f324.
 case "start":
   partialMessage = event.partial;
   context.messages.push(partialMessage);
@@ -776,7 +776,7 @@ Một slot tránh lưu mỗi token delta thành conversation message. Subscriber
 Hard-stop check chạy trước bước chọn Tool:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at a470b121.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 4e58f324.
 if (message.stopReason === "error" || message.stopReason === "aborted") {
   await emit({ type: "turn_end", message, toolResults: [] });
   await emit({ type: "agent_end", messages: newMessages });
@@ -800,7 +800,7 @@ Hai mode giữ conversation order theo cách khác nhau:
 Nếu bất kỳ Tool được gọi nào khai báo `executionMode: "sequential"`, toàn bộ assistant batch chạy sequential. Preflight resolve Tool, áp dụng `prepareArguments`, validate schema rồi gọi `beforeToolCall`:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at a470b121.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 4e58f324.
 const preparedToolCall = prepareToolCallArguments(tool, toolCall);
 const validatedArgs = validateToolArguments(tool, preparedToolCall);
 const beforeResult = await config.beforeToolCall?.(
@@ -812,7 +812,7 @@ const beforeResult = await config.beforeToolCall?.(
 Tool không tồn tại, argument sai, preflight code throw, call bị block và abort đã được quan sát đều trở thành immediate error result. `afterToolCall` chỉ chạy sau khi một Tool được phép đã thực thi; hook có thể thay `content`, `details`, `usage`, `isError` hoặc `terminate` trước final event:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at a470b121.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 4e58f324.
 const afterResult = await config.afterToolCall?.(
   {
     assistantMessage,
@@ -840,7 +840,7 @@ Với mỗi call đã finalize, Pi phát `tool_execution_end` rồi một cặp 
 Batch termination dùng `every`:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at a470b121.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 4e58f324.
 const terminate =
   finalizedCalls.length > 0 &&
   finalizedCalls.every((entry) => entry.result.terminate === true);
@@ -884,7 +884,7 @@ Settlement kéo dài qua thời điểm phát event. `agent_end` bảo đảm lo
 ### 4.8 Quay lại đầu vòng lặp
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at a470b121.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 4e58f324.
 while (hasMoreToolCalls || pendingMessages.length > 0) {
   // one assistant response and its Tool batch
 }
@@ -897,7 +897,7 @@ Automatic continuation đến từ Tool batch không terminate. Steering continu
 Tại boundary ổn định, Agent Core chỉ poll follow-up queue:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at a470b121.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 4e58f324.
 const followUpMessages = (await config.getFollowUpMessages?.()) || [];
 if (followUpMessages.length > 0) {
   pendingMessages = followUpMessages;
@@ -955,4 +955,4 @@ Cách tách này cho phép một domain Agent nhỏ dùng `Agent` trực tiếp,
 
 [Chương 4](ch04-model-invocation.md) mở boundary `StreamFn`: model collection, provider registration, request conversion, normalized streaming event và error handling.
 
-> Version boundary: phần walkthrough này theo Pi `0.84.2` tại commit `a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c` và Node.js `>=22.19.0`.
+> Version boundary: phần walkthrough này theo Pi `0.84.3` tại commit `4e58f324fae8ebfa98a3d45181fb248072a2afac` và Node.js `>=22.19.0`.

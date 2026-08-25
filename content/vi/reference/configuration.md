@@ -8,7 +8,7 @@ reviewed_by: Pify maintainers
 last_updated: '2026-08-25'
 ---
 
-Pi đọc setting JSON khi khởi động và khi reload resource. Reference này mô tả `@earendil-works/pi-coding-agent` 0.84.2 trên Node.js 22.19 trở lên.
+Pi đọc setting JSON khi khởi động và khi reload resource. Reference này mô tả `@earendil-works/pi-coding-agent` 0.84.3 trên Node.js 22.19 trở lên.
 
 ## File setting và thứ tự ưu tiên
 
@@ -97,7 +97,7 @@ console.log({
 
 ### Chọn tool
 
-`defaultTools` chọn built-in tool lúc khởi động. Khi bỏ qua setting này, `read`, `bash`, `edit` và `write` là các mặc định được bật; `grep`, `find` và `ls` cũng là built-in và có thể được chọn. Array rỗng bỏ các built-in mặc định nhưng vẫn để extension tool và SDK custom tool hoạt động.
+`defaultTools` chọn built-in tool lúc khởi động. Khi bỏ qua setting này, `read`, `bash`, `edit` và `write` là các mặc định được bật; `grep`, `find` và `ls` cũng là built-in và có thể được chọn, tương tự native tool `powershell` tùy chọn trên Windows. Array rỗng bỏ các built-in mặc định nhưng vẫn để extension tool và SDK custom tool hoạt động.
 
 `--tools` là allowlist nghiêm ngặt cho built-in, extension và custom tool. `--no-tools` tắt toàn bộ tool, `--no-builtin-tools` chỉ bỏ built-in, còn `--exclude-tools` lọc kết quả. Array ở project thay thế toàn bộ array global.
 

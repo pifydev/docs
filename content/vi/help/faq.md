@@ -5,7 +5,7 @@ translation_key: faq
 language: vi
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-08-24'
+last_updated: '2026-08-25'
 ---
 Các câu trả lời dưới đây đề cập tới Pi và dự án tài liệu này. Hãy mở [GitHub issue](https://github.com/pifydev/docs/issues) nếu câu hỏi của bạn chưa có trong danh sách.
 
@@ -35,7 +35,7 @@ Hãy đọc chương 1 đến 3 theo thứ tự để nắm tổng quan dự án
 
 ### Tài liệu này mô tả revision nào của Pi?
 
-Review ledger ghi chính xác upstream commit dùng để đối chiếu. Lần review hiện tại được ghim tại [`a470b121`](https://github.com/badlogic/pi-mono/commit/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c). Hãy kiểm tra lại upstream trước khi phụ thuộc vào API hoặc giá trị mặc định có thể thay đổi theo version.
+Review ledger ghi chính xác upstream commit dùng để đối chiếu. Lần review hiện tại được ghim tại [`4e58f324`](https://github.com/earendil-works/pi/commit/4e58f324fae8ebfa98a3d45181fb248072a2afac). Hãy kiểm tra lại upstream trước khi phụ thuộc vào API hoặc giá trị mặc định có thể thay đổi theo version.
 
 ### Vì sao ví dụ dùng TypeScript?
 

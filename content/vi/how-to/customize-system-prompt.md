@@ -150,7 +150,7 @@ Chạy bằng `npx tsx inspect-system-prompt.ts`; ví dụ chủ ý bỏ qua res
 
 Fixture tùy chọn dưới đây tạo các file độc lập, không gọi provider, đồng thời kiểm tra thứ tự context, override trong cùng directory, prompt file của project đã trust và chưa trust, cách chọn nguồn tường minh theo kiểu CLI, output thực tế của builder và `session.reload()`.
 
-Chạy bằng `npx tsx verify-system-prompt.ts` trên Node `>=22.19.0` sau khi cài `@earendil-works/pi-coding-agent@0.84.2`, `tsx` và TypeScript.
+Chạy bằng `npx tsx verify-system-prompt.ts` trên Node `>=22.19.0` sau khi cài `@earendil-works/pi-coding-agent@0.84.3`, `tsx` và TypeScript.
 
 <Accordions type="single">
 <Accordion title="Fixture DefaultResourceLoader xác định và không cần secret">

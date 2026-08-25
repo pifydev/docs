@@ -1,6 +1,6 @@
 ---
 title: Tham chiếu API
-description: Bản đồ chọn lọc các entry point công khai của Pi AI, Agent Core và Coding Agent ở phiên bản 0.84.2.
+description: Bản đồ chọn lọc các entry point công khai của Pi AI, Agent Core và Coding Agent ở phiên bản 0.84.3.
 translation_key: reference-api
 language: vi
 status: reviewed
@@ -8,7 +8,7 @@ reviewed_by: Pify maintainers
 last_updated: '2026-08-25'
 ---
 
-Tài liệu tham chiếu tích hợp có chọn lọc này lược bỏ các export chuyên biệt và UI. Nội dung áp dụng cho upstream commit `a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c`, ba package `@earendil-works/*` phiên bản `0.84.2` và Node.js `22.19` trở lên.
+Tài liệu tham chiếu tích hợp có chọn lọc này lược bỏ các export chuyên biệt và UI. Nội dung áp dụng cho upstream commit `4e58f324fae8ebfa98a3d45181fb248072a2afac`, ba package `@earendil-works/*` phiên bản `0.84.3` và Node.js `22.19` trở lên.
 
 - `@earendil-works/pi-ai` quản lý provider collection, metadata của model, authentication, message và LLM stream.
 - `@earendil-works/pi-agent-core` bổ sung agent loop, thực thi tool, state, queue và lifecycle event.

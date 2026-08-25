@@ -6,8 +6,8 @@ language: vi
 chapter: 5
 source_url: "https://www.dgzhuya.com/modules/ch05-tool-system"
 official_refs:
-  - "https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/README.md#tools"
-  - "https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/docs/extensions.md#custom-tools"
+  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/README.md#tools"
+  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/docs/extensions.md#custom-tools"
 terms_used:
   - Tool
   - ToolCall
@@ -15,7 +15,7 @@ terms_used:
   - AgentTool
   - ToolDefinition
 status: reviewed
-last_updated: "2026-08-24"
+last_updated: "2026-08-25"
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -33,7 +33,7 @@ Chương 3 theo dõi một lượt của Agent: từ phản hồi của model, q
 
 Khối này không cấp quyền thực hiện thao tác và cũng không chứa mã có thể chạy. Runtime vẫn phải tìm đúng Tool theo tên, chuẩn bị và xác thực các đối số không đáng tin cậy, áp dụng chính sách của sản phẩm, xử lý yêu cầu hủy, chạy thao tác, báo tiến độ, chốt kết quả rồi tạo `ToolResultMessage` tương ứng. Khi một thông điệp chứa cả lô, runtime còn phải xác định những thao tác nào có thể chạy đồng thời mà không làm hỏng trạng thái dùng chung.
 
-Pi `0.84.2` giải quyết các yêu cầu đó bằng ba lớp kiểu có liên hệ với nhau và một luồng thực thi gồm nhiều giai đoạn. Mô hình giảng dạy năm bước trước đây vẫn hữu ích—chuẩn bị, xác thực, hook trước, thực thi, hook sau—nhưng phần triển khai hiện tại còn quy định cách lập lịch, thứ tự sự kiện, ranh giới hủy, cách tạo kết quả và điều kiện dừng cho cả lô. Chương này đi qua toàn bộ luồng đó theo commit được ghim `a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c`.
+Pi `0.84.3` giải quyết các yêu cầu đó bằng ba lớp kiểu có liên hệ với nhau và một luồng thực thi gồm nhiều giai đoạn. Mô hình giảng dạy năm bước trước đây vẫn hữu ích—chuẩn bị, xác thực, hook trước, thực thi, hook sau—nhưng phần triển khai hiện tại còn quy định cách lập lịch, thứ tự sự kiện, ranh giới hủy, cách tạo kết quả và điều kiện dừng cho cả lô. Chương này đi qua toàn bộ luồng đó theo commit được ghim `4e58f324fae8ebfa98a3d45181fb248072a2afac`.
 
 ## 1. Ba lớp kiểu giữ hướng phụ thuộc về phía lõi
 
@@ -987,6 +987,6 @@ Việc thực thi Tool là một giao thức có kiểm soát bao quanh thao tá
 
 Chương 6 sẽ theo dõi các thông điệp đó qua transcript Agent giàu thông tin hơn và ranh giới chuyển đổi của provider. Chương tiếp theo cũng giải thích vì sao `details` của Tool có thể phục vụ UI trong khi chỉ nội dung văn bản và hình ảnh đi vào kết quả thông thường dành cho model.
 
-Việc rà soát mã nguồn cho chương này dùng Pi `0.84.2` tại commit `a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c`. Các đường dẫn chính gồm `packages/ai/src/types.ts`, `packages/ai/src/utils/validation.ts`, `packages/agent/src/types.ts`, `packages/agent/src/agent-loop.ts`, `packages/agent/src/agent.ts`, `packages/coding-agent/src/core/extensions/types.ts`, `packages/coding-agent/src/core/extensions/runner.ts`, `packages/coding-agent/src/core/extensions/wrapper.ts`, `packages/coding-agent/src/core/extensions/loader.ts`, `packages/coding-agent/src/core/agent-session.ts` và các phần triển khai Tool trong `packages/coding-agent/src/core/tools/`.
+Việc rà soát mã nguồn cho chương này dùng Pi `0.84.3` tại commit `4e58f324fae8ebfa98a3d45181fb248072a2afac`. Các đường dẫn chính gồm `packages/ai/src/types.ts`, `packages/ai/src/utils/validation.ts`, `packages/agent/src/types.ts`, `packages/agent/src/agent-loop.ts`, `packages/agent/src/agent.ts`, `packages/coding-agent/src/core/extensions/types.ts`, `packages/coding-agent/src/core/extensions/runner.ts`, `packages/coding-agent/src/core/extensions/wrapper.ts`, `packages/coding-agent/src/core/extensions/loader.ts`, `packages/coding-agent/src/core/agent-session.ts` và các phần triển khai Tool trong `packages/coding-agent/src/core/tools/`.
 
 [Chương 6: Hệ thống thông điệp](ch06-messages.md)

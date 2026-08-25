@@ -4,8 +4,8 @@ description: Định nghĩa Tool có type, đăng ký với agent core hoặc Co
 translation_key: how-to-add-custom-tool
 language: vi
 official_refs:
-  - "https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/agent/README.md#tools"
-  - "https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/docs/extensions.md#custom-tools"
+  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/README.md#tools"
+  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/docs/extensions.md#custom-tools"
 terms_used:
   - AgentTool
   - ToolDefinition
@@ -13,7 +13,7 @@ terms_used:
   - AbortSignal
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: "2026-08-24"
+last_updated: "2026-08-25"
 ---
 
 Hướng dẫn này tạo Tool `get_weather` có type để model gọi trong một turn. Ví dụ dùng một tập dữ liệu nhỏ trong bộ nhớ, nên bạn có thể kiểm thử Tool mà không cần dịch vụ bên ngoài. Contract thực thi này cũng dùng được với database hoặc HTTP client, miễn là bạn chuyển tiếp tín hiệu hủy và không đưa credential vào output mà model nhìn thấy.
@@ -36,12 +36,12 @@ Chỉ chọn một cách đăng ký ở tầng sản phẩm. Coding Agent sessio
 
 ## Điều kiện cần
 
-Pi `0.84.2` yêu cầu Node.js `>=22.19.0`. Tạo một dự án TypeScript dùng ESM và cài từng package được import trực tiếp trong ví dụ:
+Pi `0.84.3` yêu cầu Node.js `>=22.19.0`. Tạo một dự án TypeScript dùng ESM và cài từng package được import trực tiếp trong ví dụ:
 
 ```bash
 npm init -y
 npm pkg set type=module
-npm install @earendil-works/pi-ai@0.84.2 @earendil-works/pi-agent-core@0.84.2 @earendil-works/pi-coding-agent@0.84.2
+npm install @earendil-works/pi-ai@0.84.3 @earendil-works/pi-agent-core@0.84.3 @earendil-works/pi-coding-agent@0.84.3
 npm install --save-dev typescript tsx @types/node
 ```
 
@@ -463,7 +463,7 @@ Không chạy `agent-session.ts` cho cách này. Từ thư mục gốc của d�
 node --env-file=.env ./node_modules/@earendil-works/pi-coding-agent/dist/cli.js "What is the weather in Tokyo?"
 ```
 
-Khi CLI khởi động ở chế độ interactive, chỉ chấp nhận project-trust prompt sau khi review các resource của dự án; nếu từ chối, Pi sẽ bỏ qua Extension cục bộ. [Hướng dẫn Extensions](https://github.com/badlogic/pi-mono/blob/a470b121bf683b4c2b9fc0b3a7c807de7e0cfe9c/packages/coding-agent/docs/extensions.md#extension-locations) đã ghim mô tả các vị trí được phát hiện, cách reload và ranh giới trust đó.
+Khi CLI khởi động ở chế độ interactive, chỉ chấp nhận project-trust prompt sau khi review các resource của dự án; nếu từ chối, Pi sẽ bỏ qua Extension cục bộ. [Hướng dẫn Extensions](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/docs/extensions.md#extension-locations) đã ghim mô tả các vị trí được phát hiện, cách reload và ranh giới trust đó.
 
 Khi debug toàn bộ loop, hãy subscribe trước khi gọi `prompt()`. Ghi log `tool_execution_start`, `tool_execution_update` và `tool_execution_end`; che payload nếu chúng có thể chứa dữ liệu người dùng hoặc credential.
 
