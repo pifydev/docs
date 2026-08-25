@@ -978,15 +978,15 @@ test.each(["getter", "call"] as const)(
 test("checks cancellation after resolution and safe output inspection", async () => {
   const controller = new AbortController();
   const reason = new DOMException("cancel during output", "AbortError");
-  const output = new Proxy(
-    { value: 42 },
-    {
-      ownKeys(target) {
-        controller.abort(reason);
-        return Reflect.ownKeys(target);
-      },
+  const prototype = new Proxy(Object.prototype, {
+    getPrototypeOf(target) {
+      controller.abort(reason);
+      return Reflect.getPrototypeOf(target);
     },
-  );
+  });
+  const output = Object.assign(Object.create(prototype) as object, {
+    value: 42,
+  });
   const registry = new ToolRegistry([
     defineTool({
       name: "cancel-after-resolution",
@@ -1161,13 +1161,17 @@ test("bounds serializer work for an 8-million-character string", async () => {
 
 test("bounds sparse-array descriptor visits instead of walking a million slots", async () => {
   let descriptorVisits = 0;
-  const sparse = new Array(1_000_000);
-  const output = new Proxy(sparse, {
-    getOwnPropertyDescriptor(target, property) {
-      descriptorVisits += 1;
-      return Reflect.getOwnPropertyDescriptor(target, property);
-    },
-  });
+  const output = new Array(1_000_000);
+  const originalGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+  const descriptorSpy = vi
+    .spyOn(Object, "getOwnPropertyDescriptor")
+    .mockImplementation((value: object, key: PropertyKey) => {
+      if (value === output) descriptorVisits += 1;
+      return Reflect.apply(originalGetOwnPropertyDescriptor, Object, [
+        value,
+        key,
+      ]);
+    });
   const registry = new ToolRegistry([
     defineTool({
       name: "sparse-output",
@@ -1177,18 +1181,22 @@ test("bounds sparse-array descriptor visits instead of walking a million slots",
     }),
   ]);
 
-  const result = await executeToolCall(
-    registry,
-    call("sparse-output"),
-    new AbortController().signal,
-  );
+  try {
+    const result = await executeToolCall(
+      registry,
+      call("sparse-output"),
+      new AbortController().signal,
+    );
 
-  expect(result.isError).toBe(false);
-  expect(result.content.endsWith(COURSE_TOOL_TRUNCATION_MARKER)).toBe(true);
-  expect(COURSE_TOOL_SERIALIZATION_MAX_COLLECTION_ENTRIES).toBe(256);
-  expect(descriptorVisits).toBeLessThanOrEqual(
-    COURSE_TOOL_SERIALIZATION_MAX_COLLECTION_ENTRIES + 2,
-  );
+    expect(result.isError).toBe(false);
+    expect(result.content.endsWith(COURSE_TOOL_TRUNCATION_MARKER)).toBe(true);
+    expect(COURSE_TOOL_SERIALIZATION_MAX_COLLECTION_ENTRIES).toBe(256);
+    expect(descriptorVisits).toBeLessThanOrEqual(
+      COURSE_TOOL_SERIALIZATION_MAX_COLLECTION_ENTRIES + 2,
+    );
+  } finally {
+    descriptorSpy.mockRestore();
+  }
 });
 
 test("bounds deep and wide output with explicit depth and node budgets", async () => {
@@ -1255,7 +1263,121 @@ test("enumerates a 250k-key plain object without eager full-key APIs", async () 
     COURSE_TOOL_OUTPUT_CAP_CHARACTERS,
   );
   expect(result.content.endsWith(COURSE_TOOL_TRUNCATION_MARKER)).toBe(true);
-  expect(toolSource()).not.toMatch(/\b(?:Reflect\.ownKeys|Object\.keys)\b/u);
+  expect(toolSource()).not.toMatch(
+    /\b(?:Reflect\.ownKeys|Object\.keys|Object\.getOwnPropertyNames)\b/u,
+  );
+});
+
+test("counts inherited enumerable keys against the collection visit budget", async () => {
+  const output = runInNewContext(`(() => {
+    for (let index = 0; index < 250_000; index += 1) {
+      Object.prototype["inherited-" + index] = index;
+    }
+    return {};
+  })()`);
+  const originalHasOwn = Object.hasOwn;
+  let outputHasOwnChecks = 0;
+  const hasOwnSpy = vi
+    .spyOn(Object, "hasOwn")
+    .mockImplementation((value: object, key: PropertyKey) => {
+      if (value === output) outputHasOwnChecks += 1;
+      return Reflect.apply(originalHasOwn, Object, [value, key]);
+    });
+  const registry = new ToolRegistry([
+    defineTool({
+      name: "inherited-key-flood",
+      description: "Bound inherited enumerable key traversal.",
+      validate: (input) => ({ ok: true, value: input }),
+      execute: async () => output,
+    }),
+  ]);
+
+  try {
+    const result = await executeToolCall(
+      registry,
+      call("inherited-key-flood"),
+      new AbortController().signal,
+    );
+
+    expect(result.isError).toBe(false);
+    expect(result.content.endsWith(COURSE_TOOL_TRUNCATION_MARKER)).toBe(true);
+    expect(outputHasOwnChecks).toBe(
+      COURSE_TOOL_SERIALIZATION_MAX_COLLECTION_ENTRIES,
+    );
+  } finally {
+    hasOwnSpy.mockRestore();
+  }
+});
+
+test("rejects local and cross-realm output Proxies before ownKeys enumeration", async () => {
+  let ownKeysCalls = 0;
+  let generatedKeys = 0;
+  const localProxy = new Proxy(
+    {},
+    {
+      ownKeys() {
+        ownKeysCalls += 1;
+        return Array.from({ length: 250_000 }, (_, index) => {
+          generatedKeys += 1;
+          return `generated-${index}`;
+        });
+      },
+    },
+  );
+  const crossRealmProxy = runInNewContext(`new Proxy({}, {
+    ownKeys() {
+      throw new Error("cross-realm ownKeys trap was reached");
+    }
+  })`);
+  const callableProxy = new Proxy(() => "unreachable", {
+    ownKeys() {
+      ownKeysCalls += 1;
+      return [];
+    },
+  });
+  const registry = new ToolRegistry([
+    defineTool({
+      name: "proxy-output",
+      description: "Reject Proxy output before reflection.",
+      validate(input) {
+        const value = input as { kind?: unknown };
+        return { ok: true, value: value.kind };
+      },
+      execute: async (kind) =>
+        kind === "cross-realm"
+          ? crossRealmProxy
+          : kind === "callable"
+            ? callableProxy
+            : localProxy,
+    }),
+  ]);
+
+  const localResult = await executeToolCall(
+    registry,
+    call("proxy-output", { kind: "local" }),
+    new AbortController().signal,
+  );
+  const crossRealmResult = await executeToolCall(
+    registry,
+    call("proxy-output", { kind: "cross-realm" }, "call-cross-realm-proxy"),
+    new AbortController().signal,
+  );
+  const callableResult = await executeToolCall(
+    registry,
+    call("proxy-output", { kind: "callable" }, "call-callable-proxy"),
+    new AbortController().signal,
+  );
+
+  for (const result of [localResult, crossRealmResult, callableResult]) {
+    expect(result.isError).toBe(true);
+    expect(result.content).toContain("TOOL_OUTPUT_SERIALIZATION_FAILED");
+    expect(result.content).toContain("Proxy");
+  }
+  expect(crossRealmResult.content).not.toContain(
+    "cross-realm ownKeys trap was reached",
+  );
+  expect(ownKeysCalls).toBe(0);
+  expect(generatedKeys).toBe(0);
 });
 
 test("uses explicit JSON property semantics without invoking accessors", async () => {
@@ -1578,6 +1700,8 @@ test("shares NonRecoverableToolError provenance across module reloads and subcla
   class ReloadedInvariantError extends copyA.NonRecoverableToolError {}
   const direct = new copyA.NonRecoverableToolError("copy A direct error");
   const subclassed = new ReloadedInvariantError("copy A subclass error");
+  expect(Object.isFrozen(direct)).toBe(true);
+  expect(Object.isFrozen(subclassed)).toBe(true);
 
   vi.resetModules();
   const copyB = await import("../src/tool");
@@ -1601,6 +1725,57 @@ test("shares NonRecoverableToolError provenance across module reloads and subcla
       ),
     ).rejects.toBe(failure);
   }
+});
+
+test("does not expose a mutable NonRecoverableToolError provenance collection", async () => {
+  const registryKey = Symbol.for(
+    "pify.course.NonRecoverableToolError.provenance.v1",
+  );
+  const brandKey = Symbol.for("pify.course.NonRecoverableToolError.brand.v1");
+  const provenance = Reflect.get(globalThis, registryKey) as object;
+  const register = Reflect.get(provenance, "register") as (
+    value: unknown,
+  ) => boolean;
+  const forged = {
+    name: "NonRecoverableToolError",
+    code: "NON_RECOVERABLE_TOOL_ERROR",
+    nonRecoverable: true,
+    message: "registry-injected plain object",
+  } as Record<PropertyKey, unknown>;
+  Object.defineProperty(forged, brandKey, {
+    configurable: false,
+    enumerable: false,
+    value: true,
+    writable: false,
+  });
+  Object.freeze(forged);
+
+  expect(Object.isFrozen(provenance)).toBe(true);
+  expect(Reflect.get(provenance, "errors")).toBeUndefined();
+  expect(typeof register).toBe("function");
+  expect(Reflect.apply(register, undefined, [forged])).toBe(false);
+  expect(Reflect.set(provenance, "register", () => true)).toBe(false);
+
+  const toolRegistry = new ToolRegistry([
+    defineTool({
+      name: "registry-forgery",
+      description: "Keep registry-injected plain objects recoverable.",
+      validate: (input) => ({ ok: true, value: input }),
+      execute: async () => {
+        throw forged;
+      },
+    }),
+  ]);
+  await expect(
+    executeToolCall(
+      toolRegistry,
+      call("registry-forgery"),
+      new AbortController().signal,
+    ),
+  ).resolves.toMatchObject({
+    isError: true,
+    content: expect.stringContaining("TOOL_EXECUTION_FAILED"),
+  });
 });
 
 test("accepts nested cross-realm plain JSON outputs", async () => {

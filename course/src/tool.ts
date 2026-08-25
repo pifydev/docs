@@ -14,24 +14,46 @@ export const COURSE_TOOL_TRUNCATION_MARKER = "\n[Tool output truncated]";
 export const COURSE_TOOL_SERIALIZATION_MAX_DEPTH = 32;
 /** Maximum values inspected by the course serializer. */
 export const COURSE_TOOL_SERIALIZATION_MAX_NODES = 128;
-/** Maximum own properties or array slots inspected across one output. */
+/** Maximum enumerable keys encountered or array slots inspected per output. */
 export const COURSE_TOOL_SERIALIZATION_MAX_COLLECTION_ENTRIES = 256;
 /** Maximum Unicode code points consumed from keys and string values. */
 export const COURSE_TOOL_SERIALIZATION_MAX_STRING_CHARACTERS = 4096;
 /** Maximum accepted BigInt magnitude in binary bits before decimal conversion. */
 export const COURSE_TOOL_SERIALIZATION_MAX_BIGINT_BITS = 4096;
 
+type NonRecoverableToolErrorRegistry = Readonly<{
+  version: 1;
+  register: (value: unknown) => boolean;
+  isRegistered: (value: unknown) => boolean;
+}>;
+
+type NodeUtilTypes = Readonly<{
+  isProxy: (value: unknown) => boolean;
+  isNativeError: (value: unknown) => boolean;
+}>;
+
 const ownedToolContractErrors = new WeakSet<object>();
 const reflectApply = Reflect.apply;
 const weakSetAdd = WeakSet.prototype.add;
 const weakSetHas = WeakSet.prototype.has;
+const nodeUtilTypes = loadNodeUtilTypes();
 const nonRecoverableRegistryKey = Symbol.for(
   "pify.course.NonRecoverableToolError.provenance.v1",
 );
-const sharedNonRecoverableToolErrors = loadNonRecoverableToolErrorRegistry();
+const nonRecoverableBrandKey = Symbol.for(
+  "pify.course.NonRecoverableToolError.brand.v1",
+);
+const sharedNonRecoverableToolErrorRegistry =
+  loadNonRecoverableToolErrorRegistry();
+const registerNonRecoverableToolError =
+  sharedNonRecoverableToolErrorRegistry.register;
+const isRegisteredNonRecoverableToolError =
+  sharedNonRecoverableToolErrorRegistry.isRegistered;
 const nativePromiseConstructor = Promise;
 const nativePromiseResolve = Promise.resolve;
 const nativePromiseThen = Promise.prototype.then;
+const nodeIsProxy = nodeUtilTypes.isProxy;
+const nodeIsNativeError = nodeUtilTypes.isNativeError;
 const abortSignalAbortedGetter = Object.getOwnPropertyDescriptor(
   AbortSignal.prototype,
   "aborted",
@@ -75,7 +97,21 @@ export class NonRecoverableToolError extends Error {
   public constructor(message: string, options?: ErrorOptions) {
     super(message, options);
     this.name = "NonRecoverableToolError";
-    reflectApply(weakSetAdd, sharedNonRecoverableToolErrors, [this]);
+    Object.defineProperty(this, nonRecoverableBrandKey, {
+      configurable: false,
+      enumerable: false,
+      value: true,
+      writable: false,
+    });
+    Object.freeze(this);
+    const registered = reflectApply(
+      registerNonRecoverableToolError,
+      undefined,
+      [this],
+    ) as boolean;
+    if (!registered) {
+      throw new TypeError("NonRecoverableToolError registration failed");
+    }
   }
 }
 
@@ -739,6 +775,12 @@ function writeSerializedValue(
     writeQuotedString("[Symbol]", state, false);
     return;
   }
+  if (
+    isObjectLike(value) &&
+    (reflectApply(nodeIsProxy, undefined, [value]) as boolean)
+  ) {
+    throw new TypeError("Tool output Proxy values are not supported");
+  }
   if (typeof value === "function") {
     writeQuotedString("[Function]", state, false);
     return;
@@ -877,8 +919,8 @@ function writeSerializedObject(
     Readonly<{ key: string; descriptor: PropertyDescriptor }>
   > = [];
   for (const key in value) {
-    if (!Object.hasOwn(value, key)) continue;
     if (!visitCollectionEntry(state)) return;
+    if (!Object.hasOwn(value, key)) continue;
     const descriptor = Object.getOwnPropertyDescriptor(value, key);
     if (descriptor === undefined) {
       throw new TypeError("Tool output property disappeared during inspection");
@@ -990,12 +1032,9 @@ function propagateExceptionalFailure(
 function isNonRecoverableToolError(
   value: unknown,
 ): value is NonRecoverableToolError {
-  return (
-    isObjectLike(value) &&
-    (reflectApply(weakSetHas, sharedNonRecoverableToolErrors, [
-      value,
-    ]) as boolean)
-  );
+  return reflectApply(isRegisteredNonRecoverableToolError, undefined, [
+    value,
+  ]) as boolean;
 }
 
 function createToolContractError(
@@ -1008,16 +1047,26 @@ function createToolContractError(
   return error;
 }
 
-function loadNonRecoverableToolErrorRegistry(): WeakSet<object> {
+function loadNonRecoverableToolErrorRegistry(): NonRecoverableToolErrorRegistry {
   const existing = Object.getOwnPropertyDescriptor(
     globalThis,
     nonRecoverableRegistryKey,
   );
   if (existing === undefined) {
     const errors = new WeakSet<object>();
+    const register = Object.freeze((value: unknown): boolean => {
+      if (!isPreparedNonRecoverableToolError(value)) return false;
+      reflectApply(weakSetAdd, errors, [value]);
+      return true;
+    });
+    const isRegistered = Object.freeze((value: unknown): boolean => {
+      if (!isObjectLike(value)) return false;
+      return reflectApply(weakSetHas, errors, [value]) as boolean;
+    });
     const registry = Object.freeze({
       version: 1 as const,
-      errors,
+      register,
+      isRegistered,
     });
     Object.defineProperty(globalThis, nonRecoverableRegistryKey, {
       configurable: false,
@@ -1025,7 +1074,7 @@ function loadNonRecoverableToolErrorRegistry(): WeakSet<object> {
       value: registry,
       writable: false,
     });
-    return errors;
+    return registry;
   }
 
   if (
@@ -1039,30 +1088,106 @@ function loadNonRecoverableToolErrorRegistry(): WeakSet<object> {
     );
   }
   const version = Object.getOwnPropertyDescriptor(existing.value, "version");
-  const errors = Object.getOwnPropertyDescriptor(existing.value, "errors");
+  const register = Object.getOwnPropertyDescriptor(existing.value, "register");
+  const isRegistered = Object.getOwnPropertyDescriptor(
+    existing.value,
+    "isRegistered",
+  );
   if (
     version === undefined ||
     !("value" in version) ||
     version.value !== 1 ||
-    errors === undefined ||
-    !("value" in errors) ||
-    !isWeakSet(errors.value)
+    register === undefined ||
+    !("value" in register) ||
+    typeof register.value !== "function" ||
+    !Object.isFrozen(register.value) ||
+    isRegistered === undefined ||
+    !("value" in isRegistered) ||
+    typeof isRegistered.value !== "function" ||
+    !Object.isFrozen(isRegistered.value) ||
+    Object.getOwnPropertyDescriptor(existing.value, "errors") !== undefined
   ) {
     throw new TypeError(
       "Shared NonRecoverableToolError registry has incompatible data",
     );
   }
-  return errors.value;
+  return existing.value as NonRecoverableToolErrorRegistry;
 }
 
-function isWeakSet(value: unknown): value is WeakSet<object> {
+function loadNodeUtilTypes(): NodeUtilTypes {
+  const runtimeProcess = Reflect.get(globalThis, "process");
+  if (!isObjectLike(runtimeProcess)) {
+    throw new TypeError("Node process is required for safe Tool inspection");
+  }
+  const getBuiltinModule = Reflect.get(runtimeProcess, "getBuiltinModule");
+  if (typeof getBuiltinModule !== "function") {
+    throw new TypeError(
+      "process.getBuiltinModule() is required for safe Tool inspection",
+    );
+  }
+  const nodeUtil = reflectApply(getBuiltinModule, runtimeProcess, [
+    "node:util",
+  ]);
+  if (!isObjectLike(nodeUtil)) {
+    throw new TypeError("node:util is required for safe Tool inspection");
+  }
+  const types = Reflect.get(nodeUtil, "types");
+  if (!isObjectLike(types)) {
+    throw new TypeError("node:util types are unavailable");
+  }
+  const isProxy = Reflect.get(types, "isProxy");
+  const isNativeError = Reflect.get(types, "isNativeError");
+  if (typeof isProxy !== "function" || typeof isNativeError !== "function") {
+    throw new TypeError("Required node:util type guards are unavailable");
+  }
+  return Object.freeze({ isProxy, isNativeError });
+}
+
+function isPreparedNonRecoverableToolError(value: unknown): value is Error {
   if (!isObjectLike(value)) return false;
   try {
-    reflectApply(weakSetHas, value, [{}]);
-    return true;
+    if (!(reflectApply(nodeIsNativeError, undefined, [value]) as boolean)) {
+      return false;
+    }
+    if (!Object.isFrozen(value)) return false;
+    return (
+      hasImmutableOwnDataValue(value, "name", "NonRecoverableToolError") &&
+      hasImmutableOwnDataValue(value, "code", "NON_RECOVERABLE_TOOL_ERROR") &&
+      hasImmutableOwnDataValue(value, "nonRecoverable", true) &&
+      hasImmutableOwnDataValue(value, nonRecoverableBrandKey, true, false) &&
+      hasImmutableOwnString(value, "message")
+    );
   } catch {
     return false;
   }
+}
+
+function hasImmutableOwnDataValue(
+  value: object,
+  key: PropertyKey,
+  expected: unknown,
+  enumerable?: boolean,
+): boolean {
+  const descriptor = Object.getOwnPropertyDescriptor(value, key);
+  return (
+    descriptor !== undefined &&
+    "value" in descriptor &&
+    Object.is(descriptor.value, expected) &&
+    descriptor.configurable === false &&
+    descriptor.writable === false &&
+    (enumerable === undefined || descriptor.enumerable === enumerable)
+  );
+}
+
+function hasImmutableOwnString(value: object, key: PropertyKey): boolean {
+  const descriptor = Object.getOwnPropertyDescriptor(value, key);
+  return (
+    descriptor !== undefined &&
+    "value" in descriptor &&
+    typeof descriptor.value === "string" &&
+    descriptor.configurable === false &&
+    descriptor.writable === false
+  );
 }
 
 function failureMessage(error: unknown, fallback: string): string {
