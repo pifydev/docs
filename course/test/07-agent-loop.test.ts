@@ -85,6 +85,33 @@ function shadowPromiseMetadata<Value>(promise: Promise<Value>): Promise<Value> {
   return promise;
 }
 
+function lockPromiseMetadata<Value>(promise: Promise<Value>): Promise<Value> {
+  Object.defineProperties(promise, {
+    constructor: {
+      get() {
+        throw new Error("locked hostile Promise constructor getter");
+      },
+    },
+    then: { value: undefined },
+  });
+  return promise;
+}
+
+function creatorObservedLockedRejection(message: string): Readonly<{
+  promise: Promise<never>;
+  creatorObservation: Promise<unknown>;
+}> {
+  const source = deferred<never>();
+  const creatorObservation = Reflect.apply(
+    Promise.prototype.then,
+    source.promise,
+    [undefined, () => undefined],
+  );
+  lockPromiseMetadata(source.promise);
+  source.reject(new Error(message));
+  return { promise: source.promise, creatorObservation };
+}
+
 function user(content = "Add 20 and 22.") {
   return { id: "message-user-001", role: "user" as const, content };
 }
@@ -1539,6 +1566,144 @@ test("observes iterator cleanup rejection before hostile Promise metadata", asyn
   expect(unhandled).toEqual([]);
 });
 
+test("classifies a locked native model.stream Promise as unobservable", async () => {
+  const locked = creatorObservedLockedRejection("locked stream rejection");
+  const model: CourseModel = {
+    stream() {
+      return locked.promise as unknown as EventStream<
+        CourseModelChunk,
+        CourseModelResponse
+      >;
+    },
+  };
+
+  const { result } = await settleRun(
+    runAgentLoop({
+      messages: [user()],
+      model,
+      tools: new ToolRegistry(),
+      maxSteps: 1,
+      signal: new AbortController().signal,
+    }),
+  );
+  await locked.creatorObservation;
+
+  expect(result).toMatchObject({
+    status: "failed",
+    error: {
+      code: "MODEL_ASYNC_VALUE_UNOBSERVABLE",
+      message: expect.stringContaining("creator must observe"),
+    },
+  });
+});
+
+test("classifies a locked native iterator.next Promise as unobservable", async () => {
+  const locked = creatorObservedLockedRejection("locked next rejection");
+  const model: CourseModel = {
+    stream() {
+      const stream = new EventStream<CourseModelChunk, CourseModelResponse>();
+      const iterator = {
+        next: () => locked.promise,
+        [Symbol.asyncIterator]() {
+          return this;
+        },
+      };
+      Object.defineProperty(stream, Symbol.asyncIterator, {
+        value: () => iterator,
+      });
+      return stream;
+    },
+  };
+
+  const { result } = await settleRun(
+    runAgentLoop({
+      messages: [user()],
+      model,
+      tools: new ToolRegistry(),
+      maxSteps: 1,
+      signal: new AbortController().signal,
+    }),
+  );
+  await locked.creatorObservation;
+
+  expect(result).toMatchObject({
+    status: "failed",
+    error: { code: "MODEL_ASYNC_VALUE_UNOBSERVABLE" },
+  });
+});
+
+test("classifies a locked native stream.result Promise as unobservable", async () => {
+  const locked = creatorObservedLockedRejection("locked result rejection");
+  const model: CourseModel = {
+    stream() {
+      const stream = new EventStream<CourseModelChunk, CourseModelResponse>();
+      const iterator = {
+        next: async () => ({ done: true as const, value: undefined }),
+        [Symbol.asyncIterator]() {
+          return this;
+        },
+      };
+      Object.defineProperties(stream, {
+        result: { value: locked.promise },
+        [Symbol.asyncIterator]: { value: () => iterator },
+      });
+      return stream;
+    },
+  };
+
+  const { result } = await settleRun(
+    runAgentLoop({
+      messages: [user()],
+      model,
+      tools: new ToolRegistry(),
+      maxSteps: 1,
+      signal: new AbortController().signal,
+    }),
+  );
+  await locked.creatorObservation;
+
+  expect(result).toMatchObject({
+    status: "failed",
+    error: { code: "MODEL_ASYNC_VALUE_UNOBSERVABLE" },
+  });
+});
+
+test("locked cleanup Promise cannot replace the primary model failure", async () => {
+  const locked = creatorObservedLockedRejection("locked cleanup rejection");
+  const model: CourseModel = {
+    stream() {
+      const stream = new EventStream<CourseModelChunk, CourseModelResponse>();
+      const iterator = {
+        next: async () => ({ done: false as const, value: null }),
+        return: () => locked.promise,
+        [Symbol.asyncIterator]() {
+          return this;
+        },
+      };
+      Object.defineProperty(stream, Symbol.asyncIterator, {
+        value: () => iterator,
+      });
+      return stream;
+    },
+  };
+
+  const { result } = await settleRun(
+    runAgentLoop({
+      messages: [user()],
+      model,
+      tools: new ToolRegistry(),
+      maxSteps: 1,
+      signal: new AbortController().signal,
+    }),
+  );
+  await locked.creatorObservation;
+
+  expect(result).toMatchObject({
+    status: "failed",
+    error: { code: "MODEL_PROTOCOL_ERROR" },
+  });
+});
+
 test("rejects a Proxy-wrapped Promise while the creator observes its target", async () => {
   const target = Promise.reject(new Error("creator-owned proxy rejection"));
   const creatorObservation = Reflect.apply(Promise.prototype.then, target, [
@@ -1619,6 +1784,98 @@ test("counts one Unicode code point when a surrogate pair spans text deltas", as
   );
 
   expect(result).toMatchObject({ status: "completed", finalText });
+});
+
+test("counts one Unicode code point when a surrogate pair spans terminal text blocks", async () => {
+  const prefix = "a".repeat(65_535);
+  const finalText = `${prefix}😀`;
+  const model: CourseModel = {
+    stream(request) {
+      const stream = new EventStream<CourseModelChunk, CourseModelResponse>();
+      for (const delta of [prefix, "\ud83d", "\ude00"]) {
+        stream.push({ type: "textDelta", requestId: request.id, delta });
+      }
+      stream.finish(
+        responseFor(
+          request.id,
+          "response-split-surrogate-block-boundary",
+          [
+            { type: "text", text: `${prefix}\ud83d` },
+            { type: "text", text: "" },
+            { type: "text", text: "\ude00" },
+          ],
+          "stop",
+        ),
+      );
+      return stream;
+    },
+  };
+
+  const { result } = await settleRun(
+    runAgentLoop({
+      messages: [user()],
+      model,
+      tools: new ToolRegistry(),
+      maxSteps: 1,
+      signal: new AbortController().signal,
+    }),
+  );
+
+  expect(result).toMatchObject({ status: "completed", finalText });
+});
+
+test("applies split-surrogate text budgets to initial assistant blocks", async () => {
+  const prefix = "a".repeat(65_535);
+  const boundaryAssistant = {
+    id: "message-initial-split-boundary",
+    role: "assistant" as const,
+    content: [
+      { type: "text" as const, text: `${prefix}\ud83d` },
+      { type: "text" as const, text: "" },
+      { type: "text" as const, text: "\ude00" },
+    ],
+  };
+  const model = new ScriptedModel([
+    scriptedResponse(
+      "response-after-initial-split-boundary",
+      [{ type: "text", text: "done" }],
+      "stop",
+    ),
+  ]);
+  await expect(
+    runAgentLoop({
+      messages: [user(), boundaryAssistant],
+      model,
+      tools: new ToolRegistry(),
+      maxSteps: 1,
+      signal: new AbortController().signal,
+    }).result,
+  ).resolves.toMatchObject({ status: "completed", finalText: "done" });
+
+  const overBudgetModel = new ScriptedModel();
+  await expect(
+    runAgentLoop({
+      messages: [
+        user(),
+        {
+          ...boundaryAssistant,
+          id: "message-initial-split-overflow",
+          content: [
+            { type: "text" as const, text: `${"a".repeat(65_536)}\ud83d` },
+            { type: "text" as const, text: "\ude00" },
+          ],
+        },
+      ],
+      model: overBudgetModel,
+      tools: new ToolRegistry(),
+      maxSteps: 1,
+      signal: new AbortController().signal,
+    }).result,
+  ).resolves.toMatchObject({
+    status: "failed",
+    error: { code: "INVALID_TRANSCRIPT" },
+  });
+  expect(overBudgetModel.callCount).toBe(0);
 });
 
 test("keeps a split surrogate pair pending across empty text deltas", async () => {

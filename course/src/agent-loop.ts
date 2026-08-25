@@ -98,6 +98,15 @@ class ModelStreamFailure extends Error {
   }
 }
 
+class ModelAsyncValueUnobservableError extends Error {
+  public constructor(context: string) {
+    super(
+      `${context} returned a genuine native Promise whose locked hostile constructor/species prevents intrinsic observation. The malformed model implementation or creator must observe this Promise before returning it`,
+    );
+    this.name = "ModelAsyncValueUnobservableError";
+  }
+}
+
 class ToolPhaseFailure extends Error {
   public constructor(message: string, options?: ErrorOptions) {
     super(message, options);
@@ -135,9 +144,7 @@ type JsonTraversalState = {
   readonly ancestors: WeakSet<object>;
 };
 
-type AssistantContentBudget = {
-  textCodePoints: number;
-};
+type AssistantContentBudget = UnicodeCodePointCounter;
 
 type ModelIteratorHandle = Readonly<{
   iterator: object;
@@ -149,7 +156,8 @@ type InspectedIteratorStep =
 
 type OperationBox = Readonly<{ value: unknown }>;
 
-type AsyncObservation = "native" | "thenable" | "proxy" | "none";
+type AsyncObservation =
+  "native" | "thenable" | "proxy" | "unobservablePromise" | "none";
 
 type NormalizedResponseBlock =
   | Readonly<{ type: "text"; text: string }>
@@ -377,6 +385,12 @@ async function produceRun(
         "MODEL_PROTOCOL_ERROR",
         error.message,
       );
+    } else if (error instanceof ModelAsyncValueUnobservableError) {
+      result = failedResult(
+        currentMessages,
+        "MODEL_ASYNC_VALUE_UNOBSERVABLE",
+        error.message,
+      );
     } else if (error instanceof ModelStreamFailure) {
       result = failedResult(
         currentMessages,
@@ -421,6 +435,9 @@ async function invokeModel(
   }
   if (!(returnedStream instanceof EventStream)) {
     const observation = observeAsyncValue(returnedStream);
+    if (observation === "unobservablePromise") {
+      throw new ModelAsyncValueUnobservableError("model.stream");
+    }
     if (observation === "proxy") {
       throw new ModelProtocolError(
         "model.stream returned a Proxy-wrapped Promise; the loop cannot observe its hidden Promise target, so its creator must observe that target",
@@ -453,8 +470,13 @@ async function invokeModel(
 
       let rawStep: unknown;
       try {
-        rawStep = await waitForAbort(pendingStep, signal);
+        rawStep = await waitForAbort(
+          pendingStep,
+          signal,
+          "Model iterator.next",
+        );
       } catch (error) {
+        if (error instanceof ModelAsyncValueUnobservableError) throw error;
         if (error instanceof ModelProtocolError) throw error;
         if (error instanceof SignalAccessError) throw error;
         throwIfAborted(signal);
@@ -505,8 +527,13 @@ async function invokeModel(
     }
     let rawResponse: unknown;
     try {
-      rawResponse = await waitForAbort(pendingResponse, signal);
+      rawResponse = await waitForAbort(
+        pendingResponse,
+        signal,
+        "Model stream.result",
+      );
     } catch (error) {
+      if (error instanceof ModelAsyncValueUnobservableError) throw error;
       if (error instanceof ModelProtocolError) throw error;
       if (error instanceof SignalAccessError) throw error;
       throwIfAborted(signal);
@@ -658,7 +685,7 @@ function snapshotChunk(value: unknown, requestId: string): CourseModelChunk {
       assertBoundedAssistantBlock(
         rawToolCall,
         "Model Tool-call chunk.toolCall",
-        { textCodePoints: 0 },
+        { count: 0, pendingHighSurrogate: false },
       );
       const snapshot = assistantMessage({
         id: "message-model-chunk-snapshot",
@@ -754,7 +781,10 @@ function assertBoundedAssistantContent(
   }
   assertArrayPrototype(value, path);
   const length = readOwnArrayLength(value, path, MAX_MODEL_BLOCKS_PER_STEP);
-  const budget: AssistantContentBudget = { textCodePoints: 0 };
+  const budget: AssistantContentBudget = {
+    count: 0,
+    pendingHighSurrogate: false,
+  };
   for (let index = 0; index < length; index += 1) {
     const block = readOwnDataProperty(
       value,
@@ -763,6 +793,7 @@ function assertBoundedAssistantContent(
     );
     assertBoundedAssistantBlock(block, `${path}[${index}]`, budget);
   }
+  finishTextCodePointCounter(budget);
 }
 
 function assertBoundedAssistantBlock(
@@ -777,18 +808,14 @@ function assertBoundedAssistantBlock(
     if (typeof text !== "string") {
       throw new TypeError(`${path}.text must be a string`);
     }
-    addBoundedStringCodePoints(
-      budget,
-      "textCodePoints",
-      text,
-      MAX_MODEL_TEXT_CODE_POINTS,
-      `${path}.text`,
-    );
+    addAssistantTextCodePoints(budget, text, `${path}.text`);
     return;
   }
   if (type !== "toolCall") {
     throw new TypeError(`${path}.type must be "text" or "toolCall"`);
   }
+  // A Tool call breaks text adjacency in the assistant block protocol.
+  finishTextCodePointCounter(budget);
 
   const id = readOwnDataProperty(value, "id", `${path}.id`);
   const name = readOwnDataProperty(value, "name", `${path}.name`);
@@ -846,13 +873,7 @@ function assertBoundedToolArguments(
       continue;
     }
     if (typeof item === "string") {
-      addBoundedStringCodePoints(
-        state,
-        "stringCodePoints",
-        item,
-        MAX_TOOL_ARGUMENT_STRING_CODE_POINTS,
-        path,
-      );
+      addBoundedJsonStringCodePoints(state, item, path);
       continue;
     }
     if (!isObjectLike(item) || typeof item === "function") {
@@ -900,13 +921,7 @@ function assertBoundedToolArguments(
         throw new TypeError(`${path}.${key} must not be an accessor`);
       }
       addJsonEntries(state, 1, path);
-      addBoundedStringCodePoints(
-        state,
-        "stringCodePoints",
-        key,
-        MAX_TOOL_ARGUMENT_STRING_CODE_POINTS,
-        path,
-      );
+      addBoundedJsonStringCodePoints(state, key, path);
       stack.push({
         type: "value",
         value: descriptor.value,
@@ -1435,10 +1450,14 @@ function normalizeSignalAccessError(error: unknown): SignalAccessError {
       });
 }
 
-function waitForAbort(value: unknown, signal: AbortSignal): Promise<unknown> {
+function waitForAbort(
+  value: unknown,
+  signal: AbortSignal,
+  context: string,
+): Promise<unknown> {
   let pending: Promise<OperationBox>;
   try {
-    pending = prepareObservedOperation(value);
+    pending = prepareObservedOperation(value, context);
   } catch (error) {
     return nativePromiseConstructor.reject(error);
   }
@@ -1522,7 +1541,10 @@ function waitForAbort(value: unknown, signal: AbortSignal): Promise<unknown> {
   });
 }
 
-function prepareObservedOperation(value: unknown): Promise<OperationBox> {
+function prepareObservedOperation(
+  value: unknown,
+  context: string,
+): Promise<OperationBox> {
   let resolveBox!: (box: OperationBox) => void;
   let rejectBox!: (reason?: unknown) => void;
   const bridge = new nativePromiseConstructor<OperationBox>(
@@ -1542,6 +1564,9 @@ function prepareObservedOperation(value: unknown): Promise<OperationBox> {
     throw new ModelProtocolError(
       "Proxy-wrapped Promise/thenable values cannot be observed because Proxy hides the target Promise internal slots; the creator must observe the target",
     );
+  }
+  if (isNativePromiseValue(value)) {
+    throw new ModelAsyncValueUnobservableError(context);
   }
   if (!isObjectLike(value)) {
     fulfill(value);
@@ -1596,6 +1621,7 @@ function observeAsyncValue(value: unknown): AsyncObservation {
     return "native";
   }
   if (isProxyValue(value)) return "proxy";
+  if (isNativePromiseValue(value)) return "unobservablePromise";
 
   let then: unknown;
   try {
@@ -1605,7 +1631,7 @@ function observeAsyncValue(value: unknown): AsyncObservation {
   }
   if (typeof then !== "function") return "none";
 
-  const pending = prepareObservedOperation(value);
+  const pending = prepareObservedOperation(value, "Thenable observation");
   attachNativePromise(pending, ignoreSettlement, ignoreSettlement);
   return "thenable";
 }
@@ -1640,8 +1666,12 @@ function attachNativePromiseWithStableSpecies(
   onRejected: (reason: unknown) => void,
 ): unknown | undefined {
   try {
-    if (!reflectApply(nodeIsPromise, undefined, [value])) return undefined;
+    if (!isNativePromiseValue(value)) return undefined;
     const prior = Object.getOwnPropertyDescriptor(value, "constructor");
+    // Promise.prototype.then must run SpeciesConstructor before it installs
+    // reactions. Standard JavaScript has no alternate per-Promise attachment
+    // API, so a locked hostile constructor makes this native Promise locally
+    // unobservable. Its creator remains responsible for observing it.
     if (prior !== undefined && !prior.configurable) return undefined;
     Object.defineProperty(value, "constructor", nativePromiseDescriptor);
     try {
@@ -1677,6 +1707,15 @@ function isProxyValue(value: unknown): boolean {
   }
 }
 
+function isNativePromiseValue(value: unknown): boolean {
+  if (!isObjectLike(value)) return false;
+  try {
+    return reflectApply(nodeIsPromise, undefined, [value]);
+  } catch {
+    return false;
+  }
+}
+
 function ignoreSettlement(): void {
   // Intentionally consume an asynchronous settlement.
 }
@@ -1696,12 +1735,51 @@ function closeIteratorQuietly(iterator: object): void {
   } catch {
     return;
   }
-  observeAsyncValue(cleanup);
+  const observation = observeAsyncValue(cleanup);
+  if (observation === "unobservablePromise") {
+    // Cleanup only runs while another terminal outcome is already selected.
+    // The creator must have observed a locked Promise before returning it;
+    // cleanup metadata can never replace or delay the primary result.
+    return;
+  }
 }
 
 function addTextDeltaCodePoints(
   counter: UnicodeCodePointCounter,
   value: string,
+): void {
+  addStatefulUnicodeCodePoints(
+    counter,
+    value,
+    MAX_MODEL_TEXT_CODE_POINTS,
+    () =>
+      new ModelProtocolError(
+        `Model turn exceeded ${MAX_MODEL_TEXT_CODE_POINTS} streamed text code points`,
+      ),
+  );
+}
+
+function addAssistantTextCodePoints(
+  counter: AssistantContentBudget,
+  value: string,
+  path: string,
+): void {
+  addStatefulUnicodeCodePoints(
+    counter,
+    value,
+    MAX_MODEL_TEXT_CODE_POINTS,
+    () =>
+      new TypeError(
+        `${path} exceeds ${MAX_MODEL_TEXT_CODE_POINTS} Unicode code points`,
+      ),
+  );
+}
+
+function addStatefulUnicodeCodePoints(
+  counter: UnicodeCodePointCounter,
+  value: string,
+  maximum: number,
+  overflowError: () => Error,
 ): void {
   let index = 0;
   if (counter.pendingHighSurrogate && value.length > 0) {
@@ -1712,11 +1790,7 @@ function addTextDeltaCodePoints(
   while (index < value.length) {
     const first = value.charCodeAt(index);
     counter.count += 1;
-    if (counter.count > MAX_MODEL_TEXT_CODE_POINTS) {
-      throw new ModelProtocolError(
-        `Model turn exceeded ${MAX_MODEL_TEXT_CODE_POINTS} streamed text code points`,
-      );
-    }
+    if (counter.count > maximum) throw overflowError();
     if (isHighSurrogate(first)) {
       if (index + 1 === value.length) {
         counter.pendingHighSurrogate = true;
@@ -1738,26 +1812,20 @@ function finishTextCodePointCounter(counter: UnicodeCodePointCounter): void {
   counter.pendingHighSurrogate = false;
 }
 
-function addBoundedStringCodePoints(
-  state: AssistantContentBudget | JsonTraversalState,
-  key: "textCodePoints" | "stringCodePoints",
+function addBoundedJsonStringCodePoints(
+  state: JsonTraversalState,
   value: string,
-  maximum: number,
   path: string,
 ): void {
-  const current =
-    key === "textCodePoints"
-      ? (state as AssistantContentBudget).textCodePoints
-      : (state as JsonTraversalState).stringCodePoints;
-  const added = countUnicodeCodePointsUpTo(value, maximum - current);
-  if (added > maximum - current) {
-    throw new TypeError(`${path} exceeds ${maximum} Unicode code points`);
+  const remaining =
+    MAX_TOOL_ARGUMENT_STRING_CODE_POINTS - state.stringCodePoints;
+  const added = countUnicodeCodePointsUpTo(value, remaining);
+  if (added > remaining) {
+    throw new TypeError(
+      `${path} exceeds ${MAX_TOOL_ARGUMENT_STRING_CODE_POINTS} Unicode code points`,
+    );
   }
-  if (key === "textCodePoints") {
-    (state as AssistantContentBudget).textCodePoints = current + added;
-  } else {
-    (state as JsonTraversalState).stringCodePoints = current + added;
-  }
+  state.stringCodePoints += added;
 }
 
 function countUnicodeCodePointsUpTo(value: string, maximum: number): number {
