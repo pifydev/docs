@@ -18,8 +18,15 @@ import {
   type AgentTool,
 } from "@earendil-works/pi-agent-core";
 import {
+  type AgentSession,
+  type AgentSessionRuntime,
+  type AgentSessionRuntimeDiagnostic,
+  type CreateAgentSessionRuntimeFactory,
+  type CreateAgentSessionServicesOptions,
   createAgentSession,
+  createAgentSessionFromServices,
   createAgentSessionRuntime,
+  createAgentSessionServices,
   createPowerShellTool,
   type PowerShellOperations,
   type PowerShellToolOptions,
@@ -416,6 +423,163 @@ export async function verifyDeterministicAgentTestingGuide(): Promise<void> {
   }
 }
 
+export async function createSerializedSessionRuntimeHost(
+  processInputs: Pick<
+    CreateAgentSessionServicesOptions,
+    | "modelRuntimeSignal"
+    | "extensionFlagValues"
+    | "resourceLoaderOptions"
+    | "resourceLoaderReloadOptions"
+  > & {
+    tools?: string[];
+    authorizeProject?: (options: {
+      cwd: string;
+      projectTrustContext: Parameters<CreateAgentSessionRuntimeFactory>[0]["projectTrustContext"];
+    }) => Promise<void>;
+  },
+  initial: Parameters<typeof createAgentSessionRuntime>[1],
+  bindings: {
+    subscribe(session: AgentSession): () => void;
+    reportDiagnostics(
+      diagnostics: readonly AgentSessionRuntimeDiagnostic[],
+    ): void;
+    flushPersistence(): Promise<void>;
+  },
+): Promise<{
+  readonly cwd: string;
+  readonly diagnostics: readonly AgentSessionRuntimeDiagnostic[];
+  newSession(): ReturnType<AgentSessionRuntime["newSession"]>;
+  resume(
+    sessionPath: string,
+    cwdOverride?: string,
+  ): ReturnType<AgentSessionRuntime["switchSession"]>;
+  fork(entryId: string): ReturnType<AgentSessionRuntime["fork"]>;
+  clone(entryId: string): ReturnType<AgentSessionRuntime["fork"]>;
+  importJsonl(
+    inputPath: string,
+    cwdOverride?: string,
+  ): ReturnType<AgentSessionRuntime["importFromJsonl"]>;
+  dispose(): Promise<void>;
+}> {
+  const { tools, authorizeProject, ...serviceInputs } = processInputs;
+  const createRuntime: CreateAgentSessionRuntimeFactory = async ({
+    cwd,
+    agentDir,
+    sessionManager,
+    sessionStartEvent,
+    projectTrustContext,
+  }) => {
+    await authorizeProject?.({ cwd, projectTrustContext });
+    const services = await createAgentSessionServices({
+      ...serviceInputs,
+      cwd,
+      agentDir,
+    });
+    const created = await createAgentSessionFromServices({
+      services,
+      sessionManager,
+      sessionStartEvent,
+      tools,
+    });
+    return {
+      ...created,
+      services,
+      diagnostics: [...services.diagnostics],
+    };
+  };
+
+  const runtime: AgentSessionRuntime = await createAgentSessionRuntime(
+    createRuntime,
+    initial,
+  );
+  let tail: Promise<void> = Promise.resolve();
+  let unsubscribe: (() => void) | undefined;
+  let replacementInFlight = false;
+  let unusable = false;
+  let disposed = false;
+
+  const clearSubscription = () => {
+    const release = unsubscribe;
+    unsubscribe = undefined;
+    release?.();
+  };
+  const assertAvailable = () => {
+    if (disposed) throw new Error("session runtime host is disposed");
+    if (unusable || replacementInFlight) {
+      throw new Error("session runtime host has no usable current session");
+    }
+  };
+  const serialize = <T>(operation: () => Promise<T>): Promise<T> => {
+    const pending = tail.then(async () => {
+      assertAvailable();
+      try {
+        return await operation();
+      } catch (error) {
+        if (replacementInFlight) unusable = true;
+        throw error;
+      }
+    });
+    tail = pending.then(
+      () => undefined,
+      () => undefined,
+    );
+    return pending;
+  };
+  const replace = <T>(operation: () => Promise<T>): Promise<T> =>
+    serialize(async () => {
+      const result = await operation();
+      await bindings.flushPersistence();
+      return result;
+    });
+
+  runtime.setBeforeSessionInvalidate(() => {
+    replacementInFlight = true;
+    clearSubscription();
+  });
+  runtime.setRebindSession(async (session) => {
+    clearSubscription();
+    unsubscribe = bindings.subscribe(session);
+    bindings.reportDiagnostics(runtime.diagnostics);
+    replacementInFlight = false;
+  });
+
+  try {
+    unsubscribe = bindings.subscribe(runtime.session);
+    bindings.reportDiagnostics(runtime.diagnostics);
+  } catch (error) {
+    await runtime.dispose();
+    throw error;
+  }
+
+  return {
+    get cwd() {
+      assertAvailable();
+      return runtime.cwd;
+    },
+    get diagnostics() {
+      assertAvailable();
+      return runtime.diagnostics;
+    },
+    newSession: () => replace(() => runtime.newSession()),
+    resume: (sessionPath, cwdOverride) =>
+      replace(() => runtime.switchSession(sessionPath, { cwdOverride })),
+    fork: (entryId) => replace(() => runtime.fork(entryId)),
+    clone: (entryId) =>
+      replace(() => runtime.fork(entryId, { position: "at" })),
+    importJsonl: (inputPath, cwdOverride) =>
+      replace(() => runtime.importFromJsonl(inputPath, cwdOverride)),
+    dispose: () =>
+      serialize(async () => {
+        await runtime.session.abort();
+        await bindings.flushPersistence();
+        await runtime.dispose();
+        clearSubscription();
+        replacementInFlight = false;
+        disposed = true;
+      }),
+  };
+}
+
 void [
   agentConstructor,
   fauxProviderFactory,
@@ -433,4 +597,5 @@ void [
   customizedPowerShellTool,
   verifyDeterministicAgentRoundTrip,
   verifyDeterministicAgentTestingGuide,
+  createSerializedSessionRuntimeHost,
 ];

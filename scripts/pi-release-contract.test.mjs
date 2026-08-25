@@ -17,6 +17,7 @@ const compileFixturePackages = [
 ];
 const chapter11ExampleFunction = "verifyDeterministicAgentRoundTrip";
 const deterministicGuideFunction = "verifyDeterministicAgentTestingGuide";
+const runtimeGuideFunction = "createSerializedSessionRuntimeHost";
 
 function chapter11ExampleFence(markdown) {
   const matches = [
@@ -228,6 +229,50 @@ function assertDeterministicGuideExampleParity(
     displayed.functionSource,
     compiled.functionSource,
     `${context} displayed function must match the compile fixture`,
+  );
+  assert.deepEqual(
+    displayed.requiredImports,
+    compiled.requiredImports,
+    `${context} required imports must match the compile fixture`,
+  );
+}
+
+function runtimeGuideExampleFence(markdown, context) {
+  const matches = [
+    ...markdown.matchAll(
+      /^```(?:ts|typescript)(?:\s+[^\r\n]*)?\s*\r?\n([\s\S]*?)\r?\n```\s*$/gm,
+    ),
+  ].filter((match) => match[1].includes(`function ${runtimeGuideFunction}`));
+  assert.equal(
+    matches.length,
+    1,
+    `${context} must contain exactly one TypeScript fence for ${runtimeGuideFunction}`,
+  );
+  return matches[0][1].replaceAll("\r\n", "\n");
+}
+
+function assertRuntimeGuideExampleParity(markdown, compileFixture, context) {
+  const displayed = parsedExampleContract(
+    runtimeGuideExampleFence(markdown, context),
+    `${context} displayed example`,
+    runtimeGuideFunction,
+    {},
+  );
+  const compiled = parsedExampleContract(
+    compileFixture.replaceAll("\r\n", "\n"),
+    "Pi 0.84.3 compile fixture",
+    runtimeGuideFunction,
+  );
+
+  assert.deepEqual(
+    displayed.allImports,
+    displayed.requiredImports,
+    `${context} displayed example must not carry unused imports`,
+  );
+  assert.equal(
+    displayed.functionSource,
+    compiled.functionSource,
+    `${context} displayed host function must match the compile fixture`,
   );
   assert.deepEqual(
     displayed.requiredImports,
@@ -580,6 +625,126 @@ test("compile fixture packages are exactly pinned to the published release", asy
 
   for (const packageName of compileFixturePackages) {
     assert.equal(packageJSON.devDependencies[packageName], "0.84.3");
+  }
+});
+
+test("both replaceable session runtime guides name the public 0.84.3 contracts", async () => {
+  const guides = await readLocalizedContent("how-to/host-session-runtime.md");
+
+  for (const { locale, source } of guides) {
+    for (const contract of [
+      "createAgentSession",
+      "createAgentSessionRuntime",
+      "CreateAgentSessionRuntimeFactory",
+      "AgentSessionRuntime",
+    ]) {
+      assert.match(
+        source,
+        new RegExp(`\\b${contract}\\b`),
+        `${locale} replaceable session runtime guide must name ${contract}`,
+      );
+    }
+  }
+});
+
+test("replaceable session runtime guide examples stay synchronized with the compile fixture", async () => {
+  const [guides, compileFixture] = await Promise.all([
+    readLocalizedContent("how-to/host-session-runtime.md"),
+    readFile(
+      new URL("tests/fixtures/pi-sdk-0843.contract.ts", repositoryRoot),
+      "utf8",
+    ),
+  ]);
+
+  const displayedExamples = guides.map(({ locale, source }) => {
+    assert.doesNotThrow(() =>
+      assertRuntimeGuideExampleParity(
+        source,
+        compileFixture,
+        `${locale} replaceable session runtime guide`,
+      ),
+    );
+    return runtimeGuideExampleFence(
+      source,
+      `${locale} replaceable session runtime guide`,
+    );
+  });
+  assert.equal(
+    displayedExamples[0],
+    displayedExamples[1],
+    "replaceable session runtime guide code must be identical across locales",
+  );
+});
+
+test("replaceable session runtime parity rejects function and import drift", async () => {
+  const [markdown, compileFixture] = await Promise.all([
+    readFile(
+      new URL("content/en/how-to/host-session-runtime.md", repositoryRoot),
+      "utf8",
+    ),
+    readFile(
+      new URL("tests/fixtures/pi-sdk-0843.contract.ts", repositoryRoot),
+      "utf8",
+    ),
+  ]);
+  const changedFunction = markdown.replace(
+    "await createAgentSessionFromServices({",
+    "await createAgentSessionFromServices({ /* drift */",
+  );
+  const changedImport = markdown.replace(
+    'from "@earendil-works/pi-coding-agent";',
+    'from "@earendil-works/pi-coding-agent/internal";',
+  );
+  assert.notEqual(changedFunction, markdown);
+  assert.notEqual(changedImport, markdown);
+
+  assert.throws(
+    () =>
+      assertRuntimeGuideExampleParity(
+        changedFunction,
+        compileFixture,
+        "synthetic replaceable session runtime guide",
+      ),
+    /displayed host function must match the compile fixture/,
+  );
+  assert.throws(
+    () =>
+      assertRuntimeGuideExampleParity(
+        changedImport,
+        compileFixture,
+        "synthetic replaceable session runtime guide",
+      ),
+    /required imports must match the compile fixture/,
+  );
+});
+
+test("both replaceable session runtime guides preserve the ten-step lifecycle and diagram actors", async () => {
+  const guides = await readLocalizedContent("how-to/host-session-runtime.md");
+
+  for (const { locale, source } of guides) {
+    let cursor = -1;
+    for (let step = 1; step <= 10; step += 1) {
+      const next = source.search(new RegExp(`^## ${step}\\.`, "m"));
+      assert.ok(
+        next > cursor,
+        `${locale} runtime guide step ${step} must be ordered`,
+      );
+      cursor = next;
+    }
+    for (const actor of [
+      "Host lock",
+      "Old session",
+      "Runtime factory",
+      "Replacement session",
+      "Subscription rebind",
+      "Disposal",
+    ]) {
+      assert.match(
+        source,
+        new RegExp(actor, "i"),
+        `${locale} runtime guide Mermaid diagram must name ${actor}`,
+      );
+    }
   }
 });
 
