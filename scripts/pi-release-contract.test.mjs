@@ -16,6 +16,7 @@ const compileFixturePackages = [
   "@earendil-works/pi-coding-agent",
 ];
 const chapter11ExampleFunction = "verifyDeterministicAgentRoundTrip";
+const deterministicGuideFunction = "verifyDeterministicAgentTestingGuide";
 
 function chapter11ExampleFence(markdown) {
   const matches = [
@@ -33,7 +34,11 @@ function chapter11ExampleFence(markdown) {
   return matches[0][1].replaceAll("\r\n", "\n");
 }
 
-function parsedExampleContract(source, label) {
+function parsedExampleContract(
+  source,
+  label,
+  functionName = chapter11ExampleFunction,
+) {
   const sourceFile = ts.createSourceFile(
     label,
     source,
@@ -44,12 +49,12 @@ function parsedExampleContract(source, label) {
   const functions = sourceFile.statements.filter(
     (statement) =>
       ts.isFunctionDeclaration(statement) &&
-      statement.name?.text === chapter11ExampleFunction,
+      statement.name?.text === functionName,
   );
   assert.equal(
     functions.length,
     1,
-    `${label} must define exactly one ${chapter11ExampleFunction} function`,
+    `${label} must define exactly one ${functionName} function`,
   );
 
   const imports = new Map();
@@ -99,6 +104,70 @@ function parsedExampleContract(source, label) {
     .trim();
 
   return { allImports, functionSource, requiredImports };
+}
+
+function deterministicGuideExampleFence(markdown, context) {
+  const matches = [
+    ...markdown.matchAll(
+      /^```(?:ts|typescript)(?:\s+[^\r\n]*)?\s*\r?\n([\s\S]*?)\r?\n```\s*$/gm,
+    ),
+  ].filter((match) =>
+    match[1].includes(`function ${deterministicGuideFunction}`),
+  );
+  assert.equal(
+    matches.length,
+    1,
+    `${context} must contain exactly one TypeScript fence for ${deterministicGuideFunction}`,
+  );
+  return matches[0][1].replaceAll("\r\n", "\n");
+}
+
+function assertDeterministicGuideExampleParity(
+  markdown,
+  compileFixture,
+  context,
+) {
+  const source = deterministicGuideExampleFence(markdown, context);
+  const displayed = parsedExampleContract(
+    source,
+    `${context} displayed example`,
+    deterministicGuideFunction,
+  );
+  const compiled = parsedExampleContract(
+    compileFixture.replaceAll("\r\n", "\n"),
+    "Pi 0.84.3 compile fixture",
+    deterministicGuideFunction,
+  );
+  const testImport = {
+    local: "test",
+    imported: "default",
+    module: "node:test",
+    typeOnly: false,
+  };
+  const allowedImports = [...displayed.requiredImports, testImport].sort(
+    (left, right) => left.local.localeCompare(right.local),
+  );
+
+  assert.deepEqual(
+    displayed.allImports,
+    allowedImports,
+    `${context} displayed example must use only its compile-checked imports and node:test`,
+  );
+  assert.match(
+    source,
+    /test\(\s*"runs a deterministic Agent without network access",\s*verifyDeterministicAgentTestingGuide,?\s*\);/,
+    `${context} displayed example must register the compile-checked function as a test`,
+  );
+  assert.equal(
+    displayed.functionSource,
+    compiled.functionSource,
+    `${context} displayed function must match the compile fixture`,
+  );
+  assert.deepEqual(
+    displayed.requiredImports,
+    compiled.requiredImports,
+    `${context} required imports must match the compile fixture`,
+  );
 }
 
 function assertChapter11ExampleParity(markdown, compileFixture) {
@@ -444,6 +513,115 @@ test("compile fixture packages are exactly pinned to the published release", asy
   for (const packageName of compileFixturePackages) {
     assert.equal(packageJSON.devDependencies[packageName], "0.84.3");
   }
+});
+
+test("both deterministic Agent guides use the public faux-provider helpers", async () => {
+  const guides = await readLocalizedContent(
+    "how-to/test-agent-deterministically.md",
+  );
+
+  for (const { locale, source } of guides) {
+    for (const helper of [
+      "fauxProvider",
+      "fauxAssistantMessage",
+      "fauxToolCall",
+      "fauxText",
+    ]) {
+      assert.match(
+        source,
+        new RegExp(`\\b${helper}\\b`),
+        `${locale} deterministic Agent guide must use ${helper}`,
+      );
+    }
+  }
+});
+
+test("deterministic Agent guide examples stay synchronized with the compile fixture", async () => {
+  const [guides, compileFixture] = await Promise.all([
+    readLocalizedContent("how-to/test-agent-deterministically.md"),
+    readFile(
+      new URL("tests/fixtures/pi-sdk-0843.contract.ts", repositoryRoot),
+      "utf8",
+    ),
+  ]);
+
+  const displayedExamples = guides.map(({ locale, source }) => {
+    assert.doesNotThrow(() =>
+      assertDeterministicGuideExampleParity(
+        source,
+        compileFixture,
+        `${locale} deterministic Agent guide`,
+      ),
+    );
+    return deterministicGuideExampleFence(
+      source,
+      `${locale} deterministic Agent guide`,
+    );
+  });
+  assert.equal(
+    displayedExamples[0],
+    displayedExamples[1],
+    "deterministic Agent guide code must be identical across locales",
+  );
+});
+
+test("deterministic Agent guide parity rejects function, import, and runner drift", async () => {
+  const [markdown, compileFixture] = await Promise.all([
+    readFile(
+      new URL(
+        "content/en/how-to/test-agent-deterministically.md",
+        repositoryRoot,
+      ),
+      "utf8",
+    ),
+    readFile(
+      new URL("tests/fixtures/pi-sdk-0843.contract.ts", repositoryRoot),
+      "utf8",
+    ),
+  ]);
+  const changedFunction = markdown.replace(
+    'fauxText("The total is 42.")',
+    'fauxText("The total is forty-two.")',
+  );
+  const changedImport = markdown.replace(
+    'from "@earendil-works/pi-agent-core";',
+    'from "@earendil-works/pi-agent-core/internal";',
+  );
+  const changedRunner = markdown.replace(
+    '"runs a deterministic Agent without network access"',
+    '"runs a renamed deterministic test"',
+  );
+  assert.notEqual(changedFunction, markdown);
+  assert.notEqual(changedImport, markdown);
+  assert.notEqual(changedRunner, markdown);
+
+  assert.throws(
+    () =>
+      assertDeterministicGuideExampleParity(
+        changedFunction,
+        compileFixture,
+        "synthetic deterministic Agent guide",
+      ),
+    /displayed function must match the compile fixture/,
+  );
+  assert.throws(
+    () =>
+      assertDeterministicGuideExampleParity(
+        changedImport,
+        compileFixture,
+        "synthetic deterministic Agent guide",
+      ),
+    /required imports must match the compile fixture/,
+  );
+  assert.throws(
+    () =>
+      assertDeterministicGuideExampleParity(
+        changedRunner,
+        compileFixture,
+        "synthetic deterministic Agent guide",
+      ),
+    /must register the compile-checked function as a test/,
+  );
 });
 
 test("Chapter 11 deterministic example stays synchronized with the compile fixture", async () => {
