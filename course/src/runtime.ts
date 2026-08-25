@@ -50,6 +50,7 @@ const toolRegistryGet = ToolRegistry.prototype.get;
 const toolRegistryRegisterMany = ToolRegistry.prototype.registerMany;
 const toolRegistrySnapshot = ToolRegistry.prototype.snapshot;
 const sessionStoreFlush = SessionStore.prototype.flush;
+const sessionStoreCanonicalPathOf = SessionStore.canonicalPathOf;
 const sessionTreeAppend = SessionTree.prototype.append;
 const agentCancel = Agent.prototype.cancel;
 const agentSubscribe = Agent.prototype.subscribe;
@@ -236,13 +237,23 @@ type CreatedSessionIdentity = Readonly<{
   contentsBase64: string;
 }>;
 
+type CreatedSessionParentIdentity = Readonly<{
+  path: string;
+  realPath: string;
+  workspaceRoot: string;
+  device: bigint;
+  inode: bigint;
+  birthtimeNs: bigint;
+}>;
+
 type CreatedSessionParents = Readonly<{
-  directories: readonly string[];
+  directories: readonly CreatedSessionParentIdentity[];
 }>;
 
 type ConstructionOwnershipRecord = {
   readonly label: string;
   readonly value: object;
+  readonly resourceKey?: string;
   readonly cleanup?: () => unknown | PromiseLike<unknown>;
   state: "owned" | "cleaned" | "committed";
 };
@@ -752,9 +763,11 @@ class ConstructionOwnershipLedger {
       if (record.value === value && record.state === "owned") return;
     }
     const cleanup = constructionCleanup(label, value);
+    const resourceKey = constructionResourceKey(label, value);
     this.#records.push({
       label,
       value,
+      ...(resourceKey === undefined ? {} : { resourceKey }),
       ...(cleanup === undefined ? {} : { cleanup }),
       state: "owned",
     });
@@ -765,9 +778,23 @@ class ConstructionOwnershipLedger {
     selected: unknown,
   ): Promise<unknown[]> {
     const failures: unknown[] = [];
+    let selectedResourceKey: string | undefined;
+    for (let index = this.#records.length - 1; index >= start; index -= 1) {
+      const record = this.#records[index];
+      if (record.state === "owned" && record.value === selected) {
+        selectedResourceKey = record.resourceKey;
+        break;
+      }
+    }
     for (let index = this.#records.length - 1; index >= start; index -= 1) {
       const record = this.#records[index];
       if (record.state !== "owned" || record.value === selected) continue;
+      if (
+        record.resourceKey !== undefined &&
+        record.resourceKey === selectedResourceKey
+      ) {
+        continue;
+      }
       const failure = await cleanupConstructionRecord(record);
       if (failure !== undefined) failures.push(failure);
     }
@@ -791,6 +818,14 @@ class ConstructionOwnershipLedger {
       if (record.state === "owned") record.state = "committed";
     }
   }
+}
+
+function constructionResourceKey(
+  label: string,
+  value: object,
+): string | undefined {
+  if (label !== "Session" || !(value instanceof SessionStore)) return undefined;
+  return `Session:${reflectApply(sessionStoreCanonicalPathOf, SessionStore, [value]) as string}`;
 }
 
 function constructionCleanup(
@@ -833,14 +868,44 @@ function isCreatedSessionParents(
 }
 
 async function cleanupCreatedSessionParents(
-  directories: readonly string[],
+  directories: readonly CreatedSessionParentIdentity[],
 ): Promise<unknown[]> {
   const failures: unknown[] = [];
   for (let index = directories.length - 1; index >= 0; index -= 1) {
+    const identity = directories[index];
     try {
-      await rmdir(directories[index]);
+      const metadata = await lstat(identity.path, { bigint: true });
+      const canonical = await realpath(identity.path);
+      if (
+        !metadata.isDirectory() ||
+        metadata.isSymbolicLink() ||
+        canonical !== identity.realPath ||
+        !isWithin(identity.workspaceRoot, canonical) ||
+        metadata.dev !== identity.device ||
+        metadata.ino !== identity.inode ||
+        metadata.birthtimeNs !== identity.birthtimeNs
+      ) {
+        failures.push(
+          runtimeFailure(
+            "RUNTIME_SESSION_ROLLBACK_FAILED",
+            "Created Session parent changed before rollback; refusing to remove it",
+          ),
+        );
+        continue;
+      }
+      await rmdir(identity.path);
     } catch (error) {
-      if (!isFileSystemCode(error, "ENOENT")) failures.push(error);
+      if (!isFileSystemCode(error, "ENOENT")) {
+        failures.push(
+          error instanceof CourseRuntimeError
+            ? error
+            : runtimeFailure(
+                "RUNTIME_SESSION_ROLLBACK_FAILED",
+                "Cannot remove an owned Session parent during rollback",
+                error,
+              ),
+        );
+      }
     }
   }
   return failures;
@@ -1023,6 +1088,12 @@ async function buildCourseRuntime(
     );
     assertFactoryProduct(agent, isAgent, "Agent");
     await assertWorkspaceIdentity(identity);
+    if (!messageArraysEqual(agent.messages, session.activeMessages)) {
+      throw runtimeFailure(
+        "RUNTIME_SESSION_DIVERGED",
+        "Constructed Agent transcript does not match the active Session branch",
+      );
+    }
 
     const runtime = new OwnedCourseRuntime({
       identity,
@@ -1103,11 +1174,15 @@ async function invokeFactory<Input, Output>(
   let output: Output;
   try {
     output = await adoptAsync(selected);
-    if (fallbackPromise !== undefined) await fallbackPromise;
   } catch (error) {
     return await rethrowAfterFallback(error, fallbackPromise, label);
   }
   ownership.register(label, output);
+  try {
+    if (fallbackPromise !== undefined) await fallbackPromise;
+  } catch (error) {
+    return await rethrowAfterFallback(error, fallbackPromise, label);
+  }
   const selectionFailures = await ownership.discardUnselected(
     ownershipStart,
     output,
@@ -1561,25 +1636,43 @@ async function prepareSessionParents(
     );
   }
 
-  const created: string[] = [];
+  const created: CreatedSessionParentIdentity[] = [];
   try {
     for (let index = missing.length - 1; index >= 0; index -= 1) {
       const directory = missing[index];
+      let createdHere = false;
       try {
         await mkdir(directory);
-        created.push(directory);
+        createdHere = true;
       } catch (error) {
         if (!isFileSystemCode(error, "EEXIST")) throw error;
       }
       const canonical = await realpath(directory);
-      const metadata = await stat(canonical);
+      const metadata = await lstat(directory, { bigint: true });
+      const canonicalMetadata = await stat(canonical, { bigint: true });
       if (
         !metadata.isDirectory() ||
+        metadata.isSymbolicLink() ||
+        !canonicalMetadata.isDirectory() ||
+        canonicalMetadata.dev !== metadata.dev ||
+        canonicalMetadata.ino !== metadata.ino ||
         !isWithin(identity.canonicalRoot, canonical)
       ) {
         throw runtimeFailure(
           "RUNTIME_INVALID_OPTIONS",
           "Created Session parent escaped the workspace root",
+        );
+      }
+      if (createdHere) {
+        created.push(
+          Object.freeze({
+            path: directory,
+            realPath: canonical,
+            workspaceRoot: identity.canonicalRoot,
+            device: metadata.dev,
+            inode: metadata.ino,
+            birthtimeNs: metadata.birthtimeNs,
+          }),
         );
       }
       await assertWorkspaceIdentity(identity);

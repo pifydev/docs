@@ -118,6 +118,14 @@ export class SessionStore {
   #unusableError: SessionStoreError | undefined;
   #queue: Promise<void> = Promise.resolve();
 
+  /** Canonical file key for trusted composition code. */
+  public static canonicalPathOf(store: SessionStore): string {
+    if (!(store instanceof SessionStore)) {
+      throw new TypeError("Expected a SessionStore");
+    }
+    return store.#lockKey;
+  }
+
   private constructor(input: {
     path: string;
     root: RootIdentity;
@@ -418,7 +426,7 @@ export class SessionStore {
         installedIdentity = identityFromStats(installed);
         if (
           !installed.isFile() ||
-          !sameIdentity(installedIdentity, temporaryIdentity) ||
+          !sameIdentityAcrossRename(installedIdentity, temporaryIdentity) ||
           installed.size !== BigInt(bytes.byteLength)
         ) {
           throw new SessionStoreError(
@@ -1635,6 +1643,16 @@ function sameIdentity(left: FileIdentity, right: FileIdentity): boolean {
     left.ino === right.ino &&
     left.birthtimeNs === right.birthtimeNs
   );
+}
+
+function sameIdentityAcrossRename(
+  left: FileIdentity,
+  right: FileIdentity,
+): boolean {
+  // NTFS may tunnel a previous destination creation time onto a file renamed
+  // over that path. The file ID remains stable; retain the installed birthtime
+  // as the full identity used by every subsequent replacement check.
+  return left.dev === right.dev && left.ino === right.ino;
 }
 
 async function cleanupOwnedPath(

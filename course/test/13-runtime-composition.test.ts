@@ -14,8 +14,10 @@ import { dirname, join, resolve } from "node:path";
 import { afterEach, expect, test } from "vitest";
 
 import {
+  Agent,
   CourseRuntimeError,
   ExtensionHost,
+  SessionStore,
   ScriptedModel,
   createCourseRuntime,
   createCourseRuntimeManager,
@@ -597,6 +599,45 @@ test("fails replacement closed and leaves the previous runtime live", async () =
   await manager.dispose();
 });
 
+test("rejects an incoherent candidate before publishing it", async () => {
+  const first = await workspace("coherent-old");
+  const second = await workspace("incoherent-candidate");
+  const prepared = await createCourseRuntime(
+    runtimeOptions(
+      second,
+      new ScriptedModel([scriptedResponse("prepared", "Persisted response")]),
+    ),
+  );
+  await drain(prepared.agent.prompt("Persisted request"));
+  await prepared.dispose();
+
+  const factories: CourseRuntimeFactoryOverrides = {
+    createAgent(input, fallback) {
+      if (input.workspace.root !== resolve(second)) return fallback(input);
+      return new Agent({
+        model: input.model,
+        tools: input.tools,
+        messages: [],
+      });
+    },
+  };
+  const manager = await createCourseRuntimeManager(
+    runtimeOptions(first, new ScriptedModel([]), { factories }),
+  );
+  const old = manager.current;
+
+  await expect(
+    manager.replace({
+      cwd: second,
+      session: { path: "course-session.jsonl", mode: "resume" },
+    }),
+  ).rejects.toMatchObject({ code: "RUNTIME_SESSION_DIVERGED" });
+  expect(manager.current).toBe(old);
+  expect(old.state).toBe("open");
+  await expect(old.flush()).resolves.toBeUndefined();
+  await manager.dispose();
+});
+
 test("rolls back a failed construction and disposes activated Extensions in reverse", async () => {
   const cwd = await workspace("rollback");
   const cleanup: string[] = [];
@@ -684,6 +725,48 @@ test("disposes an unselected fallback product exactly once", async () => {
   expect(cleanup).toEqual(["unselected"]);
   await runtime.dispose();
   expect(cleanup).toEqual(["unselected"]);
+});
+
+test("retains a fallback-created Session when the selected store loads the same file", async () => {
+  const cwd = await workspace("fallback-session-same-file");
+  const sessionPath = join(cwd, "course-session.jsonl");
+  const factories: CourseRuntimeFactoryOverrides = {
+    createSession: async (input, fallback) => {
+      await fallback(input);
+      return SessionStore.load(input.workspace.sessionPath, input.options);
+    },
+  };
+
+  const runtime = await createCourseRuntime(
+    runtimeOptions(cwd, new ScriptedModel([]), { factories }),
+  );
+  await expect(runtime.flush()).resolves.toBeUndefined();
+  expect((await lstat(sessionPath)).isFile()).toBe(true);
+  await runtime.dispose();
+});
+
+test("rolls back a retained fallback-created Session after a later factory fails", async () => {
+  const cwd = await workspace("fallback-session-later-failure");
+  const sessionPath = join(cwd, "course-session.jsonl");
+  let filePresentAtAgentFactory = false;
+  const factories: CourseRuntimeFactoryOverrides = {
+    createSession: async (input, fallback) => {
+      await fallback(input);
+      return SessionStore.load(input.workspace.sessionPath, input.options);
+    },
+    createAgent: async () => {
+      filePresentAtAgentFactory = (await lstat(sessionPath)).isFile();
+      throw new Error("Agent failed after Session selection");
+    },
+  };
+
+  await expect(
+    createCourseRuntime(
+      runtimeOptions(cwd, new ScriptedModel([]), { factories }),
+    ),
+  ).rejects.toMatchObject({ code: "RUNTIME_CONSTRUCTION_FAILED" });
+  expect(filePresentAtAgentFactory).toBe(true);
+  await expect(lstat(sessionPath)).rejects.toMatchObject({ code: "ENOENT" });
 });
 
 test("awaits and rolls back a fallback started without awaiting it", async () => {
@@ -778,6 +861,52 @@ test("observes a detached fallback rejection while its override is pending", asy
   }
 });
 
+test("rolls back a selected ExtensionHost when a detached fallback later rejects", async () => {
+  const cwd = await workspace("selected-before-fallback-rejection");
+  const cleanup: string[] = [];
+  const selectedDefinition: ExtensionDefinition = {
+    id: "selected-host",
+    create: () => ({
+      activate(context) {
+        context.onDispose(() => {
+          cleanup.push("selected-host");
+          throw new Error("selected host cleanup failed");
+        });
+      },
+    }),
+  };
+  const factories: CourseRuntimeFactoryOverrides = {
+    createExtensions: async (input, fallback) => {
+      const selected = new ExtensionHost({
+        resources: input.resources,
+        tools: input.tools,
+      });
+      selected.discover([selectedDefinition]);
+      await selected.activate(selectedDefinition.id);
+      void fallback(input);
+      return selected;
+    },
+  };
+  const rejectingDefinition: ExtensionDefinition = {
+    id: "rejecting-fallback-host",
+    create: () => ({
+      activate() {
+        throw new Error("fallback rejected after selected host resolved");
+      },
+    }),
+  };
+
+  const failure = await createCourseRuntime(
+    runtimeOptions(cwd, new ScriptedModel([]), {
+      factories,
+      extensions: [rejectingDefinition],
+    }),
+  ).catch((error: unknown) => error);
+  expect(failure).toMatchObject({ code: "RUNTIME_CONSTRUCTION_FAILED" });
+  expect((failure as CourseRuntimeError).cause).toBeInstanceOf(AggregateError);
+  expect(cleanup).toEqual(["selected-host"]);
+});
+
 test("removes an unchanged create-mode Session when later construction fails", async () => {
   const cwd = await workspace("session-rollback");
   const sessionPath = join(cwd, "course-session.jsonl");
@@ -798,6 +927,8 @@ test("removes an unchanged create-mode Session when later construction fails", a
     runtimeOptions(cwd, new ScriptedModel([])),
   );
   expect(retry.state).toBe("open");
+  await expect(retry.flush()).resolves.toBeUndefined();
+  await expect(retry.dispose()).resolves.toBeUndefined();
 });
 
 test("preserves an externally replaced Session and aggregates rollback refusal", async () => {
@@ -1247,6 +1378,45 @@ test("creates nested Session parents only after confining their canonical path",
     (await lstat(dirname(runtime.workspace.sessionPath))).isDirectory(),
   ).toBe(true);
   await runtime.dispose();
+});
+
+test("preserves replacement directories during created-parent rollback", async () => {
+  const cwd = await workspace("replaced-session-parents");
+  const createdParent = join(cwd, "state");
+  const replacementLeaf = join(createdParent, "nested");
+  const movedParent = join(cwd, "original-state");
+  const factoryEntered = deferred<void>();
+  const releaseFactory = deferred<void>();
+  const factories: CourseRuntimeFactoryOverrides = {
+    createAgent: async () => {
+      factoryEntered.resolve();
+      await releaseFactory.promise;
+      throw new Error("Agent failed after Session parent replacement");
+    },
+  };
+  const construction = createCourseRuntime({
+    ...runtimeOptions(cwd, new ScriptedModel([]), { factories }),
+    session: { path: "state/nested/session.jsonl", mode: "create" },
+  });
+  await factoryEntered.promise;
+  await rename(createdParent, movedParent);
+  await mkdir(createdParent);
+  await mkdir(replacementLeaf);
+  releaseFactory.resolve();
+
+  const failure = await construction.catch((error: unknown) => error);
+  expect(failure).toMatchObject({ code: "RUNTIME_CONSTRUCTION_FAILED" });
+  const cause = (failure as CourseRuntimeError).cause;
+  expect(cause).toBeInstanceOf(AggregateError);
+  expect(
+    (cause as AggregateError).errors.some(
+      (error: unknown) =>
+        error instanceof CourseRuntimeError &&
+        error.code === "RUNTIME_SESSION_ROLLBACK_FAILED",
+    ),
+  ).toBe(true);
+  expect((await lstat(createdParent)).isDirectory()).toBe(true);
+  expect((await lstat(replacementLeaf)).isDirectory()).toBe(true);
 });
 
 test("rejects a nested Session path whose existing parent escapes by symlink", async () => {
