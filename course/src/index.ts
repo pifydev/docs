@@ -4,6 +4,7 @@ export * from "./agent-loop";
 export * from "./coding-tools";
 export * from "./context";
 export * from "./event-stream";
+export * from "./eval";
 export * from "./messages";
 export * from "./provider-adapter";
 export * from "./protocol";
