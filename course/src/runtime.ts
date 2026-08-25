@@ -1,6 +1,23 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import { realpath, stat } from "node:fs/promises";
-import { isAbsolute, relative, resolve } from "node:path";
+import type { BigIntStats } from "node:fs";
+import {
+  lstat,
+  mkdir,
+  open,
+  readFile,
+  realpath,
+  rmdir,
+  stat,
+  unlink,
+} from "node:fs/promises";
+import {
+  dirname,
+  isAbsolute,
+  posix,
+  relative,
+  resolve,
+  win32,
+} from "node:path";
 import { types as nodeUtilTypes } from "node:util";
 
 import { Agent, type AgentOptions } from "./agent";
@@ -38,16 +55,18 @@ const agentCancel = Agent.prototype.cancel;
 const agentSubscribe = Agent.prototype.subscribe;
 const extensionHostDispose = ExtensionHost.prototype.dispose;
 const extensionHostEmit = ExtensionHost.prototype.emit;
+const processCwd = process.cwd.bind(process);
 
 export type CourseRuntimeErrorCode =
   | "RUNTIME_INVALID_OPTIONS"
   | "RUNTIME_CONSTRUCTION_FAILED"
   | "RUNTIME_ROOT_CHANGED"
   | "RUNTIME_EVENT_FAILED"
-  | "RUNTIME_SESSION_CHANGED"
+  | "RUNTIME_SESSION_DIVERGED"
   | "RUNTIME_REENTRANT_OPERATION"
   | "RUNTIME_DISPOSED"
   | "RUNTIME_DISPOSAL_FAILED"
+  | "RUNTIME_SESSION_ROLLBACK_FAILED"
   | "RUNTIME_REPLACEMENT_CLEANUP_FAILED";
 
 export class CourseRuntimeError extends Error {
@@ -206,6 +225,32 @@ type RuntimeOperationContext = {
   readonly token: symbol;
   active: boolean;
 };
+
+type CreatedSessionIdentity = Readonly<{
+  path: string;
+  parent: string;
+  workspaceRoot: string;
+  device: bigint;
+  inode: bigint;
+  birthtimeNs: bigint;
+  contentsBase64: string;
+}>;
+
+type CreatedSessionParents = Readonly<{
+  directories: readonly string[];
+}>;
+
+type ConstructionOwnershipRecord = {
+  readonly label: string;
+  readonly value: object;
+  readonly cleanup?: () => unknown | PromiseLike<unknown>;
+  state: "owned" | "cleaned" | "committed";
+};
+
+const createdSessionIdentities = new WeakMap<
+  SessionStore,
+  CreatedSessionIdentity
+>();
 
 /** Build one independently owned runtime for one canonical workspace root. */
 export function createCourseRuntime(
@@ -457,7 +502,9 @@ class OwnedCourseRuntime implements CourseRuntime {
     }
     return this.#enqueueEvent(async () => {
       await assertWorkspaceIdentity(this.#identity);
+      this.#assertCoherentState();
       await reflectApply(sessionStoreFlush, this.#store, []);
+      this.#assertCoherentState();
       await assertWorkspaceIdentity(this.#identity);
     });
   }
@@ -588,20 +635,20 @@ class OwnedCourseRuntime implements CourseRuntime {
     const active = this.session.activeMessages;
     if (!messageArraysEqual(active, this.#persistedMessages)) {
       throw runtimeFailure(
-        "RUNTIME_SESSION_CHANGED",
+        "RUNTIME_SESSION_DIVERGED",
         "The runtime-owned Session branch changed outside the composition root",
       );
     }
     if (transcript.length < this.#persistedMessages.length) {
       throw runtimeFailure(
-        "RUNTIME_SESSION_CHANGED",
+        "RUNTIME_SESSION_DIVERGED",
         "Agent transcript moved behind the persisted Session branch",
       );
     }
     for (let index = 0; index < this.#persistedMessages.length; index += 1) {
       if (!messagesEqual(this.#persistedMessages[index], transcript[index])) {
         throw runtimeFailure(
-          "RUNTIME_SESSION_CHANGED",
+          "RUNTIME_SESSION_DIVERGED",
           `Agent and Session transcripts diverged at message ${index}`,
         );
       }
@@ -614,6 +661,20 @@ class OwnedCourseRuntime implements CourseRuntime {
       const message = transcript[index];
       await reflectApply(sessionTreeAppend, this.session, [message]);
       this.#persistedMessages.push(message);
+    }
+  }
+
+  #assertCoherentState(): void {
+    const activeMessages = this.session.activeMessages;
+    const agentMessages = this.agent.messages;
+    if (
+      !messageArraysEqual(activeMessages, this.#persistedMessages) ||
+      !messageArraysEqual(agentMessages, this.#persistedMessages)
+    ) {
+      throw runtimeFailure(
+        "RUNTIME_SESSION_DIVERGED",
+        "Agent and Session branches diverged from runtime-owned persistence",
+      );
     }
   }
 
@@ -647,6 +708,11 @@ class OwnedCourseRuntime implements CourseRuntime {
 
       // Persistence is attempted before any Extension-owned resource cleanup.
       try {
+        this.#assertCoherentState();
+      } catch (error) {
+        if (!failures.includes(error)) failures.push(error);
+      }
+      try {
         await reflectApply(sessionStoreFlush, this.#store, []);
       } catch (error) {
         failures.push(error);
@@ -672,10 +738,195 @@ class OwnedCourseRuntime implements CourseRuntime {
   }
 }
 
+class ConstructionOwnershipLedger {
+  readonly #records: ConstructionOwnershipRecord[] = [];
+
+  public mark(): number {
+    return this.#records.length;
+  }
+
+  public register(label: string, value: unknown): void {
+    if (typeof value !== "object" || value === null) return;
+    for (let index = this.#records.length - 1; index >= 0; index -= 1) {
+      const record = this.#records[index];
+      if (record.value === value && record.state === "owned") return;
+    }
+    const cleanup = constructionCleanup(label, value);
+    this.#records.push({
+      label,
+      value,
+      ...(cleanup === undefined ? {} : { cleanup }),
+      state: "owned",
+    });
+  }
+
+  public async discardUnselected(
+    start: number,
+    selected: unknown,
+  ): Promise<unknown[]> {
+    const failures: unknown[] = [];
+    for (let index = this.#records.length - 1; index >= start; index -= 1) {
+      const record = this.#records[index];
+      if (record.state !== "owned" || record.value === selected) continue;
+      const failure = await cleanupConstructionRecord(record);
+      if (failure !== undefined) failures.push(failure);
+    }
+    return failures;
+  }
+
+  public async rollback(): Promise<unknown[]> {
+    const failures: unknown[] = [];
+    for (let index = this.#records.length - 1; index >= 0; index -= 1) {
+      const record = this.#records[index];
+      if (record.state !== "owned") continue;
+      const failure = await cleanupConstructionRecord(record);
+      if (failure !== undefined) failures.push(failure);
+    }
+    return failures;
+  }
+
+  public commitAll(): void {
+    for (let index = 0; index < this.#records.length; index += 1) {
+      const record = this.#records[index];
+      if (record.state === "owned") record.state = "committed";
+    }
+  }
+}
+
+function constructionCleanup(
+  label: string,
+  value: object,
+): (() => unknown | PromiseLike<unknown>) | undefined {
+  if (label === "SessionParents" && isCreatedSessionParents(value)) {
+    return async () => {
+      const failures = await cleanupCreatedSessionParents(value.directories);
+      if (failures.length > 0) {
+        throw runtimeFailure(
+          "RUNTIME_SESSION_ROLLBACK_FAILED",
+          "Cannot remove created Session parent directories",
+          frozenAggregate(
+            failures,
+            "Created Session parent directory rollback failed",
+          ),
+        );
+      }
+    };
+  }
+  if (label === "Extensions" && value instanceof ExtensionHost) {
+    return () => reflectApply(extensionHostDispose, value, []);
+  }
+  if (label === "Session" && value instanceof SessionStore) {
+    const identity = createdSessionIdentities.get(value);
+    if (identity !== undefined) return () => rollbackCreatedSession(identity);
+  }
+  return undefined;
+}
+
+function isCreatedSessionParents(
+  value: object,
+): value is CreatedSessionParents {
+  try {
+    return Array.isArray(Reflect.get(value, "directories"));
+  } catch {
+    return false;
+  }
+}
+
+async function cleanupCreatedSessionParents(
+  directories: readonly string[],
+): Promise<unknown[]> {
+  const failures: unknown[] = [];
+  for (let index = directories.length - 1; index >= 0; index -= 1) {
+    try {
+      await rmdir(directories[index]);
+    } catch (error) {
+      if (!isFileSystemCode(error, "ENOENT")) failures.push(error);
+    }
+  }
+  return failures;
+}
+
+async function cleanupConstructionRecord(
+  record: ConstructionOwnershipRecord,
+): Promise<unknown | undefined> {
+  if (record.state !== "owned") return undefined;
+  record.state = "cleaned";
+  if (record.cleanup === undefined) return undefined;
+  try {
+    await adoptAsync(record.cleanup());
+    return undefined;
+  } catch (error) {
+    return error;
+  }
+}
+
+async function rollbackCreatedSession(
+  identity: CreatedSessionIdentity,
+): Promise<void> {
+  let metadata: BigIntStats;
+  let canonicalParent: string;
+  let contentsBase64: string;
+  try {
+    canonicalParent = await realpath(identity.parent);
+    metadata = await lstat(identity.path, { bigint: true });
+    contentsBase64 = (await readFile(identity.path)).toString("base64");
+  } catch (error) {
+    if (isFileSystemCode(error, "ENOENT")) return;
+    throw runtimeFailure(
+      "RUNTIME_SESSION_ROLLBACK_FAILED",
+      "Cannot inspect the create-mode Session during rollback",
+      error,
+    );
+  }
+  if (
+    !isWithin(identity.workspaceRoot, canonicalParent) ||
+    !metadata.isFile() ||
+    metadata.isSymbolicLink() ||
+    metadata.dev !== identity.device ||
+    metadata.ino !== identity.inode ||
+    metadata.birthtimeNs !== identity.birthtimeNs ||
+    contentsBase64 !== identity.contentsBase64
+  ) {
+    throw runtimeFailure(
+      "RUNTIME_SESSION_ROLLBACK_FAILED",
+      "Create-mode Session changed before rollback; refusing to remove it",
+    );
+  }
+  try {
+    await unlink(identity.path);
+    await syncDirectory(identity.parent);
+  } catch (error) {
+    throw runtimeFailure(
+      "RUNTIME_SESSION_ROLLBACK_FAILED",
+      "Cannot remove the owned create-mode Session during rollback",
+      error,
+    );
+  }
+}
+
+async function syncDirectory(path: string): Promise<void> {
+  let handle: Awaited<ReturnType<typeof open>> | undefined;
+  try {
+    handle = await open(path, "r");
+    await handle.sync();
+  } catch (error) {
+    if (
+      !isFileSystemCode(error, "EINVAL") &&
+      !isFileSystemCode(error, "ENOTSUP") &&
+      !isFileSystemCode(error, "EPERM")
+    ) {
+      throw error;
+    }
+  } finally {
+    await handle?.close().catch(() => undefined);
+  }
+}
+
 async function buildCourseRuntime(
   capturedWorkspace: CapturedWorkspaceOptions,
   shared: CapturedSharedOptions,
 ): Promise<CourseRuntime> {
+  const ownership = new ConstructionOwnershipLedger();
   let identity: WorkspaceIdentity;
   try {
     identity = await captureWorkspace(capturedWorkspace);
@@ -688,8 +939,9 @@ async function buildCourseRuntime(
     );
   }
 
-  let extensions: ExtensionHost | undefined;
   try {
+    const sessionParents = await prepareSessionParents(identity);
+    ownership.register("SessionParents", sessionParents);
     const toolsInput = Object.freeze({
       workspace: identity.publicValue,
       baseTools: snapshotRegistry(shared.baseTools),
@@ -700,6 +952,7 @@ async function buildCourseRuntime(
       toolsInput,
       defaultCreateTools,
       identity,
+      ownership,
     );
     assertFactoryProduct(baseTools, isToolRegistry, "Tools");
 
@@ -717,6 +970,7 @@ async function buildCourseRuntime(
       resourcesInput,
       defaultCreateResources,
       identity,
+      ownership,
     );
     assertFactoryProduct(resources, isResourceLoader, "Resources");
 
@@ -730,6 +984,7 @@ async function buildCourseRuntime(
       sessionInput,
       defaultCreateSession,
       identity,
+      ownership,
     );
     assertFactoryProduct(store, isSessionStore, "Session");
     const session = new SessionTree(store);
@@ -740,12 +995,13 @@ async function buildCourseRuntime(
       tools: baseTools,
       definitions: shared.extensions,
     });
-    extensions = await invokeFactory(
+    const extensions = await invokeFactory(
       "Extensions",
       shared.factories.createExtensions,
       extensionsInput,
       defaultCreateExtensions,
       identity,
+      ownership,
     );
     assertFactoryProduct(extensions, isExtensionHost, "Extensions");
     const tools = extensions.tools;
@@ -763,11 +1019,12 @@ async function buildCourseRuntime(
       agentInput,
       defaultCreateAgent,
       identity,
+      ownership,
     );
     assertFactoryProduct(agent, isAgent, "Agent");
     await assertWorkspaceIdentity(identity);
 
-    return new OwnedCourseRuntime({
+    const runtime = new OwnedCourseRuntime({
       identity,
       agent,
       session,
@@ -775,13 +1032,10 @@ async function buildCourseRuntime(
       tools,
       extensions,
     });
+    ownership.commitAll();
+    return runtime;
   } catch (error) {
-    const cleanupFailures =
-      extensions === undefined
-        ? []
-        : await collectCleanupFailure(() =>
-            reflectApply(extensionHostDispose, extensions as ExtensionHost, []),
-          );
+    const cleanupFailures = await ownership.rollback();
     if (error instanceof CourseRuntimeError && cleanupFailures.length === 0) {
       throw error;
     }
@@ -808,21 +1062,31 @@ async function invokeFactory<Input, Output>(
   input: Input,
   defaultFactory: (input: Input) => Output | PromiseLike<Output>,
   identity: WorkspaceIdentity,
+  ownership: ConstructionOwnershipLedger,
 ): Promise<Output> {
+  const ownershipStart = ownership.mark();
   let fallbackPromise: Promise<Output> | undefined;
   const fallback: RuntimeFallback<Input, Output> = () => {
     if (fallbackPromise !== undefined) return fallbackPromise;
     fallbackPromise = (async () => {
       await assertWorkspaceIdentity(identity);
+      if (label === "Session") await assertFinalSessionParent(identity);
       const output = await adoptAsync(defaultFactory(input));
+      ownership.register(label, output);
+      if (label === "Session") await assertFinalSessionParent(identity);
       await assertWorkspaceIdentity(identity);
       return output;
     })();
+    void reflectApply(nativePromiseThen, fallbackPromise, [
+      () => undefined,
+      () => undefined,
+    ]);
     return fallbackPromise;
   };
   Object.freeze(fallback);
 
   await assertWorkspaceIdentity(identity);
+  if (label === "Session") await assertFinalSessionParent(identity);
   let selected: Output | PromiseLike<Output>;
   try {
     selected =
@@ -830,11 +1094,53 @@ async function invokeFactory<Input, Output>(
         ? fallback(input)
         : reflectApply(override, undefined, [input, fallback]);
   } catch (error) {
-    throw new Error(`${label} factory threw`, { cause: error });
+    return await rethrowAfterFallback(
+      new Error(`${label} factory threw`, { cause: error }),
+      fallbackPromise,
+      label,
+    );
   }
-  const output = await adoptAsync(selected);
+  let output: Output;
+  try {
+    output = await adoptAsync(selected);
+    if (fallbackPromise !== undefined) await fallbackPromise;
+  } catch (error) {
+    return await rethrowAfterFallback(error, fallbackPromise, label);
+  }
+  ownership.register(label, output);
+  const selectionFailures = await ownership.discardUnselected(
+    ownershipStart,
+    output,
+  );
+  if (selectionFailures.length > 0) {
+    throw frozenAggregate(
+      selectionFailures,
+      `${label} factory selection cleanup failed`,
+    );
+  }
+  if (label === "Session") await assertFinalSessionParent(identity);
   await assertWorkspaceIdentity(identity);
   return output;
+}
+
+async function rethrowAfterFallback<Output>(
+  primary: unknown,
+  fallbackPromise: Promise<Output> | undefined,
+  label: string,
+): Promise<never> {
+  if (fallbackPromise !== undefined) {
+    try {
+      await fallbackPromise;
+    } catch (fallbackError) {
+      if (fallbackError !== primary) {
+        throw frozenAggregate(
+          [primary, fallbackError],
+          `${label} factory and fallback failed`,
+        );
+      }
+    }
+  }
+  throw primary;
 }
 
 function defaultCreateTools(
@@ -856,12 +1162,54 @@ function defaultCreateResources(
   return ResourceLoader.create(input.roots);
 }
 
-function defaultCreateSession(
+async function defaultCreateSession(
   input: CourseRuntimeSessionFactoryInput,
 ): Promise<SessionStore> {
-  return input.workspace.sessionMode === "resume"
-    ? SessionStore.load(input.workspace.sessionPath, input.options)
-    : SessionStore.create(input.workspace.sessionPath, input.options);
+  if (input.workspace.sessionMode === "resume") {
+    return SessionStore.load(input.workspace.sessionPath, input.options);
+  }
+
+  let absent = false;
+  try {
+    await lstat(input.workspace.sessionPath);
+  } catch (error) {
+    if (!isFileSystemCode(error, "ENOENT")) throw error;
+    absent = true;
+  }
+  const store = await SessionStore.create(
+    input.workspace.sessionPath,
+    input.options,
+  );
+  if (absent) {
+    const contentsBase64 = Buffer.from(
+      `${JSON.stringify(store.header)}\n`,
+      "utf8",
+    ).toString("base64");
+    const metadata = await lstat(input.workspace.sessionPath, { bigint: true });
+    if (
+      !metadata.isFile() ||
+      metadata.isSymbolicLink() ||
+      metadata.size !== BigInt(Buffer.from(contentsBase64, "base64").byteLength)
+    ) {
+      throw runtimeFailure(
+        "RUNTIME_SESSION_ROLLBACK_FAILED",
+        "Created Session path is not an owned regular file",
+      );
+    }
+    createdSessionIdentities.set(
+      store,
+      Object.freeze({
+        path: input.workspace.sessionPath,
+        parent: dirname(input.workspace.sessionPath),
+        workspaceRoot: input.workspace.root,
+        device: metadata.dev,
+        inode: metadata.ino,
+        birthtimeNs: metadata.birthtimeNs,
+        contentsBase64,
+      }),
+    );
+  }
+  return store;
 }
 
 async function defaultCreateExtensions(
@@ -899,6 +1247,7 @@ function defaultCreateAgent(input: CourseRuntimeAgentFactoryInput): Agent {
 }
 
 function captureRuntimeOptions(value: unknown): CapturedRuntimeOptions {
+  const callCwd = processCwd();
   const record = exactDataRecord(value, [
     "cwd",
     "model",
@@ -909,15 +1258,21 @@ function captureRuntimeOptions(value: unknown): CapturedRuntimeOptions {
     "extensions",
     "factories",
   ]);
-  const workspace = captureWorkspaceOptions({
-    cwd: requireString(record.cwd, "cwd"),
-    session: captureSessionInput(record.session),
-  });
+  const workspace = captureWorkspaceOptions(
+    {
+      cwd: requireString(record.cwd, "cwd"),
+      session: captureSessionInput(record.session),
+    },
+    callCwd,
+  );
   const model = snapshotModel(record.model);
   const maxSteps = optionalPositiveInteger(record.maxSteps, "maxSteps");
   const baseDefinitions = snapshotDenseArray(record.tools ?? [], "tools");
   const baseTools = new ToolRegistry(baseDefinitions);
-  const resourceRoots = snapshotResourceRoots(record.resourceRoots ?? []);
+  const resourceRoots = snapshotResourceRoots(
+    record.resourceRoots ?? [],
+    callCwd,
+  );
   const extensions = snapshotExtensionDefinitions(record.extensions ?? []);
   const factories = snapshotFactories(record.factories);
   return Object.freeze({
@@ -933,12 +1288,15 @@ function captureRuntimeOptions(value: unknown): CapturedRuntimeOptions {
   });
 }
 
-function captureWorkspaceOptions(value: unknown): CapturedWorkspaceOptions {
+function captureWorkspaceOptions(
+  value: unknown,
+  callCwd = processCwd(),
+): CapturedWorkspaceOptions {
   const record = exactDataRecord(value, ["cwd", "session"]);
   const cwd = requireString(record.cwd, "cwd");
   const session = captureSessionInput(record.session);
   return Object.freeze({
-    cwd,
+    cwd: resolve(callCwd, cwd),
     sessionPath: session.path,
     sessionMode: session.mode,
     sessionOptions: snapshotSessionStoreOptions(session.options),
@@ -947,7 +1305,9 @@ function captureWorkspaceOptions(value: unknown): CapturedWorkspaceOptions {
 
 function captureSessionInput(value: unknown): CourseRuntimeSessionOptions {
   const record = exactDataRecord(value, ["path", "mode", "options"]);
-  const path = requireString(record.path, "session.path");
+  const path = normalizeSessionRelativePath(
+    requireString(record.path, "session.path"),
+  );
   const mode = record.mode;
   if (mode !== "create" && mode !== "resume") {
     throw new TypeError('session.mode must be "create" or "resume"');
@@ -1029,6 +1389,7 @@ function optionalFactory(
 
 function snapshotResourceRoots(
   value: unknown,
+  callCwd: string,
 ): readonly ResourceRootDefinition[] {
   const values = snapshotDenseArray(value, "resourceRoots");
   const roots: ResourceRootDefinition[] = [];
@@ -1042,9 +1403,9 @@ function snapshotResourceRoots(
     roots.push(
       Object.freeze({
         id,
-        directory: requireString(
-          record.directory,
-          `resourceRoots[${index}].directory`,
+        directory: resolve(
+          callCwd,
+          requireString(record.directory, `resourceRoots[${index}].directory`),
         ),
       }),
     );
@@ -1098,15 +1459,14 @@ async function captureWorkspace(
       "Workspace root must be a directory",
     );
   }
-  const sessionPath = isAbsolute(input.sessionPath)
-    ? resolve(input.sessionPath)
-    : resolve(canonicalRoot, input.sessionPath);
+  const sessionPath = resolve(canonicalRoot, ...input.sessionPath.split("/"));
   if (!isWithin(canonicalRoot, sessionPath) || sessionPath === canonicalRoot) {
     throw runtimeFailure(
       "RUNTIME_INVALID_OPTIONS",
       "Session path must name a file inside the workspace root",
     );
   }
+  await assertNearestSessionParentConfined(canonicalRoot, sessionPath);
   const publicValue = Object.freeze({
     root: canonicalRoot,
     sessionPath,
@@ -1120,6 +1480,157 @@ async function captureWorkspace(
     birthtimeMs: metadata.birthtimeMs,
     publicValue,
   });
+}
+
+async function assertNearestSessionParentConfined(
+  canonicalRoot: string,
+  sessionPath: string,
+): Promise<void> {
+  let candidate = dirname(sessionPath);
+  while (true) {
+    try {
+      const metadata = await lstat(candidate);
+      const canonical = await realpath(candidate);
+      const canonicalMetadata = await stat(canonical);
+      if (
+        !metadata.isDirectory() ||
+        !canonicalMetadata.isDirectory() ||
+        !isWithin(canonicalRoot, canonical)
+      ) {
+        throw runtimeFailure(
+          "RUNTIME_INVALID_OPTIONS",
+          "Session parent resolves outside the workspace root",
+        );
+      }
+      return;
+    } catch (error) {
+      if (!isFileSystemCode(error, "ENOENT")) {
+        if (error instanceof CourseRuntimeError) throw error;
+        throw runtimeFailure(
+          "RUNTIME_INVALID_OPTIONS",
+          "Session parent cannot be inspected safely",
+          error,
+        );
+      }
+    }
+    const parent = dirname(candidate);
+    if (parent === candidate) {
+      throw runtimeFailure(
+        "RUNTIME_INVALID_OPTIONS",
+        "Session path has no existing confined parent",
+      );
+    }
+    candidate = parent;
+  }
+}
+
+async function prepareSessionParents(
+  identity: WorkspaceIdentity,
+): Promise<CreatedSessionParents> {
+  const finalParent = dirname(identity.publicValue.sessionPath);
+  const missing: string[] = [];
+  let candidate = finalParent;
+  while (true) {
+    try {
+      const metadata = await lstat(candidate);
+      if (!metadata.isDirectory()) {
+        throw runtimeFailure(
+          "RUNTIME_INVALID_OPTIONS",
+          "Session parent path contains a non-directory entry",
+        );
+      }
+      break;
+    } catch (error) {
+      if (!isFileSystemCode(error, "ENOENT")) throw error;
+      missing.push(candidate);
+      const parent = dirname(candidate);
+      if (parent === candidate) {
+        throw runtimeFailure(
+          "RUNTIME_INVALID_OPTIONS",
+          "Session parent cannot be created safely",
+        );
+      }
+      candidate = parent;
+    }
+  }
+
+  if (identity.publicValue.sessionMode === "resume" && missing.length > 0) {
+    throw runtimeFailure(
+      "RUNTIME_INVALID_OPTIONS",
+      "Resume-mode Session parent must already exist",
+    );
+  }
+
+  const created: string[] = [];
+  try {
+    for (let index = missing.length - 1; index >= 0; index -= 1) {
+      const directory = missing[index];
+      try {
+        await mkdir(directory);
+        created.push(directory);
+      } catch (error) {
+        if (!isFileSystemCode(error, "EEXIST")) throw error;
+      }
+      const canonical = await realpath(directory);
+      const metadata = await stat(canonical);
+      if (
+        !metadata.isDirectory() ||
+        !isWithin(identity.canonicalRoot, canonical)
+      ) {
+        throw runtimeFailure(
+          "RUNTIME_INVALID_OPTIONS",
+          "Created Session parent escaped the workspace root",
+        );
+      }
+      await assertWorkspaceIdentity(identity);
+    }
+    const finalCanonical = await realpath(finalParent);
+    if (!isWithin(identity.canonicalRoot, finalCanonical)) {
+      throw runtimeFailure(
+        "RUNTIME_INVALID_OPTIONS",
+        "Final Session parent escaped the workspace root",
+      );
+    }
+    return Object.freeze({ directories: Object.freeze(created.slice()) });
+  } catch (error) {
+    const cleanupFailures = await cleanupCreatedSessionParents(created);
+    if (cleanupFailures.length === 0) throw error;
+    throw runtimeFailure(
+      "RUNTIME_SESSION_ROLLBACK_FAILED",
+      "Session parent preparation and rollback failed",
+      frozenAggregate(
+        [error, ...cleanupFailures],
+        "Session parent preparation and rollback failed",
+      ),
+    );
+  }
+}
+
+async function assertFinalSessionParent(
+  identity: WorkspaceIdentity,
+): Promise<void> {
+  try {
+    const parent = dirname(identity.publicValue.sessionPath);
+    const canonical = await realpath(parent);
+    const metadata = await stat(canonical);
+    if (
+      !metadata.isDirectory() ||
+      !isWithin(identity.canonicalRoot, canonical)
+    ) {
+      throw runtimeFailure(
+        "RUNTIME_INVALID_OPTIONS",
+        "Final Session parent resolves outside the workspace root",
+      );
+    }
+    await assertWorkspaceIdentity(identity);
+  } catch (error) {
+    if (error instanceof CourseRuntimeError) throw error;
+    throw runtimeFailure(
+      "RUNTIME_INVALID_OPTIONS",
+      "Final Session parent cannot be inspected safely",
+      error,
+    );
+  }
 }
 
 async function assertWorkspaceIdentity(
@@ -1314,10 +1825,13 @@ function exactDataRecord(
       throw new TypeError(`Unexpected option ${String(key)}`);
     }
     const descriptor = Object.getOwnPropertyDescriptor(value, key);
-    if (descriptor === undefined || !("value" in descriptor)) {
-      throw new TypeError(`Option ${key} must be a data property`);
+    if (descriptor === undefined) throw new TypeError(`Option ${key} vanished`);
+    if ("value" in descriptor) result[key] = descriptor.value;
+    else if (typeof descriptor.get === "function") {
+      result[key] = reflectApply(descriptor.get, value, []);
+    } else {
+      throw new TypeError(`Option ${key} is unreadable`);
     }
-    result[key] = descriptor.value;
   }
   return result;
 }
@@ -1396,6 +1910,35 @@ function optionalPositiveInteger(
   return value as number;
 }
 
+function normalizeSessionRelativePath(value: string): string {
+  if (
+    isAbsolute(value) ||
+    posix.isAbsolute(value) ||
+    win32.isAbsolute(value) ||
+    value.includes(":") ||
+    value.startsWith("\\\\") ||
+    /^[A-Za-z]:/u.test(value)
+  ) {
+    throw new TypeError("session.path must be a portable relative path");
+  }
+  const segments = value.replaceAll("\\", "/").split("/");
+  const normalized: string[] = [];
+  for (let index = 0; index < segments.length; index += 1) {
+    const segment = segments[index];
+    if (segment === "" || segment === "." || segment === "..") {
+      throw new TypeError("session.path contains an invalid segment");
+    }
+    if (
+      /[. ]$/u.test(segment) ||
+      /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/iu.test(segment)
+    ) {
+      throw new TypeError("session.path contains a device-like segment");
+    }
+    normalized.push(segment);
+  }
+  return normalized.join("/");
+}
+
 function isWithin(root: string, target: string): boolean {
   const path = relative(root, target);
   return (
@@ -1408,6 +1951,15 @@ function isWithin(root: string, target: string): boolean {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isFileSystemCode(value: unknown, code: string): boolean {
+  if (typeof value !== "object" || value === null) return false;
+  try {
+    return Reflect.get(value, "code") === code;
+  } catch {
+    return false;
+  }
 }
 
 function normalizeEventFailure(error: unknown): CourseRuntimeError {
