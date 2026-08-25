@@ -459,10 +459,18 @@ automatic: prepare first → compaction_start
   → append entry → rebuild Agent messages → session_compact
   → compaction_end(success, willRetry)
 
-terminal failure or abort after start
+ordinary terminal failure or abort after compaction_start
   → compaction_end(result: undefined, aborted/errorMessage)
   → session_compact_failed
+
+exhausted overflow recovery, without a new compaction_start
+  → compaction_end(reason: overflow, result: undefined, terminal fields)
+  → session_compact_failed (awaited with the same terminal meaning)
 ```
+
+Ordinary started compaction failures follow `compaction_start`, then `compaction_end`, and finally the awaited `session_compact_failed` hook.
+
+Exhausted overflow recovery is the terminal exception to the start/end pairing. Without a new `compaction_start`, Pi emits `compaction_end` and then awaits `session_compact_failed`. The end event has `result: undefined`; both carry `reason: "overflow"`, `errorMessage` set to either `Context overflow recovery failed after one compact-and-retry attempt. Try reducing context or switching to a larger-context model.` or `Truncated response recovery failed after one compact-and-retry attempt.`, `aborted: false`, and `willRetry: false`; the failed Extension event also carries `fromExtension: false`.
 
 This copyable Extension records all three hook outcomes without replacing the built-in summary:
 

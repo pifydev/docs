@@ -462,10 +462,18 @@ tự động: chuẩn bị trước → compaction_start
   → ghi mục → dựng lại thông điệp Agent → session_compact
   → compaction_end(thành công, willRetry)
 
-lỗi kết thúc hoặc thao tác hủy sau khi bắt đầu
+lỗi kết thúc hoặc thao tác hủy thông thường sau compaction_start
   → compaction_end(result: undefined, aborted/errorMessage)
   → session_compact_failed
+
+phục hồi overflow đã dùng hết, không có compaction_start mới
+  → compaction_end(reason: overflow, result: undefined, các field kết thúc)
+  → session_compact_failed (được chờ với cùng trạng thái kết thúc)
 ```
+
+Lỗi compaction thông thường đã bắt đầu đi theo chuỗi `compaction_start`, rồi `compaction_end`, cuối cùng là hook `session_compact_failed` được chờ hoàn tất.
+
+Phục hồi overflow đã dùng hết là ngoại lệ kết thúc đối với cặp start/end. Không có `compaction_start` mới, Pi phát `compaction_end` rồi chờ `session_compact_failed` hoàn tất. Sự kiện kết thúc có `result: undefined`; cả hai mang `reason: "overflow"`, `errorMessage` là `Context overflow recovery failed after one compact-and-retry attempt. Try reducing context or switching to a larger-context model.` hoặc `Truncated response recovery failed after one compact-and-retry attempt.`, `aborted: false` và `willRetry: false`; sự kiện lỗi của Extension còn mang `fromExtension: false`.
 
 Extension dưới đây ghi nhận kết quả của cả ba hook mà không thay bản tóm tắt tích hợp sẵn:
 

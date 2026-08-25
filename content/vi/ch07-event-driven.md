@@ -265,7 +265,11 @@ type SessionCompactFailedEvent = {
 
 Pi phát đồng bộ sự kiện session `compaction_end` trước, sau đó `session_compact_failed` mới được phân phối và được chờ hoàn tất sau `compaction_end`. Vì vậy, failed hook hoàn tất trước khi promise của `compact()` thủ công reject hoặc đường tự động trả `false`.
 
-Với lần chạy thủ công, `compact()` chỉ reject sau khi các handler `session_compact_failed` hoàn tất; với lỗi tự động sau khi bắt đầu và có phát sự kiện này, vòng lặp compaction chỉ trả `false` sau khi các handler đó hoàn tất. Cả hai đường kết thúc đều không ghi thêm mục compaction mới. Đường tự động tự xử lý thao tác hủy, abort, lỗi tạo summary thông thường và việc phục hồi overflow đã dùng hết một lần retry thay vì ném các kết quả đó cho caller. Trường hợp không có model, không thể chuẩn bị hoặc lỗi authentication trước `compaction_start` có thể trả `false` mà không phát `compaction_end` hay `session_compact_failed`.
+Với lần chạy thủ công, `compact()` chỉ reject sau khi các handler `session_compact_failed` hoàn tất; với lỗi tự động sau khi bắt đầu và có phát sự kiện này, vòng lặp compaction chỉ trả `false` sau khi các handler đó hoàn tất. Cả hai đường kết thúc đều không ghi thêm mục compaction mới. Đường tự động tự xử lý thao tác hủy, abort và lỗi tạo summary thông thường đã bắt đầu thay vì ném các kết quả đó cho caller. Trường hợp không có model, không thể chuẩn bị hoặc lỗi authentication trước `compaction_start` có thể trả `false` mà không phát `compaction_end` hay `session_compact_failed`.
+
+Lỗi compaction thông thường đã bắt đầu đi theo chuỗi `compaction_start`, rồi `compaction_end`, cuối cùng là hook `session_compact_failed` được chờ hoàn tất.
+
+Phục hồi overflow đã dùng hết là một đường kết thúc riêng. Không có `compaction_start` mới, Pi phát `compaction_end` rồi chờ `session_compact_failed` hoàn tất. Sự kiện kết thúc có `result: undefined`; cả hai mang `reason: "overflow"`, `errorMessage` là `Context overflow recovery failed after one compact-and-retry attempt. Try reducing context or switching to a larger-context model.` hoặc `Truncated response recovery failed after one compact-and-retry attempt.`, `aborted: false` và `willRetry: false`; sự kiện lỗi của Extension còn mang `fromExtension: false`.
 
 ## 3. Phân phối, thứ tự listener và thời điểm hoàn tất
 

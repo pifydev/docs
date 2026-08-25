@@ -265,7 +265,11 @@ type SessionCompactFailedEvent = {
 
 Pi emits the synchronous session `compaction_end` first; `session_compact_failed` is dispatched and awaited after `compaction_end`. The failed hook therefore settles before the manual `compact()` promise rejects or the automatic path returns `false`.
 
-For a manual attempt, `compact()` rejects only after `session_compact_failed` handlers settle; for an automatic post-start failure that emits this event, the compaction loop returns `false` only after those handlers settle. Neither terminal path appends a new compaction entry. Automatic cancellation, abort, ordinary summary failure, and exhausted one-retry overflow recovery are handled inside the automatic path rather than thrown to its caller. A no-model result, unavailable preparation, or authentication error before `compaction_start` can return `false` without emitting `compaction_end` or `session_compact_failed`.
+For a manual attempt, `compact()` rejects only after `session_compact_failed` handlers settle; for an automatic post-start failure that emits this event, the compaction loop returns `false` only after those handlers settle. Neither terminal path appends a new compaction entry. Automatic cancellation, abort, and ordinary started summary failure are handled inside the automatic path rather than thrown to its caller. A no-model result, unavailable preparation, or authentication error before `compaction_start` can return `false` without emitting `compaction_end` or `session_compact_failed`.
+
+Ordinary started compaction failures follow `compaction_start`, then `compaction_end`, and finally the awaited `session_compact_failed` hook.
+
+Exhausted overflow recovery is a separate terminal path. Without a new `compaction_start`, Pi emits `compaction_end` and then awaits `session_compact_failed`. The end event has `result: undefined`; both carry `reason: "overflow"`, `errorMessage` set to either `Context overflow recovery failed after one compact-and-retry attempt. Try reducing context or switching to a larger-context model.` or `Truncated response recovery failed after one compact-and-retry attempt.`, `aborted: false`, and `willRetry: false`; the failed Extension event also carries `fromExtension: false`.
 
 ## 3. Delivery, listener order, and settlement
 

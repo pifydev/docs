@@ -143,19 +143,72 @@ function assertParagraphContainsAll(source, patterns, context) {
   );
 }
 
+function markdownSemanticSegments(source) {
+  const lines = source.replaceAll("\r\n", "\n").split("\n");
+  const segments = [];
+  let paragraph = [];
+  const flushParagraph = () => {
+    if (paragraph.length > 0) segments.push(paragraph.join("\n"));
+    paragraph = [];
+  };
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (/^\s*\{% hint\b/.test(line)) {
+      flushParagraph();
+      const callout = [line];
+      while (
+        index + 1 < lines.length &&
+        !/^\s*\{% endhint %\}/.test(lines[index])
+      ) {
+        index += 1;
+        callout.push(lines[index]);
+      }
+      segments.push(callout.join("\n"));
+      continue;
+    }
+    const fence = /^\s*(```|~~~)/.exec(line)?.[1];
+    if (fence) {
+      flushParagraph();
+      const code = [line];
+      while (index + 1 < lines.length) {
+        index += 1;
+        code.push(lines[index]);
+        if (new RegExp(`^\\s*${fence}`).test(lines[index])) break;
+      }
+      segments.push(code.join("\n"));
+      continue;
+    }
+    if (/^\s*\|/.test(line)) {
+      flushParagraph();
+      segments.push(line);
+      continue;
+    }
+    if (line.trim() === "") {
+      flushParagraph();
+      continue;
+    }
+    paragraph.push(line);
+  }
+  flushParagraph();
+  return segments;
+}
+
 function assertTruncatedSummaryClaimsAreUnreleased(source, locale, context) {
-  const blocks = source
-    .split(/\n\s*\n/)
-    .flatMap((block) => (block.includes("\n|") ? block.split("\n") : [block]));
-  const claims = blocks.filter(
-    (block) =>
-      /(?:compaction|branch)[^.\n]{0,100}(?:summar|tóm tắt)|(?:summar|tóm tắt)[^.\n]{0,100}(?:compaction|branch)/i.test(
-        block,
-      ) &&
-      /truncat|length-limited|token (?:cap|limit)|cắt cụt|giới hạn token/i.test(
-        block,
-      ) &&
-      /reject|refus|not persist|discard|từ chối|không lưu|loại bỏ/i.test(block),
+  // This is intentionally a semantic heuristic, not a claim that arbitrary
+  // natural language can be classified completely. It covers the known
+  // post-tag behavior family and keeps unrelated assistant/Tool truncation out.
+  const summaryConcept =
+    /(?:compaction|branch|turn prefix|history)[\s\S]{0,120}(?:summar(?:y|ies|ization)|tóm tắt)|(?:summar(?:y|ies|ization)|tóm tắt)[\s\S]{0,120}(?:compaction|branch|nhánh)/i;
+  const rejectionPredicate =
+    /reject(?:s|ed|ion)?|refus(?:e|es|ed|al)?|(?:does |do )?not persist|cannot[^.\n]{0,60}persist|discard(?:s|ed)?|fail(?:s|ed|ure)?|từ chối|không (?:lưu|ghi)|không thể[^.\n]{0,60}(?:lưu|ghi)|loại bỏ|thất bại/i;
+  const sizePredicate =
+    /truncat|length[- ]limit|token (?:cap|limit)|hit[^.\n]{0,50}token cap|incomplete|\bsize\b|oversiz|too large|output[^.\n]{0,80}(?:exceed|maximum|max)|exceed[^.\n]{0,80}(?:maximum|max|limit|cap)|cắt cụt|giới hạn token|vượt quá|tối đa|kích thước|quá lớn|không hoàn chỉnh|chưa hoàn chỉnh/i;
+  const claims = markdownSemanticSegments(source).filter(
+    (segment) =>
+      summaryConcept.test(segment) &&
+      rejectionPredicate.test(segment) &&
+      sizePredicate.test(segment),
   );
   const warning =
     locale === "en" ? /\*\*Unreleased:\*\*/ : /\*\*Chưa phát hành:\*\*/;
@@ -602,6 +655,104 @@ test("Chapter 9 compaction lifecycle specifies failed-event payload, order, and 
   assert.deepEqual(structures[0], structures[1]);
 });
 
+test("Chapters 7 and 9 cover exhausted overflow recovery without a new compaction start", async () => {
+  const documentContracts = [
+    {
+      path: "ch07-event-driven.md",
+      headings: {
+        en: "### Extension events form a separate contract",
+        vi: "### Sự kiện Extension có hợp đồng riêng",
+      },
+    },
+    {
+      path: "ch09-compaction.md",
+      headings: {
+        en: "### Public events and Extension hooks serve different consumers",
+        vi: "### Sự kiện công khai và hook Extension phục vụ các thành phần khác nhau",
+      },
+    },
+  ];
+  const localeContract = {
+    en: {
+      ordinary: /ordinary started compaction failures/i,
+      exhausted: /exhausted overflow recovery/i,
+      noStart: /without a new `compaction_start`/i,
+      awaited: /awaited|awaits/i,
+      reason: /reason[^.]*`?"overflow"`?/i,
+      error: /errorMessage[^.]*recovery failed/i,
+      result: /result[^.]*undefined/i,
+      aborted: /aborted[^.]*false/i,
+      retry: /willRetry[^.]*false/i,
+      extension: /fromExtension[^.]*false/i,
+      contextError:
+        /Context overflow recovery failed after one compact-and-retry attempt\. Try reducing context or switching to a larger-context model\./,
+      truncatedError:
+        /Truncated response recovery failed after one compact-and-retry attempt\./,
+    },
+    vi: {
+      ordinary: /lỗi compaction thông thường đã bắt đầu/i,
+      exhausted: /phục hồi overflow đã dùng hết/i,
+      noStart: /không có `compaction_start` mới/i,
+      awaited: /được chờ|chờ[^.]*hoàn tất/i,
+      reason: /reason[^.]*`?"overflow"`?/i,
+      error: /errorMessage[^.]*recovery failed/i,
+      result: /result[^.]*undefined/i,
+      aborted: /aborted[^.]*false/i,
+      retry: /willRetry[^.]*false/i,
+      extension: /fromExtension[^.]*false/i,
+      contextError:
+        /Context overflow recovery failed after one compact-and-retry attempt\. Try reducing context or switching to a larger-context model\./,
+      truncatedError:
+        /Truncated response recovery failed after one compact-and-retry attempt\./,
+    },
+  };
+
+  for (const documentContract of documentContracts) {
+    const documents = await readLocalizedContent(documentContract.path);
+    const structures = [];
+    for (const { locale, source } of documents) {
+      const section = extractMarkdownSection(
+        source,
+        documentContract.headings[locale],
+        `${locale} ${documentContract.path} exhausted overflow lifecycle`,
+      );
+      const contract = localeContract[locale];
+      assertParagraphContainsAll(
+        section.body,
+        [
+          contract.ordinary,
+          /`compaction_start`/,
+          /`compaction_end`/,
+          contract.awaited,
+          /`session_compact_failed`/,
+        ],
+        `${locale} ${documentContract.path} ordinary started failure lifecycle`,
+      );
+      assertParagraphContainsAll(
+        section.body,
+        [
+          contract.exhausted,
+          contract.noStart,
+          /`compaction_end`/,
+          /`session_compact_failed`/,
+          contract.awaited,
+          contract.reason,
+          contract.error,
+          contract.result,
+          contract.aborted,
+          contract.retry,
+          contract.extension,
+          contract.contextError,
+          contract.truncatedError,
+        ],
+        `${locale} ${documentContract.path} exhausted overflow lifecycle`,
+      );
+      structures.push(sectionStructure(section));
+    }
+    assert.deepEqual(structures[0], structures[1]);
+  }
+});
+
 test("provider, API, and configuration guidance distinguish Google API and normalized thinking levels", async () => {
   const documentContracts = [
     {
@@ -675,6 +826,65 @@ test("truncated compaction-summary rejection claims require visible unreleased w
         "synthetic English claim",
       ),
     /must put truncated-summary rejection in a warning callout/,
+  );
+  assert.throws(
+    () =>
+      assertTruncatedSummaryClaimsAreUnreleased(
+        "Pi does not persist a compaction summary when its output is too large.",
+        "en",
+        "synthetic English too-large bypass",
+      ),
+    /must put truncated-summary rejection in a warning callout/,
+  );
+  assert.throws(
+    () =>
+      assertTruncatedSummaryClaimsAreUnreleased(
+        "Pi rejects a compaction summary based on its output size.",
+        "en",
+        "synthetic English output-size bypass",
+      ),
+    /must put truncated-summary rejection in a warning callout/,
+  );
+  assert.throws(
+    () =>
+      assertTruncatedSummaryClaimsAreUnreleased(
+        "Pi không lưu bản tóm tắt compaction khi đầu ra quá lớn.",
+        "vi",
+        "synthetic Vietnamese too-large bypass",
+      ),
+    /must put truncated-summary rejection in a warning callout/,
+  );
+  assert.throws(
+    () =>
+      assertTruncatedSummaryClaimsAreUnreleased(
+        "Pi does not persist a compaction summary whose output exceeds its maximum.",
+        "en",
+        "synthetic English maximum-output bypass",
+      ),
+    /must put truncated-summary rejection in a warning callout/,
+  );
+  assert.throws(
+    () =>
+      assertTruncatedSummaryClaimsAreUnreleased(
+        "Pi không lưu bản tóm tắt compaction khi đầu ra vượt quá giới hạn tối đa.",
+        "vi",
+        "synthetic Vietnamese maximum-output bypass",
+      ),
+    /must put truncated-summary rejection in a warning callout/,
+  );
+  assert.doesNotThrow(() =>
+    assertTruncatedSummaryClaimsAreUnreleased(
+      "Compaction does not truncate a single oversized Tool result at execution time.",
+      "en",
+      "synthetic Tool-output truncation exclusion",
+    ),
+  );
+  assert.doesNotThrow(() =>
+    assertTruncatedSummaryClaimsAreUnreleased(
+      "A truncated assistant response triggers compaction and one retry; it is not a compaction summary.",
+      "en",
+      "synthetic assistant-response truncation exclusion",
+    ),
   );
   assert.throws(
     () =>
