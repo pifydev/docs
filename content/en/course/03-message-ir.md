@@ -81,46 +81,9 @@ The graph distinguishes a structurally valid result from a relationally valid re
 
 ## Build it
 
-The cumulative module is `course/src/messages.ts`. The public constructors let later modules create messages without duplicating shape checks. The following contiguous excerpt is copied verbatim from the start of `course/test/03-message-ir.test.ts` through its first test. It compiles in that test file and preserves the original import, ordered text blocks, and explicit `isError` value:
+The cumulative module is `course/src/messages.ts`. The public constructors let later modules create messages without duplicating shape checks. The following first `test(...)` block is copied verbatim from `course/test/03-message-ir.test.ts`. It compiles in that focused test context, where the surrounding file already imports the constructors, `validateTranscript`, `textFromAssistant`, `expect`, and `test`. The excerpt preserves the ordered text blocks and explicit `isError` value:
 
 ```ts
-import { expect, test } from "vitest";
-
-import {
-  assistantMessage,
-  textFromAssistant,
-  toolResultMessage,
-  userMessage,
-  validateTranscript,
-  type CourseAssistantBlock,
-  type CourseMessage,
-  type TranscriptValidationErrorCode,
-} from "../src/index";
-
-function errorCodes(
-  transcript: unknown,
-): readonly TranscriptValidationErrorCode[] {
-  return validateTranscript(transcript).map(({ code }) => code);
-}
-
-function changingProperty(
-  target: object,
-  key: PropertyKey,
-  firstValue: unknown,
-  laterValue: unknown,
-): () => number {
-  let reads = 0;
-  Object.defineProperty(target, key, {
-    configurable: true,
-    enumerable: true,
-    get(): unknown {
-      reads += 1;
-      return reads === 1 ? firstValue : laterValue;
-    },
-  });
-  return () => reads;
-}
-
 test("constructs a valid Tool round-trip and extracts only assistant text", () => {
   const transcript = [
     userMessage({ id: "message-user-001", content: "Read package.json." }),

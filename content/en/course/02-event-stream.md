@@ -88,27 +88,9 @@ The table separates the consumer's event timeline from the caller's result timel
 
 ## Build it
 
-The cumulative module is `course/src/event-stream.ts`. Inspect `push()` and `finish()` there to see direct waiter delivery and buffered completion. The following contiguous excerpt is copied verbatim from the start of `course/test/02-event-stream.test.ts` through its first test. It compiles in that test file and exercises the public buffer/result contract:
+The cumulative module is `course/src/event-stream.ts`. Inspect `push()` and `finish()` there to see direct waiter delivery and buffered completion. The following contiguous excerpt copies the exact `collect()` helper and first test from `course/test/02-event-stream.test.ts`. It compiles in that focused test context, where the surrounding file already imports `expect`, `test`, and `EventStream`:
 
 ```ts
-import { expect, test } from "vitest";
-
-import { EventStream } from "../src/index";
-
-type Deferred<Value> = Readonly<{
-  promise: Promise<Value>;
-  resolve: (value: Value | PromiseLike<Value>) => void;
-}>;
-
-function deferred<Value>(): Deferred<Value> {
-  let resolve!: (value: Value | PromiseLike<Value>) => void;
-  const promise = new Promise<Value>((resolvePromise) => {
-    resolve = resolvePromise;
-  });
-
-  return { promise, resolve };
-}
-
 async function collect<Value>(source: AsyncIterable<Value>): Promise<Value[]> {
   const values: Value[] = [];
   for await (const value of source) {

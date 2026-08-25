@@ -81,46 +81,9 @@ Sơ đồ phân biệt result hợp lệ về cấu trúc với result hợp l�
 
 ## Xây dựng
 
-Module tích lũy là `course/src/messages.ts`. Các public constructor cho phép module về sau tạo message mà không lặp lại shape check. Đoạn liên tục dưới đây được chép nguyên văn từ đầu `course/test/03-message-ir.test.ts` đến hết test đầu tiên. Nó compile ngay trong test file đó và giữ nguyên import, các text block có thứ tự cùng giá trị `isError` tường minh:
+Module tích lũy là `course/src/messages.ts`. Các public constructor cho phép module về sau tạo message mà không lặp lại shape check. Block `test(...)` đầu tiên dưới đây được chép nguyên văn từ `course/test/03-message-ir.test.ts`. Đoạn code compile trong context của focused test đó, nơi file bao quanh đã import các constructor, `validateTranscript`, `textFromAssistant`, `expect` và `test`. Đoạn trích giữ nguyên các text block có thứ tự cùng giá trị `isError` tường minh:
 
 ```ts
-import { expect, test } from "vitest";
-
-import {
-  assistantMessage,
-  textFromAssistant,
-  toolResultMessage,
-  userMessage,
-  validateTranscript,
-  type CourseAssistantBlock,
-  type CourseMessage,
-  type TranscriptValidationErrorCode,
-} from "../src/index";
-
-function errorCodes(
-  transcript: unknown,
-): readonly TranscriptValidationErrorCode[] {
-  return validateTranscript(transcript).map(({ code }) => code);
-}
-
-function changingProperty(
-  target: object,
-  key: PropertyKey,
-  firstValue: unknown,
-  laterValue: unknown,
-): () => number {
-  let reads = 0;
-  Object.defineProperty(target, key, {
-    configurable: true,
-    enumerable: true,
-    get(): unknown {
-      reads += 1;
-      return reads === 1 ? firstValue : laterValue;
-    },
-  });
-  return () => reads;
-}
-
 test("constructs a valid Tool round-trip and extracts only assistant text", () => {
   const transcript = [
     userMessage({ id: "message-user-001", content: "Read package.json." }),

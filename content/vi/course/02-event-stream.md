@@ -88,27 +88,9 @@ Bảng tách timeline sự kiện của consumer khỏi result timeline của ca
 
 ## Xây dựng
 
-Module tích lũy là `course/src/event-stream.ts`. Hãy đọc `push()` và `finish()` trong file đó để thấy cách truyền trực tiếp đến waiter và hoàn tất dữ liệu đã buffer. Đoạn liên tục dưới đây được chép nguyên văn từ đầu `course/test/02-event-stream.test.ts` đến hết test đầu tiên. Đoạn code compile ngay trong test file đó và kiểm tra public contract của buffer/result:
+Module tích lũy là `course/src/event-stream.ts`. Hãy đọc `push()` và `finish()` trong file đó để thấy cách truyền trực tiếp đến waiter và hoàn tất dữ liệu đã buffer. Đoạn liên tục dưới đây chép chính xác helper `collect()` cùng test đầu tiên trong `course/test/02-event-stream.test.ts`. Đoạn code compile trong context của focused test đó, nơi file bao quanh đã import `expect`, `test` và `EventStream`:
 
 ```ts
-import { expect, test } from "vitest";
-
-import { EventStream } from "../src/index";
-
-type Deferred<Value> = Readonly<{
-  promise: Promise<Value>;
-  resolve: (value: Value | PromiseLike<Value>) => void;
-}>;
-
-function deferred<Value>(): Deferred<Value> {
-  let resolve!: (value: Value | PromiseLike<Value>) => void;
-  const promise = new Promise<Value>((resolvePromise) => {
-    resolve = resolvePromise;
-  });
-
-  return { promise, resolve };
-}
-
 async function collect<Value>(source: AsyncIterable<Value>): Promise<Value[]> {
   const values: Value[] = [];
   for await (const value of source) {
