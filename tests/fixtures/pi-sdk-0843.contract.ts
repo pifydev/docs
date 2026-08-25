@@ -436,6 +436,242 @@ export function throwSessionBindingFailure(
   );
 }
 
+export async function bindSerializedSessionRuntimeHost(
+  runtime: Pick<
+    AgentSessionRuntime,
+    | "session"
+    | "cwd"
+    | "diagnostics"
+    | "setBeforeSessionInvalidate"
+    | "setRebindSession"
+    | "newSession"
+    | "switchSession"
+    | "fork"
+    | "importFromJsonl"
+    | "dispose"
+  >,
+  bindings: {
+    extensionBindings(
+      session: AgentSession,
+    ): Parameters<AgentSession["bindExtensions"]>[0];
+    subscribe(session: AgentSession): () => void;
+    reportDiagnostics(
+      diagnostics: readonly AgentSessionRuntimeDiagnostic[],
+    ): void;
+    flushPersistence(): Promise<void>;
+  },
+): Promise<{
+  readonly cwd: string;
+  readonly diagnostics: readonly AgentSessionRuntimeDiagnostic[];
+  newSession(): ReturnType<AgentSessionRuntime["newSession"]>;
+  resume(
+    sessionPath: string,
+    cwdOverride?: string,
+  ): ReturnType<AgentSessionRuntime["switchSession"]>;
+  fork(entryId: string): ReturnType<AgentSessionRuntime["fork"]>;
+  clone(entryId: string): ReturnType<AgentSessionRuntime["fork"]>;
+  importJsonl(
+    inputPath: string,
+    cwdOverride?: string,
+  ): ReturnType<AgentSessionRuntime["importFromJsonl"]>;
+  dispose(): Promise<void>;
+}> {
+  let tail: Promise<void> = Promise.resolve();
+  let unsubscribe: (() => void) | undefined;
+  let invalidationCleanupFailures: unknown[] = [];
+  let replacementInFlight = false;
+  let unusable = false;
+  let disposed = false;
+
+  class CapturedSessionBindingFailure {
+    constructor(
+      readonly primary: unknown,
+      readonly cleanupFailures: unknown[],
+    ) {}
+  }
+
+  const clearSubscription = () => {
+    const release = unsubscribe;
+    unsubscribe = undefined;
+    release?.();
+  };
+  const clearSubscriptionAfterFailure = (cleanupFailures: unknown[]) => {
+    try {
+      clearSubscription();
+    } catch (error) {
+      cleanupFailures.push(error);
+    }
+  };
+  const takeInvalidationCleanupFailures = () => {
+    const failures = invalidationCleanupFailures;
+    invalidationCleanupFailures = [];
+    return failures;
+  };
+  const bindSession = async (session: AgentSession) => {
+    try {
+      clearSubscription();
+      await session.bindExtensions(bindings.extensionBindings(session));
+      unsubscribe = bindings.subscribe(session);
+      bindings.reportDiagnostics(runtime.diagnostics);
+    } catch (error) {
+      const cleanupFailures: unknown[] = [];
+      clearSubscriptionAfterFailure(cleanupFailures);
+      throw new CapturedSessionBindingFailure(error, cleanupFailures);
+    }
+  };
+  const disposeRuntimeFailure = async (
+    error: unknown,
+    phase: string,
+  ): Promise<never> => {
+    const captured =
+      error instanceof CapturedSessionBindingFailure
+        ? error
+        : new CapturedSessionBindingFailure(error, []);
+    replacementInFlight = true;
+    unusable = true;
+    const cleanupFailures = [...captured.cleanupFailures];
+    try {
+      clearSubscriptionAfterFailure(cleanupFailures);
+      try {
+        await runtime.dispose();
+      } catch (disposeError) {
+        cleanupFailures.push(disposeError);
+      }
+    } finally {
+      replacementInFlight = true;
+      unusable = true;
+      clearSubscriptionAfterFailure(cleanupFailures);
+    }
+    return throwSessionBindingFailure(captured.primary, cleanupFailures, phase);
+  };
+  const assertAvailable = () => {
+    if (disposed) throw new Error("session runtime host is disposed");
+    if (unusable || replacementInFlight) {
+      throw new Error("session runtime host has no usable current session");
+    }
+  };
+  const enqueue = <T>(operation: () => Promise<T>): Promise<T> => {
+    const pending = tail.then(operation);
+    tail = pending.then(
+      () => undefined,
+      () => undefined,
+    );
+    return pending;
+  };
+  const serialize = <T>(operation: () => Promise<T>): Promise<T> =>
+    enqueue(async () => {
+      assertAvailable();
+      try {
+        return await operation();
+      } catch (error) {
+        if (replacementInFlight) {
+          unusable = true;
+          return throwSessionBindingFailure(
+            error,
+            takeInvalidationCleanupFailures(),
+            "session replacement",
+          );
+        }
+        throw error;
+      }
+    });
+  const replace = <T>(operation: () => Promise<T>): Promise<T> =>
+    serialize(async () => {
+      const result = await operation();
+      try {
+        await bindings.flushPersistence();
+      } catch (error) {
+        return disposeRuntimeFailure(error, "replacement persistence");
+      }
+      return result;
+    });
+
+  runtime.setBeforeSessionInvalidate(() => {
+    replacementInFlight = true;
+    clearSubscriptionAfterFailure(invalidationCleanupFailures);
+  });
+  runtime.setRebindSession(async (session) => {
+    const cleanupFailures = takeInvalidationCleanupFailures();
+    if (cleanupFailures.length > 0) {
+      const [primary, ...remaining] = cleanupFailures;
+      return disposeRuntimeFailure(
+        new CapturedSessionBindingFailure(primary, remaining),
+        "replacement invalidation cleanup",
+      );
+    }
+    try {
+      await bindSession(session);
+      replacementInFlight = false;
+    } catch (error) {
+      return disposeRuntimeFailure(error, "replacement session binding");
+    }
+  });
+
+  try {
+    await bindSession(runtime.session);
+  } catch (error) {
+    return disposeRuntimeFailure(error, "initial session binding");
+  }
+
+  const dispose = (): Promise<void> => {
+    try {
+      assertAvailable();
+    } catch (error) {
+      return Promise.reject(error);
+    }
+    disposed = true;
+    unusable = true;
+    replacementInFlight = true;
+    return enqueue(async () => {
+      const failures: unknown[] = [];
+      try {
+        await runtime.session.abort();
+      } catch (error) {
+        failures.push(error);
+      }
+      try {
+        await bindings.flushPersistence();
+      } catch (error) {
+        failures.push(error);
+      }
+      try {
+        await runtime.dispose();
+      } catch (error) {
+        failures.push(error);
+      }
+      clearSubscriptionAfterFailure(failures);
+      if (failures.length > 0) {
+        const [primary, ...cleanupFailures] = failures;
+        return throwSessionBindingFailure(
+          primary,
+          cleanupFailures,
+          "final session runtime disposal",
+        );
+      }
+    });
+  };
+
+  return {
+    get cwd() {
+      assertAvailable();
+      return runtime.cwd;
+    },
+    get diagnostics() {
+      assertAvailable();
+      return runtime.diagnostics;
+    },
+    newSession: () => replace(() => runtime.newSession()),
+    resume: (sessionPath, cwdOverride) =>
+      replace(() => runtime.switchSession(sessionPath, { cwdOverride })),
+    fork: (entryId) => replace(() => runtime.fork(entryId)),
+    clone: (entryId) =>
+      replace(() => runtime.fork(entryId, { position: "at" })),
+    importJsonl: (inputPath, cwdOverride) =>
+      replace(() => runtime.importFromJsonl(inputPath, cwdOverride)),
+    dispose,
+  };
+}
+
 export async function createSerializedSessionRuntimeHost(
   processInputs: Pick<
     CreateAgentSessionServicesOptions,
@@ -508,146 +744,7 @@ export async function createSerializedSessionRuntimeHost(
     createRuntime,
     initial,
   );
-  let tail: Promise<void> = Promise.resolve();
-  let unsubscribe: (() => void) | undefined;
-  let replacementInFlight = false;
-  let unusable = false;
-  let disposed = false;
-
-  class CapturedSessionBindingFailure {
-    constructor(
-      readonly primary: unknown,
-      readonly cleanupFailures: unknown[],
-    ) {}
-  }
-
-  const clearSubscription = () => {
-    const release = unsubscribe;
-    unsubscribe = undefined;
-    release?.();
-  };
-  const clearSubscriptionAfterFailure = (cleanupFailures: unknown[]) => {
-    try {
-      clearSubscription();
-    } catch (error) {
-      cleanupFailures.push(error);
-    }
-  };
-  const bindSession = async (session: AgentSession) => {
-    clearSubscription();
-    try {
-      await session.bindExtensions(bindings.extensionBindings(session));
-      unsubscribe = bindings.subscribe(session);
-      bindings.reportDiagnostics(runtime.diagnostics);
-    } catch (error) {
-      const cleanupFailures: unknown[] = [];
-      clearSubscriptionAfterFailure(cleanupFailures);
-      throw new CapturedSessionBindingFailure(error, cleanupFailures);
-    }
-  };
-  const disposeBindingFailure = async (
-    error: unknown,
-    phase: "initial" | "replacement",
-  ): Promise<never> => {
-    const captured =
-      error instanceof CapturedSessionBindingFailure
-        ? error
-        : new CapturedSessionBindingFailure(error, []);
-    unusable = true;
-    const cleanupFailures = [...captured.cleanupFailures];
-    try {
-      clearSubscriptionAfterFailure(cleanupFailures);
-      try {
-        await runtime.dispose();
-      } catch (disposeError) {
-        cleanupFailures.push(disposeError);
-      }
-    } finally {
-      replacementInFlight = true;
-      unusable = true;
-      clearSubscriptionAfterFailure(cleanupFailures);
-    }
-    return throwSessionBindingFailure(
-      captured.primary,
-      cleanupFailures,
-      `${phase} session binding`,
-    );
-  };
-  const assertAvailable = () => {
-    if (disposed) throw new Error("session runtime host is disposed");
-    if (unusable || replacementInFlight) {
-      throw new Error("session runtime host has no usable current session");
-    }
-  };
-  const serialize = <T>(operation: () => Promise<T>): Promise<T> => {
-    const pending = tail.then(async () => {
-      assertAvailable();
-      try {
-        return await operation();
-      } catch (error) {
-        if (replacementInFlight) unusable = true;
-        throw error;
-      }
-    });
-    tail = pending.then(
-      () => undefined,
-      () => undefined,
-    );
-    return pending;
-  };
-  const replace = <T>(operation: () => Promise<T>): Promise<T> =>
-    serialize(async () => {
-      const result = await operation();
-      await bindings.flushPersistence();
-      return result;
-    });
-
-  runtime.setBeforeSessionInvalidate(() => {
-    replacementInFlight = true;
-    clearSubscription();
-  });
-  runtime.setRebindSession(async (session) => {
-    try {
-      await bindSession(session);
-      replacementInFlight = false;
-    } catch (error) {
-      return disposeBindingFailure(error, "replacement");
-    }
-  });
-
-  try {
-    await bindSession(runtime.session);
-  } catch (error) {
-    return disposeBindingFailure(error, "initial");
-  }
-
-  return {
-    get cwd() {
-      assertAvailable();
-      return runtime.cwd;
-    },
-    get diagnostics() {
-      assertAvailable();
-      return runtime.diagnostics;
-    },
-    newSession: () => replace(() => runtime.newSession()),
-    resume: (sessionPath, cwdOverride) =>
-      replace(() => runtime.switchSession(sessionPath, { cwdOverride })),
-    fork: (entryId) => replace(() => runtime.fork(entryId)),
-    clone: (entryId) =>
-      replace(() => runtime.fork(entryId, { position: "at" })),
-    importJsonl: (inputPath, cwdOverride) =>
-      replace(() => runtime.importFromJsonl(inputPath, cwdOverride)),
-    dispose: () =>
-      serialize(async () => {
-        await runtime.session.abort();
-        await bindings.flushPersistence();
-        await runtime.dispose();
-        clearSubscription();
-        replacementInFlight = false;
-        disposed = true;
-      }),
-  };
+  return bindSerializedSessionRuntimeHost(runtime, bindings);
 }
 
 void [

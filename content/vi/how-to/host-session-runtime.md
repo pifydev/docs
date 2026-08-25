@@ -65,7 +65,7 @@ Project trust cũng phải được đánh giá theo cwd đích. Ví dụ inject
 
 ## 3. Cài đặt `CreateAgentSessionRuntimeFactory` có type đầy đủ
 
-Function dưới đây là compile-only host shape hoàn chỉnh. `CreateAgentSessionRuntimeFactory` buộc factory trả về session mới, các service tương ứng và diagnostic như một kết quả nhất quán. Fixture không gọi `createSerializedSessionRuntimeHost()`, nên bước compile không đọc credential, scan project hay mở session file.
+Code dưới đây là compile-only host shape hoàn chỉnh. `CreateAgentSessionRuntimeFactory` buộc factory trả về session mới, các service tương ứng và diagnostic như một kết quả nhất quán. `bindSerializedSessionRuntimeHost()` sở hữu lifecycle policy qua port hẹp `Pick<AgentSessionRuntime, ...>`; `AgentSessionRuntime` thật thỏa type này, còn test có thể inject fake in-memory. Compile fixture không gọi hai function export, nên bước compile không đọc credential, scan project hay mở session file.
 
 ```typescript title="replaceable-session-runtime.ts"
 import {
@@ -90,6 +90,242 @@ export function throwSessionBindingFailure(
     `${phase} failed and cleanup also failed`,
     { cause: primary },
   );
+}
+
+export async function bindSerializedSessionRuntimeHost(
+  runtime: Pick<
+    AgentSessionRuntime,
+    | "session"
+    | "cwd"
+    | "diagnostics"
+    | "setBeforeSessionInvalidate"
+    | "setRebindSession"
+    | "newSession"
+    | "switchSession"
+    | "fork"
+    | "importFromJsonl"
+    | "dispose"
+  >,
+  bindings: {
+    extensionBindings(
+      session: AgentSession,
+    ): Parameters<AgentSession["bindExtensions"]>[0];
+    subscribe(session: AgentSession): () => void;
+    reportDiagnostics(
+      diagnostics: readonly AgentSessionRuntimeDiagnostic[],
+    ): void;
+    flushPersistence(): Promise<void>;
+  },
+): Promise<{
+  readonly cwd: string;
+  readonly diagnostics: readonly AgentSessionRuntimeDiagnostic[];
+  newSession(): ReturnType<AgentSessionRuntime["newSession"]>;
+  resume(
+    sessionPath: string,
+    cwdOverride?: string,
+  ): ReturnType<AgentSessionRuntime["switchSession"]>;
+  fork(entryId: string): ReturnType<AgentSessionRuntime["fork"]>;
+  clone(entryId: string): ReturnType<AgentSessionRuntime["fork"]>;
+  importJsonl(
+    inputPath: string,
+    cwdOverride?: string,
+  ): ReturnType<AgentSessionRuntime["importFromJsonl"]>;
+  dispose(): Promise<void>;
+}> {
+  let tail: Promise<void> = Promise.resolve();
+  let unsubscribe: (() => void) | undefined;
+  let invalidationCleanupFailures: unknown[] = [];
+  let replacementInFlight = false;
+  let unusable = false;
+  let disposed = false;
+
+  class CapturedSessionBindingFailure {
+    constructor(
+      readonly primary: unknown,
+      readonly cleanupFailures: unknown[],
+    ) {}
+  }
+
+  const clearSubscription = () => {
+    const release = unsubscribe;
+    unsubscribe = undefined;
+    release?.();
+  };
+  const clearSubscriptionAfterFailure = (cleanupFailures: unknown[]) => {
+    try {
+      clearSubscription();
+    } catch (error) {
+      cleanupFailures.push(error);
+    }
+  };
+  const takeInvalidationCleanupFailures = () => {
+    const failures = invalidationCleanupFailures;
+    invalidationCleanupFailures = [];
+    return failures;
+  };
+  const bindSession = async (session: AgentSession) => {
+    try {
+      clearSubscription();
+      await session.bindExtensions(bindings.extensionBindings(session));
+      unsubscribe = bindings.subscribe(session);
+      bindings.reportDiagnostics(runtime.diagnostics);
+    } catch (error) {
+      const cleanupFailures: unknown[] = [];
+      clearSubscriptionAfterFailure(cleanupFailures);
+      throw new CapturedSessionBindingFailure(error, cleanupFailures);
+    }
+  };
+  const disposeRuntimeFailure = async (
+    error: unknown,
+    phase: string,
+  ): Promise<never> => {
+    const captured =
+      error instanceof CapturedSessionBindingFailure
+        ? error
+        : new CapturedSessionBindingFailure(error, []);
+    replacementInFlight = true;
+    unusable = true;
+    const cleanupFailures = [...captured.cleanupFailures];
+    try {
+      clearSubscriptionAfterFailure(cleanupFailures);
+      try {
+        await runtime.dispose();
+      } catch (disposeError) {
+        cleanupFailures.push(disposeError);
+      }
+    } finally {
+      replacementInFlight = true;
+      unusable = true;
+      clearSubscriptionAfterFailure(cleanupFailures);
+    }
+    return throwSessionBindingFailure(captured.primary, cleanupFailures, phase);
+  };
+  const assertAvailable = () => {
+    if (disposed) throw new Error("session runtime host is disposed");
+    if (unusable || replacementInFlight) {
+      throw new Error("session runtime host has no usable current session");
+    }
+  };
+  const enqueue = <T>(operation: () => Promise<T>): Promise<T> => {
+    const pending = tail.then(operation);
+    tail = pending.then(
+      () => undefined,
+      () => undefined,
+    );
+    return pending;
+  };
+  const serialize = <T>(operation: () => Promise<T>): Promise<T> =>
+    enqueue(async () => {
+      assertAvailable();
+      try {
+        return await operation();
+      } catch (error) {
+        if (replacementInFlight) {
+          unusable = true;
+          return throwSessionBindingFailure(
+            error,
+            takeInvalidationCleanupFailures(),
+            "session replacement",
+          );
+        }
+        throw error;
+      }
+    });
+  const replace = <T>(operation: () => Promise<T>): Promise<T> =>
+    serialize(async () => {
+      const result = await operation();
+      try {
+        await bindings.flushPersistence();
+      } catch (error) {
+        return disposeRuntimeFailure(error, "replacement persistence");
+      }
+      return result;
+    });
+
+  runtime.setBeforeSessionInvalidate(() => {
+    replacementInFlight = true;
+    clearSubscriptionAfterFailure(invalidationCleanupFailures);
+  });
+  runtime.setRebindSession(async (session) => {
+    const cleanupFailures = takeInvalidationCleanupFailures();
+    if (cleanupFailures.length > 0) {
+      const [primary, ...remaining] = cleanupFailures;
+      return disposeRuntimeFailure(
+        new CapturedSessionBindingFailure(primary, remaining),
+        "replacement invalidation cleanup",
+      );
+    }
+    try {
+      await bindSession(session);
+      replacementInFlight = false;
+    } catch (error) {
+      return disposeRuntimeFailure(error, "replacement session binding");
+    }
+  });
+
+  try {
+    await bindSession(runtime.session);
+  } catch (error) {
+    return disposeRuntimeFailure(error, "initial session binding");
+  }
+
+  const dispose = (): Promise<void> => {
+    try {
+      assertAvailable();
+    } catch (error) {
+      return Promise.reject(error);
+    }
+    disposed = true;
+    unusable = true;
+    replacementInFlight = true;
+    return enqueue(async () => {
+      const failures: unknown[] = [];
+      try {
+        await runtime.session.abort();
+      } catch (error) {
+        failures.push(error);
+      }
+      try {
+        await bindings.flushPersistence();
+      } catch (error) {
+        failures.push(error);
+      }
+      try {
+        await runtime.dispose();
+      } catch (error) {
+        failures.push(error);
+      }
+      clearSubscriptionAfterFailure(failures);
+      if (failures.length > 0) {
+        const [primary, ...cleanupFailures] = failures;
+        return throwSessionBindingFailure(
+          primary,
+          cleanupFailures,
+          "final session runtime disposal",
+        );
+      }
+    });
+  };
+
+  return {
+    get cwd() {
+      assertAvailable();
+      return runtime.cwd;
+    },
+    get diagnostics() {
+      assertAvailable();
+      return runtime.diagnostics;
+    },
+    newSession: () => replace(() => runtime.newSession()),
+    resume: (sessionPath, cwdOverride) =>
+      replace(() => runtime.switchSession(sessionPath, { cwdOverride })),
+    fork: (entryId) => replace(() => runtime.fork(entryId)),
+    clone: (entryId) =>
+      replace(() => runtime.fork(entryId, { position: "at" })),
+    importJsonl: (inputPath, cwdOverride) =>
+      replace(() => runtime.importFromJsonl(inputPath, cwdOverride)),
+    dispose,
+  };
 }
 
 export async function createSerializedSessionRuntimeHost(
@@ -164,146 +400,7 @@ export async function createSerializedSessionRuntimeHost(
     createRuntime,
     initial,
   );
-  let tail: Promise<void> = Promise.resolve();
-  let unsubscribe: (() => void) | undefined;
-  let replacementInFlight = false;
-  let unusable = false;
-  let disposed = false;
-
-  class CapturedSessionBindingFailure {
-    constructor(
-      readonly primary: unknown,
-      readonly cleanupFailures: unknown[],
-    ) {}
-  }
-
-  const clearSubscription = () => {
-    const release = unsubscribe;
-    unsubscribe = undefined;
-    release?.();
-  };
-  const clearSubscriptionAfterFailure = (cleanupFailures: unknown[]) => {
-    try {
-      clearSubscription();
-    } catch (error) {
-      cleanupFailures.push(error);
-    }
-  };
-  const bindSession = async (session: AgentSession) => {
-    clearSubscription();
-    try {
-      await session.bindExtensions(bindings.extensionBindings(session));
-      unsubscribe = bindings.subscribe(session);
-      bindings.reportDiagnostics(runtime.diagnostics);
-    } catch (error) {
-      const cleanupFailures: unknown[] = [];
-      clearSubscriptionAfterFailure(cleanupFailures);
-      throw new CapturedSessionBindingFailure(error, cleanupFailures);
-    }
-  };
-  const disposeBindingFailure = async (
-    error: unknown,
-    phase: "initial" | "replacement",
-  ): Promise<never> => {
-    const captured =
-      error instanceof CapturedSessionBindingFailure
-        ? error
-        : new CapturedSessionBindingFailure(error, []);
-    unusable = true;
-    const cleanupFailures = [...captured.cleanupFailures];
-    try {
-      clearSubscriptionAfterFailure(cleanupFailures);
-      try {
-        await runtime.dispose();
-      } catch (disposeError) {
-        cleanupFailures.push(disposeError);
-      }
-    } finally {
-      replacementInFlight = true;
-      unusable = true;
-      clearSubscriptionAfterFailure(cleanupFailures);
-    }
-    return throwSessionBindingFailure(
-      captured.primary,
-      cleanupFailures,
-      `${phase} session binding`,
-    );
-  };
-  const assertAvailable = () => {
-    if (disposed) throw new Error("session runtime host is disposed");
-    if (unusable || replacementInFlight) {
-      throw new Error("session runtime host has no usable current session");
-    }
-  };
-  const serialize = <T>(operation: () => Promise<T>): Promise<T> => {
-    const pending = tail.then(async () => {
-      assertAvailable();
-      try {
-        return await operation();
-      } catch (error) {
-        if (replacementInFlight) unusable = true;
-        throw error;
-      }
-    });
-    tail = pending.then(
-      () => undefined,
-      () => undefined,
-    );
-    return pending;
-  };
-  const replace = <T>(operation: () => Promise<T>): Promise<T> =>
-    serialize(async () => {
-      const result = await operation();
-      await bindings.flushPersistence();
-      return result;
-    });
-
-  runtime.setBeforeSessionInvalidate(() => {
-    replacementInFlight = true;
-    clearSubscription();
-  });
-  runtime.setRebindSession(async (session) => {
-    try {
-      await bindSession(session);
-      replacementInFlight = false;
-    } catch (error) {
-      return disposeBindingFailure(error, "replacement");
-    }
-  });
-
-  try {
-    await bindSession(runtime.session);
-  } catch (error) {
-    return disposeBindingFailure(error, "initial");
-  }
-
-  return {
-    get cwd() {
-      assertAvailable();
-      return runtime.cwd;
-    },
-    get diagnostics() {
-      assertAvailable();
-      return runtime.diagnostics;
-    },
-    newSession: () => replace(() => runtime.newSession()),
-    resume: (sessionPath, cwdOverride) =>
-      replace(() => runtime.switchSession(sessionPath, { cwdOverride })),
-    fork: (entryId) => replace(() => runtime.fork(entryId)),
-    clone: (entryId) =>
-      replace(() => runtime.fork(entryId, { position: "at" })),
-    importJsonl: (inputPath, cwdOverride) =>
-      replace(() => runtime.importFromJsonl(inputPath, cwdOverride)),
-    dispose: () =>
-      serialize(async () => {
-        await runtime.session.abort();
-        await bindings.flushPersistence();
-        await runtime.dispose();
-        clearSubscription();
-        replacementInFlight = false;
-        disposed = true;
-      }),
-  };
+  return bindSerializedSessionRuntimeHost(runtime, bindings);
 }
 ```
 
@@ -347,10 +444,10 @@ Before-event bị cancel sẽ return mà không vô hiệu session cũ. Đây l�
 
 Release lifecycle cung cấp hai callback cho hai thời điểm khác nhau:
 
-- `setBeforeSessionInvalidate()` chạy đồng bộ sau khi handler `session_shutdown` hoàn tất nhưng trước khi session cũ bị dispose. Wrapper đánh dấu replacement đang diễn ra và gỡ listener cũ tại đây.
+- `setBeforeSessionInvalidate()` chạy đồng bộ sau khi handler `session_shutdown` hoàn tất nhưng trước khi session cũ bị dispose. Wrapper đánh dấu replacement đang diễn ra và thử gỡ listener cũ tại đây. Vì Pi không await callback này, wrapper capture unsubscribe failure vào `invalidationCleanupFailures` và luôn return bình thường; disposal của session cũ và factory vẫn phải tiếp tục.
 - `setRebindSession()` được await sau khi kết quả factory đã apply. Wrapper gọi cùng helper `bindSession()`, await `session.bindExtensions(...)` trước khi cài host subscription và report diagnostic. Chỉ sau đó nó mới đánh dấu host available trở lại.
 
-Runtime cập nhật `session`, `services`, `diagnostics` và `modelFallbackMessage` cùng lúc trước callback rebind. Nếu `bindSession()` sau đó thất bại, Pi đã apply replacement đó. Wrapper lập tức đánh dấu chính nó unusable, clear mọi subscription đã trả về, thử `runtime.dispose()` trên applied replacement và dùng `finally` để giữ cả `replacementInFlight` lẫn `unusable` trước khi propagate lỗi gốc hoặc lỗi aggregate. Wrapper công khai cwd và diagnostic nhưng chủ động không công khai raw `AgentSessionRuntime`; nhờ vậy request code không thể đọc session cũ đã dispose hoặc applied replacement bị lỗi.
+Runtime cập nhật `session`, `services`, `diagnostics` và `modelFallbackMessage` cùng lúc trước callback rebind. Nếu synchronous invalidation cleanup đã bị capture, rebind không công khai replacement: nó dispose applied runtime rồi propagate cleanup error đó làm primary failure. Nếu `bindSession()` thất bại, wrapper clear mọi subscription đã trả về và đi qua cùng disposal path. Nếu factory reject trước apply, serialized operation kết hợp factory error làm primary với các invalidation cleanup error đã capture. Mọi path đều giữ trạng thái terminal. Wrapper công khai cwd và diagnostic nhưng chủ động không công khai raw `AgentSessionRuntime`; request code không thể đọc session cũ đã dispose hoặc applied replacement bị lỗi.
 
 ```mermaid
 sequenceDiagram
@@ -362,33 +459,52 @@ sequenceDiagram
     participant Next as Replacement session
     participant Extensions as Extension binding
     participant Rebind as Subscription rebind
+    participant Persist as Host persistence
     Caller->>Lock: enqueue new/resume/fork/clone/import
     Lock->>Dispose: begin runtime teardown
     Dispose->>Old: abort active response
     Dispose->>Old: session_shutdown
-    Dispose->>Rebind: unbind before invalidation
+    Dispose->>Rebind: synchronous unbind before invalidation
+    alt old unsubscribe succeeds
+        Rebind-->>Dispose: callback returns
+    else old unsubscribe fails
+        Rebind-->>Lock: capture failure and return normally
+    end
     Dispose->>Old: dispose()
     Lock->>Factory: create target cwd runtime
     alt factory succeeds
         Factory-->>Lock: session + services + diagnostics
         Lock->>Next: apply coherent result
-        Lock->>Extensions: bindExtensions(replacement options)
-        Extensions->>Next: session_start and extend resources
-        alt Extension and host binding succeed
-            Extensions-->>Lock: Extension lifecycle ready
-            Lock->>Rebind: subscribe to replacement session
-            Rebind-->>Caller: operation result
-        else Extension, subscribe, or diagnostics fail
-            Extensions--xLock: binding failure
-            Lock->>Rebind: clear returned subscription
+        alt invalidation cleanup was captured
             Lock->>Next: dispose applied replacement
-            Lock->>Lock: keep host unusable in finally
-            Lock--xCaller: original or aggregate failure
+            Lock--xCaller: flat terminal cleanup failure
+        else invalidation cleanup succeeded
+            Lock->>Extensions: bindExtensions(replacement options)
+            Extensions->>Next: session_start and extend resources
+            alt Extension and host binding succeed
+                Extensions-->>Lock: Extension lifecycle ready
+                Lock->>Rebind: subscribe to replacement session
+                Lock->>Persist: flush host persistence
+                alt persistence flush succeeds
+                    Persist-->>Caller: operation result
+                else persistence flush fails
+                    Persist--xLock: primary persistence failure
+                    Lock->>Rebind: clear installed subscription
+                    Lock->>Next: dispose applied replacement
+                    Lock--xCaller: terminal failure
+                end
+            else Extension, subscribe, or diagnostics fail
+                Extensions--xLock: binding failure
+                Lock->>Rebind: clear returned subscription
+                Lock->>Next: dispose applied replacement
+                Lock->>Lock: keep host unusable in finally
+                Lock--xCaller: original or aggregate failure
+            end
         end
     else factory rejects after disposal
         Factory--xLock: reject
-        Lock->>Lock: mark host unusable
-        Lock--xCaller: propagate error and expose no session
+        Lock->>Lock: combine captured cleanup and mark unusable
+        Lock--xCaller: factory primary and no exposed session
     end
 ```
 
@@ -396,17 +512,17 @@ sequenceDiagram
 
 Khi replacement, teardown nội bộ của Pi trước hết await `oldSession.abort()`. Bước này settle response đang hoạt động để aborted turn và Tool result của nó có thể được ghi vào session sắp rời đi. Sau đó runtime await `session_shutdown`, chạy invalidation callback đồng bộ và gọi `oldSession.dispose()` trước khi gọi factory. Không được tái sử dụng Extension runner cũ hay resource do session sở hữu sau thời điểm đó.
 
-`SessionManager` append record JSONL của Pi qua chính session operation; `AgentSessionRuntime` không có public method `flush()` bất đồng bộ. `flushPersistence()` trong ví dụ chỉ dành cho persistence, event projection hoặc durable queue do host sở hữu. Nó chạy sau mỗi replacement thành công và, khi dispose cuối cùng, sau `runtime.session.abort()` nhưng trước `runtime.dispose()`.
+`SessionManager` append record JSONL của Pi qua chính session operation; `AgentSessionRuntime` không có public method `flush()` bất đồng bộ. `flushPersistence()` trong ví dụ chỉ dành cho persistence, event projection hoặc durable queue do host sở hữu. Nó chạy sau mỗi rebind thành công. Nếu flush reject, installed replacement không còn an toàn để công khai: adapter chuyển sang terminal, clear subscription, thử `runtime.dispose()` rồi reject operation.
 
-Final shutdown cũng được tuần tự hóa. Ngừng nhận command mới, await `host.dispose()`, rồi mới đóng resource dùng chung cho process như database pool hoặc telemetry exporter. Gọi wrapper method sau dispose sẽ reject thay vì chạm vào session không còn hợp lệ.
+Final shutdown cũng được tuần tự hóa, nhưng terminal state được set đồng bộ ngay khi gọi `host.dispose()`, trước khi queued cleanup bắt đầu. Cleanup thử độc lập `runtime.session.abort()`, flush host persistence, `runtime.dispose()` và unsubscribe, nên failure ở một bước không được bỏ qua các bước sau. Failure đầu tiên giữ vai trò primary; các failure sau được nối vào một `AggregateError` phẳng. Hãy ngừng nhận command mới, await kết quả, rồi mới đóng resource dùng chung cho process như database pool hoặc telemetry exporter. Getter và operation reject ngay từ lúc disposal bắt đầu, kể cả khi cleanup thất bại.
 
 ## 9. Xử lý factory failure mà không để lộ half-replaced session
 
 Replacement trong Pi `0.84.3` không phải rollback transaction. `AgentSessionRuntime` dispose session cũ trước khi await factory mới. Nếu factory reject, runtime propagate error và không chạy bước apply hoặc rebind nội bộ; object cũ đã mất hiệu lực còn replacement dùng được chưa tồn tại.
 
-Wrapper phát hiện đúng boundary này vì `setBeforeSessionInvalidate()` đã đặt `replacementInFlight`, còn `setRebindSession()` thành công chỉ xóa flag sau khi cả Extension binding lẫn host binding hoàn tất. Factory rejection xảy ra trước apply nên không có replacement cần dispose. Rejection từ `bindExtensions(...)`, host subscription hoặc diagnostic reporting xảy ra sau apply, vì vậy rebind catch clear subscription đã trả về và dispose applied replacement trước khi propagate. Finally path giữ wrapper unusable ngay cả khi disposal thất bại. Subscription cũ đã được gỡ, không có raw session nào được public, và operation hay state getter sau đó đều reject. Đây là policy no-half-replacement, fail-closed bắt buộc.
+Wrapper phát hiện đúng boundary này vì `setBeforeSessionInvalidate()` đã đặt `replacementInFlight`, còn `setRebindSession()` thành công chỉ xóa flag sau khi Extension binding và host binding hoàn tất. Callback đồng bộ không bao giờ throw: unsubscribe failure được giữ lại cho awaited boundary. Factory rejection xảy ra trước apply nên không có replacement cần dispose; wrapper propagate nó làm primary và nối cleanup failure đã giữ lại. Invalidation-cleanup rejection, `bindExtensions(...)`, host subscription, diagnostic reporting hoặc post-rebind persistence rejection sau apply đều dispose installed replacement trước khi propagate. `finally` giữ wrapper unusable kể cả khi disposal thất bại. Không có raw session nào được public, còn operation và state getter sau đó đều reject. Đây là policy no-half-replacement, fail-closed bắt buộc.
 
-Cleanup failure không bao giờ thay thế hoặc lồng bằng chứng chính. `disposeBindingFailure()` bắt đầu bằng các lỗi unsubscribe đã capture, nối thêm lỗi disposal và final cleanup theo thứ tự xảy ra, rồi chỉ gọi `throwSessionBindingFailure()` đúng một lần. Khi không có cleanup failure, helper rethrow lỗi binding gốc. Nếu có, nó throw một `AggregateError` duy nhất với `.errors` là `[primary, ...cleanupFailures]` và `.cause` là `primary`. Hãy log cấu trúc aggregate phẳng đó nhưng không serialize session content, đồng thời xem từng phần tử là một operational incident.
+Cleanup failure không bao giờ thay thế hoặc lồng bằng chứng chính. `disposeRuntimeFailure()` bắt đầu bằng các cleanup failure đã capture, nối thêm disposal và final-cleanup failure theo thứ tự xảy ra, rồi chỉ gọi `throwSessionBindingFailure()` đúng một lần. Final disposal cũng ghi từng stage đã thử trước khi finalize. Khi không có cleanup failure, helper rethrow primary ban đầu. Nếu có, nó throw một `AggregateError` duy nhất với `.errors` là `[primary, ...cleanupFailures]` và `.cause` là `primary`. Hãy log cấu trúc aggregate phẳng đó nhưng không serialize session content, đồng thời xem từng phần tử là một operational incident.
 
 Không catch lỗi rồi tiếp tục phục vụ qua một session đã cache. Hãy ghi operation, target path hoặc cwd và error nhưng không log transcript content hay secret. Sau đó kết thúc worker đang sở hữu runtime, hoặc dựng host mới từ một safe startup target tường minh. Chỉ retry tự động khi host vẫn unavailable và mỗi attempt dựng một runtime mới hoàn chỉnh.
 
@@ -423,11 +539,13 @@ Xác minh các invariant sau:
 - [ ] Mỗi replacement thành công tạo đúng một bộ session/services/diagnostics khớp nhau và report diagnostic mới đúng một lần.
 - [ ] Call new, resume, fork, clone và import không bao giờ overlap, kể cả sau khi command trước reject.
 - [ ] Clone gọi `fork(entryId, { position: "at" })`; fork giữ semantics mặc định `"before"`.
-- [ ] Subscription cũ được gỡ trước disposal; mỗi replacement await `bindExtensions(...)` trước khi cài host subscription và trước khi host available.
+- [ ] Old unsubscribe failure được capture đồng bộ mà không thoát khỏi invalidation callback; old disposal và factory tiếp tục, rồi applied replacement được dispose hoặc factory error được kết hợp với cleanup failure.
+- [ ] Mỗi replacement await `bindExtensions(...)` trước khi cài host subscription và trước khi host available.
 - [ ] Cancellation hoặc pre-validation failure vẫn giữ binding cũ dùng được.
 - [ ] Factory rejection sau invalidation không công khai session nào; binding failure sau apply cũng clear subscription và dispose applied replacement. Cả hai vĩnh viễn reject operation sau đó trên wrapper này.
-- [ ] Nếu unsubscribe hoặc replacement disposal thất bại, `AggregateError` duy nhất được propagate có `.errors` phẳng theo thứ tự lỗi binding gốc, lỗi unsubscribe rồi lỗi disposal, còn `.cause` là lỗi gốc.
-- [ ] Final disposal abort response đang hoạt động, flush host persistence, phát shutdown qua runtime, unbind và reject access sau đó.
+- [ ] Post-rebind persistence failure đưa adapter về terminal, clear installed subscription, dispose replacement và reject mọi access về sau.
+- [ ] Nếu unsubscribe hoặc replacement disposal thất bại, `AggregateError` duy nhất được propagate có `.errors` phẳng theo thứ tự primary rồi các cleanup failure theo lúc xảy ra, còn `.cause` là primary failure.
+- [ ] Final disposal chuyển terminal trước cleanup; abort, persistence flush, runtime disposal và unsubscribe đều được thử, còn access sau đó reject ngay cả khi cleanup thất bại.
 - [ ] Diagnostic output redact secret và định danh operation cùng target cwd hoặc session path.
 
 Với acceptance run thật, tạo session trong hai thư mục cwd tạm, switch qua lại và assert project-local settings cùng resource đến từ cwd đã chọn. Dùng in-memory hoặc faux provider để lifecycle evidence không phụ thuộc network hay credential.

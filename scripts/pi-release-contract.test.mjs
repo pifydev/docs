@@ -18,6 +18,7 @@ const compileFixturePackages = [
 const chapter11ExampleFunction = "verifyDeterministicAgentRoundTrip";
 const deterministicGuideFunction = "verifyDeterministicAgentTestingGuide";
 const runtimeGuideFunction = "createSerializedSessionRuntimeHost";
+const runtimeHostAdapterFunction = "bindSerializedSessionRuntimeHost";
 const runtimeBindingFailureFunction = "throwSessionBindingFailure";
 
 function chapter11ExampleFence(markdown) {
@@ -259,7 +260,12 @@ function assertRuntimeGuideExampleParity(markdown, compileFixture, context) {
     displayedSource,
     `${context} displayed example`,
     runtimeGuideFunction,
-    { allowedFunctions: [runtimeBindingFailureFunction] },
+    {
+      allowedFunctions: [
+        runtimeBindingFailureFunction,
+        runtimeHostAdapterFunction,
+      ],
+    },
   );
   const compiled = parsedExampleContract(
     compileFixture.replaceAll("\r\n", "\n"),
@@ -275,6 +281,16 @@ function assertRuntimeGuideExampleParity(markdown, compileFixture, context) {
     compileFixture.replaceAll("\r\n", "\n"),
     "Pi 0.84.3 compile fixture binding failure helper",
     runtimeBindingFailureFunction,
+  );
+  const displayedHostAdapter = parsedExampleContract(
+    displayedSource,
+    `${context} displayed runtime host adapter`,
+    runtimeHostAdapterFunction,
+  );
+  const compiledHostAdapter = parsedExampleContract(
+    compileFixture.replaceAll("\r\n", "\n"),
+    "Pi 0.84.3 compile fixture runtime host adapter",
+    runtimeHostAdapterFunction,
   );
 
   assert.deepEqual(
@@ -297,22 +313,113 @@ function assertRuntimeGuideExampleParity(markdown, compileFixture, context) {
     compiledFailureHelper.functionSource,
     `${context} binding failure helper must match the compile fixture`,
   );
+  assert.equal(
+    displayedHostAdapter.functionSource,
+    compiledHostAdapter.functionSource,
+    `${context} runtime host adapter must match the compile fixture`,
+  );
 }
 
-async function importCompileFixtureFunction(source, functionName) {
-  const contract = parsedExampleContract(
-    source.replaceAll("\r\n", "\n"),
-    "executable Pi 0.84.3 compile fixture helper",
-    functionName,
-  );
-  const compiled = ts.transpileModule(contract.functionSource, {
+async function importCompileFixtureFunctions(source, functionNames) {
+  const normalized = source.replaceAll("\r\n", "\n");
+  const executableSource = functionNames
+    .map(
+      (functionName) =>
+        parsedExampleContract(
+          normalized,
+          `executable Pi 0.84.3 compile fixture ${functionName}`,
+          functionName,
+        ).functionSource,
+    )
+    .join("\n\n");
+  const compiled = ts.transpileModule(executableSource, {
     compilerOptions: {
       module: ts.ModuleKind.ESNext,
       target: ts.ScriptTarget.ES2022,
     },
   });
   const moduleURL = `data:text/javascript;base64,${Buffer.from(compiled.outputText).toString("base64")}`;
-  return (await import(moduleURL))[functionName];
+  return import(moduleURL);
+}
+
+async function importCompileFixtureFunction(source, functionName) {
+  return (await importCompileFixtureFunctions(source, [functionName]))[
+    functionName
+  ];
+}
+
+function createRuntimePortHarness(events, options = {}) {
+  let beforeSessionInvalidate;
+  let rebindSession;
+  let replacementIndex = 0;
+
+  const createSession = (label) => ({
+    label,
+    async bindExtensions() {
+      events.push(`${label}:bind-extensions`);
+    },
+    async abort() {
+      events.push(`${label}:abort`);
+      if (options.abortFailure) throw options.abortFailure;
+    },
+  });
+
+  const runtime = {
+    session: createSession("old"),
+    cwd: "/old",
+    diagnostics: [],
+    newSessionCalls: 0,
+    setBeforeSessionInvalidate(callback) {
+      beforeSessionInvalidate = callback;
+    },
+    setRebindSession(callback) {
+      rebindSession = callback;
+    },
+    async newSession() {
+      this.newSessionCalls += 1;
+      events.push("replacement:before-invalidate");
+      beforeSessionInvalidate?.();
+      events.push("replacement:before-invalidate-returned");
+      events.push("old:disposed");
+      events.push("factory:called");
+      if (options.factoryFailure) throw options.factoryFailure;
+      replacementIndex += 1;
+      const replacement = createSession(`replacement-${replacementIndex}`);
+      this.session = replacement;
+      this.cwd = `/replacement-${replacementIndex}`;
+      events.push(`replacement-${replacementIndex}:applied`);
+      await rebindSession?.(replacement);
+      events.push(`replacement-${replacementIndex}:rebound`);
+      return { cancelled: false };
+    },
+    async switchSession() {
+      return this.newSession();
+    },
+    async fork() {
+      await this.newSession();
+      return { cancelled: false };
+    },
+    async importFromJsonl() {
+      return this.newSession();
+    },
+    async dispose() {
+      events.push("runtime:dispose");
+      if (options.disposeFailure) throw options.disposeFailure;
+    },
+  };
+
+  return runtime;
+}
+
+async function loadRuntimeHostAdapter() {
+  const compileFixture = await readFile(
+    new URL("tests/fixtures/pi-sdk-0843.contract.ts", repositoryRoot),
+    "utf8",
+  );
+  return importCompileFixtureFunctions(compileFixture, [
+    runtimeBindingFailureFunction,
+    runtimeHostAdapterFunction,
+  ]);
 }
 
 function assertRuntimeGuideExtensionBindingOrder(markdown, context) {
@@ -361,7 +468,7 @@ function assertRuntimeGuideBindingFailureCleanup(markdown, context) {
   const bindStart = source.indexOf(
     "  const bindSession = async (session: AgentSession) => {",
   );
-  const bindEnd = source.indexOf("\n  const disposeBindingFailure", bindStart);
+  const bindEnd = source.indexOf("\n  const disposeRuntimeFailure", bindStart);
   assert.ok(bindStart >= 0, `${context} must define async bindSession`);
   assert.ok(bindEnd > bindStart, `${context} must scope async bindSession`);
   const bindSession = source.slice(bindStart, bindEnd);
@@ -400,12 +507,12 @@ function assertRuntimeGuideBindingFailureCleanup(markdown, context) {
   );
   assert.match(
     source,
-    /runtime\.setRebindSession\(async \(session\) => \{[\s\S]*?catch \(error\) \{\s+return disposeBindingFailure\(error, "replacement"\);/,
+    /runtime\.setRebindSession\(async \(session\) => \{[\s\S]*?catch \(error\) \{\s+return disposeRuntimeFailure\(error, "replacement session binding"\);/,
     `${context} replacement binding failure must use fail-closed disposal`,
   );
   assert.match(
     source,
-    /try \{\s+await bindSession\(runtime\.session\);\s+\} catch \(error\) \{\s+return disposeBindingFailure\(error, "initial"\);/,
+    /try \{\s+await bindSession\(runtime\.session\);\s+\} catch \(error\) \{\s+return disposeRuntimeFailure\(error, "initial session binding"\);/,
     `${context} initial binding failure must use fail-closed disposal`,
   );
 }
@@ -916,14 +1023,14 @@ test("replaceable runtime cleanup guard rejects missing subscription cleanup and
     "  const bindSession = async (session: AgentSession) => {",
   );
   const bindEnd = markdown.indexOf(
-    "\n  const disposeBindingFailure",
+    "\n  const disposeRuntimeFailure",
     bindStart,
   );
   assert.ok(bindStart >= 0);
   assert.ok(bindEnd > bindStart);
   const bindSession = markdown.slice(bindStart, bindEnd);
   const missingSubscriptionCleanupBlock = bindSession.replace(
-    "    clearSubscriptionAfterFailure(cleanupFailures);\n",
+    "      clearSubscriptionAfterFailure(cleanupFailures);\n",
     "",
   );
   const missingSubscriptionCleanup = markdown.replace(
@@ -931,7 +1038,7 @@ test("replaceable runtime cleanup guard rejects missing subscription cleanup and
     missingSubscriptionCleanupBlock,
   );
   const missingRuntimeDisposal = markdown.replace(
-    "      await runtime.dispose();\n",
+    "        await runtime.dispose();\n",
     "",
   );
   assert.notEqual(missingSubscriptionCleanupBlock, bindSession);
@@ -992,6 +1099,141 @@ test("binding failure finalizer preserves one flat primary and staged cleanup or
     () => throwSessionBindingFailure(primary, [], "initial session binding"),
     (error) => error === primary,
   );
+});
+
+test("synchronous invalidation cleanup failure cannot interrupt replacement teardown or factory", async () => {
+  const { bindSerializedSessionRuntimeHost } = await loadRuntimeHostAdapter();
+  assert.equal(typeof bindSerializedSessionRuntimeHost, "function");
+
+  const events = [];
+  const unsubscribeFailure = new Error("old unsubscribe failure");
+  const replacementDisposeFailure = new Error(
+    "applied replacement disposal failure",
+  );
+  const runtime = createRuntimePortHarness(events, {
+    disposeFailure: replacementDisposeFailure,
+  });
+  const host = await bindSerializedSessionRuntimeHost(runtime, {
+    extensionBindings: () => ({}),
+    subscribe(session) {
+      events.push(`${session.label}:subscribe`);
+      return () => {
+        events.push(`${session.label}:unsubscribe`);
+        if (session.label === "old") throw unsubscribeFailure;
+      };
+    },
+    reportDiagnostics() {},
+    async flushPersistence() {
+      events.push("persistence:flush");
+    },
+  });
+
+  await assert.rejects(host.newSession(), (error) => {
+    assert.ok(error instanceof AggregateError);
+    assert.deepEqual(error.errors, [
+      unsubscribeFailure,
+      replacementDisposeFailure,
+    ]);
+    assert.equal(error.cause, unsubscribeFailure);
+    return true;
+  });
+  assert.ok(
+    events.indexOf("old:unsubscribe") <
+      events.indexOf("replacement:before-invalidate-returned"),
+  );
+  assert.ok(
+    events.indexOf("replacement:before-invalidate-returned") <
+      events.indexOf("old:disposed"),
+  );
+  assert.ok(events.indexOf("old:disposed") < events.indexOf("factory:called"));
+  assert.ok(
+    events.indexOf("factory:called") < events.indexOf("runtime:dispose"),
+  );
+  assert.throws(() => host.cwd, /no usable current session/);
+});
+
+test("post-rebind persistence failure disposes the installed runtime and stays terminal", async () => {
+  const { bindSerializedSessionRuntimeHost } = await loadRuntimeHostAdapter();
+  const events = [];
+  const flushFailure = new Error("replacement persistence flush failure");
+  const runtime = createRuntimePortHarness(events);
+  const host = await bindSerializedSessionRuntimeHost(runtime, {
+    extensionBindings: () => ({}),
+    subscribe(session) {
+      events.push(`${session.label}:subscribe`);
+      return () => events.push(`${session.label}:unsubscribe`);
+    },
+    reportDiagnostics() {},
+    async flushPersistence() {
+      events.push("persistence:flush");
+      throw flushFailure;
+    },
+  });
+
+  await assert.rejects(host.newSession(), (error) => error === flushFailure);
+  assert.ok(
+    events.indexOf("replacement-1:rebound") <
+      events.indexOf("persistence:flush"),
+  );
+  assert.ok(
+    events.indexOf("persistence:flush") <
+      events.indexOf("replacement-1:unsubscribe"),
+  );
+  assert.ok(
+    events.indexOf("replacement-1:unsubscribe") <
+      events.indexOf("runtime:dispose"),
+  );
+  assert.throws(() => host.cwd, /no usable current session/);
+  await assert.rejects(host.newSession(), /no usable current session/);
+  assert.equal(runtime.newSessionCalls, 1);
+});
+
+test("final persistence failure still disposes and unsubscribes after terminal state", async () => {
+  const { bindSerializedSessionRuntimeHost } = await loadRuntimeHostAdapter();
+  const events = [];
+  const flushFailure = new Error("final persistence flush failure");
+  const runtimeDisposeFailure = new Error("final runtime disposal failure");
+  const unsubscribeFailure = new Error("final unsubscribe failure");
+  const runtime = createRuntimePortHarness(events, {
+    disposeFailure: runtimeDisposeFailure,
+  });
+  const host = await bindSerializedSessionRuntimeHost(runtime, {
+    extensionBindings: () => ({}),
+    subscribe(session) {
+      events.push(`${session.label}:subscribe`);
+      return () => {
+        events.push(`${session.label}:unsubscribe`);
+        throw unsubscribeFailure;
+      };
+    },
+    reportDiagnostics() {},
+    async flushPersistence() {
+      events.push("persistence:flush");
+      throw flushFailure;
+    },
+  });
+
+  const disposing = host.dispose();
+  assert.throws(() => host.cwd, /disposed/);
+  await assert.rejects(disposing, (error) => {
+    assert.ok(error instanceof AggregateError);
+    assert.deepEqual(error.errors, [
+      flushFailure,
+      runtimeDisposeFailure,
+      unsubscribeFailure,
+    ]);
+    assert.equal(error.cause, flushFailure);
+    return true;
+  });
+  assert.deepEqual(events.slice(-4), [
+    "old:abort",
+    "persistence:flush",
+    "runtime:dispose",
+    "old:unsubscribe",
+  ]);
+  assert.throws(() => host.diagnostics, /disposed/);
+  await assert.rejects(host.newSession(), /disposed/);
+  assert.equal(runtime.newSessionCalls, 0);
 });
 
 test("both replaceable session runtime guides preserve the ten-step lifecycle and diagram actors", async () => {

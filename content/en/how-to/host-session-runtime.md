@@ -65,7 +65,7 @@ Project trust is also evaluated for the target cwd. The example injects `authori
 
 ## 3. Implement a typed `CreateAgentSessionRuntimeFactory`
 
-The function below is the complete compile-only host shape. `CreateAgentSessionRuntimeFactory` forces the factory to return the new session, its matching services, and diagnostics as one coherent result. `createSerializedSessionRuntimeHost()` is not invoked by the fixture, so compilation does not read credentials, scan a project, or open a session file.
+The code below is the complete compile-only host shape. `CreateAgentSessionRuntimeFactory` forces the factory to return the new session, its matching services, and diagnostics as one coherent result. `bindSerializedSessionRuntimeHost()` owns lifecycle policy through a narrow `Pick<AgentSessionRuntime, ...>` port; a real `AgentSessionRuntime` satisfies it, while tests can inject an in-memory fake. Neither exported function is invoked by the compile fixture, so compilation does not read credentials, scan a project, or open a session file.
 
 ```typescript title="replaceable-session-runtime.ts"
 import {
@@ -90,6 +90,242 @@ export function throwSessionBindingFailure(
     `${phase} failed and cleanup also failed`,
     { cause: primary },
   );
+}
+
+export async function bindSerializedSessionRuntimeHost(
+  runtime: Pick<
+    AgentSessionRuntime,
+    | "session"
+    | "cwd"
+    | "diagnostics"
+    | "setBeforeSessionInvalidate"
+    | "setRebindSession"
+    | "newSession"
+    | "switchSession"
+    | "fork"
+    | "importFromJsonl"
+    | "dispose"
+  >,
+  bindings: {
+    extensionBindings(
+      session: AgentSession,
+    ): Parameters<AgentSession["bindExtensions"]>[0];
+    subscribe(session: AgentSession): () => void;
+    reportDiagnostics(
+      diagnostics: readonly AgentSessionRuntimeDiagnostic[],
+    ): void;
+    flushPersistence(): Promise<void>;
+  },
+): Promise<{
+  readonly cwd: string;
+  readonly diagnostics: readonly AgentSessionRuntimeDiagnostic[];
+  newSession(): ReturnType<AgentSessionRuntime["newSession"]>;
+  resume(
+    sessionPath: string,
+    cwdOverride?: string,
+  ): ReturnType<AgentSessionRuntime["switchSession"]>;
+  fork(entryId: string): ReturnType<AgentSessionRuntime["fork"]>;
+  clone(entryId: string): ReturnType<AgentSessionRuntime["fork"]>;
+  importJsonl(
+    inputPath: string,
+    cwdOverride?: string,
+  ): ReturnType<AgentSessionRuntime["importFromJsonl"]>;
+  dispose(): Promise<void>;
+}> {
+  let tail: Promise<void> = Promise.resolve();
+  let unsubscribe: (() => void) | undefined;
+  let invalidationCleanupFailures: unknown[] = [];
+  let replacementInFlight = false;
+  let unusable = false;
+  let disposed = false;
+
+  class CapturedSessionBindingFailure {
+    constructor(
+      readonly primary: unknown,
+      readonly cleanupFailures: unknown[],
+    ) {}
+  }
+
+  const clearSubscription = () => {
+    const release = unsubscribe;
+    unsubscribe = undefined;
+    release?.();
+  };
+  const clearSubscriptionAfterFailure = (cleanupFailures: unknown[]) => {
+    try {
+      clearSubscription();
+    } catch (error) {
+      cleanupFailures.push(error);
+    }
+  };
+  const takeInvalidationCleanupFailures = () => {
+    const failures = invalidationCleanupFailures;
+    invalidationCleanupFailures = [];
+    return failures;
+  };
+  const bindSession = async (session: AgentSession) => {
+    try {
+      clearSubscription();
+      await session.bindExtensions(bindings.extensionBindings(session));
+      unsubscribe = bindings.subscribe(session);
+      bindings.reportDiagnostics(runtime.diagnostics);
+    } catch (error) {
+      const cleanupFailures: unknown[] = [];
+      clearSubscriptionAfterFailure(cleanupFailures);
+      throw new CapturedSessionBindingFailure(error, cleanupFailures);
+    }
+  };
+  const disposeRuntimeFailure = async (
+    error: unknown,
+    phase: string,
+  ): Promise<never> => {
+    const captured =
+      error instanceof CapturedSessionBindingFailure
+        ? error
+        : new CapturedSessionBindingFailure(error, []);
+    replacementInFlight = true;
+    unusable = true;
+    const cleanupFailures = [...captured.cleanupFailures];
+    try {
+      clearSubscriptionAfterFailure(cleanupFailures);
+      try {
+        await runtime.dispose();
+      } catch (disposeError) {
+        cleanupFailures.push(disposeError);
+      }
+    } finally {
+      replacementInFlight = true;
+      unusable = true;
+      clearSubscriptionAfterFailure(cleanupFailures);
+    }
+    return throwSessionBindingFailure(captured.primary, cleanupFailures, phase);
+  };
+  const assertAvailable = () => {
+    if (disposed) throw new Error("session runtime host is disposed");
+    if (unusable || replacementInFlight) {
+      throw new Error("session runtime host has no usable current session");
+    }
+  };
+  const enqueue = <T>(operation: () => Promise<T>): Promise<T> => {
+    const pending = tail.then(operation);
+    tail = pending.then(
+      () => undefined,
+      () => undefined,
+    );
+    return pending;
+  };
+  const serialize = <T>(operation: () => Promise<T>): Promise<T> =>
+    enqueue(async () => {
+      assertAvailable();
+      try {
+        return await operation();
+      } catch (error) {
+        if (replacementInFlight) {
+          unusable = true;
+          return throwSessionBindingFailure(
+            error,
+            takeInvalidationCleanupFailures(),
+            "session replacement",
+          );
+        }
+        throw error;
+      }
+    });
+  const replace = <T>(operation: () => Promise<T>): Promise<T> =>
+    serialize(async () => {
+      const result = await operation();
+      try {
+        await bindings.flushPersistence();
+      } catch (error) {
+        return disposeRuntimeFailure(error, "replacement persistence");
+      }
+      return result;
+    });
+
+  runtime.setBeforeSessionInvalidate(() => {
+    replacementInFlight = true;
+    clearSubscriptionAfterFailure(invalidationCleanupFailures);
+  });
+  runtime.setRebindSession(async (session) => {
+    const cleanupFailures = takeInvalidationCleanupFailures();
+    if (cleanupFailures.length > 0) {
+      const [primary, ...remaining] = cleanupFailures;
+      return disposeRuntimeFailure(
+        new CapturedSessionBindingFailure(primary, remaining),
+        "replacement invalidation cleanup",
+      );
+    }
+    try {
+      await bindSession(session);
+      replacementInFlight = false;
+    } catch (error) {
+      return disposeRuntimeFailure(error, "replacement session binding");
+    }
+  });
+
+  try {
+    await bindSession(runtime.session);
+  } catch (error) {
+    return disposeRuntimeFailure(error, "initial session binding");
+  }
+
+  const dispose = (): Promise<void> => {
+    try {
+      assertAvailable();
+    } catch (error) {
+      return Promise.reject(error);
+    }
+    disposed = true;
+    unusable = true;
+    replacementInFlight = true;
+    return enqueue(async () => {
+      const failures: unknown[] = [];
+      try {
+        await runtime.session.abort();
+      } catch (error) {
+        failures.push(error);
+      }
+      try {
+        await bindings.flushPersistence();
+      } catch (error) {
+        failures.push(error);
+      }
+      try {
+        await runtime.dispose();
+      } catch (error) {
+        failures.push(error);
+      }
+      clearSubscriptionAfterFailure(failures);
+      if (failures.length > 0) {
+        const [primary, ...cleanupFailures] = failures;
+        return throwSessionBindingFailure(
+          primary,
+          cleanupFailures,
+          "final session runtime disposal",
+        );
+      }
+    });
+  };
+
+  return {
+    get cwd() {
+      assertAvailable();
+      return runtime.cwd;
+    },
+    get diagnostics() {
+      assertAvailable();
+      return runtime.diagnostics;
+    },
+    newSession: () => replace(() => runtime.newSession()),
+    resume: (sessionPath, cwdOverride) =>
+      replace(() => runtime.switchSession(sessionPath, { cwdOverride })),
+    fork: (entryId) => replace(() => runtime.fork(entryId)),
+    clone: (entryId) =>
+      replace(() => runtime.fork(entryId, { position: "at" })),
+    importJsonl: (inputPath, cwdOverride) =>
+      replace(() => runtime.importFromJsonl(inputPath, cwdOverride)),
+    dispose,
+  };
 }
 
 export async function createSerializedSessionRuntimeHost(
@@ -164,146 +400,7 @@ export async function createSerializedSessionRuntimeHost(
     createRuntime,
     initial,
   );
-  let tail: Promise<void> = Promise.resolve();
-  let unsubscribe: (() => void) | undefined;
-  let replacementInFlight = false;
-  let unusable = false;
-  let disposed = false;
-
-  class CapturedSessionBindingFailure {
-    constructor(
-      readonly primary: unknown,
-      readonly cleanupFailures: unknown[],
-    ) {}
-  }
-
-  const clearSubscription = () => {
-    const release = unsubscribe;
-    unsubscribe = undefined;
-    release?.();
-  };
-  const clearSubscriptionAfterFailure = (cleanupFailures: unknown[]) => {
-    try {
-      clearSubscription();
-    } catch (error) {
-      cleanupFailures.push(error);
-    }
-  };
-  const bindSession = async (session: AgentSession) => {
-    clearSubscription();
-    try {
-      await session.bindExtensions(bindings.extensionBindings(session));
-      unsubscribe = bindings.subscribe(session);
-      bindings.reportDiagnostics(runtime.diagnostics);
-    } catch (error) {
-      const cleanupFailures: unknown[] = [];
-      clearSubscriptionAfterFailure(cleanupFailures);
-      throw new CapturedSessionBindingFailure(error, cleanupFailures);
-    }
-  };
-  const disposeBindingFailure = async (
-    error: unknown,
-    phase: "initial" | "replacement",
-  ): Promise<never> => {
-    const captured =
-      error instanceof CapturedSessionBindingFailure
-        ? error
-        : new CapturedSessionBindingFailure(error, []);
-    unusable = true;
-    const cleanupFailures = [...captured.cleanupFailures];
-    try {
-      clearSubscriptionAfterFailure(cleanupFailures);
-      try {
-        await runtime.dispose();
-      } catch (disposeError) {
-        cleanupFailures.push(disposeError);
-      }
-    } finally {
-      replacementInFlight = true;
-      unusable = true;
-      clearSubscriptionAfterFailure(cleanupFailures);
-    }
-    return throwSessionBindingFailure(
-      captured.primary,
-      cleanupFailures,
-      `${phase} session binding`,
-    );
-  };
-  const assertAvailable = () => {
-    if (disposed) throw new Error("session runtime host is disposed");
-    if (unusable || replacementInFlight) {
-      throw new Error("session runtime host has no usable current session");
-    }
-  };
-  const serialize = <T>(operation: () => Promise<T>): Promise<T> => {
-    const pending = tail.then(async () => {
-      assertAvailable();
-      try {
-        return await operation();
-      } catch (error) {
-        if (replacementInFlight) unusable = true;
-        throw error;
-      }
-    });
-    tail = pending.then(
-      () => undefined,
-      () => undefined,
-    );
-    return pending;
-  };
-  const replace = <T>(operation: () => Promise<T>): Promise<T> =>
-    serialize(async () => {
-      const result = await operation();
-      await bindings.flushPersistence();
-      return result;
-    });
-
-  runtime.setBeforeSessionInvalidate(() => {
-    replacementInFlight = true;
-    clearSubscription();
-  });
-  runtime.setRebindSession(async (session) => {
-    try {
-      await bindSession(session);
-      replacementInFlight = false;
-    } catch (error) {
-      return disposeBindingFailure(error, "replacement");
-    }
-  });
-
-  try {
-    await bindSession(runtime.session);
-  } catch (error) {
-    return disposeBindingFailure(error, "initial");
-  }
-
-  return {
-    get cwd() {
-      assertAvailable();
-      return runtime.cwd;
-    },
-    get diagnostics() {
-      assertAvailable();
-      return runtime.diagnostics;
-    },
-    newSession: () => replace(() => runtime.newSession()),
-    resume: (sessionPath, cwdOverride) =>
-      replace(() => runtime.switchSession(sessionPath, { cwdOverride })),
-    fork: (entryId) => replace(() => runtime.fork(entryId)),
-    clone: (entryId) =>
-      replace(() => runtime.fork(entryId, { position: "at" })),
-    importJsonl: (inputPath, cwdOverride) =>
-      replace(() => runtime.importFromJsonl(inputPath, cwdOverride)),
-    dispose: () =>
-      serialize(async () => {
-        await runtime.session.abort();
-        await bindings.flushPersistence();
-        await runtime.dispose();
-        clearSubscription();
-        replacementInFlight = false;
-        disposed = true;
-      }),
-  };
+  return bindSerializedSessionRuntimeHost(runtime, bindings);
 }
 ```
 
@@ -347,10 +444,10 @@ A cancelled before-event returns without invalidating the old session. It is a n
 
 The release lifecycle exposes two different callbacks for two different moments:
 
-- `setBeforeSessionInvalidate()` runs synchronously after `session_shutdown` handlers finish but before the old session is disposed. The wrapper marks replacement as in flight and removes old listeners here.
+- `setBeforeSessionInvalidate()` runs synchronously after `session_shutdown` handlers finish but before the old session is disposed. The wrapper marks replacement as in flight and attempts to remove old listeners here. Because Pi does not await this callback, it catches an unsubscribe failure into `invalidationCleanupFailures` and always returns normally; old-session disposal and the factory must still run.
 - `setRebindSession()` is awaited after the factory result has been applied. The wrapper calls the same `bindSession()` helper, which awaits `session.bindExtensions(...)` before installing the host subscription and reporting diagnostics. Only then does it mark the host available again.
 
-The runtime updates `session`, `services`, `diagnostics`, and `modelFallbackMessage` together before the rebind callback. If `bindSession()` then fails, Pi has already applied that replacement. The wrapper immediately marks itself unusable, clears any returned subscription, attempts `runtime.dispose()` on the applied replacement, and uses `finally` to keep both `replacementInFlight` and `unusable` set before propagating the original or aggregate failure. The wrapper exposes cwd and diagnostics but deliberately does not expose its raw `AgentSessionRuntime`; request code therefore cannot read either a disposed old session or a failed applied replacement.
+The runtime updates `session`, `services`, `diagnostics`, and `modelFallbackMessage` together before the rebind callback. If synchronous invalidation cleanup was captured, rebind does not publish the replacement: it disposes the applied runtime and propagates that cleanup error as the primary failure. If `bindSession()` fails instead, the wrapper clears any returned subscription and follows the same disposal path. If the factory rejects before apply, the serialized operation combines that factory error as primary with captured invalidation cleanup errors. Every path remains terminal. The wrapper exposes cwd and diagnostics but deliberately does not expose its raw `AgentSessionRuntime`; request code therefore cannot read either a disposed old session or a failed applied replacement.
 
 ```mermaid
 sequenceDiagram
@@ -362,33 +459,52 @@ sequenceDiagram
     participant Next as Replacement session
     participant Extensions as Extension binding
     participant Rebind as Subscription rebind
+    participant Persist as Host persistence
     Caller->>Lock: enqueue new/resume/fork/clone/import
     Lock->>Dispose: begin runtime teardown
     Dispose->>Old: abort active response
     Dispose->>Old: session_shutdown
-    Dispose->>Rebind: unbind before invalidation
+    Dispose->>Rebind: synchronous unbind before invalidation
+    alt old unsubscribe succeeds
+        Rebind-->>Dispose: callback returns
+    else old unsubscribe fails
+        Rebind-->>Lock: capture failure and return normally
+    end
     Dispose->>Old: dispose()
     Lock->>Factory: create target cwd runtime
     alt factory succeeds
         Factory-->>Lock: session + services + diagnostics
         Lock->>Next: apply coherent result
-        Lock->>Extensions: bindExtensions(replacement options)
-        Extensions->>Next: session_start and extend resources
-        alt Extension and host binding succeed
-            Extensions-->>Lock: Extension lifecycle ready
-            Lock->>Rebind: subscribe to replacement session
-            Rebind-->>Caller: operation result
-        else Extension, subscribe, or diagnostics fail
-            Extensions--xLock: binding failure
-            Lock->>Rebind: clear returned subscription
+        alt invalidation cleanup was captured
             Lock->>Next: dispose applied replacement
-            Lock->>Lock: keep host unusable in finally
-            Lock--xCaller: original or aggregate failure
+            Lock--xCaller: flat terminal cleanup failure
+        else invalidation cleanup succeeded
+            Lock->>Extensions: bindExtensions(replacement options)
+            Extensions->>Next: session_start and extend resources
+            alt Extension and host binding succeed
+                Extensions-->>Lock: Extension lifecycle ready
+                Lock->>Rebind: subscribe to replacement session
+                Lock->>Persist: flush host persistence
+                alt persistence flush succeeds
+                    Persist-->>Caller: operation result
+                else persistence flush fails
+                    Persist--xLock: primary persistence failure
+                    Lock->>Rebind: clear installed subscription
+                    Lock->>Next: dispose applied replacement
+                    Lock--xCaller: terminal failure
+                end
+            else Extension, subscribe, or diagnostics fail
+                Extensions--xLock: binding failure
+                Lock->>Rebind: clear returned subscription
+                Lock->>Next: dispose applied replacement
+                Lock->>Lock: keep host unusable in finally
+                Lock--xCaller: original or aggregate failure
+            end
         end
     else factory rejects after disposal
         Factory--xLock: reject
-        Lock->>Lock: mark host unusable
-        Lock--xCaller: propagate error and expose no session
+        Lock->>Lock: combine captured cleanup and mark unusable
+        Lock--xCaller: factory primary and no exposed session
     end
 ```
 
@@ -396,17 +512,17 @@ sequenceDiagram
 
 For a replacement, Pi's internal teardown first awaits `oldSession.abort()`. This settles an active response so its aborted turn and Tool results can be written to the outgoing session. It then awaits `session_shutdown`, runs the synchronous invalidation callback, and calls `oldSession.dispose()` before invoking the factory. The old Extension runner and other session-owned resources must not be reused after that point.
 
-`SessionManager` appends Pi's JSONL records through its own session operations; there is no public asynchronous `flush()` method on `AgentSessionRuntime`. The example's `flushPersistence()` is explicitly for host-owned persistence, event projection, or durable queues. It runs after each successful replacement and, during final disposal, after `runtime.session.abort()` but before `runtime.dispose()`.
+`SessionManager` appends Pi's JSONL records through its own session operations; there is no public asynchronous `flush()` method on `AgentSessionRuntime`. The example's `flushPersistence()` is explicitly for host-owned persistence, event projection, or durable queues. It runs after each successful rebind. If that flush rejects, the installed replacement is not safe to publish: the adapter becomes terminal, clears its subscription, attempts `runtime.dispose()`, and rejects the operation.
 
-Final shutdown is also serialized. Stop accepting new commands, await `host.dispose()`, and then close process-global resources such as database pools or telemetry exporters. Calling a wrapper method after disposal rejects instead of reaching an invalid session.
+Final shutdown is also serialized, but terminal state is set synchronously when `host.dispose()` is called, before queued cleanup starts. Cleanup attempts `runtime.session.abort()`, host persistence flush, `runtime.dispose()`, and unsubscribe independently, so one failure cannot skip the later steps. The first failure remains primary; later failures are appended to one flat `AggregateError`. Stop accepting new commands, await the result, and then close process-global resources such as database pools or telemetry exporters. Getters and operations reject from the moment disposal starts, including after cleanup fails.
 
 ## 9. Handle factory failure without a half-replaced session
 
 Replacement in Pi `0.84.3` is not rollback-transactional. `AgentSessionRuntime` disposes the old session before awaiting the new factory. If that factory rejects, it propagates the error and does not call its internal apply or rebind steps; the old object is already invalid and there is no usable replacement.
 
-The wrapper detects this exact boundary because `setBeforeSessionInvalidate()` set `replacementInFlight`, while a successful `setRebindSession()` would have cleared it only after Extension and host binding both completed. A factory rejection occurs before apply and leaves no replacement to dispose. A `bindExtensions(...)`, host-subscription, or diagnostic-reporting rejection occurs after apply, so the rebind catch clears the returned subscription and disposes that applied replacement before propagating. Its `finally` path keeps the wrapper unusable even if disposal fails. Old subscriptions have already been detached, no raw session is public, and later operations or state getters reject. This is the required no-half-replacement, fail-closed policy.
+The wrapper detects this exact boundary because `setBeforeSessionInvalidate()` set `replacementInFlight`, while a successful `setRebindSession()` clears it only after Extension and host binding complete. The synchronous callback never throws: unsubscribe failure is retained for the awaited boundary. A factory rejection occurs before apply and leaves no replacement to dispose, so it is propagated as primary with that retained cleanup failure appended. An invalidation-cleanup, `bindExtensions(...)`, host-subscription, diagnostic-reporting, or post-rebind persistence rejection after apply disposes the installed replacement before propagating. `finally` keeps the wrapper unusable even if disposal fails. No raw session is public, and later operations or state getters reject. This is the required no-half-replacement, fail-closed policy.
 
-Cleanup failure never replaces or nests the primary evidence. `disposeBindingFailure()` starts with the captured unsubscribe failures, appends disposal and final-cleanup failures in occurrence order, and calls `throwSessionBindingFailure()` exactly once. With no cleanup failures, the helper rethrows the original binding error. Otherwise, it throws one `AggregateError` whose `.errors` are `[primary, ...cleanupFailures]` and whose `.cause` is `primary`. Log that flat aggregate structure without serializing session content, and treat every member as an operational incident.
+Cleanup failure never replaces or nests the primary evidence. `disposeRuntimeFailure()` starts with the captured cleanup failures, appends disposal and final-cleanup failures in occurrence order, and calls `throwSessionBindingFailure()` exactly once. Final disposal similarly records each attempted stage before finalizing. With no cleanup failures, the helper rethrows the original primary. Otherwise, it throws one `AggregateError` whose `.errors` are `[primary, ...cleanupFailures]` and whose `.cause` is `primary`. Log that flat aggregate structure without serializing session content, and treat every member as an operational incident.
 
 Do not catch that error and continue serving through a cached session. Record the operation, target path or cwd, and error without logging transcript content or secrets. Then terminate the owning worker, or build a new host from an explicit safe startup target. Automatic retry is acceptable only if the host remains unavailable and each attempt builds a complete new runtime.
 
@@ -423,11 +539,13 @@ Verify these invariants:
 - [ ] Each successful replacement creates a matching session/services/diagnostics set and reports the new diagnostics once.
 - [ ] New, resume, fork, clone, and import calls never overlap, including after an earlier command rejects.
 - [ ] Clone calls `fork(entryId, { position: "at" })`; fork keeps the default `"before"` semantics.
-- [ ] Old subscriptions are removed before disposal; each replacement awaits `bindExtensions(...)` before its host subscription is installed and before the host becomes available.
+- [ ] Old unsubscribe failure is captured synchronously without escaping the invalidation callback; old disposal and the factory continue, then the applied replacement is disposed or a factory error is combined with the cleanup failure.
+- [ ] Each replacement awaits `bindExtensions(...)` before its host subscription is installed and before the host becomes available.
 - [ ] A cancelled or pre-validation failure keeps the old binding usable.
 - [ ] A factory rejection after invalidation exposes no session; a binding failure after apply also clears subscriptions and disposes the applied replacement. Both permanently reject later operations on that wrapper.
-- [ ] If unsubscribe or replacement disposal fails, the single propagated `AggregateError` has flat `.errors` ordered as the original binding failure, unsubscribe failure, then disposal failure, and `.cause` is the original failure.
-- [ ] Final disposal aborts the active response, flushes host persistence, emits shutdown through the runtime, unbinds, and rejects later access.
+- [ ] Post-rebind persistence failure marks the adapter terminal, clears the installed subscription, disposes the replacement, and rejects all later access.
+- [ ] If unsubscribe or replacement disposal fails, the single propagated `AggregateError` has flat `.errors` ordered as primary then cleanup failures in occurrence order, and `.cause` is the primary failure.
+- [ ] Final disposal becomes terminal before cleanup; abort, persistence flush, runtime disposal, and unsubscribe are all attempted, and later access rejects even when cleanup fails.
 - [ ] Diagnostic output redacts secrets and identifies the operation plus target cwd or session path.
 
 For a real acceptance run, create sessions in two temporary cwd directories, switch between them, and assert that project-local settings and resources come from the selected cwd. Use an in-memory or faux provider so lifecycle evidence does not depend on network access or credentials.
