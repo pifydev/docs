@@ -510,6 +510,11 @@ async function invokeModel(
       }
       if (chunk.type === "textDelta") {
         addTextDeltaCodePoints(textCodePoints, chunk.delta);
+      } else {
+        // Tool calls separate streamed text blocks just as they do in the
+        // terminal assistant message. A pending high surrogate was already
+        // counted as one code point; clear adjacency before later text.
+        finishTextCodePointCounter(textCodePoints);
       }
       throwIfAborted(signal);
       chunks.push(chunk);

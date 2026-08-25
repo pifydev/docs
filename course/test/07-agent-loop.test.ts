@@ -1824,6 +1824,123 @@ test("counts one Unicode code point when a surrogate pair spans terminal text bl
   expect(result).toMatchObject({ status: "completed", finalText });
 });
 
+test("a Tool-call chunk breaks surrogate adjacency before an overflowing low surrogate", async () => {
+  const prefix = "a".repeat(65_535);
+  const toolCall = call("bounded", "call-surrogate-separator-overflow");
+  const model: CourseModel = {
+    stream(request) {
+      const stream = new EventStream<CourseModelChunk, CourseModelResponse>();
+      for (const delta of [prefix, "\ud83d"]) {
+        stream.push({ type: "textDelta", requestId: request.id, delta });
+      }
+      stream.push({ type: "toolCall", requestId: request.id, toolCall });
+      stream.push({
+        type: "textDelta",
+        requestId: request.id,
+        delta: "\ude00",
+      });
+      stream.finish(
+        responseFor(
+          request.id,
+          "response-surrogate-separator-overflow",
+          [
+            { type: "text", text: `${prefix}\ud83d` },
+            toolCall,
+            { type: "text", text: "\ude00" },
+          ],
+          "toolCall",
+        ),
+      );
+      return stream;
+    },
+  };
+
+  const { events, result } = await settleRun(
+    runAgentLoop({
+      messages: [user()],
+      model,
+      tools: new ToolRegistry(),
+      maxSteps: 1,
+      signal: new AbortController().signal,
+    }),
+  );
+
+  expect(result).toMatchObject({
+    status: "failed",
+    error: { code: "MODEL_PROTOCOL_ERROR" },
+  });
+  const chunks = events
+    .filter((event) => event.type === "model.chunk")
+    .map((event) => event.payload.chunk);
+  expect(chunks).toHaveLength(3);
+  expect(chunks[2]).toMatchObject({ type: "toolCall" });
+  expect(
+    chunks.some(
+      (chunk) => chunk.type === "textDelta" && chunk.delta === "\ude00",
+    ),
+  ).toBe(false);
+});
+
+test("accepts the text budget boundary when a Tool call separates surrogates", async () => {
+  const prefix = "a".repeat(65_534);
+  const toolCall = call("bounded", "call-surrogate-separator-boundary");
+  let executions = 0;
+  const tools = new ToolRegistry([
+    defineTool({
+      name: "bounded",
+      description: "Separate streamed text.",
+      validate: () => ({ ok: true as const, value: undefined }),
+      execute: async () => {
+        executions += 1;
+        return "ok";
+      },
+    }),
+  ]);
+  const model: CourseModel = {
+    stream(request) {
+      const stream = new EventStream<CourseModelChunk, CourseModelResponse>();
+      for (const delta of [prefix, "\ud83d"]) {
+        stream.push({ type: "textDelta", requestId: request.id, delta });
+      }
+      stream.push({ type: "toolCall", requestId: request.id, toolCall });
+      stream.push({
+        type: "textDelta",
+        requestId: request.id,
+        delta: "\ude00",
+      });
+      stream.finish(
+        responseFor(
+          request.id,
+          "response-surrogate-separator-boundary",
+          [
+            { type: "text", text: `${prefix}\ud83d` },
+            toolCall,
+            { type: "text", text: "\ude00" },
+          ],
+          "toolCall",
+        ),
+      );
+      return stream;
+    },
+  };
+
+  const { events, result } = await settleRun(
+    runAgentLoop({
+      messages: [user()],
+      model,
+      tools,
+      maxSteps: 1,
+      signal: new AbortController().signal,
+    }),
+  );
+
+  expect(result.status).toBe("maxSteps");
+  expect(events.filter((event) => event.type === "model.chunk")).toHaveLength(
+    4,
+  );
+  expect(executions).toBe(1);
+});
+
 test("applies split-surrogate text budgets to initial assistant blocks", async () => {
   const prefix = "a".repeat(65_535);
   const boundaryAssistant = {
