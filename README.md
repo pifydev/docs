@@ -36,11 +36,11 @@ and [Pi source code](https://github.com/earendil-works/pi).
 
 ## What is included
 
-- A ten-chapter walkthrough of the Pi Agent SDK architecture and runtime.
-- A ten-minute quickstart and five focused how-to guides.
+- An eleven-chapter walkthrough of the Pi Agent SDK architecture and runtime.
+- A ten-minute quickstart and eight focused how-to guides.
 - API, configuration, and environment-variable references.
 - A glossary, FAQ, changelog, Mermaid diagrams, and runnable code examples.
-- 23 synchronized page pairs: 46 public English and Vietnamese documents.
+- 27 synchronized page pairs: 54 public English and Vietnamese documents.
 - Locale-aware navigation and search, dark and light themes, responsive layouts,
   canonical metadata, sitemap, robots, and LLM-friendly text endpoints.
 

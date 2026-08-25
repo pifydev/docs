@@ -104,8 +104,8 @@ npm run build
 
 The individual content checks are also available:
 
-- `npm run lint:sync` compares all 23 public EN/VI page pairs.
-- `npm run lint:frontmatter` validates all 46 public files.
+- `npm run lint:sync` compares all 27 public EN/VI page pairs.
+- `npm run lint:frontmatter` validates all 54 public files.
 - `npm run lint:content` checks the manifest, navigation, links, headings, and
   retired authoring syntax.
 - `npm run lint:mermaid` validates every public Mermaid block.
