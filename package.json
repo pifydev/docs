@@ -15,6 +15,7 @@
     "test:editorial": "node --test scripts/editorial-lint.test.mjs",
     "test:preservation": "node --test scripts/content-preservation.test.mjs",
     "test:release": "node --test scripts/pi-release-contract.test.mjs",
+    "test:evals-guide": "node --test scripts/pi-evals-guide.test.mjs",
     "lint:frontmatter": "node scripts/validate-frontmatter.mjs",
     "lint:sync": "node scripts/sync-check.mjs",
     "lint:mermaid": "node scripts/validate-mermaid.mjs",
@@ -24,7 +25,7 @@
     "test:e2e": "playwright test",
     "format:check": "prettier --check .",
     "lint": "npm run lint:sync && npm run lint:frontmatter && npm run lint:content && npm run lint:editorial && npm run lint:mermaid && npm run lint:app",
-    "quality:content": "npm run test:content && npm run test:preservation && npm run test:editorial && npm run test:unit && npm run lint:sync && npm run lint:frontmatter && npm run lint:content && npm run lint:editorial && npm run lint:mermaid && npm run test:release && npm run lint:app"
+    "quality:content": "npm run test:content && npm run test:preservation && npm run test:editorial && npm run test:unit && npm run lint:sync && npm run lint:frontmatter && npm run lint:content && npm run lint:editorial && npm run lint:mermaid && npm run test:release && npm run test:evals-guide && npm run lint:app"
   },
   "engines": {
     "node": ">=22 <23"
