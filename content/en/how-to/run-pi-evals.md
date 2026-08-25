@@ -38,7 +38,7 @@ By the end of this guide, you will be able to:
 - compare a baseline with a candidate over deliberate repetitions;
 - separate an infrastructure error from a task verdict;
 - interpret token, latency, estimated-cost telemetry and inspect artifacts without exposing them;
-- remove the generated artifact directory through the pinned package's own cleanup script.
+- remove the default generated artifact directory through the pinned package's own cleanup script.
 
 :::caution[Optional model-backed execution, cost, and sensitive evidence]
 

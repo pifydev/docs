@@ -38,7 +38,7 @@ Sau hướng dẫn này, bạn có thể:
 - so sánh baseline với candidate qua số repetitions có chủ đích;
 - tách infrastructure error khỏi task verdict;
 - đọc telemetry về token, latency, estimated cost và kiểm tra artifact mà không làm lộ dữ liệu;
-- xóa artifact directory đã sinh bằng chính cleanup script của package đã pin.
+- xóa artifact directory mặc định được sinh bằng chính cleanup script của package đã pin.
 
 :::caution[Model-backed execution tùy chọn, chi phí và bằng chứng nhạy cảm]
 
