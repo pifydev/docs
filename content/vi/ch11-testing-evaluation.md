@@ -230,7 +230,7 @@ Khi hàng đợi faux cạn, kết quả là một assistant error response cu�
 
 ## 4. Assert các bất biến của Agent Loop và vòng khứ hồi Tool
 
-Ví dụ deterministic chứng minh nhiều hơn chuỗi `42`. Nó chứng minh hình dạng nhân quả của một lần chạy Agent. Provider request đầu chứa user message và Tool đã được công bố. Sau đó assistant yêu cầu `add` với ID `add-1`. Agent core xác thực arguments, gọi `execute()`, append một `ToolResultMessage` có cùng ID và tên Tool, rồi gửi context đã mở rộng cho provider. Chỉ assistant response thứ hai mới kết thúc lần chạy.
+Ví dụ deterministic chứng minh nhiều hơn chuỗi `42`. Nó chứng minh hình dạng nhân quả của một lần chạy Agent. Provider request đầu chứa user message và Tool được khai báo trong request. Sau đó assistant yêu cầu `add` với ID `add-1`. Agent core xác thực arguments, gọi `execute()`, append một `ToolResultMessage` có cùng ID và tên Tool, rồi gửi context đã mở rộng cho provider. Chỉ assistant response thứ hai mới kết thúc lần chạy.
 
 Một test suite tập trung cho Agent Loop nên assert riêng các bất biến sau, độc lập với câu chữ của answer:
 
@@ -394,11 +394,11 @@ Task failure là một observation hợp lệ đã hoàn tất nhưng không th�
 | Unscored | Run hoàn tất nhưng thiếu output bắt buộc từ judge | Diagnostic và metadata run được giữ lại | Loại khỏi cặp correctness; điều tra judge |
 | Harness error | Thiếu model, auth fail, setup throw hoặc không chuẩn hóa được output | Error class, stage và một phần telemetry an toàn | Đánh dấu invalid; không tạo score tác vụ giả |
 | Cancelled hoặc timed out | Budget, user hoặc scheduler dừng run | Nguồn hủy và elapsed budget | Đánh dấu invalid hoặc phân tích riêng theo policy đã công bố |
-| Cleanup/artifact error | Snapshot session hoặc teardown thất bại | Kết quả chính cùng diagnostic cleanup | Làm policy hạ tầng fail; không âm thầm loại bỏ |
+| Cleanup/artifact error | Snapshot session hoặc teardown thất bại | Kết quả chính cùng diagnostic cleanup | Đánh dấu là hạ tầng không đạt theo policy; không âm thầm loại bỏ |
 
 Sự phân tách này quyết định assertion nằm ở đâu. Harness nên throw hoặc trả về infrastructure error tường minh khi không thể tạo runtime, settle Agent, chuẩn hóa output hoặc cleanup resource bắt buộc. Judge chỉ chạy trên observation hợp lệ. Score thấp từ judge vẫn là dữ liệu evaluation; trong suite so sánh, nó không nhất thiết làm cả test process fail. Có thể áp dụng ngưỡng release sau đó trên báo cáo đầy đủ, với mẫu số và diagnostic hiển thị rõ.
 
-Retry policy phải giữ nguyên sự phân biệt. Retry rate limit hoặc lỗi transport tạm thời có thể khôi phục hạ tầng. Retry một answer sai cho đến khi pass làm thay đổi câu hỏi evaluation và thổi phồng hiệu năng. Nếu retry ở tầng tác vụ là một phần của sản phẩm, hãy mô hình hóa nó trong cả baseline và candidate harness, đồng thời tính token, latency và cost của retry.
+Retry policy phải giữ nguyên sự phân biệt. Retry rate limit hoặc lỗi transport tạm thời có thể khôi phục hạ tầng. Retry một answer sai cho đến khi pass làm thay đổi câu hỏi evaluation và thổi phồng kết quả đánh giá. Nếu retry ở tầng tác vụ là một phần của sản phẩm, hãy mô hình hóa nó trong cả baseline và candidate harness, đồng thời tính token, latency và cost của retry.
 
 ## 10. Kiểm soát quyền riêng tư, chi phí và khả năng tái lập của artifact
 
@@ -456,13 +456,13 @@ Trước khi phát hành thay đổi hành vi Agent, hãy trả lời các câu 
 - Reviewer có thể tái lập cấu hình mà không nhận artifact private chưa redact hay không?
 - Candidate có đạt correctness policy mà không tạo regression không thể chấp nhận về latency, token hoặc cost hay không?
 
-Source map sau được pin tới commit Pi `0.84.3` `4e58f324fae8ebfa98a3d45181fb248072a2afac`:
+Source map sau được pin tới release Pi `0.84.3`, commit `4e58f324fae8ebfa98a3d45181fb248072a2afac`:
 
 - [`packages/ai/src/providers/faux.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/ai/src/providers/faux.ts) định nghĩa `fauxProvider()`, response helper, hành vi hàng đợi và request factory.
 - [`packages/agent/test/e2e.test.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/test/e2e.test.ts) minh họa test deterministic cho Agent, Tool, abort, lifecycle và multi-turn.
 - [`packages/agent/src/agent-loop.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/agent-loop.ts) sở hữu bước chuẩn bị và thực thi Tool, dựng result, thứ tự append và tiếp tục turn.
 - [`packages/coding-agent/src/core/session-manager.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/session-manager.ts) triển khai session storage v3 liên kết bằng parent và phép chiếu active path của Coding Agent.
-- [`packages/agent/test/harness/session/context.test.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/test/harness/session/context.test.ts) và [`jsonl-storage.test.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/test/harness/session/jsonl-storage.test.ts) thực thi các contract session riêng của generic harness.
+- [`packages/agent/test/harness/session/context.test.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/test/harness/session/context.test.ts) và [`jsonl-storage.test.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/test/harness/session/jsonl-storage.test.ts) kiểm thử các contract session riêng của generic harness.
 - [`packages/evals/README.md`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/README.md), [`smoke.eval.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/src/smoke.eval.ts) và [`pi-harness.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/src/pi-harness.ts) định nghĩa entry eval model-backed private của release và Coding Agent harness.
 - [`harness-table.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/src/vitest-evals/harness-table.ts), [`reporter.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/src/vitest-evals/reporter.ts), [`artifacts.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/src/vitest-evals/artifacts.ts) và [`summary.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/src/vitest-evals/summary.ts) triển khai việc ghép cặp lặp lại, đính kèm artifact, diagnostic và summary so sánh.
 
