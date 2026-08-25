@@ -8,6 +8,9 @@ const NativePromise = Promise;
 const nativePromiseResolve = Promise.resolve;
 const nativePromiseThen = Promise.prototype.then;
 const reflectApply = Reflect.apply;
+const objectGetPrototypeOf = Object.getPrototypeOf;
+const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const objectPrototype = Object.prototype;
 const nodeIsProxy = nodeUtilTypes.isProxy;
 const objectHasOwn = Object.prototype.hasOwnProperty;
 const eventTargetAddEventListener = EventTarget.prototype.addEventListener;
@@ -17,6 +20,8 @@ const abortSignalAbortedGetter = Object.getOwnPropertyDescriptor(
   AbortSignal.prototype,
   "aborted",
 )?.get;
+const nativeSetTimeout = setTimeout;
+const nativeClearTimeout = clearTimeout;
 
 const MAX_TASKS = 256;
 const MAX_REPETITIONS = 64;
@@ -29,12 +34,15 @@ export const MAX_EVIDENCE_ITEMS = 32;
 export const MAX_SOURCE_METRICS = 64;
 /** Merged per-run report metrics may contain both source allowances. */
 export const MAX_REPORT_METRICS = 128;
+/** Each owned cleanup ignores run cancellation but has this hard time ceiling. */
+export const MAX_EVALUATION_CLEANUP_MS = 1_000;
 export const MAX_EVIDENCE_ITEM_CODE_POINTS = 4_096;
 export const MAX_TASK_EVIDENCE_CODE_POINTS = 65_536;
 const MAX_PROMPT_CODE_UNITS = 100_000;
 const ID_PATTERN = /^[a-z0-9](?:[a-z0-9._-]{0,63})$/u;
 const ERROR_CODE_PATTERN = /^[A-Z][A-Z0-9_:-]{0,63}$/u;
 const METRIC_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/u;
+const MAX_OWNERSHIP_PROTOTYPE_DEPTH = 8;
 
 export type EvaluationVerdict = "pass" | "fail" | "error";
 
@@ -131,6 +139,10 @@ export type EvaluationWorkspaceFactory = (
 
 export type EvaluationClock = Readonly<{ now: () => number }>;
 
+export type EvaluationCleanupTimer = Readonly<{
+  schedule: (delayMs: number, onTimeout: () => void) => () => void;
+}>;
+
 export type EvaluationRunReport = Readonly<{
   taskId: string;
   runId: string;
@@ -188,6 +200,10 @@ export type RunEvaluationOptions = Readonly<{
   concurrency?: number;
   clock?: EvaluationClock;
   workspaceFactory?: EvaluationWorkspaceFactory;
+  /** Per runtime-dispose or workspace-cleanup timeout; capped at 1,000 ms. */
+  cleanupTimeoutMs?: number;
+  /** Deterministic scheduling seam for tests and embedded hosts. */
+  cleanupTimer?: EvaluationCleanupTimer;
 }>;
 
 export type EvaluationInfrastructureErrorCode =
@@ -199,6 +215,7 @@ export type EvaluationInfrastructureErrorCode =
   | "EVALUATION_JUDGE_FAILED"
   | "EVALUATION_CLOCK_FAILED"
   | "EVALUATION_CLEANUP_FAILED"
+  | "EVALUATION_CLEANUP_TIMEOUT"
   | "EVALUATION_INVALID_REPORT";
 
 export class EvaluationInfrastructureError extends Error {
@@ -239,6 +256,8 @@ type CapturedOptions = Readonly<{
   concurrency: number;
   now: () => number;
   createWorkspace: EvaluationWorkspaceFactory;
+  cleanupTimeoutMs: number;
+  scheduleCleanupTimeout: EvaluationCleanupTimer["schedule"];
 }>;
 
 type CapturedCompletedOutput = Readonly<{
@@ -269,6 +288,13 @@ type SharedCancellation = Readonly<{
 type UnknownFunction = (...arguments_: never[]) => unknown;
 
 const defaultClock: EvaluationClock = Object.freeze({ now: () => 0 });
+
+const defaultCleanupTimer: EvaluationCleanupTimer = Object.freeze({
+  schedule(delayMs, onTimeout) {
+    const timer = nativeSetTimeout(onTimeout, delayMs);
+    return () => nativeClearTimeout(timer);
+  },
+});
 
 const defaultWorkspaceFactory: EvaluationWorkspaceFactory = async () => {
   const path = await mkdtemp(join(tmpdir(), "pify-agent-eval-"));
@@ -471,22 +497,16 @@ async function executeEvaluation(
 
   if (failures.length > 0) {
     const primary = initiatingFailure ?? failures[0].error;
-    const cleanupFailures: EvaluationInfrastructureError[] = [];
+    const cleanupFailures: FailureRecord[] = [];
     for (let index = 0; index < failures.length; index += 1) {
       const failure = failures[index].error;
-      if (failure.code === "EVALUATION_CLEANUP_FAILED" && failure !== primary) {
-        cleanupFailures.push(failure);
+      if (failure.code === "EVALUATION_CLEANUP_FAILED") {
+        cleanupFailures.push(failures[index]);
       }
     }
     if (cleanupFailures.length > 0) {
-      throw infrastructureFailure(
-        "EVALUATION_CLEANUP_FAILED",
-        "Evaluation failed and peer cleanup also failed",
-        new NativeAggregateError(
-          [primary, ...cleanupFailures],
-          "Evaluation failure and peer cleanup failures",
-        ),
-      );
+      cleanupFailures.sort((left, right) => left.index - right.index);
+      throw aggregateWorkerCleanupFailures(primary, cleanupFailures);
     }
     throw primary;
   }
@@ -509,6 +529,48 @@ async function executeEvaluation(
     runs: frozenRuns,
     publicMetrics: aggregateMetrics(frozenRuns),
   });
+}
+
+function aggregateWorkerCleanupFailures(
+  primary: EvaluationInfrastructureError,
+  cleanupFailures: readonly FailureRecord[],
+): EvaluationInfrastructureError {
+  const causes: unknown[] = [];
+  let primaryAdded = false;
+  const addCause = (cause: unknown) => {
+    if (
+      cause instanceof EvaluationInfrastructureError &&
+      cause.code === "EVALUATION_CANCELLED" &&
+      cause !== primary
+    ) {
+      return;
+    }
+    if (cause === primary) {
+      if (primaryAdded) return;
+      primaryAdded = true;
+    }
+    causes.push(cause);
+  };
+
+  if (primary.code !== "EVALUATION_CLEANUP_FAILED") addCause(primary);
+  for (let index = 0; index < cleanupFailures.length; index += 1) {
+    const failure = cleanupFailures[index].error;
+    const cause = failure.cause;
+    if (cause instanceof NativeAggregateError) {
+      const nested = cause.errors as readonly unknown[];
+      for (let nestedIndex = 0; nestedIndex < nested.length; nestedIndex += 1) {
+        addCause(nested[nestedIndex]);
+      }
+    } else {
+      addCause(failure);
+    }
+  }
+  if (causes.length === 0) addCause(primary);
+  return infrastructureFailure(
+    "EVALUATION_CLEANUP_FAILED",
+    "Evaluation failed and cleanup did not settle successfully",
+    new NativeAggregateError(causes, "Evaluation and cleanup failures"),
+  );
 }
 
 export function compareEvaluations(
@@ -710,10 +772,10 @@ async function runOne(
 
   const cleanupFailures: unknown[] = [];
   if (runtimeDispose !== undefined) {
-    await settleOwnedCleanup(runtimeDispose, options.signal, cleanupFailures);
+    await settleOwnedCleanup(runtimeDispose, options, cleanupFailures);
   }
   if (workspaceCleanup !== undefined) {
-    await settleOwnedCleanup(workspaceCleanup, options.signal, cleanupFailures);
+    await settleOwnedCleanup(workspaceCleanup, options, cleanupFailures);
   }
 
   if (cleanupFailures.length > 0) {
@@ -754,7 +816,7 @@ async function runOne(
 
 async function settleOwnedCleanup(
   cleanup: OwnedCleanup,
-  signal: AbortSignal,
+  options: CapturedOptions,
   failures: unknown[],
 ): Promise<void> {
   let value: unknown;
@@ -765,10 +827,72 @@ async function settleOwnedCleanup(
     return;
   }
   try {
-    await awaitAbortable(value, signal);
+    await settleCleanupWithin(
+      value,
+      options.cleanupTimeoutMs,
+      options.scheduleCleanupTimeout,
+    );
   } catch (error) {
-    if (!isCancellation(error)) failures.push(error);
+    failures.push(error);
   }
+}
+
+function settleCleanupWithin(
+  value: unknown,
+  timeoutMs: number,
+  scheduleTimeout: EvaluationCleanupTimer["schedule"],
+): Promise<void> {
+  const observed = observeAsync(value);
+  return new NativePromise<void>((resolve, reject) => {
+    let settled = false;
+    let cancelTimer: UnknownFunction | undefined;
+    let timerCleared = false;
+
+    const clearTimer = () => {
+      if (timerCleared || cancelTimer === undefined) return;
+      timerCleared = true;
+      try {
+        reflectApply(cancelTimer, undefined, []);
+      } catch {
+        // Clearing a selected timer cannot replace the cleanup outcome.
+      }
+    };
+    const settle = (kind: "resolve" | "reject", result?: unknown) => {
+      if (settled) return;
+      settled = true;
+      clearTimer();
+      if (kind === "resolve") resolve();
+      else reject(result);
+    };
+
+    const continuation = reflectApply(nativePromiseThen, observed, [
+      () => settle("resolve"),
+      (error: unknown) => settle("reject", error),
+    ]) as Promise<unknown>;
+    void reflectApply(nativePromiseThen, continuation, [
+      () => undefined,
+      () => undefined,
+    ]);
+
+    try {
+      const rawCancel = scheduleTimeout(timeoutMs, () => {
+        settle(
+          "reject",
+          infrastructureFailure(
+            "EVALUATION_CLEANUP_TIMEOUT",
+            `Evaluation cleanup exceeded ${timeoutMs} ms`,
+          ),
+        );
+      });
+      cancelTimer = requireFunction(
+        rawCancel,
+        "Evaluation cleanup timer cancellation",
+      );
+      if (settled) clearTimer();
+    } catch (error) {
+      settle("reject", error);
+    }
+  });
 }
 
 async function createWorkspace(
@@ -920,6 +1044,16 @@ function captureOptions(options: RunEvaluationOptions): CapturedOptions {
     "workspaceFactory",
     defaultWorkspaceFactory,
   );
+  const cleanupTimeoutValue = readOptionalProperty(
+    raw,
+    "cleanupTimeoutMs",
+    MAX_EVALUATION_CLEANUP_MS,
+  );
+  const cleanupTimerValue = readOptionalProperty(
+    raw,
+    "cleanupTimer",
+    defaultCleanupTimer,
+  );
 
   const candidate = requireRecord(candidateValue, "Evaluation candidate");
   const candidateId = requireId(
@@ -944,6 +1078,22 @@ function captureOptions(options: RunEvaluationOptions): CapturedOptions {
     workspaceFactoryValue,
     "Evaluation workspaceFactory",
   ) as EvaluationWorkspaceFactory;
+  const cleanupTimer = requireRecord(
+    cleanupTimerValue,
+    "Evaluation cleanup timer",
+  );
+  const rawScheduleCleanupTimeout = requireFunction(
+    readProperty(cleanupTimer, "schedule", "Evaluation cleanup timer"),
+    "Evaluation cleanup timer schedule",
+  );
+  const scheduleCleanupTimeout: EvaluationCleanupTimer["schedule"] = (
+    delayMs,
+    onTimeout,
+  ) =>
+    reflectApply(rawScheduleCleanupTimeout, cleanupTimer, [
+      delayMs,
+      onTimeout,
+    ]) as () => void;
 
   if (
     !Number.isSafeInteger(repetitionsValue) ||
@@ -968,6 +1118,16 @@ function captureOptions(options: RunEvaluationOptions): CapturedOptions {
   if (!(signalValue instanceof AbortSignal) || isProxy(signalValue)) {
     throw new TypeError("Evaluation signal must be a native AbortSignal");
   }
+  if (
+    typeof cleanupTimeoutValue !== "number" ||
+    !Number.isSafeInteger(cleanupTimeoutValue) ||
+    cleanupTimeoutValue < 1 ||
+    cleanupTimeoutValue > MAX_EVALUATION_CLEANUP_MS
+  ) {
+    throw new TypeError(
+      `Evaluation cleanupTimeoutMs must be an integer from 1 to ${MAX_EVALUATION_CLEANUP_MS}`,
+    );
+  }
   const tasks = loadEvaluationTasks(tasksValue);
   const totalRuns = tasks.length * repetitionsValue;
   if (totalRuns > MAX_EVALUATION_RUNS) {
@@ -986,6 +1146,8 @@ function captureOptions(options: RunEvaluationOptions): CapturedOptions {
     concurrency: concurrencyValue,
     now,
     createWorkspace,
+    cleanupTimeoutMs: cleanupTimeoutValue,
+    scheduleCleanupTimeout,
   });
 }
 
@@ -1570,30 +1732,49 @@ function captureOwnedMethod(
   key: "cleanup" | "dispose",
   label: string,
 ): OwnedCleanup {
-  let descriptor: PropertyDescriptor | undefined;
-  try {
-    descriptor = Object.getOwnPropertyDescriptor(owner, key);
-  } catch (error) {
-    throw new TypeError(`${label} ownership could not be inspected safely`, {
-      cause: error,
-    });
+  let current: object = owner;
+  for (let depth = 0; depth <= MAX_OWNERSHIP_PROTOTYPE_DEPTH; depth += 1) {
+    if (current === objectPrototype || isProxy(current)) break;
+    let descriptor: PropertyDescriptor | undefined;
+    try {
+      descriptor = reflectApply(objectGetOwnPropertyDescriptor, Object, [
+        current,
+        key,
+      ]) as PropertyDescriptor | undefined;
+    } catch (error) {
+      throw new TypeError(`${label} ownership could not be inspected safely`, {
+        cause: error,
+      });
+    }
+    if (descriptor !== undefined) {
+      if (!reflectApply(objectHasOwn, descriptor, ["value"])) {
+        throw new TypeError(`${label} must not be an accessor`);
+      }
+      const method = requireFunction(descriptor.value, label);
+      let called = false;
+      return () => {
+        if (called) return undefined;
+        called = true;
+        return reflectApply(method, owner, []);
+      };
+    }
+    let prototype: object | null;
+    try {
+      prototype = reflectApply(objectGetPrototypeOf, Object, [current]) as
+        object | null;
+    } catch (error) {
+      throw new TypeError(`${label} prototype could not be inspected safely`, {
+        cause: error,
+      });
+    }
+    if (prototype === null || prototype === objectPrototype) {
+      throw new TypeError(`${label} must be a data-function contract`);
+    }
+    current = prototype;
   }
-  if (descriptor === undefined) {
-    throw new TypeError(`${label} must be an own function`);
-  }
-  let value: unknown;
-  try {
-    value = "value" in descriptor ? descriptor.value : Reflect.get(owner, key);
-  } catch (error) {
-    throw new TypeError(`${label} could not be read safely`, { cause: error });
-  }
-  const method = requireFunction(value, label);
-  let called = false;
-  return () => {
-    if (called) return undefined;
-    called = true;
-    return reflectApply(method, owner, []);
-  };
+  throw new TypeError(
+    `${label} prototype depth must not exceed ${MAX_OWNERSHIP_PROTOTYPE_DEPTH}`,
+  );
 }
 
 function isProxy(input: object): boolean {

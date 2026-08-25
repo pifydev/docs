@@ -5,6 +5,7 @@ import { expect, test } from "vitest";
 import {
   EvaluationInfrastructureError,
   MAX_EVALUATION_RUNS,
+  MAX_EVALUATION_CLEANUP_MS,
   MAX_EVIDENCE_ITEMS,
   MAX_REPORT_METRICS,
   MAX_SOURCE_METRICS,
@@ -14,6 +15,7 @@ import {
   runEvaluation,
   serializeEvaluationReport,
   type EvaluationCandidate,
+  type EvaluationCleanupTimer,
   type EvaluationReport,
   type EvaluationRuntime,
   type EvaluationWorkspaceFactory,
@@ -752,7 +754,7 @@ test("shares cancellation across concurrent workers and fails fast without hangi
           },
           dispose: () => {
             disposed.push(taskId);
-            return new Promise<never>(() => undefined);
+            return Promise.resolve();
           },
         };
       },
@@ -785,7 +787,7 @@ test("shares cancellation across concurrent workers and fails fast without hangi
         path: `/virtual/${taskId}`,
         cleanup: () => {
           cleaned.push(taskId);
-          return new Promise<never>(() => undefined);
+          return Promise.resolve();
         },
       };
     },
@@ -1155,4 +1157,200 @@ test("composes source metric caps and classifies composition as judge infrastruc
   ).toThrowError(
     expect.objectContaining({ code: "EVALUATION_INVALID_REPORT" }),
   );
+});
+
+test("aggregates primary, asynchronous runtime disposal, and workspace cleanup failures", async () => {
+  const evaluation = runEvaluation({
+    candidate: {
+      id: "async-cleanup-errors",
+      createRuntime: () => ({
+        run: () => {
+          throw new Error("primary runtime failure");
+        },
+        dispose: () => Promise.reject(new Error("async dispose failure")),
+      }),
+    },
+    tasks: singleTask("held-out-async-cleanup-errors"),
+    workspaceFactory: () => ({
+      path: "/virtual/async-cleanup-errors",
+      cleanup: () => Promise.reject(new Error("async workspace failure")),
+    }),
+  });
+
+  await expect(evaluation).rejects.toSatisfy((error: unknown) => {
+    expect(error).toMatchObject({ code: "EVALUATION_CLEANUP_FAILED" });
+    const cause = (error as Error).cause;
+    expect(cause).toBeInstanceOf(AggregateError);
+    const errors = (cause as AggregateError).errors as unknown[];
+    expect(errors).toHaveLength(3);
+    expect(errors.map((item) => (item as Error).message)).toEqual([
+      "Candidate runtime execution failed",
+      "async dispose failure",
+      "async workspace failure",
+    ]);
+    return true;
+  });
+});
+
+test("external cancellation still aggregates asynchronous cleanup failures", async () => {
+  const controller = new AbortController();
+  const entered = deferred<void>();
+  const evaluation = runEvaluation({
+    candidate: {
+      id: "cancel-cleanup-errors",
+      createRuntime: () => ({
+        run: () => {
+          entered.resolve();
+          return new Promise<never>(() => undefined);
+        },
+        dispose: () => Promise.reject(new Error("cancel dispose failure")),
+      }),
+    },
+    tasks: singleTask("held-out-cancel-cleanup-errors"),
+    signal: controller.signal,
+    workspaceFactory: () => ({
+      path: "/virtual/cancel-cleanup-errors",
+      cleanup: () => Promise.reject(new Error("cancel workspace failure")),
+    }),
+  });
+
+  await entered.promise;
+  controller.abort("cancel with cleanup failures");
+  await expect(evaluation).rejects.toSatisfy((error: unknown) => {
+    expect(error).toMatchObject({ code: "EVALUATION_CLEANUP_FAILED" });
+    const errors = ((error as Error).cause as AggregateError)
+      .errors as unknown[];
+    expect(errors).toHaveLength(3);
+    expect(errors[0]).toMatchObject({ code: "EVALUATION_CANCELLED" });
+    expect(errors.slice(1).map((item) => (item as Error).message)).toEqual([
+      "cancel dispose failure",
+      "cancel workspace failure",
+    ]);
+    return true;
+  });
+});
+
+test("bounds hung cleanup with an independent injectable timeout and clears timers", async () => {
+  expect(MAX_EVALUATION_CLEANUP_MS).toBe(1_000);
+  const scheduled: number[] = [];
+  let cleared = 0;
+  const cleanupTimer: EvaluationCleanupTimer = {
+    schedule(delayMs, onTimeout) {
+      scheduled.push(delayMs);
+      let active = true;
+      queueMicrotask(() => {
+        if (active) onTimeout();
+      });
+      return () => {
+        if (!active) return;
+        active = false;
+        cleared += 1;
+      };
+    },
+  };
+  const evaluation = runEvaluation({
+    candidate: {
+      id: "cleanup-timeout",
+      createRuntime: () => ({
+        run: () => {
+          throw new Error("timeout primary");
+        },
+        dispose: () => new Promise<never>(() => undefined),
+      }),
+    },
+    tasks: singleTask("held-out-cleanup-timeout"),
+    cleanupTimeoutMs: 7,
+    cleanupTimer,
+    workspaceFactory: () => ({
+      path: "/virtual/cleanup-timeout",
+      cleanup: () => undefined,
+    }),
+  });
+
+  await expect(evaluation).rejects.toSatisfy((error: unknown) => {
+    expect(error).toMatchObject({ code: "EVALUATION_CLEANUP_FAILED" });
+    const errors = ((error as Error).cause as AggregateError).errors as Array<{
+      code?: string;
+    }>;
+    expect(errors).toHaveLength(2);
+    expect(errors[1]).toMatchObject({ code: "EVALUATION_CLEANUP_TIMEOUT" });
+    return true;
+  });
+  expect(scheduled).toEqual([7, 7]);
+  expect(cleared).toBe(2);
+});
+
+test("accepts class prototype cleanup contracts and invokes them exactly once", async () => {
+  const calls: string[] = [];
+  class ClassWorkspace {
+    public readonly path = "/virtual/class-workspace";
+
+    public cleanup(): void {
+      calls.push("workspace.cleanup");
+    }
+  }
+  class ClassRuntime {
+    public run() {
+      return { status: "completed" as const, publicEvidence: ["42"] };
+    }
+
+    public dispose(): void {
+      calls.push("runtime.dispose");
+    }
+  }
+
+  const report = await runEvaluation({
+    candidate: {
+      id: "class-contracts",
+      createRuntime: () => new ClassRuntime(),
+    },
+    tasks: singleTask("held-out-class-contracts"),
+    workspaceFactory: () => new ClassWorkspace(),
+  });
+
+  expect(report.runs[0].verdict).toBe("pass");
+  expect(calls).toEqual(["runtime.dispose", "workspace.cleanup"]);
+});
+
+test("captures prototype ownership before rejecting invalid class output shapes", async () => {
+  let workspaceCleanup = 0;
+  class InvalidWorkspace {
+    public readonly path = "";
+
+    public cleanup(): void {
+      workspaceCleanup += 1;
+    }
+  }
+  await expect(
+    runEvaluation({
+      candidate: fixtureCandidate("invalid-class-workspace"),
+      tasks: singleTask("held-out-invalid-class-workspace"),
+      workspaceFactory: () => new InvalidWorkspace(),
+    }),
+  ).rejects.toMatchObject({ code: "EVALUATION_WORKSPACE_FAILED" });
+  expect(workspaceCleanup).toBe(1);
+
+  let runtimeDispose = 0;
+  class InvalidRuntime {
+    public readonly run = 42;
+
+    public dispose(): void {
+      runtimeDispose += 1;
+    }
+  }
+  await expect(
+    runEvaluation({
+      candidate: {
+        id: "invalid-class-runtime",
+        createRuntime: () =>
+          new InvalidRuntime() as unknown as EvaluationRuntime,
+      },
+      tasks: singleTask("held-out-invalid-class-runtime"),
+      workspaceFactory: () => ({
+        path: "/virtual/invalid-class-runtime",
+        cleanup: () => undefined,
+      }),
+    }),
+  ).rejects.toMatchObject({ code: "EVALUATION_RUNTIME_FACTORY_FAILED" });
+  expect(runtimeDispose).toBe(1);
 });
