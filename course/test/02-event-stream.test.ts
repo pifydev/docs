@@ -124,6 +124,23 @@ test("settles every pending waiter when the stream finishes", async () => {
   await expect(stream.result).resolves.toBe("done");
 });
 
+test("delivers FIFO events to pending waiters and closes the surplus waiter", async () => {
+  const stream = new EventStream<string, string>();
+  const iterator = stream[Symbol.asyncIterator]();
+  const first = iterator.next();
+  const second = iterator.next();
+  const surplus = iterator.next();
+
+  stream.push("first");
+  stream.push("second");
+  stream.finish("complete");
+
+  await expect(first).resolves.toEqual({ done: false, value: "first" });
+  await expect(second).resolves.toEqual({ done: false, value: "second" });
+  await expect(surplus).resolves.toEqual({ done: true, value: undefined });
+  await expect(stream.result).resolves.toBe("complete");
+});
+
 test("consumer return settles pending reads and releases the iterator", async () => {
   const stream = new EventStream<string, string>();
   const firstIterator = stream[Symbol.asyncIterator]();
