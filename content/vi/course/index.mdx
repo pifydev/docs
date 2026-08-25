@@ -1,6 +1,6 @@
 ---
 title: Tự xây Pi-style Agent
-description: Xây dựng Agent stack offline bằng TypeScript, từ protocol và truyền dữ liệu theo luồng đến phiên làm việc, Runtime Composition và đánh giá deterministic.
+description: Xây dựng Agent stack offline bằng TypeScript, từ protocol và truyền dữ liệu theo luồng (streaming) đến phiên làm việc (session), Runtime Composition và đánh giá deterministic.
 translation_key: course-overview
 language: vi
 status: reviewed
@@ -9,7 +9,7 @@ last_updated: '2026-08-26'
 translator: Pify maintainers
 ---
 
-Khóa học này dành cho lập trình viên TypeScript muốn hiểu Agent bằng cách tự xây từng ranh giới, thay vì bọc một model call trong framework lớn. Bạn sẽ theo một bản triển khai được mở rộng từng bước, bắt đầu từ dấu vết hoàn chỉnh rồi đi qua protocol có kiểu rõ ràng, truyền dữ liệu theo luồng (streaming), Tool, phiên làm việc (session) bền vững, nén ngữ cảnh, nạp Extension, Runtime Composition và đánh giá deterministic.
+Khóa học này dành cho lập trình viên TypeScript muốn hiểu Agent bằng cách tự xây từng ranh giới, thay vì bọc một model call trong framework lớn. Bạn sẽ theo một bản triển khai được mở rộng từng bước, bắt đầu từ dấu vết hoàn chỉnh rồi đi qua protocol có kiểu rõ ràng, truyền dữ liệu theo luồng, Tool, phiên làm việc bền vững, nén ngữ cảnh, nạp Extension, Runtime Composition và đánh giá deterministic.
 
 :::caution[Phục vụ học tập và không chính thức]
 
@@ -83,9 +83,9 @@ flowchart TB
   c13 --> c14["14 · Agent Evaluation"]
 ```
 
-Bảy checkpoint triển khai đầu tiên thiết lập mặt phẳng dữ liệu (data plane) và mặt phẳng thực thi (execution plane): protocol xác định các giá trị hợp lệ, `EventStream` chuyển sự kiện tiến trình theo đúng thứ tự, Message IR chuẩn hóa transcript, đầu vào deterministic cho model thay thế provider bên ngoài, adapter xác thực dữ liệu vận chuyển không đáng tin cậy, Tool cô lập side effect và vòng lặp Agent điều phối round-trip.
+Bảy checkpoint triển khai đầu tiên thiết lập mặt phẳng dữ liệu (data plane) và mặt phẳng thực thi (execution plane): protocol xác định các giá trị hợp lệ, `EventStream` chuyển sự kiện tiến trình theo đúng thứ tự, Message IR chuẩn hóa transcript, `ScriptedModel` cung cấp response đã lập script với kết quả deterministic mà không cần provider bên ngoài hay network request, adapter xác thực dữ liệu vận chuyển không đáng tin cậy, Tool cô lập side effect và vòng lặp Agent điều phối round-trip.
 
-Checkpoint `08` đến `13` bổ sung các yêu cầu khi đưa workshop vào host. Coding Tool giới hạn side effect của filesystem và process trong workspace đã khai báo. Stateful Agent xếp prompt theo thứ tự và quản lý subscription. Cây phiên làm việc lưu lịch sử liên kết bằng parent mà không làm phẳng branch. Nén ngữ cảnh giữ nguyên một Tool round hoàn chỉnh. Resource và Extension đăng ký capability theo cách atomic. Runtime Composition đặt các resource đó dưới một owner, với thứ tự thay thế và dispose xác định. Checkpoint `14` bổ sung một lớp đánh giá độc lập: nó xác thực fixture chứa held-out task, nhận từng `EvaluationCandidate` do mã gọi cung cấp, tạo một `EvaluationRuntime` riêng cho mỗi task và lần lặp, rồi chuyển `expectedPublicEvidence` từ fixture cùng `publicEvidence` từ runtime cho judge. Báo cáo tuần tự hóa có giới hạn chỉ giữ ID, verdict, `publicMetrics`, `durationMs` và `errorCode`, không giữ prompt hoặc evidence. Lớp này không tự khởi tạo hoặc tự đánh giá `CourseRuntime` của checkpoint `13`; muốn nối runtime đó vào bộ khung đánh giá, bạn cần một adapter triển khai candidate contract.
+Checkpoint `08` đến `13` bổ sung các yêu cầu khi đưa workshop vào host. Coding Tool giới hạn side effect của filesystem và process trong workspace đã khai báo. Stateful Agent sở hữu vòng đời của prompt, dùng busy guard để từ chối các run chồng lấn và chỉ dùng hàng đợi cho message điều hướng (steering) cùng message tiếp nối (follow-up); nó cũng quản lý subscription. Cây phiên làm việc lưu lịch sử liên kết bằng parent mà không làm phẳng branch. Nén ngữ cảnh giữ nguyên một Tool round hoàn chỉnh. Resource và Extension đăng ký capability theo cách atomic. Runtime Composition đặt các resource đó dưới một owner, với thứ tự thay thế và dispose xác định. Checkpoint `14` bổ sung một lớp đánh giá độc lập: nó xác thực fixture chứa held-out task, nhận từng `EvaluationCandidate` do mã gọi cung cấp, tạo một `EvaluationRuntime` riêng cho mỗi task và lần lặp, rồi chuyển `expectedPublicEvidence` từ fixture cùng `publicEvidence` từ runtime cho judge. Báo cáo tuần tự hóa có giới hạn chỉ giữ ID, verdict, `publicMetrics`, `durationMs` và `errorCode`, không giữ prompt hoặc evidence. Lớp này không tự khởi tạo hoặc tự đánh giá `CourseRuntime` của checkpoint `13`; muốn nối runtime đó vào bộ khung đánh giá, bạn cần một adapter triển khai candidate contract.
 
 ## Bản đồ checkpoint
 
@@ -102,7 +102,7 @@ Cột điều kiện tiên quyết ghi checkpoint đứng ngay trước trong l�
 | [06 · Tool contract](06-tool-contract.md) | Xác thực trước khi tạo side effect, đăng ký Tool theo cách atomic, giới hạn serialized output, truyền tín hiệu hủy và biểu diễn recoverable error. | `course/src/tool.ts` | `course/test/06-tool-contract.test.ts` | Checkpoint 05 |
 | [07 · Vòng lặp Agent](07-agent-loop.md) | Điều phối model turn và nhiều Tool call với quyền sở hữu transcript, sự kiện đúng thứ tự, step budget, cơ chế hủy và stop reason có type. | `course/src/agent-loop.ts` | `course/test/07-agent-loop.test.ts` | Checkpoint 06 |
 | [08 · Coding Tools](08-coding-tools.md) | Giới hạn Tool đọc ghi file và chạy Node process bằng canonical path, atomic write, output có giới hạn, timeout và cách thực thi không phụ thuộc platform. | `course/src/coding-tools.ts` | `course/test/08-coding-tools.test.ts` | Checkpoint 07 |
-| [09 · Stateful Agent](09-stateful-agent.md) | Quản lý run state thay đổi qua immutable snapshot, busy guard, hàng đợi steering/follow-up an toàn, subscription và khả năng phục hồi. | `course/src/agent.ts` | `course/test/09-stateful-agent.test.ts` | Checkpoint 08 |
+| [09 · Stateful Agent](09-stateful-agent.md) | Sở hữu vòng đời prompt và state thay đổi qua immutable snapshot; dùng busy guard để từ chối run chồng lấn; chỉ xếp message điều hướng/message tiếp nối vào hàng đợi; quản lý subscription và khả năng phục hồi. | `course/src/agent.ts` | `course/test/09-stateful-agent.test.ts` | Checkpoint 08 |
 | [10 · Cây phiên làm việc](10-session-tree.md) | Lưu JSONL entry liên kết bằng parent, chọn active leaf, chiếu từng branch, phục hồi phần cuối bị cắt và từ chối dữ liệu hỏng ở giữa file. | `course/src/session.ts` | `course/test/10-session-tree.test.ts` | Checkpoint 09 |
 | [11 · Nén ngữ cảnh](11-context-compaction.md) | Tính budget cho ngữ cảnh đang hoạt động theo cách deterministic, giữ trọn Tool round, xác thực summary, giữ message gần đây và không sửa state khi lỗi. | `course/src/context.ts` | `course/test/11-context-compaction.test.ts` | Checkpoint 10 |
 | [12 · Resources and Extensions](12-resources-extensions.md) | Tìm metadata dưới trusted root, chỉ activate khi cần, commit contribution theo cách atomic, rollback khi lỗi và dispose theo thứ tự ngược. | `course/src/resources.ts` | `course/test/12-resources-extensions.test.ts` | Checkpoint 11 |
