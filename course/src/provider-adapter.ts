@@ -2,6 +2,9 @@ import { EventStream } from "./event-stream";
 import { assistantMessage } from "./messages";
 import type {
   CourseAssistantBlock,
+  CourseJsonArray,
+  CourseJsonObject,
+  CourseJsonValue,
   CourseModelChunk,
   CourseModelRequest,
   CourseModelResponse,
@@ -20,6 +23,7 @@ export type FixtureProviderErrorCode =
   | "PROVIDER_DUPLICATE_TERMINAL"
   | "PROVIDER_RESPONSE_MISMATCH"
   | "PROVIDER_INVALID_TERMINAL"
+  | "PROVIDER_ITERATOR_REUSED"
   | "PROVIDER_TRANSPORT_ERROR";
 
 export type FixtureProviderErrorMetadata = Readonly<{
@@ -53,8 +57,7 @@ type ArrayRecordSource = Readonly<{
 
 type AsyncRecordSource = Readonly<{
   kind: "async";
-  target: object;
-  iteratorFactory: (this: object) => unknown;
+  open: () => unknown;
 }>;
 
 type RecordSource = ArrayRecordSource | AsyncRecordSource;
@@ -71,7 +74,8 @@ type ParseState = {
   terminal: CourseModelResponse | undefined;
 };
 
-const claimedAsyncSources = new WeakSet<object>();
+const claimedAsyncIterators = new WeakSet<object>();
+const ownedProviderErrors = new WeakSet<FixtureProviderError>();
 
 /**
  * Converts deterministic provider transport fixtures into the course model
@@ -117,7 +121,7 @@ export class FixtureProviderAdapter {
 
     const source = this.responses.shift();
     if (source === undefined) {
-      throw new FixtureProviderError(
+      throw providerError(
         "PROVIDER_EXHAUSTED",
         `No fixture response remains for request "${requestId}"`,
       );
@@ -141,7 +145,7 @@ export class FixtureProviderAdapter {
           step = await waitForAbort(cursor.next(), signal);
         } catch (error) {
           if (signal.aborted) throw abortReason(signal);
-          if (error instanceof FixtureProviderError) throw error;
+          if (isOwnedProviderError(error)) throw error;
           throw invalidFixture("Async fixture record source failed");
         }
         throwIfAborted(signal);
@@ -161,7 +165,7 @@ export class FixtureProviderAdapter {
       }
 
       if (state.terminal === undefined) {
-        throw new FixtureProviderError(
+        throw providerError(
           "PROVIDER_MISSING_TERMINAL",
           "Fixture response ended without a response_end record",
           { recordIndex },
@@ -182,11 +186,20 @@ function snapshotFixture(fixture: unknown): RecordSource[] {
       throw invalidFixture("Fixture must be an object");
     }
 
-    const schemaVersion = fixture.schemaVersion;
-    const rawResponses = fixture.responses;
-    if (schemaVersion !== 1) {
+    const schemaVersion = readOwnProperty(
+      fixture,
+      "schemaVersion",
+      "Fixture.schemaVersion",
+    );
+    const responsesProperty = readOwnProperty(
+      fixture,
+      "responses",
+      "Fixture.responses",
+    );
+    if (!schemaVersion.present || schemaVersion.value !== 1) {
       throw invalidFixture("Fixture schemaVersion must be 1");
     }
+    const rawResponses = responsesProperty.value;
     if (!Array.isArray(rawResponses)) {
       throw invalidFixture("Fixture responses must be an array");
     }
@@ -201,23 +214,33 @@ function snapshotFixture(fixture: unknown): RecordSource[] {
       responseIndex < responseCount;
       responseIndex += 1
     ) {
-      if (!Object.hasOwn(rawResponses, responseIndex)) {
+      const entryProperty = readOwnProperty(
+        rawResponses,
+        String(responseIndex),
+        `Fixture responses[${responseIndex}]`,
+      );
+      if (!entryProperty.present) {
         throw invalidFixture(
           `Fixture responses[${responseIndex}] must not be sparse`,
         );
       }
-      const entry = rawResponses[responseIndex];
+      const entry = entryProperty.value;
       if (!isRecord(entry)) {
         throw invalidFixture(
           `Fixture responses[${responseIndex}] must be an object`,
         );
       }
-      const rawRecords = entry.records;
-      responses.push(snapshotRecordSource(rawRecords, responseIndex));
+      const recordsProperty = readOwnProperty(
+        entry,
+        "records",
+        `Fixture responses[${responseIndex}].records`,
+      );
+      responses.push(
+        snapshotRecordSource(recordsProperty.value, responseIndex),
+      );
     }
     return responses;
-  } catch (error) {
-    if (error instanceof FixtureProviderError) throw error;
+  } catch {
     throw invalidFixture("Fixture could not be inspected safely");
   }
 }
@@ -233,14 +256,19 @@ function snapshotRecordSource(
     );
     const records: unknown[] = [];
     for (let recordIndex = 0; recordIndex < recordCount; recordIndex += 1) {
-      if (!Object.hasOwn(value, recordIndex)) {
+      const recordProperty = readOwnProperty(
+        value,
+        String(recordIndex),
+        `Fixture responses[${responseIndex}].records[${recordIndex}]`,
+      );
+      if (!recordProperty.present) {
         throw invalidFixture(
           `Fixture responses[${responseIndex}].records[${recordIndex}] must not be sparse`,
         );
       }
       records.push(
         snapshotUnknown(
-          value[recordIndex],
+          recordProperty.value,
           `Fixture responses[${responseIndex}].records[${recordIndex}]`,
           new WeakSet(),
         ),
@@ -255,7 +283,7 @@ function snapshotRecordSource(
   if (typeof value === "object" && value !== null) {
     let iteratorFactory: unknown;
     try {
-      iteratorFactory = value[Symbol.asyncIterator as keyof typeof value];
+      iteratorFactory = Reflect.get(value, Symbol.asyncIterator);
     } catch {
       throw invalidFixture(
         `Fixture responses[${responseIndex}].records async iterator could not be inspected`,
@@ -264,8 +292,7 @@ function snapshotRecordSource(
     if (typeof iteratorFactory === "function") {
       return Object.freeze({
         kind: "async",
-        target: value,
-        iteratorFactory: iteratorFactory as (this: object) => unknown,
+        open: () => Reflect.apply(iteratorFactory, value, []),
       });
     }
   }
@@ -291,24 +318,26 @@ function createRecordCursor(source: RecordSource): RecordCursor {
     };
   }
 
-  if (claimedAsyncSources.has(source.target)) {
-    throw invalidFixture("An async fixture record source may be consumed once");
-  }
-  claimedAsyncSources.add(source.target);
-
   let iterator: unknown;
   try {
-    iterator = source.iteratorFactory.call(source.target);
+    iterator = source.open();
   } catch {
     throw invalidFixture("Async fixture record source could not be opened");
   }
   if (!isRecord(iterator)) {
     throw invalidFixture("Async fixture record source returned no iterator");
   }
+  if (claimedAsyncIterators.has(iterator)) {
+    throw providerError(
+      "PROVIDER_ITERATOR_REUSED",
+      "An async fixture iterator may be consumed once",
+    );
+  }
+  claimedAsyncIterators.add(iterator);
 
   let nextMethod: unknown;
   try {
-    nextMethod = iterator.next;
+    nextMethod = Reflect.get(iterator, "next");
   } catch {
     closeIteratorQuietly(iterator);
     throw invalidFixture(
@@ -324,9 +353,9 @@ function createRecordCursor(source: RecordSource): RecordCursor {
     next: async () => {
       let rawStep: unknown;
       try {
-        rawStep = await nextMethod.call(iterator);
-      } catch (error) {
-        throw error;
+        rawStep = await Reflect.apply(nextMethod, iterator, []);
+      } catch {
+        throw invalidFixture("Async fixture record source failed");
       }
       return snapshotIteratorStep(rawStep);
     },
@@ -339,25 +368,36 @@ function snapshotIteratorStep(value: unknown): IteratorResult<unknown> {
     if (!isRecord(value)) {
       throw invalidFixture("Async fixture iterator returned an invalid step");
     }
-    const done = value.done;
-    if (done === true) return { done: true, value: undefined };
-    if (done !== false && done !== undefined) {
+    const doneProperty = readOwnProperty(
+      value,
+      "done",
+      "Async fixture iterator step.done",
+    );
+    if (doneProperty.present && doneProperty.value === true) {
+      return { done: true, value: undefined };
+    }
+    if (
+      doneProperty.present &&
+      doneProperty.value !== false &&
+      doneProperty.value !== undefined
+    ) {
       throw invalidFixture("Async fixture iterator step.done must be boolean");
     }
-    const stepValue = value.value;
-    return { done: false, value: stepValue };
-  } catch (error) {
-    if (error instanceof FixtureProviderError) throw error;
+    const valueProperty = readOwnProperty(
+      value,
+      "value",
+      "Async fixture iterator step.value",
+    );
+    return { done: false, value: valueProperty.value };
+  } catch {
     throw invalidFixture("Async fixture iterator step could not be inspected");
   }
 }
 
-function closeIteratorQuietly(
-  iterator: Record<string | symbol, unknown>,
-): void {
+function closeIteratorQuietly(iterator: object): void {
   let returnMethod: unknown;
   try {
-    returnMethod = iterator.return;
+    returnMethod = Reflect.get(iterator, "return");
   } catch {
     return;
   }
@@ -365,7 +405,7 @@ function closeIteratorQuietly(
 
   let cleanup: unknown;
   try {
-    cleanup = returnMethod.call(iterator);
+    cleanup = Reflect.apply(returnMethod, iterator, []);
   } catch {
     return;
   }
@@ -376,28 +416,28 @@ function snapshotTransportRecord(
   value: unknown,
   recordIndex: number,
 ): Record<string, unknown> {
+  let snapshot: unknown;
   try {
-    const snapshot = snapshotUnknown(
+    snapshot = snapshotUnknown(
       value,
       `Transport record[${recordIndex}]`,
       new WeakSet(),
     );
-    if (!isPlainRecord(snapshot)) {
-      throw new FixtureProviderError(
-        "PROVIDER_INVALID_EVENT",
-        `Transport record[${recordIndex}] must be an object`,
-        { recordIndex },
-      );
-    }
-    return snapshot;
-  } catch (error) {
-    if (error instanceof FixtureProviderError) throw error;
-    throw new FixtureProviderError(
+  } catch {
+    throw providerError(
       "PROVIDER_INVALID_EVENT",
       `Transport record[${recordIndex}] could not be inspected safely`,
       { recordIndex },
     );
   }
+  if (!isRecord(snapshot) || Array.isArray(snapshot)) {
+    throw providerError(
+      "PROVIDER_INVALID_EVENT",
+      `Transport record[${recordIndex}] must be an object`,
+      { recordIndex },
+    );
+  }
+  return snapshot;
 }
 
 function processRecord(
@@ -413,13 +453,13 @@ function processRecord(
 
   if (state.terminal !== undefined) {
     if (type === "response_end") {
-      throw new FixtureProviderError(
+      throw providerError(
         "PROVIDER_DUPLICATE_TERMINAL",
         "Fixture response contains more than one response_end record",
         { recordIndex },
       );
     }
-    throw new FixtureProviderError(
+    throw providerError(
       "PROVIDER_INVALID_TERMINAL",
       `Transport record "${type}" appears after response_end`,
       { recordIndex },
@@ -438,14 +478,14 @@ function processRecord(
     type !== "tool_call" &&
     type !== "response_end"
   ) {
-    throw new FixtureProviderError(
+    throw providerError(
       "PROVIDER_UNKNOWN_EVENT",
       `Unknown provider transport record type "${type}"`,
       { recordIndex },
     );
   }
   if (state.responseId === undefined) {
-    throw new FixtureProviderError(
+    throw providerError(
       "PROVIDER_MISSING_START",
       `Transport record "${type}" appeared before response_start`,
       { recordIndex },
@@ -484,7 +524,7 @@ function processResponseStart(
   state: ParseState,
 ): void {
   if (state.responseId !== undefined) {
-    throw new FixtureProviderError(
+    throw providerError(
       "PROVIDER_DUPLICATE_START",
       "Fixture response contains more than one response_start record",
       { recordIndex },
@@ -516,7 +556,7 @@ function processTransportError(
       "transport_error code and message must be non-empty strings",
     );
   }
-  throw new FixtureProviderError("PROVIDER_TRANSPORT_ERROR", message, {
+  throw providerError("PROVIDER_TRANSPORT_ERROR", message, {
     recordIndex,
     providerCode,
   });
@@ -539,29 +579,25 @@ function snapshotProviderToolCall(
     );
   }
 
+  let argumentsSnapshot: CourseJsonObject;
   try {
-    const message = assistantMessage({
-      id: `fixture-tool-${recordIndex}`,
-      content: [
-        {
-          type: "toolCall",
-          id,
-          name,
-          arguments: argumentsValue,
-        } as CourseToolCall,
-      ],
-    });
-    const block = message.content[0];
-    if (block.type !== "toolCall") {
-      throw new TypeError("Expected a Tool-call block");
-    }
-    return block;
+    argumentsSnapshot = parseCourseJsonObject(
+      argumentsValue,
+      `tool_call[${recordIndex}].arguments`,
+      new WeakSet(),
+    );
   } catch {
     throw invalidEvent(
       recordIndex,
       "tool_call.arguments must be a non-null JSON object",
     );
   }
+  return Object.freeze({
+    type: "toolCall",
+    id,
+    name,
+    arguments: argumentsSnapshot,
+  });
 }
 
 function snapshotTerminal(
@@ -580,7 +616,7 @@ function snapshotTerminal(
     );
   }
   if (responseId !== state.responseId) {
-    throw new FixtureProviderError(
+    throw providerError(
       "PROVIDER_RESPONSE_MISMATCH",
       `response_end ID "${responseId}" does not match response_start ID "${state.responseId}"`,
       { recordIndex },
@@ -591,14 +627,14 @@ function snapshotTerminal(
   const usage = normalizeUsage(rawUsage, recordIndex);
   const hasToolCall = state.toolCallIds.size > 0;
   if (stopReason === "toolCall" && !hasToolCall) {
-    throw new FixtureProviderError(
+    throw providerError(
       "PROVIDER_INVALID_TERMINAL",
       "A tool_call terminal must contain at least one Tool call",
       { recordIndex },
     );
   }
   if (stopReason === "stop" && hasToolCall) {
-    throw new FixtureProviderError(
+    throw providerError(
       "PROVIDER_INVALID_TERMINAL",
       "A stop terminal must not contain Tool calls",
       { recordIndex },
@@ -635,21 +671,39 @@ function normalizeUsage(value: unknown, recordIndex: number): CourseModelUsage {
     throw invalidEvent(recordIndex, "response_end.usage must be an object");
   }
 
-  const camelInput = value.inputTokens;
-  const camelOutput = value.outputTokens;
-  const snakeInput = value.input_tokens;
-  const snakeOutput = value.output_tokens;
+  const camelInput = readOwnProperty(
+    value,
+    "inputTokens",
+    "response_end.usage.inputTokens",
+  );
+  const camelOutput = readOwnProperty(
+    value,
+    "outputTokens",
+    "response_end.usage.outputTokens",
+  );
+  const snakeInput = readOwnProperty(
+    value,
+    "input_tokens",
+    "response_end.usage.input_tokens",
+  );
+  const snakeOutput = readOwnProperty(
+    value,
+    "output_tokens",
+    "response_end.usage.output_tokens",
+  );
   if (
-    (camelInput !== undefined && snakeInput !== undefined) ||
-    (camelOutput !== undefined && snakeOutput !== undefined)
+    (camelInput.present && snakeInput.present) ||
+    (camelOutput.present && snakeOutput.present)
   ) {
     throw invalidEvent(
       recordIndex,
       "response_end.usage must not mix duplicate token fields",
     );
   }
-  const inputTokens = camelInput ?? snakeInput;
-  const outputTokens = camelOutput ?? snakeOutput;
+  const inputTokens = camelInput.present ? camelInput.value : snakeInput.value;
+  const outputTokens = camelOutput.present
+    ? camelOutput.value
+    : snakeOutput.value;
   if (!isTokenCount(inputTokens) || !isTokenCount(outputTokens)) {
     throw invalidEvent(
       recordIndex,
@@ -660,16 +714,57 @@ function normalizeUsage(value: unknown, recordIndex: number): CourseModelUsage {
 }
 
 function snapshotRequestId(request: CourseModelRequest): string {
-  let id: unknown;
+  let idProperty: OwnPropertyValue;
   try {
-    id = request.id;
+    if (!isRecord(request)) {
+      throw new TypeError("request must be an object");
+    }
+    idProperty = readOwnProperty(request, "id", "request.id");
   } catch {
     throw new TypeError("request.id could not be inspected");
   }
+  const id = idProperty.value;
   if (!isNonEmptyString(id)) {
     throw new TypeError("request.id must be a non-empty string");
   }
   return id;
+}
+
+type OwnPropertyValue =
+  | Readonly<{ present: false; value: undefined }>
+  | Readonly<{ present: true; value: unknown }>;
+
+const MISSING_OWN_PROPERTY: OwnPropertyValue = Object.freeze({
+  present: false,
+  value: undefined,
+});
+
+function readOwnProperty(
+  target: object,
+  key: PropertyKey,
+  path: string,
+): OwnPropertyValue {
+  const descriptor = Object.getOwnPropertyDescriptor(target, key);
+  if (descriptor === undefined) return MISSING_OWN_PROPERTY;
+  return Object.freeze({
+    present: true,
+    value: valueFromOwnDescriptor(target, descriptor, path),
+  });
+}
+
+function valueFromOwnDescriptor(
+  target: object,
+  descriptor: PropertyDescriptor,
+  path: string,
+): unknown {
+  if (Object.hasOwn(descriptor, "value")) return descriptor.value;
+  const getter = descriptor.get;
+  if (getter === undefined) return undefined;
+  try {
+    return Reflect.apply(getter, target, []);
+  } catch {
+    throw new TypeError(`${path} getter could not be evaluated safely`);
+  }
 }
 
 function snapshotUnknown(
@@ -688,23 +783,32 @@ function snapshotUnknown(
       const length = snapshotArrayLength(value, path);
       const snapshot: unknown[] = [];
       for (let index = 0; index < length; index += 1) {
-        if (!Object.hasOwn(value, index)) {
+        const item = readOwnProperty(value, String(index), `${path}[${index}]`);
+        if (!item.present) {
           throw new TypeError(`${path}[${index}] must not be sparse`);
         }
         snapshot.push(
-          snapshotUnknown(value[index], `${path}[${index}]`, ancestors),
+          snapshotUnknown(item.value, `${path}[${index}]`, ancestors),
         );
       }
       return Object.freeze(snapshot);
     }
 
-    const prototype = Object.getPrototypeOf(value) as object | null;
-    const snapshot = Object.create(prototype) as Record<string, unknown>;
-    const keys = Object.keys(value);
+    const snapshot: Record<string, unknown> = Object.create(null);
+    const keys = Reflect.ownKeys(value);
     const keyCount = keys.length;
     for (let index = 0; index < keyCount; index += 1) {
       const key = keys[index];
-      const propertyValue = (value as Record<string, unknown>)[key];
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if (descriptor === undefined || !descriptor.enumerable) continue;
+      if (typeof key !== "string") {
+        throw new TypeError(`${path} must not contain enumerable symbol keys`);
+      }
+      const propertyValue = valueFromOwnDescriptor(
+        value,
+        descriptor,
+        `${path}.${key}`,
+      );
       Object.defineProperty(snapshot, key, {
         configurable: false,
         enumerable: true,
@@ -719,11 +823,110 @@ function snapshotUnknown(
 }
 
 function snapshotArrayLength(value: readonly unknown[], path: string): number {
-  const length = value.length;
-  if (!Number.isSafeInteger(length) || length < 0) {
+  const lengthProperty = readOwnProperty(value, "length", `${path}.length`);
+  const length = lengthProperty.value;
+  if (
+    typeof length !== "number" ||
+    !Number.isSafeInteger(length) ||
+    length < 0
+  ) {
     throw new TypeError(`${path} has an invalid length`);
   }
   return length;
+}
+
+function parseCourseJsonObject(
+  value: unknown,
+  path: string,
+  ancestors: WeakSet<object>,
+): CourseJsonObject {
+  if (!isRecord(value) || Array.isArray(value)) {
+    throw new TypeError(`${path} must be an object and not an array`);
+  }
+  return parseCourseJsonObjectValue(value, path, ancestors);
+}
+
+function parseCourseJsonObjectValue(
+  value: Record<string, unknown>,
+  path: string,
+  ancestors: WeakSet<object>,
+): CourseJsonObject {
+  if (ancestors.has(value)) {
+    throw new TypeError(`${path} must not contain cycles`);
+  }
+  ancestors.add(value);
+
+  try {
+    const snapshot: Record<string, CourseJsonValue> = Object.create(null);
+    const keys = Reflect.ownKeys(value);
+    const keyCount = keys.length;
+    for (let index = 0; index < keyCount; index += 1) {
+      const key = keys[index];
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if (descriptor === undefined || !descriptor.enumerable) continue;
+      if (typeof key !== "string") {
+        throw new TypeError(`${path} must not contain enumerable symbol keys`);
+      }
+      const item = valueFromOwnDescriptor(value, descriptor, `${path}.${key}`);
+      Object.defineProperty(snapshot, key, {
+        configurable: false,
+        enumerable: true,
+        value: parseCourseJsonValue(item, `${path}.${key}`, ancestors),
+        writable: false,
+      });
+    }
+    return Object.freeze(snapshot);
+  } finally {
+    ancestors.delete(value);
+  }
+}
+
+function parseCourseJsonValue(
+  value: unknown,
+  path: string,
+  ancestors: WeakSet<object>,
+): CourseJsonValue {
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "boolean"
+  ) {
+    return value;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (Array.isArray(value)) return parseCourseJsonArray(value, path, ancestors);
+  if (isRecord(value)) {
+    return parseCourseJsonObjectValue(value, path, ancestors);
+  }
+  throw new TypeError(`${path} must contain only JSON-compatible values`);
+}
+
+function parseCourseJsonArray(
+  value: readonly unknown[],
+  path: string,
+  ancestors: WeakSet<object>,
+): CourseJsonArray {
+  if (ancestors.has(value)) {
+    throw new TypeError(`${path} must not contain cycles`);
+  }
+  ancestors.add(value);
+
+  try {
+    const length = snapshotArrayLength(value, path);
+    const snapshot: CourseJsonValue[] = [];
+    for (let index = 0; index < length; index += 1) {
+      const item = readOwnProperty(value, String(index), `${path}[${index}]`);
+      if (!item.present) {
+        throw new TypeError(`${path}[${index}] must not be sparse`);
+      }
+      snapshot.push(
+        parseCourseJsonValue(item.value, `${path}[${index}]`, ancestors),
+      );
+    }
+    return Object.freeze(snapshot);
+  } finally {
+    ancestors.delete(value);
+  }
 }
 
 function waitForAbort<Value>(
@@ -770,27 +973,37 @@ function abortReason(signal: AbortSignal): unknown {
   );
 }
 
+function providerError(
+  code: FixtureProviderErrorCode,
+  message: string,
+  metadata: FixtureProviderErrorMetadata = {},
+): FixtureProviderError {
+  const error = new FixtureProviderError(code, message, metadata);
+  ownedProviderErrors.add(error);
+  return error;
+}
+
+function isOwnedProviderError(error: unknown): error is FixtureProviderError {
+  return (
+    error instanceof FixtureProviderError && ownedProviderErrors.has(error)
+  );
+}
+
 function invalidFixture(message: string): FixtureProviderError {
-  return new FixtureProviderError("PROVIDER_INVALID_FIXTURE", message);
+  return providerError("PROVIDER_INVALID_FIXTURE", message);
 }
 
 function invalidEvent(
   recordIndex: number,
   message: string,
 ): FixtureProviderError {
-  return new FixtureProviderError("PROVIDER_INVALID_EVENT", message, {
+  return providerError("PROVIDER_INVALID_EVENT", message, {
     recordIndex,
   });
 }
 
-function isRecord(value: unknown): value is Record<string | symbol, unknown> {
+function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
-}
-
-function isPlainRecord(value: unknown): value is Record<string, unknown> {
-  if (!isRecord(value) || Array.isArray(value)) return false;
-  const prototype = Object.getPrototypeOf(value) as unknown;
-  return prototype === Object.prototype || prototype === null;
 }
 
 function isNonEmptyString(value: unknown): value is string {
@@ -798,5 +1011,5 @@ function isNonEmptyString(value: unknown): value is string {
 }
 
 function isTokenCount(value: unknown): value is number {
-  return Number.isSafeInteger(value) && (value as number) >= 0;
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 }

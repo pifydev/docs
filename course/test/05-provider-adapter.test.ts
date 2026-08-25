@@ -73,13 +73,71 @@ function loadRoundtripFixture(): unknown {
   return providerToolRoundtrip;
 }
 
-test("adapts the checked-in Tool roundtrip fixture without network access", async () => {
-  const network = vi.fn(() => {
-    throw new Error("FixtureProviderAdapter must stay offline");
+function providerAdapterSource(): string {
+  const runtimeProcess = Reflect.get(globalThis, "process");
+  if (typeof runtimeProcess !== "object" || runtimeProcess === null) {
+    throw new Error("Node process is unavailable");
+  }
+  const getBuiltinModule = Reflect.get(runtimeProcess, "getBuiltinModule");
+  if (typeof getBuiltinModule !== "function") {
+    throw new Error("process.getBuiltinModule() is unavailable");
+  }
+  const fileSystem: unknown = Reflect.apply(getBuiltinModule, runtimeProcess, [
+    "node:fs",
+  ]);
+  if (typeof fileSystem !== "object" || fileSystem === null) {
+    throw new Error("node:fs is unavailable");
+  }
+  const readFileSync = Reflect.get(fileSystem, "readFileSync");
+  if (typeof readFileSync !== "function") {
+    throw new Error("node:fs.readFileSync() is unavailable");
+  }
+  const source: unknown = Reflect.apply(readFileSync, fileSystem, [
+    new URL("../src/provider-adapter.ts", import.meta.url),
+    "utf8",
+  ]);
+  if (typeof source !== "string") {
+    throw new Error("provider-adapter.ts was not read as text");
+  }
+  return source;
+}
+
+function asyncTextRecords(responseId: string): AsyncIterable<unknown> {
+  return {
+    async *[Symbol.asyncIterator]() {
+      for (const record of textRecords(responseId)) yield record;
+    },
+  };
+}
+
+function guardGlobal(key: PropertyKey, value: unknown): () => void {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, key);
+  Object.defineProperty(globalThis, key, {
+    configurable: true,
+    value,
+    writable: true,
   });
-  vi.stubGlobal("fetch", network);
+  return () => {
+    if (descriptor === undefined) {
+      Reflect.deleteProperty(globalThis, key);
+    } else {
+      Object.defineProperty(globalThis, key, descriptor);
+    }
+  };
+}
+
+test("adapts the checked-in Tool roundtrip fixture without network access", async () => {
+  const fetchGuard = vi.fn(() => {
+    throw new Error("FixtureProviderAdapter must not call fetch");
+  });
+  const webSocketGuard = vi.fn(() => {
+    throw new Error("FixtureProviderAdapter must not open WebSocket");
+  });
+  const restoreGlobals: Array<() => void> = [];
 
   try {
+    restoreGlobals.push(guardGlobal("fetch", fetchGuard));
+    restoreGlobals.push(guardGlobal("WebSocket", webSocketGuard));
     const adapter = new FixtureProviderAdapter(loadRoundtripFixture());
     const first = adapter.stream(
       request("request-tool"),
@@ -139,10 +197,29 @@ test("adapts the checked-in Tool roundtrip fixture without network access", asyn
     });
     expect(adapter.callCount).toBe(2);
     expect(adapter.pendingResponseCount).toBe(0);
-    expect(network).not.toHaveBeenCalled();
+    expect(fetchGuard).not.toHaveBeenCalled();
+    expect(webSocketGuard).not.toHaveBeenCalled();
   } finally {
-    vi.unstubAllGlobals();
+    while (restoreGlobals.length > 0) restoreGlobals.pop()?.();
   }
+});
+
+test("provider adapter source has no network imports or API calls", () => {
+  const source = providerAdapterSource();
+  const bannedPatterns: readonly RegExp[] = [
+    /["'](?:node:)?(?:http|https|net|tls)(?:\/[^"']*)?["']/u,
+    /["']undici(?:\/[^"']*)?["']/u,
+    /\bfetch\b/u,
+    /\bWebSocket\b/u,
+  ];
+
+  for (const pattern of bannedPatterns) expect(source).not.toMatch(pattern);
+});
+
+test("provider parser has no direct unknown-to-course protocol assertion", () => {
+  expect(providerAdapterSource()).not.toMatch(
+    /\bas\s+(?:unknown\s+as\s+)?Course(?:ToolCall|JsonObject)\b/u,
+  );
 });
 
 test("preserves delta order, stable Tool IDs, normalized usage, and immutable output", async () => {
@@ -233,6 +310,184 @@ test("preserves delta order, stable Tool IDs, normalized usage, and immutable ou
     chunks[2].type === "toolCall" &&
       Object.isFrozen(chunks[2].toolCall.arguments.nested),
   ).toBe(true);
+});
+
+test("copies dangerous JSON keys into an immutable own-property-only Tool snapshot", async () => {
+  const argumentsValue = Object.create(null) as Record<string, unknown>;
+  Object.defineProperty(argumentsValue, "__proto__", {
+    enumerable: true,
+    value: { polluted: true },
+  });
+  Object.defineProperties(argumentsValue, {
+    constructor: { enumerable: true, value: "constructor-value" },
+    prototype: { enumerable: true, value: "prototype-value" },
+  });
+  const stream = new FixtureProviderAdapter(
+    fixtureWith([
+      {
+        type: "response_start",
+        responseId: "response-dangerous-keys",
+        role: "assistant",
+      },
+      {
+        type: "tool_call",
+        id: "call-dangerous-keys",
+        name: "inspect",
+        arguments: argumentsValue,
+      },
+      {
+        type: "response_end",
+        responseId: "response-dangerous-keys",
+        stopReason: "tool_call",
+        usage: { inputTokens: 1, outputTokens: 1 },
+      },
+    ]),
+  ).stream(request("request-dangerous-keys"), new AbortController().signal);
+
+  const chunks = await collect(stream);
+  await expect(stream.result).resolves.toMatchObject({
+    id: "response-dangerous-keys",
+  });
+  expect(chunks).toHaveLength(1);
+  if (chunks[0].type !== "toolCall") {
+    throw new Error("Expected a Tool-call chunk");
+  }
+  const snapshot = chunks[0].toolCall.arguments;
+  expect(Object.hasOwn(snapshot, "__proto__")).toBe(true);
+  expect(Object.hasOwn(snapshot, "constructor")).toBe(true);
+  expect(Object.hasOwn(snapshot, "prototype")).toBe(true);
+  expect(Reflect.get(snapshot, "__proto__")).toEqual({ polluted: true });
+  expect(Reflect.get(snapshot, "constructor")).toBe("constructor-value");
+  expect(Reflect.get(snapshot, "prototype")).toBe("prototype-value");
+  expect(Object.isFrozen(snapshot)).toBe(true);
+  expect(Object.getPrototypeOf(snapshot)).toBeNull();
+  expect(Reflect.get(Object.prototype, "polluted")).toBeUndefined();
+});
+
+test("ignores inherited usage fields and never invokes inherited getters", async () => {
+  let inheritedReads = 0;
+  const usagePrototype = Object.defineProperty({}, "inputTokens", {
+    get() {
+      inheritedReads += 1;
+      return 1;
+    },
+  });
+  const usage = Object.create(usagePrototype) as Record<string, unknown>;
+  Object.defineProperty(usage, "outputTokens", {
+    enumerable: true,
+    value: 1,
+  });
+  const stream = new FixtureProviderAdapter(
+    fixtureWith([
+      {
+        type: "response_start",
+        responseId: "response-inherited-usage",
+        role: "assistant",
+      },
+      { type: "text_delta", text: "must fail closed" },
+      {
+        type: "response_end",
+        responseId: "response-inherited-usage",
+        stopReason: "stop",
+        usage,
+      },
+    ]),
+  ).stream(request("request-inherited-usage"), new AbortController().signal);
+
+  const [events, result] = await settleStream(stream);
+  expect(events).toMatchObject({
+    status: "rejected",
+    reason: { code: "PROVIDER_INVALID_EVENT" },
+  });
+  expect(result).toMatchObject({
+    status: "rejected",
+    reason: { code: "PROVIDER_INVALID_EVENT" },
+  });
+  expect(inheritedReads).toBe(0);
+});
+
+test("fixture snapshots are unaffected by later prototype mutation", async () => {
+  let inheritedReads = 0;
+  const usagePrototype = { inputTokens: 1 };
+  const usage = Object.create(usagePrototype) as Record<string, unknown>;
+  Object.defineProperty(usage, "outputTokens", {
+    enumerable: true,
+    value: 1,
+  });
+  const adapter = new FixtureProviderAdapter(
+    fixtureWith([
+      {
+        type: "response_start",
+        responseId: "response-prototype-mutation",
+        role: "assistant",
+      },
+      { type: "text_delta", text: "must fail closed" },
+      {
+        type: "response_end",
+        responseId: "response-prototype-mutation",
+        stopReason: "stop",
+        usage,
+      },
+    ]),
+  );
+  Object.defineProperty(usagePrototype, "inputTokens", {
+    configurable: true,
+    get() {
+      inheritedReads += 1;
+      throw new Error("mutated prototype must not be consulted");
+    },
+  });
+  const stream = adapter.stream(
+    request("request-prototype-mutation"),
+    new AbortController().signal,
+  );
+
+  const [events, result] = await settleStream(stream);
+  expect(events).toMatchObject({
+    status: "rejected",
+    reason: { code: "PROVIDER_INVALID_EVENT" },
+  });
+  expect(result).toMatchObject({
+    status: "rejected",
+    reason: { code: "PROVIDER_INVALID_EVENT" },
+  });
+  expect(inheritedReads).toBe(0);
+});
+
+test("rejects duplicate usage aliases by own presence even when one is undefined", async () => {
+  const stream = new FixtureProviderAdapter(
+    fixtureWith([
+      {
+        type: "response_start",
+        responseId: "response-duplicate-usage-alias",
+        role: "assistant",
+      },
+      { type: "text_delta", text: "must fail closed" },
+      {
+        type: "response_end",
+        responseId: "response-duplicate-usage-alias",
+        stopReason: "stop",
+        usage: {
+          inputTokens: undefined,
+          input_tokens: 1,
+          outputTokens: 1,
+        },
+      },
+    ]),
+  ).stream(
+    request("request-duplicate-usage-alias"),
+    new AbortController().signal,
+  );
+
+  const [events, result] = await settleStream(stream);
+  expect(events).toMatchObject({
+    status: "rejected",
+    reason: { code: "PROVIDER_INVALID_EVENT" },
+  });
+  expect(result).toMatchObject({
+    status: "rejected",
+    reason: { code: "PROVIDER_INVALID_EVENT" },
+  });
 });
 
 test("maps a validated transport_error to a stable typed failure", async () => {
@@ -522,7 +777,7 @@ test("rejects duplicate starts, events before a start, and duplicate Tool IDs", 
   }
 });
 
-test("rejects non-JSON Tool arguments instead of normalizing exotic objects", async () => {
+test("rejects non-JSON Tool arguments instead of casting unknown payloads", async () => {
   const stream = new FixtureProviderAdapter(
     fixtureWith([
       {
@@ -534,7 +789,7 @@ test("rejects non-JSON Tool arguments instead of normalizing exotic objects", as
         type: "tool_call",
         id: "call-exotic-arguments",
         name: "inspect",
-        arguments: new Date("2026-08-25T00:00:00.000Z"),
+        arguments: { unsupported: undefined },
       },
     ]),
   ).stream(request("request-exotic-arguments"), new AbortController().signal);
@@ -645,6 +900,160 @@ test("cancellation interrupts a deferred record source and closes it without sle
   await sourceClosed.promise;
 });
 
+test("allows one reusable iterable to return a fresh iterator per response", async () => {
+  let iteratorCount = 0;
+  const reusable = {
+    [Symbol.asyncIterator]() {
+      iteratorCount += 1;
+      return asyncTextRecords(`response-reusable-${iteratorCount}`)[
+        Symbol.asyncIterator
+      ]();
+    },
+  };
+  const adapter = new FixtureProviderAdapter({
+    schemaVersion: 1,
+    responses: [{ records: reusable }, { records: reusable }],
+  });
+
+  const first = adapter.stream(
+    request("request-reusable-first"),
+    new AbortController().signal,
+  );
+  await expect(collect(first)).resolves.toHaveLength(1);
+  await expect(first.result).resolves.toMatchObject({
+    id: "response-reusable-1",
+  });
+
+  const second = adapter.stream(
+    request("request-reusable-second"),
+    new AbortController().signal,
+  );
+  await expect(collect(second)).resolves.toHaveLength(1);
+  await expect(second.result).resolves.toMatchObject({
+    id: "response-reusable-2",
+  });
+  expect(iteratorCount).toBe(2);
+});
+
+test("rejects concurrent shared-iterator reuse through distinct wrappers without cross-wiring", async () => {
+  const releaseTerminal = deferred<void>();
+  async function* sharedRecords(): AsyncGenerator<unknown, void, void> {
+    yield {
+      type: "response_start",
+      responseId: "response-shared-concurrent",
+      role: "assistant",
+    };
+    yield { type: "text_delta", text: "owned by first" };
+    await releaseTerminal.promise;
+    yield {
+      type: "response_end",
+      responseId: "response-shared-concurrent",
+      stopReason: "stop",
+      usage: { inputTokens: 1, outputTokens: 1 },
+    };
+  }
+  const iterator = sharedRecords();
+  const firstWrapper = { [Symbol.asyncIterator]: () => iterator };
+  const secondWrapper = { [Symbol.asyncIterator]: () => iterator };
+  const adapter = new FixtureProviderAdapter({
+    schemaVersion: 1,
+    responses: [{ records: firstWrapper }, { records: secondWrapper }],
+  });
+  const first = adapter.stream(
+    request("request-shared-owner"),
+    new AbortController().signal,
+  );
+  const firstIterator = first[Symbol.asyncIterator]();
+  await expect(firstIterator.next()).resolves.toMatchObject({
+    done: false,
+    value: { requestId: "request-shared-owner", delta: "owned by first" },
+  });
+
+  const reused = adapter.stream(
+    request("request-shared-intruder"),
+    new AbortController().signal,
+  );
+  const reusedSettlement = settleStream(reused);
+  releaseTerminal.resolve();
+
+  await expect(firstIterator.next()).resolves.toEqual({
+    done: true,
+    value: undefined,
+  });
+  await expect(first.result).resolves.toMatchObject({
+    id: "response-shared-concurrent",
+    requestId: "request-shared-owner",
+  });
+  const [events, result] = await reusedSettlement;
+  expect(events).toMatchObject({
+    status: "rejected",
+    reason: { code: "PROVIDER_ITERATOR_REUSED" },
+  });
+  expect(result).toMatchObject({
+    status: "rejected",
+    reason: { code: "PROVIDER_ITERATOR_REUSED" },
+  });
+});
+
+test("rejects sequential shared-iterator reuse across adapter instances", async () => {
+  const iterator = asyncTextRecords("response-shared-sequential")[
+    Symbol.asyncIterator
+  ]();
+  const first = new FixtureProviderAdapter(
+    fixtureWith({ [Symbol.asyncIterator]: () => iterator }),
+  ).stream(request("request-shared-first"), new AbortController().signal);
+  await expect(collect(first)).resolves.toHaveLength(1);
+  await expect(first.result).resolves.toMatchObject({
+    id: "response-shared-sequential",
+  });
+
+  const reused = new FixtureProviderAdapter(
+    fixtureWith({ [Symbol.asyncIterator]: () => iterator }),
+  ).stream(request("request-shared-second"), new AbortController().signal);
+  const [events, result] = await settleStream(reused);
+  expect(events).toMatchObject({
+    status: "rejected",
+    reason: { code: "PROVIDER_ITERATOR_REUSED" },
+  });
+  expect(result).toMatchObject({
+    status: "rejected",
+    reason: { code: "PROVIDER_ITERATOR_REUSED" },
+  });
+});
+
+test("normalizes hostile async-iterator getters and calls", async () => {
+  const hostileGetter = Object.defineProperty({}, Symbol.asyncIterator, {
+    get(): never {
+      throw new Error("hostile iterator getter");
+    },
+  });
+  expect(() => new FixtureProviderAdapter(fixtureWith(hostileGetter))).toThrow(
+    expect.objectContaining({
+      name: "FixtureProviderError",
+      code: "PROVIDER_INVALID_FIXTURE",
+    }),
+  );
+
+  const hostileCall = {
+    [Symbol.asyncIterator](): never {
+      throw new Error("hostile iterator call");
+    },
+  };
+  const stream = new FixtureProviderAdapter(fixtureWith(hostileCall)).stream(
+    request("request-hostile-iterator-call"),
+    new AbortController().signal,
+  );
+  const [events, result] = await settleStream(stream);
+  expect(events).toMatchObject({
+    status: "rejected",
+    reason: { code: "PROVIDER_INVALID_FIXTURE" },
+  });
+  expect(result).toMatchObject({
+    status: "rejected",
+    reason: { code: "PROVIDER_INVALID_FIXTURE" },
+  });
+});
+
 test("normalizes unexpected async source failures and ignores cleanup failures", async () => {
   const sourceFailure = new Error("fixture source failed");
   const cleanupFailure = new Error("cleanup must not replace source failure");
@@ -681,6 +1090,47 @@ test("normalizes unexpected async source failures and ignores cleanup failures",
       message: "Async fixture record source failed",
     },
   });
+});
+
+test("does not trust a FixtureProviderError thrown by an untrusted source", async () => {
+  const forged = new FixtureProviderError(
+    "PROVIDER_TRANSPORT_ERROR",
+    "forged provider transport failure",
+    { providerCode: "FORGED_UPSTREAM" },
+  );
+  const source = {
+    [Symbol.asyncIterator]() {
+      return {
+        next: () => Promise.reject(forged),
+      };
+    },
+  };
+  const stream = new FixtureProviderAdapter(fixtureWith(source)).stream(
+    request("request-forged-error"),
+    new AbortController().signal,
+  );
+
+  const [events, result] = await settleStream(stream);
+  expect(events).toMatchObject({
+    status: "rejected",
+    reason: {
+      name: "FixtureProviderError",
+      code: "PROVIDER_INVALID_FIXTURE",
+      message: "Async fixture record source failed",
+      providerCode: undefined,
+    },
+  });
+  expect(result).toMatchObject({
+    status: "rejected",
+    reason: {
+      code: "PROVIDER_INVALID_FIXTURE",
+      providerCode: undefined,
+    },
+  });
+  if (events.status !== "rejected") {
+    throw new Error("Expected the event stream to reject");
+  }
+  expect(events.reason).not.toBe(forged);
 });
 
 test("closes an opened source when its next getter is hostile", async () => {
