@@ -82,6 +82,50 @@ async function exists(relativePath) {
   );
 }
 
+function glossaryDefinitionErrors(markdown, requiredTerms) {
+  const sections = [...markdown.matchAll(/^## ([^\r\n]+)\r?$/gm)].map(
+    (match) => ({
+      heading: match[1],
+      start: match.index,
+      bodyStart: match.index + match[0].length,
+    }),
+  );
+  const errors = [];
+
+  for (const term of requiredTerms) {
+    const definitions = sections.filter((section) => section.heading === term);
+
+    if (definitions.length !== 1) {
+      errors.push(
+        `term "${term}" must have exactly one H2 definition; found ${definitions.length}`,
+      );
+      continue;
+    }
+
+    const definition = definitions[0];
+    const sectionIndex = sections.indexOf(definition);
+    const bodyEnd = sections[sectionIndex + 1]?.start ?? markdown.length;
+    const body = markdown
+      .slice(definition.bodyStart, bodyEnd)
+      .replace(/```[\s\S]*?```|~~~[\s\S]*?~~~/g, "");
+    const hasProse = body.split(/\r?\n/).some((line) => {
+      const text = line.trim();
+      return (
+        text !== "" &&
+        !/^#{1,6}(?:\s|$)/.test(text) &&
+        !/^:::+/.test(text) &&
+        /[\p{L}\p{N}]/u.test(text)
+      );
+    });
+
+    if (!hasProse) {
+      errors.push(`term "${term}" must have a non-empty prose definition`);
+    }
+  }
+
+  return errors;
+}
+
 test("translation manifest contains 23 unique EN/VI pairs", async () => {
   const manifest = JSON.parse(await readFile(manifestURL, "utf8"));
   assert.equal(manifest.version, 1);
@@ -175,14 +219,14 @@ test("FAQ contribution guidance uses the canonical content tree", async () => {
 
 test("paired glossaries define the canonical testing and runtime terms", async () => {
   const requiredTerms = [
-    "test double",
-    "fixture",
-    "harness",
-    "judge",
-    "verdict",
-    "held-out evaluation",
-    "composition root",
-    "fail-closed",
+    "Test Double",
+    "Fixture",
+    "Harness",
+    "Judge",
+    "Verdict",
+    "Held-out Evaluation",
+    "Composition Root",
+    "Fail-closed",
   ];
 
   for (const locale of ["en", "vi"]) {
@@ -190,17 +234,47 @@ test("paired glossaries define the canonical testing and runtime terms", async (
       new URL(`content/${locale}/glossary.md`, repositoryRoot),
       "utf8",
     );
-    const headings = [...glossary.matchAll(/^## (.+)$/gm)].map(([, heading]) =>
-      heading.toLocaleLowerCase("en-US"),
+    assert.deepEqual(
+      glossaryDefinitionErrors(glossary, requiredTerms),
+      [],
+      `content/${locale}/glossary.md must define every canonical term exactly once with prose`,
     );
-
-    for (const term of requiredTerms) {
-      assert.ok(
-        headings.includes(term),
-        `content/${locale}/glossary.md must define the exact term "${term}"`,
-      );
-    }
   }
+});
+
+test("glossary definition contract rejects duplicate and empty sections", () => {
+  const glossary = `# Glossary
+
+## Fixture
+
+A reusable case.
+
+## Fixture
+
+Another fixture.
+
+## Judge
+
+### Details
+
+## Verdict
+
+`;
+
+  assert.deepEqual(
+    glossaryDefinitionErrors(glossary, [
+      "Fixture",
+      "Judge",
+      "Verdict",
+      "Test Double",
+    ]),
+    [
+      'term "Fixture" must have exactly one H2 definition; found 2',
+      'term "Judge" must have a non-empty prose definition',
+      'term "Verdict" must have a non-empty prose definition',
+      'term "Test Double" must have exactly one H2 definition; found 0',
+    ],
+  );
 });
 
 test("repository satisfies the Fumadocs content contract", async () => {
