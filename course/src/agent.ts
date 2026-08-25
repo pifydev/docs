@@ -725,7 +725,7 @@ function nextGeneratedMessageNumber(
 ): number {
   let next = 1;
   for (let index = 0; index < messages.length; index += 1) {
-    const match = /^agent-user-(\d{6})$/u.exec(messages[index].id);
+    const match = messages[index].id.match(/^agent-user-(\d{6})$/u);
     if (match === null) continue;
     const candidate = Number(match[1]) + 1;
     if (candidate > next) next = candidate;
