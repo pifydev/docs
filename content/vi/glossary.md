@@ -5,7 +5,7 @@ translation_key: glossary
 language: vi
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-08-24'
+last_updated: '2026-08-25'
 ---
 Các định nghĩa dưới đây bám theo package Pi hiện tại. Identifier, tên package, command, đường dẫn, configuration key và biến môi trường luôn được giữ nguyên.
 
@@ -65,7 +65,7 @@ Dịch vụ xử lý model request, chẳng hạn Anthropic, OpenAI, Google, Bed
 
 ## Pi
 
-Bộ công cụ agent mã nguồn mở được duy trì trong `badlogic/pi-mono` và mirror tại `earendil-works/pi`. Tên viết thường `pi` chỉ command của coding-agent CLI.
+Bộ công cụ agent mã nguồn mở được duy trì trong repository `earendil-works/pi`. Tên viết thường `pi` chỉ command của coding-agent CLI.
 
 ## Session
 

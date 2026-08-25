@@ -119,6 +119,15 @@ test("active content satisfies the published Pi migration contract", async () =>
   );
 });
 
+test("active content uses the maintained Pi repository authority", async () => {
+  const activeSources = await readActiveSources();
+  const legacyRepositoryMentions = activeSources
+    .filter(({ source }) => source.includes("badlogic/pi-mono"))
+    .map(({ filename }) => filename);
+
+  assert.deepEqual(legacyRepositoryMentions, []);
+});
+
 test("parses the exact GitHub source ref for published Pi release links", () => {
   const release = {
     tag: "v0.84.3",

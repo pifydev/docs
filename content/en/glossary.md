@@ -5,7 +5,7 @@ translation_key: glossary
 language: en
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-08-24'
+last_updated: '2026-08-25'
 ---
 These definitions follow the current Pi packages. Code identifiers, package names, commands, paths, configuration keys, and environment variables are always preserved exactly.
 
@@ -65,7 +65,7 @@ The service that handles a model request, such as Anthropic, OpenAI, Google, Bed
 
 ## Pi
 
-The open-source agent toolkit maintained in `badlogic/pi-mono` and mirrored at `earendil-works/pi`. Lowercase `pi` refers to the coding-agent CLI command.
+The open-source agent toolkit maintained in the `earendil-works/pi` repository. Lowercase `pi` refers to the coding-agent CLI command.
 
 ## Session
 
