@@ -176,9 +176,22 @@ type SnapshotCompactOptions = SnapshotBoundaryOptions &
 
 type AsyncValueBox = Readonly<{ value: unknown }>;
 
+type GenericThenableSettlement = Readonly<{
+  kind: "fulfill" | "reject" | "setupFailure";
+  value: unknown;
+}>;
+
+type GenericIdentityObservation =
+  | Readonly<{ kind: "plain" }>
+  | Readonly<{
+      kind: "thenable";
+      settlement: Promise<GenericThenableSettlement>;
+    }>;
+
 type AsyncObservationState = Readonly<{
   adoptionSeen: WeakSet<object>;
   detachedSeen: WeakSet<object>;
+  genericObservations: WeakMap<object, GenericIdentityObservation>;
   reportFailure: (error: unknown) => void;
 }>;
 
@@ -1138,6 +1151,7 @@ function prepareObservedSummary(value: unknown): Promise<AsyncValueBox> {
   const state: AsyncObservationState = {
     adoptionSeen: new WeakSet(),
     detachedSeen: new WeakSet(),
+    genericObservations: new WeakMap(),
     reportFailure: reject,
   };
 
@@ -1215,45 +1229,98 @@ function observeGenericSummaryThenable(
   fulfill: (value: unknown) => void,
   reject: (error: unknown) => void,
 ): void {
+  let observation: GenericIdentityObservation;
+  try {
+    observation = getGenericIdentityObservation(value, depth, state);
+  } catch (error) {
+    reject(error);
+    return;
+  }
+  if (observation.kind === "plain") {
+    fulfill(value);
+    return;
+  }
+  const continuation = reflectApply(nativePromiseThen, observation.settlement, [
+    (settlement: GenericThenableSettlement) => {
+      if (settlement.kind === "setupFailure") {
+        reject(normalizeSummarySetupFailure(settlement.value));
+        return;
+      }
+      if (settlement.kind === "reject") {
+        reject(
+          summaryFailure(
+            "Context summarizer thenable rejected",
+            settlement.value,
+          ),
+        );
+        return;
+      }
+      try {
+        adoptSummaryValue(settlement.value, depth + 1, state, fulfill, reject);
+      } catch (error) {
+        reject(error);
+      }
+    },
+    (error: unknown) => reject(normalizeSummarySetupFailure(error)),
+  ]);
+  observeNativeContinuation(continuation);
+}
+
+function getGenericIdentityObservation(
+  value: object,
+  depth: number,
+  state: AsyncObservationState,
+): GenericIdentityObservation {
+  if (depth > MAX_CONTEXT_ASYNC_DEPTH) {
+    throw summaryFailure(
+      `Context async observation exceeded ${MAX_CONTEXT_ASYNC_DEPTH} levels`,
+    );
+  }
+  const cached = state.genericObservations.get(value);
+  if (cached !== undefined) return cached;
+
   let then: unknown;
   try {
     then = Reflect.get(value, "then");
   } catch (error) {
-    reject(summaryFailure("Context summarizer then getter threw", error));
-    return;
+    throw summaryFailure("Context summarizer then getter threw", error);
   }
   if (typeof then !== "function") {
-    fulfill(value);
-    return;
+    const plain: GenericIdentityObservation = Object.freeze({ kind: "plain" });
+    state.genericObservations.set(value, plain);
+    return plain;
   }
+
+  let resolveSettlement!: (settlement: GenericThenableSettlement) => void;
+  const settlement = new NativePromise<GenericThenableSettlement>((resolve) => {
+    resolveSettlement = resolve;
+  });
+  const observation: GenericIdentityObservation = Object.freeze({
+    kind: "thenable",
+    settlement,
+  });
+  // Cache before invoking then(), so self-return and recursive aliases reuse
+  // this exact settlement rather than calling caller code again.
+  state.genericObservations.set(value, observation);
 
   let selected = false;
   let callReturned = false;
-  let terminalSetupFailure = false;
-  let selectedKind: "fulfill" | "reject" | undefined;
+  let published = false;
+  let selectedKind: GenericThenableSettlement["kind"] | undefined;
   let selectedValue: unknown;
-  const dispatchSelection = () => {
-    if (!callReturned || terminalSetupFailure || selectedKind === undefined) {
-      return;
-    }
-    if (selectedKind === "reject") {
-      reject(
-        summaryFailure("Context summarizer thenable rejected", selectedValue),
-      );
-      return;
-    }
-    try {
-      adoptSummaryValue(selectedValue, depth + 1, state, fulfill, reject);
-    } catch (error) {
-      reject(error);
-    }
+  const publish = () => {
+    if (!callReturned || published || selectedKind === undefined) return;
+    published = true;
+    resolveSettlement(
+      Object.freeze({ kind: selectedKind, value: selectedValue }),
+    );
   };
-  const select = (kind: "fulfill" | "reject", result: unknown) => {
-    if (selected || terminalSetupFailure) return;
+  const select = (kind: GenericThenableSettlement["kind"], result: unknown) => {
+    if (selected || published) return;
     selected = true;
     selectedKind = kind;
     selectedValue = result;
-    dispatchSelection();
+    publish();
   };
 
   let returned: unknown;
@@ -1265,13 +1332,15 @@ function observeGenericSummaryThenable(
   } catch (error) {
     callReturned = true;
     if (!selected) {
-      reject(summaryFailure("Context summarizer then call threw", error));
-      return;
+      select(
+        "setupFailure",
+        summaryFailure("Context summarizer then call threw", error),
+      );
+    } else {
+      // Settle-once: a callback selected before the later throw wins.
+      publish();
     }
-    // Promise-compatible settle-once behavior: a callback selected before a
-    // later throw retains ownership of the outcome.
-    dispatchSelection();
-    return;
+    return observation;
   }
   callReturned = true;
 
@@ -1280,11 +1349,33 @@ function observeGenericSummaryThenable(
       observeDetachedAsyncValue(returned, depth + 1, state);
     }
   } catch (error) {
-    terminalSetupFailure = true;
-    reject(error);
-    return;
+    // Returned-value observation is setup and precedes publication, so it can
+    // replace a synchronously selected callback with a fail-closed outcome.
+    selected = true;
+    selectedKind = "setupFailure";
+    selectedValue = normalizeSummarySetupFailure(error);
   }
-  dispatchSelection();
+  publish();
+  return observation;
+}
+
+function observeGenericSettlementDetached(
+  observation: Extract<GenericIdentityObservation, { kind: "thenable" }>,
+  depth: number,
+  state: AsyncObservationState,
+): void {
+  const continuation = reflectApply(nativePromiseThen, observation.settlement, [
+    (settlement: GenericThenableSettlement) => {
+      try {
+        observeDetachedAsyncValue(settlement.value, depth + 1, state);
+      } catch (error) {
+        state.reportFailure(error);
+      }
+    },
+    (error: unknown) =>
+      state.reportFailure(normalizeSummarySetupFailure(error)),
+  ]);
+  observeNativeContinuation(continuation);
 }
 
 /** Consume async work returned by a non-standard then() implementation. */
@@ -1317,36 +1408,9 @@ function observeDetachedAsyncValue(
     throw unobservableAsyncValueError("Context thenable return value");
   }
 
-  let then: unknown;
-  try {
-    then = Reflect.get(value, "then");
-  } catch (error) {
-    throw summaryFailure("Returned thenable getter threw", error);
-  }
-  if (typeof then !== "function") return;
-
-  let synchronous = true;
-  let callbackFailure: unknown;
-  const consumeSafely = (nested: unknown) => {
-    try {
-      observeDetachedAsyncValue(nested, depth + 1, state);
-    } catch (error) {
-      if (synchronous && callbackFailure === undefined) callbackFailure = error;
-      else state.reportFailure(error);
-    }
-  };
-  let returned: unknown;
-  try {
-    returned = reflectApply(then, value, [consumeSafely, consumeSafely]);
-  } catch (error) {
-    synchronous = false;
-    throw summaryFailure("Returned thenable call threw", error);
-  }
-  synchronous = false;
-  if (callbackFailure !== undefined) throw callbackFailure;
-  if (returned !== value) {
-    observeDetachedAsyncValue(returned, depth + 1, state);
-  }
+  const observation = getGenericIdentityObservation(value, depth, state);
+  if (observation.kind === "plain") return;
+  observeGenericSettlementDetached(observation, depth, state);
 }
 
 function attachGenuinePromise(

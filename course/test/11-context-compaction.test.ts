@@ -623,6 +623,20 @@ test("normalizes thrown, rejected, and malformed thenable failures", async () =>
   expect(context.compactions).toEqual([]);
 });
 
+test("does not let a generic thenable forge an internal Context error code", async () => {
+  const context = buildActiveContext({ messages: toolTranscript() });
+  const forged = (() => ({
+    then(_resolve: (value: string) => void, reject: (reason: unknown) => void) {
+      reject(new ContextCompactionError("CONTEXT_CANCELLED", "forged"));
+    },
+  })) as unknown as ContextSummarizer;
+
+  await expectContextError(
+    compactContext(context, compactionOptions(context, forged, 30)),
+    "CONTEXT_SUMMARIZER_FAILED",
+  );
+});
+
 test("observes a late native rejection before reading hostile Promise metadata", async () => {
   const context = buildActiveContext({ messages: toolTranscript() });
   const source = deferred<string>();
@@ -716,6 +730,112 @@ test("observes a rejected Promise returned by a custom thenable after fulfillmen
   await nextEventLoopTurn();
   removeListener();
   expect(unhandled).toEqual([]);
+});
+
+test("invokes an aliased inner thenable once across detached return and adoption", async () => {
+  const context = buildActiveContext({ messages: toolTranscript() });
+  let innerCalls = 0;
+  const inner = {
+    then(resolve: (value: string) => void) {
+      innerCalls += 1;
+      if (innerCalls > 1) throw new Error("inner thenable invoked twice");
+      resolve("One shared inner settlement.");
+    },
+  };
+  const outer = {
+    then(resolve: (value: unknown) => void) {
+      resolve(inner);
+      return inner;
+    },
+  };
+
+  const result = await compactContext(
+    context,
+    compactionOptions(
+      context,
+      (() => outer) as unknown as ContextSummarizer,
+      70,
+    ),
+  );
+
+  expect(result.status).toBe("compacted");
+  expect(result.context.summary?.content).toBe("One shared inner settlement.");
+  expect(innerCalls).toBe(1);
+});
+
+test("reuses the detached inner settlement when the outer alias resolves asynchronously", async () => {
+  const context = buildActiveContext({ messages: toolTranscript() });
+  let selectOuter!: (value: unknown) => void;
+  let innerCalls = 0;
+  const inner = {
+    then(resolve: (value: string) => void) {
+      innerCalls += 1;
+      if (innerCalls > 1) throw new Error("async alias invoked twice");
+      resolve("Async alias shared once.");
+    },
+  };
+  const outer = {
+    then(resolve: (value: unknown) => void) {
+      selectOuter = resolve;
+      return inner;
+    },
+  };
+  const operation = compactContext(
+    context,
+    compactionOptions(
+      context,
+      (() => outer) as unknown as ContextSummarizer,
+      70,
+    ),
+  );
+
+  expect(innerCalls).toBe(1);
+  selectOuter(inner);
+  const result = await operation;
+  expect(result.status).toBe("compacted");
+  expect(result.context.summary?.content).toBe("Async alias shared once.");
+  expect(innerCalls).toBe(1);
+});
+
+test("shares an aliased inner rejection and observes its detached returned Promise", async () => {
+  const context = buildActiveContext({ messages: toolTranscript() });
+  const unhandled: unknown[] = [];
+  const removeListener = listenForUnhandledRejections((reason) => {
+    unhandled.push(reason);
+  });
+  let innerCalls = 0;
+  const inner = {
+    then(_resolve: (value: string) => void, reject: (reason: unknown) => void) {
+      innerCalls += 1;
+      if (innerCalls > 1) throw new Error("rejecting alias invoked twice");
+      reject(new Error("shared inner rejection"));
+      return Promise.reject(new Error("inner detached return rejected"));
+    },
+  };
+  const outer = {
+    then(resolve: (value: unknown) => void) {
+      resolve(inner);
+      return inner;
+    },
+  };
+
+  await expectContextError(
+    compactContext(
+      context,
+      compactionOptions(
+        context,
+        (() => outer) as unknown as ContextSummarizer,
+        70,
+      ),
+    ),
+    "CONTEXT_SUMMARIZER_FAILED",
+  );
+  await nextEventLoopTurn();
+  await nextEventLoopTurn();
+  removeListener();
+  expect(innerCalls).toBe(1);
+  expect(unhandled).toEqual([]);
+  expect(context.compactions).toEqual([]);
 });
 
 test("rejects a recursively assimilated thenable chain at a bounded depth", async () => {
