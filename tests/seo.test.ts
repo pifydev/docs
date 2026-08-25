@@ -11,10 +11,10 @@ describe("public documentation SEO", () => {
   it("publishes exactly one English and Vietnamese URL per source page", () => {
     const paths = buildPublicPagePaths();
 
-    expect(paths).toHaveLength(46);
-    expect(new Set(paths).size).toBe(46);
-    expect(paths.filter((path) => path.startsWith("/en"))).toHaveLength(23);
-    expect(paths.filter((path) => path.startsWith("/vi"))).toHaveLength(23);
+    expect(paths).toHaveLength(54);
+    expect(new Set(paths).size).toBe(54);
+    expect(paths.filter((path) => path.startsWith("/en"))).toHaveLength(27);
+    expect(paths.filter((path) => path.startsWith("/vi"))).toHaveLength(27);
     expect(paths.some((path) => path.startsWith("/zh"))).toBe(false);
   });
 
@@ -32,7 +32,7 @@ describe("public documentation SEO", () => {
       (entry) => entry.url === `${SITE_ORIGIN}/en/quickstart`,
     );
 
-    expect(sitemap).toHaveLength(46);
+    expect(sitemap).toHaveLength(54);
     expect(quickstart?.alternates?.languages).toEqual({
       en: `${SITE_ORIGIN}/en/quickstart`,
       vi: `${SITE_ORIGIN}/vi/quickstart`,

@@ -226,9 +226,9 @@ test("serves machine-readable documentation surfaces", async ({ request }) => {
   expect(await robots.text()).toContain(
     "Sitemap: https://docs.pify.dev/sitemap.xml",
   );
-  expect((await sitemap.text()).match(/<url>/g)).toHaveLength(46);
+  expect((await sitemap.text()).match(/<url>/g)).toHaveLength(54);
   expect(index.headers()["content-type"]).toContain("text/plain");
-  expect((await index.text()).match(/^- \[/gm)).toHaveLength(23);
+  expect((await index.text()).match(/^- \[/gm)).toHaveLength(27);
   expect(full.headers()["content-type"]).toContain("text/plain");
   expect((await full.text()).length).toBeGreaterThan(100_000);
 });
@@ -246,7 +246,7 @@ test("renders every internal Markdown source link as a clean public route", asyn
     ),
     (match) => match[1],
   );
-  expect(paths).toHaveLength(46);
+  expect(paths).toHaveLength(54);
 
   for (const path of paths) {
     const response = await request.get(path);
