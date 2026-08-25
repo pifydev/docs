@@ -4,9 +4,11 @@ import {
   mkdtemp,
   mkdir,
   readFile,
+  readdir,
   realpath,
   rm,
   symlink,
+  watch,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -94,12 +96,42 @@ async function waitForFile(path: string): Promise<void> {
   throw new Error(`Timed out waiting for fixture file ${path}`);
 }
 
+async function replaceNextWriteTemporary(
+  root: string,
+  signal: AbortSignal,
+  replace: (path: string) => Promise<void> = async (path) =>
+    writeFile(path, "substituted temporary", "utf8"),
+): Promise<string> {
+  for await (const event of watch(root, { signal })) {
+    const filename = event.filename;
+    if (typeof filename !== "string" || !filename.includes(".pify-tmp-")) {
+      continue;
+    }
+    const temporaryPath = join(root, filename);
+    for (let turn = 0; turn < 10_000; turn += 1) {
+      try {
+        await rm(temporaryPath, { force: true });
+        await replace(temporaryPath);
+        return temporaryPath;
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code;
+        if (code !== "EBUSY" && code !== "EPERM" && code !== "ENOENT") {
+          throw error;
+        }
+        await new Promise<void>((resolve) => setImmediate(resolve));
+      }
+    }
+    throw new Error("Could not replace the observed write temporary");
+  }
+  throw new Error("Temporary watcher ended before observing a write");
+}
+
 test("documents finite file, process, output, argument, and time caps", () => {
   expect(COURSE_CODING_FILE_MAX_BYTES).toBe(65_536);
   expect(COURSE_NODE_SOURCE_MAX_BYTES).toBe(32_768);
-  expect(COURSE_NODE_ARGUMENT_COUNT_MAX).toBe(64);
-  expect(COURSE_NODE_ARGUMENT_MAX_BYTES).toBe(4_096);
-  expect(COURSE_NODE_ARGUMENTS_TOTAL_MAX_BYTES).toBe(16_384);
+  expect(COURSE_NODE_ARGUMENT_COUNT_MAX).toBe(32);
+  expect(COURSE_NODE_ARGUMENT_MAX_BYTES).toBe(2_048);
+  expect(COURSE_NODE_ARGUMENTS_TOTAL_MAX_BYTES).toBe(8_192);
   expect(COURSE_NODE_OUTPUT_MAX_BYTES).toBe(32_768);
   expect(COURSE_NODE_TIMEOUT_MS).toBe(500);
 });
@@ -184,6 +216,49 @@ test("rejects traversal and absolute paths across POSIX, Windows, mixed, UNC, an
       },
     });
   }
+});
+
+test("rejects Windows ADS and colon path components before filesystem effects", async () => {
+  const registry = new ToolRegistry([
+    createReadTool(workspace),
+    createWriteTool(workspace),
+  ]);
+  const invalidPaths = [
+    "file.txt:secret",
+    "nested/file:ads",
+    "nested\\file:ads",
+    "C:drive-relative.txt",
+    "\\\\?\\C:\\device.txt",
+    "\\\\.\\C:\\device.txt",
+    "CON",
+    "nested/NUL.txt",
+    "COM1.log",
+    "nested/LPT9",
+    "trailing-dot.",
+    "trailing-space ",
+  ];
+
+  for (let index = 0; index < invalidPaths.length; index += 1) {
+    for (const [name, argumentsValue] of [
+      ["read_file", { path: invalidPaths[index] }],
+      ["write_file", { path: invalidPaths[index], content: "blocked" }],
+    ] as const) {
+      const result = await executeToolCall(
+        registry,
+        call(name, argumentsValue, `call-colon-${name}-${index}`),
+        new AbortController().signal,
+      );
+      expect(parseToolContent(result.content)).toMatchObject({
+        error: {
+          code: "TOOL_ARGUMENTS_INVALID",
+          message: "INVALID_RELATIVE_PATH",
+        },
+      });
+    }
+  }
+  expect(
+    (await readdir(workspace)).filter((entry) => entry.includes(".pify-tmp-")),
+  ).toEqual([]);
 });
 
 test("rejects symlink escapes for reads and writes", async () => {
@@ -329,6 +404,136 @@ test("keeps the destination and cleans temporary siblings when atomic rename fai
   );
 });
 
+test("serializes concurrent writes to one canonical target on Windows-compatible filesystems", async () => {
+  const tools = [createWriteTool(workspace), createWriteTool(workspace)];
+  const first = "A".repeat(COURSE_CODING_FILE_MAX_BYTES);
+  const second = "B".repeat(COURSE_CODING_FILE_MAX_BYTES);
+  const inputs = [first, second, first, second, first, second];
+
+  const results = await Promise.all(
+    inputs.map((content, index) => {
+      const tool = tools[index % tools.length];
+      return tool.execute(
+        validatedInput(tool, { path: "shared.txt", content }),
+        executionContext(),
+      );
+    }),
+  );
+
+  expect(results).toHaveLength(inputs.length);
+  const finalContent = await readFile(join(workspace, "shared.txt"), "utf8");
+  expect(inputs).toContain(finalContent);
+  expect(finalContent).toHaveLength(COURSE_CODING_FILE_MAX_BYTES);
+  expect(
+    (await readdir(workspace)).filter((entry) => entry.includes(".pify-tmp-")),
+  ).toEqual([]);
+});
+
+test("rejects a substituted temporary file instead of committing attacker content", async () => {
+  const tool = createWriteTool(workspace);
+  const watcherController = new AbortController();
+  const replacement = replaceNextWriteTemporary(
+    workspace,
+    watcherController.signal,
+  );
+  const pending = tool.execute(
+    validatedInput(tool, {
+      path: "identity.txt",
+      content: "trusted".repeat(8_000),
+    }),
+    executionContext(),
+  );
+
+  try {
+    await replacement;
+    await expect(pending).rejects.toThrowError("WRITE_TEMP_IDENTITY_CHANGED");
+  } finally {
+    watcherController.abort();
+    await pending.catch(() => undefined);
+  }
+  await expect(access(join(workspace, "identity.txt"))).rejects.toMatchObject({
+    code: "ENOENT",
+  });
+  expect(
+    (await readdir(workspace)).filter((entry) => entry.includes(".pify-tmp-")),
+  ).toEqual([]);
+});
+
+test("rejects symlink and junction substitutions at the temporary pathname", async () => {
+  const variants: Array<
+    Readonly<{
+      name: string;
+      prepare: () => Promise<(path: string) => Promise<void>>;
+    }>
+  > = [
+    {
+      name: "symlink",
+      async prepare() {
+        const source = join(workspace, "symlink-source.txt");
+        const probe = join(workspace, "symlink-probe.txt");
+        await writeFile(source, "outside temporary", "utf8");
+        await symlink(source, probe, "file");
+        await rm(probe, { force: true });
+        return async (path) => symlink(source, path, "file");
+      },
+    },
+    {
+      name: "junction",
+      async prepare() {
+        const source = join(workspace, "junction-source");
+        await mkdir(source);
+        return async (path) => symlink(source, path, "junction");
+      },
+    },
+  ];
+
+  for (const variant of variants) {
+    let replace: (path: string) => Promise<void>;
+    try {
+      replace = await variant.prepare();
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "EPERM") continue;
+      throw error;
+    }
+    const tool = createWriteTool(workspace);
+    const watcherController = new AbortController();
+    const replacement = replaceNextWriteTemporary(
+      workspace,
+      watcherController.signal,
+      replace,
+    );
+    const target = `identity-${variant.name}.txt`;
+    const pending = tool.execute(
+      validatedInput(tool, {
+        path: target,
+        content: "trusted".repeat(8_000),
+      }),
+      executionContext(),
+    );
+    try {
+      await replacement;
+      const failure = await pending.then(
+        () => new Error("write unexpectedly succeeded"),
+        (error: unknown) => error,
+      );
+      expect(failure, variant.name).toMatchObject({
+        message: "WRITE_TEMP_IDENTITY_CHANGED",
+      });
+    } finally {
+      watcherController.abort();
+      await pending.catch(() => undefined);
+    }
+    await expect(access(join(workspace, target))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+    expect(
+      (await readdir(workspace)).filter((entry) =>
+        entry.includes(".pify-tmp-"),
+      ),
+    ).toEqual([]);
+  }
+});
+
 test("runs only JavaScript source with an argument array in the canonical workspace", async () => {
   const tool = createNodeProcessTool(workspace);
   const source = [
@@ -400,6 +605,38 @@ test("validates Node source and argument caps before spawning", () => {
   });
 });
 
+test("launches exact accepted source and argument boundaries through a temporary script", async () => {
+  const tool = createNodeProcessTool(workspace);
+  const expectedLengths = Array.from(
+    {
+      length:
+        COURSE_NODE_ARGUMENTS_TOTAL_MAX_BYTES / COURSE_NODE_ARGUMENT_MAX_BYTES,
+    },
+    () => COURSE_NODE_ARGUMENT_MAX_BYTES,
+  );
+  const argumentsValue = expectedLengths.map((length) =>
+    ' \\"'.repeat(Math.ceil(length / 3)).slice(0, length),
+  );
+  const program =
+    "process.stdout.write(JSON.stringify(process.argv.slice(-" +
+    String(argumentsValue.length) +
+    ").map((value) => value.length)));";
+  const source = `${program}${" ".repeat(
+    COURSE_NODE_SOURCE_MAX_BYTES - Buffer.byteLength(program, "utf8"),
+  )}`;
+
+  const output = await tool.execute(
+    validatedInput(tool, { source, arguments: argumentsValue }),
+    executionContext(),
+  );
+
+  expect(output.exitCode).toBe(0);
+  expect(JSON.parse(output.stdout)).toEqual(expectedLengths);
+  expect(
+    (await readdir(workspace)).filter((entry) => entry.includes(".pify-node-")),
+  ).toEqual([]);
+});
+
 test("bounds stdout and stderr independently at UTF-8 byte boundaries", async () => {
   const tool = createNodeProcessTool(workspace);
   const output = await tool.execute(
@@ -469,6 +706,9 @@ test("kills an in-flight Node process on cancellation before rejecting", async (
   controller.abort(reason);
   await expect(pending).rejects.toBe(reason);
   expect(() => process.kill(pid, 0)).toThrow();
+  expect(
+    (await readdir(workspace)).filter((entry) => entry.includes(".pify-node-")),
+  ).toEqual([]);
 });
 
 test("kills timed-out Node processes and returns a stable Tool-layer error", async () => {
@@ -489,6 +729,112 @@ test("kills timed-out Node processes and returns a stable Tool-layer error", asy
       message: "NODE_PROCESS_TIMEOUT",
     },
   });
+  expect(
+    (await readdir(workspace)).filter((entry) => entry.includes(".pify-node-")),
+  ).toEqual([]);
+});
+
+test("timeout settles promptly when an exited parent leaves a descendant holding stdio", async () => {
+  const tool = createNodeProcessTool(workspace);
+  const source = [
+    "const { spawn } = require('node:child_process');",
+    "const descendant = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 1_500)'], {",
+    "  stdio: ['ignore', 'inherit', 'inherit'],",
+    "});",
+    ...(process.platform === "win32" ? [] : ["descendant.unref();"]),
+  ].join("\n");
+  const startedAt = performance.now();
+
+  await expect(
+    tool.execute(
+      validatedInput(tool, { source, arguments: [] }),
+      executionContext(),
+    ),
+  ).rejects.toThrowError("NODE_PROCESS_TIMEOUT");
+
+  expect(performance.now() - startedAt).toBeLessThan(
+    COURSE_NODE_TIMEOUT_MS + 500,
+  );
+  expect(
+    (await readdir(workspace)).filter((entry) => entry.includes(".pify-node-")),
+  ).toEqual([]);
+});
+
+test("termination never skips cleanup merely because the direct child has exited", async () => {
+  const source = await readFile(
+    new URL("../src/coding-tools.ts", import.meta.url),
+    "utf8",
+  );
+  expect(source).not.toMatch(
+    /child\.exitCode !== null \|\| child\.signalCode !== null\) return/,
+  );
+});
+
+test("rejects a deleted and recreated workspace root for every coding Tool", async () => {
+  await writeFile(join(workspace, "before.txt"), "before", "utf8");
+  const readTool = createReadTool(workspace);
+  const writeTool = createWriteTool(workspace);
+  const nodeTool = createNodeProcessTool(workspace);
+  await rm(workspace, { recursive: true, force: true });
+  await mkdir(workspace);
+  await writeFile(join(workspace, "before.txt"), "replacement", "utf8");
+
+  await expect(
+    readTool.execute(
+      validatedInput(readTool, { path: "before.txt" }),
+      executionContext(),
+    ),
+  ).rejects.toThrowError("WORKSPACE_ROOT_CHANGED");
+  await expect(
+    writeTool.execute(
+      validatedInput(writeTool, { path: "after.txt", content: "blocked" }),
+      executionContext(),
+    ),
+  ).rejects.toThrowError("WORKSPACE_ROOT_CHANGED");
+  await expect(
+    nodeTool.execute(
+      validatedInput(nodeTool, { source: "", arguments: [] }),
+      executionContext(),
+    ),
+  ).rejects.toThrowError("WORKSPACE_ROOT_CHANGED");
+  await expect(access(join(workspace, "after.txt"))).rejects.toMatchObject({
+    code: "ENOENT",
+  });
+});
+
+test("rejects a workspace root symlink repointed after Tool creation", async () => {
+  const parent = await temporaryDirectory("pify-course-08-repoint-");
+  const first = join(parent, "first");
+  const second = join(parent, "second");
+  const rootLink = join(parent, "root");
+  await mkdir(first);
+  await mkdir(second);
+  await writeFile(join(first, "value.txt"), "first", "utf8");
+  await writeFile(join(second, "value.txt"), "second", "utf8");
+  try {
+    await symlink(
+      first,
+      rootLink,
+      process.platform === "win32" ? "junction" : "dir",
+    );
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EPERM") return;
+    throw error;
+  }
+  const tool = createReadTool(rootLink);
+  await rm(rootLink, { recursive: true, force: true });
+  await symlink(
+    second,
+    rootLink,
+    process.platform === "win32" ? "junction" : "dir",
+  );
+
+  await expect(
+    tool.execute(
+      validatedInput(tool, { path: "value.txt" }),
+      executionContext(),
+    ),
+  ).rejects.toThrowError("WORKSPACE_ROOT_CHANGED");
 });
 
 test("rejects hostile input shapes without invoking accessors", () => {
