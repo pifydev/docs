@@ -159,6 +159,15 @@ export class ToolRegistry {
     return this.#tools.get(name);
   }
 
+  /** Clone the registry membership while retaining immutable Tool snapshots. */
+  public snapshot(): ToolRegistry {
+    const snapshot = new ToolRegistry();
+    for (const [name, tool] of this.#tools) {
+      snapshot.#tools.set(name, tool);
+    }
+    return snapshot;
+  }
+
   public register(definition: unknown): void {
     this.registerMany([definition]);
   }

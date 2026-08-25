@@ -2,6 +2,10 @@ import { expect, test } from "vitest";
 
 import {
   EventStream,
+  MAX_AGENT_STEPS,
+  MAX_INITIAL_MESSAGES,
+  MAX_MODEL_CHUNKS_PER_STEP,
+  MAX_MODEL_TEXT_CODE_POINTS,
   ScriptedModel,
   ToolRegistry,
   defineTool,
@@ -19,14 +23,48 @@ import {
 type Deferred<Value> = Readonly<{
   promise: Promise<Value>;
   resolve: (value: Value | PromiseLike<Value>) => void;
+  reject: (reason?: unknown) => void;
 }>;
 
 function deferred<Value>(): Deferred<Value> {
   let resolve!: (value: Value | PromiseLike<Value>) => void;
-  const promise = new Promise<Value>((resolvePromise) => {
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<Value>((resolvePromise, rejectPromise) => {
     resolve = resolvePromise;
+    reject = rejectPromise;
   });
-  return { promise, resolve };
+  return { promise, resolve, reject };
+}
+
+function nextEventLoopTurn(): Promise<void> {
+  return new Promise((resolve) => {
+    const channel = new MessageChannel();
+    channel.port1.onmessage = () => {
+      channel.port1.close();
+      channel.port2.close();
+      resolve();
+    };
+    channel.port2.postMessage(undefined);
+  });
+}
+
+function listenForUnhandledRejections(
+  listener: (reason: unknown) => void,
+): () => void {
+  process.on("unhandledRejection", listener);
+  return () => process.removeListener("unhandledRejection", listener);
+}
+
+async function settlementByNextTurn(
+  result: Promise<RunResult>,
+): Promise<"settled" | "rejected" | "pending"> {
+  return Promise.race([
+    result.then(
+      () => "settled" as const,
+      () => "rejected" as const,
+    ),
+    nextEventLoopTurn().then(() => "pending" as const),
+  ]);
 }
 
 function user(content = "Add 20 and 22.") {
@@ -359,13 +397,25 @@ test("returns a cancelled result when cancellation arrives during model streamin
     maxSteps: 2,
     signal: controller.signal,
   });
-  const eventsPromise = collect(stream);
+  const iterator = stream[Symbol.asyncIterator]();
+  const accepted = await iterator.next();
+  const streamedChunk = await iterator.next();
 
   await enteredWait.promise;
   controller.abort("caller stopped the run");
 
   const result = await stream.result;
-  const events = await eventsPromise;
+  const remainingEvents: AgentEvent[] = [];
+  while (true) {
+    const step = await iterator.next();
+    if (step.done) break;
+    remainingEvents.push(step.value);
+  }
+  const events = [
+    ...(accepted.done ? [] : [accepted.value]),
+    ...(streamedChunk.done ? [] : [streamedChunk.value]),
+    ...remainingEvents,
+  ];
   release.resolve();
 
   expect(result).toEqual({
@@ -692,4 +742,655 @@ test("normalizes a rejected model stream into a failed terminal result", async (
     { type: "message.accepted", sequence: 0 },
     { type: "run.finished", sequence: 1 },
   ]);
+});
+
+test("cancels while iterator.next stays pending and observes its late rejection", async () => {
+  const nextStep = deferred<IteratorResult<CourseModelChunk>>();
+  const controller = new AbortController();
+  const unhandled: unknown[] = [];
+  const removeListener = listenForUnhandledRejections((reason) => {
+    unhandled.push(reason);
+  });
+  let cleanupCalls = 0;
+  const model: CourseModel = {
+    stream() {
+      const stream = new EventStream<CourseModelChunk, CourseModelResponse>();
+      const iterator: AsyncIterableIterator<CourseModelChunk> = {
+        next: () => nextStep.promise,
+        return: async () => {
+          cleanupCalls += 1;
+          return { done: true, value: undefined };
+        },
+        [Symbol.asyncIterator]() {
+          return this;
+        },
+      };
+      Object.defineProperty(stream, Symbol.asyncIterator, {
+        value: () => iterator,
+      });
+      return stream;
+    },
+  };
+  const run = runAgentLoop({
+    messages: [user()],
+    model,
+    tools: new ToolRegistry(),
+    maxSteps: 1,
+    signal: controller.signal,
+  });
+
+  controller.abort("cancel pending next");
+
+  await expect(settlementByNextTurn(run.result)).resolves.toBe("settled");
+  await expect(run.result).resolves.toMatchObject({
+    status: "cancelled",
+    reason: "cancel pending next",
+  });
+  expect(cleanupCalls).toBe(1);
+
+  nextStep.reject(new Error("late next rejection"));
+  await nextEventLoopTurn();
+  await nextEventLoopTurn();
+  removeListener();
+  expect(unhandled).toEqual([]);
+});
+
+test("cancels while model stream.result stays pending and observes its late rejection", async () => {
+  const controller = new AbortController();
+  const resultRequested = deferred<void>();
+  const unhandled: unknown[] = [];
+  const removeListener = listenForUnhandledRejections((reason) => {
+    unhandled.push(reason);
+  });
+  let modelStream:
+    EventStream<CourseModelChunk, CourseModelResponse> | undefined;
+  const model: CourseModel = {
+    stream() {
+      const stream = new EventStream<CourseModelChunk, CourseModelResponse>();
+      modelStream = stream;
+      const iterator: AsyncIterableIterator<CourseModelChunk> = {
+        next: async () => ({ done: true, value: undefined }),
+        [Symbol.asyncIterator]() {
+          return this;
+        },
+      };
+      Object.defineProperty(stream, Symbol.asyncIterator, {
+        value: () => iterator,
+      });
+      const originalResult = stream.result;
+      Object.defineProperty(stream, "result", {
+        get() {
+          resultRequested.resolve();
+          return originalResult;
+        },
+      });
+      return stream;
+    },
+  };
+  const run = runAgentLoop({
+    messages: [user()],
+    model,
+    tools: new ToolRegistry(),
+    maxSteps: 1,
+    signal: controller.signal,
+  });
+
+  await resultRequested.promise;
+  controller.abort("cancel pending result");
+
+  await expect(settlementByNextTurn(run.result)).resolves.toBe("settled");
+  await expect(run.result).resolves.toMatchObject({
+    status: "cancelled",
+    reason: "cancel pending result",
+  });
+
+  modelStream?.fail(new Error("late result rejection"));
+  await nextEventLoopTurn();
+  await nextEventLoopTurn();
+  removeListener();
+  expect(unhandled).toEqual([]);
+});
+
+test("does not await hostile iterator cleanup and observes a rejected cleanup", async () => {
+  const cleanup = deferred<IteratorResult<CourseModelChunk>>();
+  const unhandled: unknown[] = [];
+  const removeListener = listenForUnhandledRejections((reason) => {
+    unhandled.push(reason);
+  });
+  let cleanupCalls = 0;
+  const model: CourseModel = {
+    stream() {
+      const stream = new EventStream<CourseModelChunk, CourseModelResponse>();
+      const iterator: AsyncIterableIterator<CourseModelChunk> = {
+        next: async () => ({
+          done: false,
+          value: {
+            type: "textDelta",
+            requestId: "request-wrong",
+            delta: "bad",
+          },
+        }),
+        return: () => {
+          cleanupCalls += 1;
+          return cleanup.promise;
+        },
+        [Symbol.asyncIterator]() {
+          return this;
+        },
+      };
+      Object.defineProperty(stream, Symbol.asyncIterator, {
+        value: () => iterator,
+      });
+      return stream;
+    },
+  };
+  const run = runAgentLoop({
+    messages: [user()],
+    model,
+    tools: new ToolRegistry(),
+    maxSteps: 1,
+    signal: new AbortController().signal,
+  });
+
+  await expect(settlementByNextTurn(run.result)).resolves.toBe("settled");
+  await expect(run.result).resolves.toMatchObject({
+    status: "failed",
+    error: { code: "MODEL_PROTOCOL_ERROR" },
+  });
+  expect(cleanupCalls).toBe(1);
+
+  cleanup.reject(new Error("cleanup rejected late"));
+  await nextEventLoopTurn();
+  await nextEventLoopTurn();
+  removeListener();
+  expect(unhandled).toEqual([]);
+});
+
+test("a hostile iterator return getter cannot replace the model protocol failure", async () => {
+  const model: CourseModel = {
+    stream() {
+      const stream = new EventStream<CourseModelChunk, CourseModelResponse>();
+      const iterator = {
+        next: async () => ({ done: false, value: null }),
+        [Symbol.asyncIterator]() {
+          return this;
+        },
+      };
+      Object.defineProperty(iterator, "return", {
+        get() {
+          throw new Error("hostile return getter");
+        },
+      });
+      Object.defineProperty(stream, Symbol.asyncIterator, {
+        value: () => iterator,
+      });
+      return stream;
+    },
+  };
+
+  const { result } = await settleRun(
+    runAgentLoop({
+      messages: [user()],
+      model,
+      tools: new ToolRegistry(),
+      maxSteps: 1,
+      signal: new AbortController().signal,
+    }),
+  );
+
+  expect(result).toMatchObject({
+    status: "failed",
+    error: { code: "MODEL_PROTOCOL_ERROR" },
+  });
+});
+
+test("observes an asynchronously rejected model.stream return with shadowed then", async () => {
+  const unhandled: unknown[] = [];
+  const removeListener = listenForUnhandledRejections((reason) => {
+    unhandled.push(reason);
+  });
+  const rejected = Promise.reject(new Error("async stream rejection"));
+  Object.defineProperty(rejected, "then", { value: undefined });
+  const model: CourseModel = {
+    stream() {
+      return rejected as unknown as EventStream<
+        CourseModelChunk,
+        CourseModelResponse
+      >;
+    },
+  };
+
+  const { result } = await settleRun(
+    runAgentLoop({
+      messages: [user()],
+      model,
+      tools: new ToolRegistry(),
+      maxSteps: 1,
+      signal: new AbortController().signal,
+    }),
+  );
+
+  await nextEventLoopTurn();
+  await nextEventLoopTurn();
+  removeListener();
+  expect(result).toMatchObject({
+    status: "failed",
+    error: { code: "MODEL_PROTOCOL_ERROR" },
+  });
+  expect(unhandled).toEqual([]);
+});
+
+test("uses captured AbortSignal intrinsics instead of hostile own properties", async () => {
+  const controller = new AbortController();
+  Object.defineProperties(controller.signal, {
+    aborted: {
+      get() {
+        throw new Error("hostile aborted getter");
+      },
+    },
+    reason: {
+      get() {
+        throw new Error("hostile reason getter");
+      },
+    },
+    addEventListener: {
+      value() {
+        throw new Error("hostile addEventListener");
+      },
+    },
+    removeEventListener: {
+      value() {
+        throw new Error("hostile removeEventListener");
+      },
+    },
+  });
+  const model: CourseModel = {
+    stream(request) {
+      const stream = new EventStream<CourseModelChunk, CourseModelResponse>();
+      stream.push({
+        type: "textDelta",
+        requestId: request.id,
+        delta: "safe",
+      });
+      stream.finish(
+        responseFor(
+          request.id,
+          "response-hostile-signal",
+          [{ type: "text", text: "safe" }],
+          "stop",
+        ),
+      );
+      return stream;
+    },
+  };
+
+  const { result } = await settleRun(
+    runAgentLoop({
+      messages: [user()],
+      model,
+      tools: new ToolRegistry(),
+      maxSteps: 1,
+      signal: controller.signal,
+    }),
+  );
+
+  expect(result).toMatchObject({ status: "completed", finalText: "safe" });
+});
+
+test("normalizes an AbortSignal internal-slot access failure into a failed result", async () => {
+  const invalidSignal: AbortSignal = Object.create(AbortSignal.prototype);
+
+  const run = runAgentLoop({
+    messages: [user()],
+    model: new ScriptedModel(),
+    tools: new ToolRegistry(),
+    maxSteps: 1,
+    signal: invalidSignal,
+  });
+
+  await expect(run.result).resolves.toMatchObject({
+    status: "failed",
+    error: { code: "SIGNAL_ACCESS_FAILED" },
+  });
+});
+
+test("classifies a null IteratorResult as a model protocol failure", async () => {
+  const model: CourseModel = {
+    stream() {
+      const stream = new EventStream<CourseModelChunk, CourseModelResponse>();
+      const iterator = {
+        next: async () => null,
+        [Symbol.asyncIterator]() {
+          return this;
+        },
+      };
+      Object.defineProperty(stream, Symbol.asyncIterator, {
+        value: () => iterator,
+      });
+      return stream;
+    },
+  };
+
+  const { result } = await settleRun(
+    runAgentLoop({
+      messages: [user()],
+      model,
+      tools: new ToolRegistry(),
+      maxSteps: 1,
+      signal: new AbortController().signal,
+    }),
+  );
+
+  expect(result).toMatchObject({
+    status: "failed",
+    error: { code: "MODEL_PROTOCOL_ERROR" },
+  });
+});
+
+test("reads hostile IteratorResult done and value properties at most once", async () => {
+  const reads = { done: 0, value: 0 };
+  const model: CourseModel = {
+    stream() {
+      const stream = new EventStream<CourseModelChunk, CourseModelResponse>();
+      const step = Object.defineProperties(
+        {},
+        {
+          done: {
+            get() {
+              reads.done += 1;
+              return false;
+            },
+          },
+          value: {
+            get() {
+              reads.value += 1;
+              return null;
+            },
+          },
+        },
+      );
+      const iterator = {
+        next: async () => step,
+        [Symbol.asyncIterator]() {
+          return this;
+        },
+      };
+      Object.defineProperty(stream, Symbol.asyncIterator, {
+        value: () => iterator,
+      });
+      return stream;
+    },
+  };
+
+  const { result } = await settleRun(
+    runAgentLoop({
+      messages: [user()],
+      model,
+      tools: new ToolRegistry(),
+      maxSteps: 1,
+      signal: new AbortController().signal,
+    }),
+  );
+
+  expect(result).toMatchObject({
+    status: "failed",
+    error: { code: "MODEL_PROTOCOL_ERROR" },
+  });
+  expect(reads).toEqual({ done: 1, value: 1 });
+});
+
+test("rejects hostile and oversized starting transcript lengths before indexed traversal", async () => {
+  expect(MAX_INITIAL_MESSAGES).toBe(4096);
+  const target = [user()];
+  const hostileLength = new Proxy(target, {
+    get(value, key, receiver) {
+      if (key === "length") return Number.POSITIVE_INFINITY;
+      return Reflect.get(value, key, receiver);
+    },
+  });
+  const model = new ScriptedModel();
+  const invalidLengthRun = runAgentLoop({
+    messages: hostileLength,
+    model,
+    tools: new ToolRegistry(),
+    maxSteps: 1,
+    signal: new AbortController().signal,
+  });
+
+  await expect(invalidLengthRun.result).resolves.toMatchObject({
+    status: "failed",
+    error: {
+      code: "INVALID_TRANSCRIPT",
+      message: "messages.length must be a non-negative safe integer",
+    },
+  });
+
+  const tooMany = Array.from({ length: MAX_INITIAL_MESSAGES + 1 }, (_, index) =>
+    user(`message ${index}`),
+  );
+  await expect(
+    runAgentLoop({
+      messages: tooMany,
+      model,
+      tools: new ToolRegistry(),
+      maxSteps: 1,
+      signal: new AbortController().signal,
+    }).result,
+  ).resolves.toMatchObject({
+    status: "failed",
+    error: { code: "INVALID_TRANSCRIPT" },
+  });
+  expect(model.callCount).toBe(0);
+});
+
+test("snapshots the Tool registry before late registration and ignores subclass overrides", async () => {
+  const releaseModel = deferred<void>();
+  const executed: string[] = [];
+  class HostileRegistry extends ToolRegistry {
+    public snapshot(): ToolRegistry {
+      throw new Error("hostile snapshot override");
+    }
+  }
+  const registry = new HostileRegistry([
+    defineTool({
+      name: "existing",
+      description: "Existing Tool.",
+      validate: () => ({ ok: true as const, value: "existing" }),
+      execute: async (value) => {
+        executed.push(value);
+        return value;
+      },
+    }),
+  ]);
+  const existingCall = call("existing", "call-existing-001");
+  const lateCall = call("late", "call-late-001");
+  const model = new ScriptedModel([
+    async function* (request) {
+      await releaseModel.promise;
+      yield { type: "toolCall", requestId: request.id, toolCall: existingCall };
+      yield { type: "toolCall", requestId: request.id, toolCall: lateCall };
+      return responseFor(
+        request.id,
+        "response-registry-snapshot",
+        [existingCall, lateCall],
+        "toolCall",
+      );
+    },
+  ]);
+  const run = runAgentLoop({
+    messages: [user("Use registry snapshot.")],
+    model,
+    tools: registry,
+    maxSteps: 1,
+    signal: new AbortController().signal,
+  });
+
+  registry.register(
+    defineTool({
+      name: "late",
+      description: "Registered after run construction.",
+      validate: () => ({ ok: true as const, value: "late" }),
+      execute: async (value) => {
+        executed.push(value);
+        return value;
+      },
+    }),
+  );
+  releaseModel.resolve();
+
+  const { result } = await settleRun(run);
+  const toolResults = result.messages.filter(
+    (message) => message.role === "toolResult",
+  );
+  expect(executed).toEqual(["existing"]);
+  expect(toolResults).toHaveLength(2);
+  expect(toolResults[0]).toMatchObject({
+    toolName: "existing",
+    isError: false,
+  });
+  expect(toolResults[1]).toMatchObject({ toolName: "late", isError: true });
+  expect(toolResults[1].content).toContain('"code":"TOOL_NOT_FOUND"');
+});
+
+test("enforces the documented maxSteps ceiling at construction", () => {
+  expect(MAX_AGENT_STEPS).toBe(64);
+  expect(() =>
+    runAgentLoop({
+      messages: [user()],
+      model: new ScriptedModel(),
+      tools: new ToolRegistry(),
+      maxSteps: MAX_AGENT_STEPS + 1,
+      signal: new AbortController().signal,
+    }),
+  ).toThrowError(`maxSteps must not exceed ${MAX_AGENT_STEPS}`);
+});
+
+test("fails deterministically when result-only consumption exceeds the chunk cap", async () => {
+  expect(MAX_MODEL_CHUNKS_PER_STEP).toBe(1024);
+  const model: CourseModel = {
+    stream(request) {
+      const stream = new EventStream<CourseModelChunk, CourseModelResponse>();
+      for (let index = 0; index <= 1024; index += 1) {
+        stream.push({
+          type: "textDelta",
+          requestId: request.id,
+          delta: "x",
+        });
+      }
+      stream.finish(
+        responseFor(
+          request.id,
+          "response-too-many-chunks",
+          [{ type: "text", text: "x".repeat(1025) }],
+          "stop",
+        ),
+      );
+      return stream;
+    },
+  };
+  const run = runAgentLoop({
+    messages: [user()],
+    model,
+    tools: new ToolRegistry(),
+    maxSteps: 1,
+    signal: new AbortController().signal,
+  });
+
+  await expect(run.result).resolves.toMatchObject({
+    status: "failed",
+    error: { code: "MODEL_PROTOCOL_ERROR" },
+  });
+});
+
+test("rejects oversized streamed text before emitting the model chunk", async () => {
+  expect(MAX_MODEL_TEXT_CODE_POINTS).toBe(65_536);
+  const oversized = "😀".repeat(65_537);
+  const model: CourseModel = {
+    stream(request) {
+      const stream = new EventStream<CourseModelChunk, CourseModelResponse>();
+      stream.push({
+        type: "textDelta",
+        requestId: request.id,
+        delta: oversized,
+      });
+      stream.finish(
+        responseFor(
+          request.id,
+          "response-text-cap",
+          [{ type: "text", text: oversized }],
+          "stop",
+        ),
+      );
+      return stream;
+    },
+  };
+
+  const { events, result } = await settleRun(
+    runAgentLoop({
+      messages: [user()],
+      model,
+      tools: new ToolRegistry(),
+      maxSteps: 1,
+      signal: new AbortController().signal,
+    }),
+  );
+
+  expect(result).toMatchObject({
+    status: "failed",
+    error: { code: "MODEL_PROTOCOL_ERROR" },
+  });
+  expect(events.map(({ type }) => type)).toEqual([
+    "message.accepted",
+    "run.finished",
+  ]);
+});
+
+test("bounds a Tool-heavy response before any Tool effect runs", async () => {
+  let executions = 0;
+  const registry = new ToolRegistry([
+    defineTool({
+      name: "bounded",
+      description: "Must not execute after an oversized model turn.",
+      validate: () => ({ ok: true as const, value: undefined }),
+      execute: async () => {
+        executions += 1;
+        return "unexpected";
+      },
+    }),
+  ]);
+  const model: CourseModel = {
+    stream(request) {
+      const stream = new EventStream<CourseModelChunk, CourseModelResponse>();
+      for (let index = 0; index <= MAX_MODEL_CHUNKS_PER_STEP; index += 1) {
+        stream.push({
+          type: "toolCall",
+          requestId: request.id,
+          toolCall: call("bounded", `call-bounded-${index}`),
+        });
+      }
+      stream.finish(
+        responseFor(
+          request.id,
+          "response-tool-cap",
+          [{ type: "text", text: "unreachable" }],
+          "stop",
+        ),
+      );
+      return stream;
+    },
+  };
+
+  const run = runAgentLoop({
+    messages: [user()],
+    model,
+    tools: registry,
+    maxSteps: 1,
+    signal: new AbortController().signal,
+  });
+
+  await expect(run.result).resolves.toMatchObject({
+    status: "failed",
+    error: { code: "MODEL_PROTOCOL_ERROR" },
+  });
+  expect(executions).toBe(0);
 });
