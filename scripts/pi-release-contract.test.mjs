@@ -61,6 +61,22 @@ function isPublishedReleaseSourceLink(link, release) {
   return ref === release.tag || ref === release.commit;
 }
 
+function piSourceLinks(sources) {
+  return sources.flatMap(({ filename, source }) =>
+    [
+      ...source.matchAll(
+        /https:\/\/github\.com\/(?:earendil-works\/pi|badlogic\/pi-mono)\/(?:blob|commit|tree)\/[^\s)'"\]]+/g,
+      ),
+    ].map(([link]) => ({ filename, link })),
+  );
+}
+
+function invalidPiSourceLinks(sources, release) {
+  return piSourceLinks(sources).filter(
+    ({ link }) => !isPublishedReleaseSourceLink(link, release),
+  );
+}
+
 test("release fixture identifies published Pi 0.84.3 authority", async () => {
   const release = await readReleaseFixture();
 
@@ -89,13 +105,18 @@ test("compile fixture packages are exactly pinned to the published release", asy
   }
 });
 
-test("active content no longer contains the previous release markers", async () => {
+test("active content satisfies the published Pi migration contract", async () => {
+  const release = await readReleaseFixture();
   const activeSources = await readActiveSources();
   const staleFiles = activeSources
     .filter(({ source }) => /0\.84\.2|a470b121/.test(source))
     .map(({ filename }) => filename);
+  const invalidSourceLinks = invalidPiSourceLinks(activeSources, release);
 
-  assert.deepEqual(staleFiles, []);
+  assert.deepEqual(
+    { staleFiles, invalidSourceLinks },
+    { staleFiles: [], invalidSourceLinks: [] },
+  );
 });
 
 test("parses the exact GitHub source ref for published Pi release links", () => {
@@ -135,21 +156,34 @@ test("parses the exact GitHub source ref for published Pi release links", () => 
   );
 });
 
+test("detects invalid Pi source refs without a release version claim", () => {
+  const release = {
+    tag: "v0.84.3",
+    commit: "4e58f324fae8ebfa98a3d45181fb248072a2afac",
+  };
+  const sources = [
+    {
+      filename: "content/en/non-version-source.md",
+      source:
+        "See https://github.com/earendil-works/pi/blob/main/packages/ai/src/index.ts for implementation details.",
+    },
+  ];
+
+  assert.deepEqual(invalidPiSourceLinks(sources, release), [
+    {
+      filename: "content/en/non-version-source.md",
+      link: "https://github.com/earendil-works/pi/blob/main/packages/ai/src/index.ts",
+    },
+  ]);
+});
+
 test("0.84.3 source links point to the published tag or release commit", async () => {
   const release = await readReleaseFixture();
   const activeSources = await readActiveSources();
   const releaseClaimSources = activeSources.filter(({ source }) =>
     source.includes(release.packageVersion),
   );
-  const releaseClaimSourceLinks = releaseClaimSources.flatMap(
-    ({ filename, source }) =>
-      [
-        ...source.matchAll(
-          /https:\/\/github\.com\/(?:earendil-works\/pi|badlogic\/pi-mono)\/(?:blob|commit|tree)\/[^\s)'"\]]+/g,
-        ),
-      ].map(([link]) => ({ filename, link })),
-  );
-  const publishedReleaseSourceLinks = releaseClaimSourceLinks.filter(
+  const publishedReleaseSourceLinks = piSourceLinks(releaseClaimSources).filter(
     ({ link }) => isPublishedReleaseSourceLink(link, release),
   );
 
@@ -158,14 +192,5 @@ test("0.84.3 source links point to the published tag or release commit", async (
       publishedReleaseSourceLinks.length > 0,
       "0.84.3 claims require at least one source link pinned to the published tag or release commit",
     );
-  }
-
-  for (const { filename, link } of releaseClaimSourceLinks) {
-    assert.notEqual(
-      releaseSourceRef(link),
-      release.upstreamAuditCommit,
-      filename,
-    );
-    assert.ok(isPublishedReleaseSourceLink(link, release), filename);
   }
 });
