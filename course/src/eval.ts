@@ -18,12 +18,20 @@ const abortSignalAbortedGetter = Object.getOwnPropertyDescriptor(
   "aborted",
 )?.get;
 
-const MAX_TASKS = 1_000;
-const MAX_REPETITIONS = 100;
+const MAX_TASKS = 256;
+const MAX_REPETITIONS = 64;
 const MAX_CONCURRENCY = 8;
-const MAX_EVIDENCE_ITEMS = 256;
-const MAX_METRICS = 64;
-const MAX_TEXT_LENGTH = 100_000;
+/** Hard ceiling across tasks multiplied by repetitions. */
+export const MAX_EVALUATION_RUNS = 4_096;
+/** Per-side evidence-item cap for fixtures, runtimes, and judges. */
+export const MAX_EVIDENCE_ITEMS = 32;
+/** Runtime and judge metrics each receive this independent allowance. */
+export const MAX_SOURCE_METRICS = 64;
+/** Merged per-run report metrics may contain both source allowances. */
+export const MAX_REPORT_METRICS = 128;
+export const MAX_EVIDENCE_ITEM_CODE_POINTS = 4_096;
+export const MAX_TASK_EVIDENCE_CODE_POINTS = 65_536;
+const MAX_PROMPT_CODE_UNITS = 100_000;
 const ID_PATTERN = /^[a-z0-9](?:[a-z0-9._-]{0,63})$/u;
 const ERROR_CODE_PATTERN = /^[A-Z][A-Z0-9_:-]{0,63}$/u;
 const METRIC_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/u;
@@ -114,6 +122,7 @@ export type EvaluationWorkspaceFactoryInput = Readonly<{
   taskId: string;
   runId: string;
   repetition: number;
+  signal: AbortSignal;
 }>;
 
 export type EvaluationWorkspaceFactory = (
@@ -189,7 +198,8 @@ export type EvaluationInfrastructureErrorCode =
   | "EVALUATION_RUNTIME_FAILED"
   | "EVALUATION_JUDGE_FAILED"
   | "EVALUATION_CLOCK_FAILED"
-  | "EVALUATION_CLEANUP_FAILED";
+  | "EVALUATION_CLEANUP_FAILED"
+  | "EVALUATION_INVALID_REPORT";
 
 export class EvaluationInfrastructureError extends Error {
   public readonly code: EvaluationInfrastructureErrorCode;
@@ -208,13 +218,9 @@ export class EvaluationInfrastructureError extends Error {
 
 type CapturedRuntime = Readonly<{
   run: EvaluationRuntime["run"];
-  dispose: EvaluationRuntime["dispose"];
 }>;
 
-type CapturedWorkspace = Readonly<{
-  path: string;
-  cleanup: EvaluationWorkspace["cleanup"];
-}>;
+type OwnedCleanup = () => unknown | PromiseLike<unknown>;
 
 type WorkItem = Readonly<{
   task: EvaluationTask;
@@ -254,6 +260,12 @@ type FailureRecord = Readonly<{
   error: EvaluationInfrastructureError;
 }>;
 
+type SharedCancellation = Readonly<{
+  signal: AbortSignal;
+  abort: () => void;
+  unlink: () => void;
+}>;
+
 type UnknownFunction = (...arguments_: never[]) => unknown;
 
 const defaultClock: EvaluationClock = Object.freeze({ now: () => 0 });
@@ -275,25 +287,15 @@ export const deterministicEvaluationJudge: EvaluationJudge = Object.freeze({
   judge(input: EvaluationJudgeInput): EvaluationJudgeResult {
     const required = input.expectedPublicEvidence.includes;
     const candidate = input.candidatePublicEvidence;
+    const candidateSet = new Set<string>();
+    for (let index = 0; index < candidate.length; index += 1) {
+      throwIfCancelled(input.signal);
+      candidateSet.add(candidate[index]);
+    }
     let matched = 0;
-    for (
-      let requiredIndex = 0;
-      requiredIndex < required.length;
-      requiredIndex += 1
-    ) {
-      const expected = required[requiredIndex];
-      let found = false;
-      for (
-        let candidateIndex = 0;
-        candidateIndex < candidate.length;
-        candidateIndex += 1
-      ) {
-        if (candidate[candidateIndex].includes(expected)) {
-          found = true;
-          break;
-        }
-      }
-      if (found) matched += 1;
+    for (let index = 0; index < required.length; index += 1) {
+      throwIfCancelled(input.signal);
+      if (candidateSet.has(required[index])) matched += 1;
     }
     return Object.freeze({
       verdict: matched === required.length ? "pass" : "fail",
@@ -358,6 +360,12 @@ export function loadEvaluationTasks(
       `Evaluation task ${index} candidatePublicEvidence`,
       true,
     );
+    assertUniqueRequiredEvidence(includes, `Evaluation task ${index}`);
+    assertTaskEvidenceBudget(
+      includes,
+      candidatePublicEvidence,
+      `Evaluation task ${index}`,
+    );
     const expectedVerdict = readProperty(
       raw,
       "expectedVerdict",
@@ -407,11 +415,30 @@ export async function runEvaluation(
   }
   throwIfCancelled(captured.signal);
 
+  const shared = createSharedCancellation(captured.signal);
+  const activeOptions = Object.freeze({ ...captured, signal: shared.signal });
+  try {
+    return await executeEvaluation(activeOptions, shared);
+  } finally {
+    shared.unlink();
+  }
+}
+
+async function executeEvaluation(
+  captured: CapturedOptions,
+  shared: SharedCancellation,
+): Promise<EvaluationReport> {
   const work = createWorkItems(captured.tasks, captured.repetitions);
   const results = new Array<EvaluationRunReport | undefined>(work.length);
   const failures: FailureRecord[] = [];
+  let initiatingFailure: EvaluationInfrastructureError | undefined;
   let nextIndex = 0;
   let stopping = false;
+
+  const selectFailure = (failure: EvaluationInfrastructureError) => {
+    if (initiatingFailure === undefined) initiatingFailure = failure;
+    shared.abort();
+  };
 
   const worker = async () => {
     while (!stopping) {
@@ -420,15 +447,19 @@ export async function runEvaluation(
       nextIndex += 1;
       try {
         throwIfCancelled(captured.signal);
-        results[index] = await runOne(captured, work[index]);
+        results[index] = await runOne(captured, work[index], selectFailure);
       } catch (error) {
+        const failure = normalizeInfrastructureError(error);
+        selectFailure(failure);
+        const firstFailure = !stopping;
         stopping = true;
         failures.push(
           Object.freeze({
             index,
-            error: normalizeInfrastructureError(error),
+            error: failure,
           }),
         );
+        if (firstFailure) shared.abort();
       }
     }
   };
@@ -436,11 +467,28 @@ export async function runEvaluation(
   const workers: Promise<void>[] = [];
   const workerCount = Math.min(captured.concurrency, work.length);
   for (let index = 0; index < workerCount; index += 1) workers.push(worker());
-  await NativePromise.all(workers);
+  await NativePromise.allSettled(workers);
 
   if (failures.length > 0) {
-    failures.sort((left, right) => left.index - right.index);
-    throw failures[0].error;
+    const primary = initiatingFailure ?? failures[0].error;
+    const cleanupFailures: EvaluationInfrastructureError[] = [];
+    for (let index = 0; index < failures.length; index += 1) {
+      const failure = failures[index].error;
+      if (failure.code === "EVALUATION_CLEANUP_FAILED" && failure !== primary) {
+        cleanupFailures.push(failure);
+      }
+    }
+    if (cleanupFailures.length > 0) {
+      throw infrastructureFailure(
+        "EVALUATION_CLEANUP_FAILED",
+        "Evaluation failed and peer cleanup also failed",
+        new NativeAggregateError(
+          [primary, ...cleanupFailures],
+          "Evaluation failure and peer cleanup failures",
+        ),
+      );
+    }
+    throw primary;
   }
   throwIfCancelled(captured.signal);
 
@@ -467,10 +515,16 @@ export function compareEvaluations(
   baselineInput: EvaluationReport,
   candidateInput: EvaluationReport,
 ): EvaluationComparison {
-  const baseline = snapshotReport(baselineInput, "Baseline evaluation");
-  const candidate = snapshotReport(candidateInput, "Candidate evaluation");
+  const baseline = captureReport(baselineInput, "Baseline evaluation");
+  const candidate = captureReport(candidateInput, "Candidate evaluation");
   if (baseline.runs.length !== candidate.runs.length) {
-    throw new TypeError("Evaluation reports must contain the same run count");
+    throw invalidReport("Evaluation reports must contain the same run count");
+  }
+
+  const candidateRuns = new Map<string, EvaluationRunReport>();
+  for (let index = 0; index < candidate.runs.length; index += 1) {
+    const run = candidate.runs[index];
+    candidateRuns.set(reportIdentity(run), run);
   }
 
   const runs: EvaluationComparisonRun[] = [];
@@ -479,12 +533,11 @@ export function compareEvaluations(
   let unchangedRuns = 0;
   for (let index = 0; index < baseline.runs.length; index += 1) {
     const baselineRun = baseline.runs[index];
-    const candidateRun = candidate.runs[index];
-    if (
-      baselineRun.taskId !== candidateRun.taskId ||
-      baselineRun.runId !== candidateRun.runId
-    ) {
-      throw new TypeError(`Evaluation reports are not aligned at run ${index}`);
+    const candidateRun = candidateRuns.get(reportIdentity(baselineRun));
+    if (candidateRun === undefined) {
+      throw invalidReport(
+        "Evaluation reports do not contain identical run sets",
+      );
     }
     const baselineRank = verdictRank(baselineRun.verdict);
     const candidateRank = verdictRank(candidateRun.verdict);
@@ -528,49 +581,103 @@ export function compareEvaluations(
 
 /** Serialize only the public report projection in a stable property order. */
 export function serializeEvaluationReport(input: EvaluationReport): string {
-  const report = snapshotReport(input, "Evaluation report");
-  const runs: Record<string, unknown>[] = [];
+  const report = captureReport(input, "Evaluation report");
+  let runs = "[";
   for (let index = 0; index < report.runs.length; index += 1) {
     const run = report.runs[index];
-    runs.push({
-      taskId: run.taskId,
-      runId: run.runId,
-      candidateId: run.candidateId,
-      verdict: run.verdict,
-      publicMetrics: orderedMetrics(run.publicMetrics),
-      durationMs: run.durationMs,
-      errorCode: run.errorCode,
-    });
+    if (index > 0) runs += ",";
+    runs +=
+      `{"taskId":${encodeJsonString(run.taskId)}` +
+      `,"runId":${encodeJsonString(run.runId)}` +
+      `,"candidateId":${encodeJsonString(run.candidateId)}` +
+      `,"verdict":${encodeJsonString(run.verdict)}` +
+      `,"publicMetrics":${encodeMetrics(run.publicMetrics)}` +
+      `,"durationMs":${encodeFiniteNumber(run.durationMs)}` +
+      `,"errorCode":${run.errorCode === null ? "null" : encodeJsonString(run.errorCode)}}`;
   }
-  return JSON.stringify({
-    candidateId: report.candidateId,
-    runs,
-    publicMetrics: {
-      totalRuns: report.publicMetrics.totalRuns,
-      passedRuns: report.publicMetrics.passedRuns,
-      failedRuns: report.publicMetrics.failedRuns,
-      errorRuns: report.publicMetrics.errorRuns,
-      passRate: report.publicMetrics.passRate,
-      failRate: report.publicMetrics.failRate,
-      errorRate: report.publicMetrics.errorRate,
-    },
-  });
+  runs += "]";
+  return (
+    `{"candidateId":${encodeJsonString(report.candidateId)}` +
+    `,"runs":${runs}` +
+    `,"publicMetrics":{"totalRuns":${encodeFiniteNumber(report.publicMetrics.totalRuns)}` +
+    `,"passedRuns":${encodeFiniteNumber(report.publicMetrics.passedRuns)}` +
+    `,"failedRuns":${encodeFiniteNumber(report.publicMetrics.failedRuns)}` +
+    `,"errorRuns":${encodeFiniteNumber(report.publicMetrics.errorRuns)}` +
+    `,"passRate":${encodeFiniteNumber(report.publicMetrics.passRate)}` +
+    `,"failRate":${encodeFiniteNumber(report.publicMetrics.failRate)}` +
+    `,"errorRate":${encodeFiniteNumber(report.publicMetrics.errorRate)}}}`
+  );
+}
+
+function encodeMetrics(metrics: Readonly<Record<string, number>>): string {
+  const keys = Object.keys(metrics).sort();
+  let encoded = "{";
+  for (let index = 0; index < keys.length; index += 1) {
+    if (index > 0) encoded += ",";
+    const key = keys[index];
+    encoded += `${encodeJsonString(key)}:${encodeFiniteNumber(metrics[key])}`;
+  }
+  return `${encoded}}`;
+}
+
+function encodeFiniteNumber(value: number): string {
+  if (!Number.isFinite(value)) {
+    throw invalidReport("Evaluation report contains a non-finite number");
+  }
+  return Object.is(value, -0) ? "0" : String(value);
+}
+
+function encodeJsonString(value: string): string {
+  const hex = "0123456789abcdef";
+  let encoded = '"';
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code === 0x22) encoded += '\\"';
+    else if (code === 0x5c) encoded += "\\\\";
+    else if (code === 0x08) encoded += "\\b";
+    else if (code === 0x09) encoded += "\\t";
+    else if (code === 0x0a) encoded += "\\n";
+    else if (code === 0x0c) encoded += "\\f";
+    else if (code === 0x0d) encoded += "\\r";
+    else if (
+      code < 0x20 ||
+      (code >= 0xd800 && code <= 0xdfff) ||
+      code === 0x2028 ||
+      code === 0x2029
+    ) {
+      encoded +=
+        "\\u" +
+        hex[(code >>> 12) & 0x0f] +
+        hex[(code >>> 8) & 0x0f] +
+        hex[(code >>> 4) & 0x0f] +
+        hex[code & 0x0f];
+    } else {
+      encoded += value[index];
+    }
+  }
+  return `${encoded}"`;
 }
 
 async function runOne(
   options: CapturedOptions,
   item: WorkItem,
+  selectInfrastructureFailure: (failure: EvaluationInfrastructureError) => void,
 ): Promise<EvaluationRunReport> {
   const started = readClock(options.now);
-  let workspace: CapturedWorkspace | undefined;
+  let workspaceCleanup: OwnedCleanup | undefined;
+  let runtimeDispose: OwnedCleanup | undefined;
   let runtime: CapturedRuntime | undefined;
   let selected: Omit<EvaluationRunReport, "durationMs"> | undefined;
   let primary: EvaluationInfrastructureError | undefined;
 
   try {
-    workspace = await createWorkspace(options, item);
+    const workspacePath = await createWorkspace(options, item, (cleanup) => {
+      workspaceCleanup = cleanup;
+    });
     throwIfCancelled(options.signal);
-    runtime = await createRuntime(options, item, workspace.path);
+    runtime = await createRuntime(options, item, workspacePath, (dispose) => {
+      runtimeDispose = dispose;
+    });
     throwIfCancelled(options.signal);
     const output = await runRuntime(options, item, runtime);
     if (output.status === "failed") {
@@ -589,7 +696,7 @@ async function runOne(
         runId: item.runId,
         candidateId: options.candidateId,
         verdict: judgement.verdict,
-        publicMetrics: mergeMetrics(
+        publicMetrics: mergeJudgeMetrics(
           output.publicMetrics,
           judgement.publicMetrics,
         ),
@@ -598,22 +705,15 @@ async function runOne(
     }
   } catch (error) {
     primary = normalizeInfrastructureError(error);
+    selectInfrastructureFailure(primary);
   }
 
   const cleanupFailures: unknown[] = [];
-  if (runtime !== undefined) {
-    try {
-      await observeAsync(runtime.dispose());
-    } catch (error) {
-      cleanupFailures.push(error);
-    }
+  if (runtimeDispose !== undefined) {
+    await settleOwnedCleanup(runtimeDispose, options.signal, cleanupFailures);
   }
-  if (workspace !== undefined) {
-    try {
-      await observeAsync(workspace.cleanup());
-    } catch (error) {
-      cleanupFailures.push(error);
-    }
+  if (workspaceCleanup !== undefined) {
+    await settleOwnedCleanup(workspaceCleanup, options.signal, cleanupFailures);
   }
 
   if (cleanupFailures.length > 0) {
@@ -652,22 +752,45 @@ async function runOne(
   });
 }
 
+async function settleOwnedCleanup(
+  cleanup: OwnedCleanup,
+  signal: AbortSignal,
+  failures: unknown[],
+): Promise<void> {
+  let value: unknown;
+  try {
+    value = cleanup();
+  } catch (error) {
+    failures.push(error);
+    return;
+  }
+  try {
+    await awaitAbortable(value, signal);
+  } catch (error) {
+    if (!isCancellation(error)) failures.push(error);
+  }
+}
+
 async function createWorkspace(
   options: CapturedOptions,
   item: WorkItem,
-): Promise<CapturedWorkspace> {
+  registerCleanup: (cleanup: OwnedCleanup) => void,
+): Promise<string> {
   const input = Object.freeze({
     candidateId: options.candidateId,
     taskId: item.task.id,
     runId: item.runId,
     repetition: item.repetition,
+    signal: options.signal,
   });
-  let value: unknown;
   try {
-    value = await observeAsync(options.createWorkspace(input));
-    return snapshotWorkspace(value);
+    const value = await invokeFactoryAbortable(
+      () => options.createWorkspace(input),
+      options.signal,
+      cleanupLateWorkspace,
+    );
+    return snapshotWorkspace(value, registerCleanup);
   } catch (error) {
-    throwIfCancelled(options.signal);
     if (isCancellation(error)) throw error;
     throw infrastructureFailure(
       "EVALUATION_WORKSPACE_FAILED",
@@ -681,6 +804,7 @@ async function createRuntime(
   options: CapturedOptions,
   item: WorkItem,
   workspacePath: string,
+  registerDispose: (dispose: OwnedCleanup) => void,
 ): Promise<CapturedRuntime> {
   const input = Object.freeze({
     candidateId: options.candidateId,
@@ -691,10 +815,13 @@ async function createRuntime(
     signal: options.signal,
   });
   try {
-    const value = await observeAsync(options.createRuntime(input));
-    return snapshotRuntime(value);
+    const value = await invokeFactoryAbortable(
+      () => options.createRuntime(input),
+      options.signal,
+      cleanupLateRuntime,
+    );
+    return snapshotRuntime(value, registerDispose);
   } catch (error) {
-    throwIfCancelled(options.signal);
     if (isCancellation(error)) throw error;
     throw infrastructureFailure(
       "EVALUATION_RUNTIME_FACTORY_FAILED",
@@ -718,7 +845,15 @@ async function runRuntime(
       () => runtime.run(input),
       options.signal,
     );
-    return snapshotRuntimeOutput(value);
+    const output = snapshotRuntimeOutput(value);
+    if (output.status === "completed") {
+      assertTaskEvidenceBudget(
+        item.task.expectedPublicEvidence.includes,
+        output.publicEvidence,
+        `Evaluation runtime output for ${item.task.id}`,
+      );
+    }
+    return output;
   } catch (error) {
     if (isCancellation(error)) throw error;
     throw infrastructureFailure(
@@ -833,11 +968,18 @@ function captureOptions(options: RunEvaluationOptions): CapturedOptions {
   if (!(signalValue instanceof AbortSignal) || isProxy(signalValue)) {
     throw new TypeError("Evaluation signal must be a native AbortSignal");
   }
+  const tasks = loadEvaluationTasks(tasksValue);
+  const totalRuns = tasks.length * repetitionsValue;
+  if (totalRuns > MAX_EVALUATION_RUNS) {
+    throw new TypeError(
+      `Evaluation must not exceed ${MAX_EVALUATION_RUNS} total runs`,
+    );
+  }
 
   return Object.freeze({
     candidateId,
     createRuntime,
-    tasks: loadEvaluationTasks(tasksValue),
+    tasks,
     repetitions: repetitionsValue,
     judge: judgeFunction,
     signal: signalValue,
@@ -868,40 +1010,70 @@ function createWorkItems(
   return Object.freeze(items);
 }
 
-function snapshotWorkspace(input: unknown): CapturedWorkspace {
+function snapshotWorkspace(
+  input: unknown,
+  registerCleanup: (cleanup: OwnedCleanup) => void,
+): string {
   const workspace = requireRecord(input, "Evaluation workspace");
+  const cleanup = captureOwnedMethod(
+    workspace,
+    "cleanup",
+    "Evaluation workspace cleanup",
+  );
+  registerCleanup(cleanup);
   const path = requireBoundedString(
     readProperty(workspace, "path", "Evaluation workspace"),
     "Evaluation workspace path",
     false,
   );
-  const cleanup = requireFunction(
-    readProperty(workspace, "cleanup", "Evaluation workspace"),
-    "Evaluation workspace cleanup",
-  );
-  return Object.freeze({
-    path,
-    cleanup: () => reflectApply(cleanup, workspace, []),
-  });
+  return path;
 }
 
-function snapshotRuntime(input: unknown): CapturedRuntime {
+function snapshotRuntime(
+  input: unknown,
+  registerDispose: (dispose: OwnedCleanup) => void,
+): CapturedRuntime {
   const runtime = requireRecord(input, "Evaluation runtime");
+  const dispose = captureOwnedMethod(
+    runtime,
+    "dispose",
+    "Evaluation runtime dispose",
+  );
+  registerDispose(dispose);
   const run = requireFunction(
     readProperty(runtime, "run", "Evaluation runtime"),
     "Evaluation runtime run",
-  );
-  const dispose = requireFunction(
-    readProperty(runtime, "dispose", "Evaluation runtime"),
-    "Evaluation runtime dispose",
   );
   return Object.freeze({
     run: (runInput) =>
       reflectApply(run, runtime, [runInput]) as ReturnType<
         EvaluationRuntime["run"]
       >,
-    dispose: () => reflectApply(dispose, runtime, []),
   });
+}
+
+function cleanupLateWorkspace(input: unknown): unknown {
+  return cleanupLateOwnedValue(input, "cleanup", "Late evaluation workspace");
+}
+
+function cleanupLateRuntime(input: unknown): unknown {
+  return cleanupLateOwnedValue(input, "dispose", "Late evaluation runtime");
+}
+
+function cleanupLateOwnedValue(
+  input: unknown,
+  key: "cleanup" | "dispose",
+  label: string,
+): unknown {
+  let cleanup: OwnedCleanup;
+  try {
+    const owner = requireRecord(input, label);
+    cleanup = captureOwnedMethod(owner, key, `${label} ${key}`);
+  } catch {
+    // A late malformed value has no safely discoverable ownership hook.
+    return undefined;
+  }
+  return cleanup();
 }
 
 function snapshotRuntimeOutput(input: unknown): CapturedRuntimeOutput {
@@ -911,6 +1083,7 @@ function snapshotRuntimeOutput(input: unknown): CapturedRuntimeOutput {
   const publicMetrics = snapshotMetrics(
     metricsValue,
     "Evaluation runtime output public metrics",
+    MAX_SOURCE_METRICS,
   );
   if (status === "completed") {
     const publicEvidence = snapshotEvidence(
@@ -952,6 +1125,7 @@ function snapshotJudgeResult(input: unknown): Readonly<{
     publicMetrics: snapshotMetrics(
       metricsValue,
       "Evaluation judge result public metrics",
+      MAX_SOURCE_METRICS,
     ),
   });
 }
@@ -966,10 +1140,12 @@ function snapshotReport(input: unknown, label: string): EvaluationReport {
     readProperty(report, "runs", label),
     `${label} runs`,
   );
-  if (rawRuns.length === 0 || rawRuns.length > MAX_TASKS * MAX_REPETITIONS) {
+  if (rawRuns.length === 0 || rawRuns.length > MAX_EVALUATION_RUNS) {
     throw new TypeError(`${label} runs has an invalid length`);
   }
   const runs: EvaluationRunReport[] = [];
+  const identities = new Set<string>();
+  const runIds = new Set<string>();
   for (let index = 0; index < rawRuns.length; index += 1) {
     const rawRun = requireRecord(rawRuns[index], `${label} run ${index}`);
     const taskId = requireId(
@@ -988,6 +1164,7 @@ function snapshotReport(input: unknown, label: string): EvaluationReport {
     const publicMetrics = snapshotMetrics(
       readProperty(rawRun, "publicMetrics", `${label} run ${index}`),
       `${label} run ${index} public metrics`,
+      MAX_REPORT_METRICS,
     );
     const durationMs = readProperty(
       rawRun,
@@ -999,6 +1176,12 @@ function snapshotReport(input: unknown, label: string): EvaluationReport {
       "errorCode",
       `${label} run ${index}`,
     );
+    const identity = `${taskId}\u0000${runId}`;
+    if (identities.has(identity) || runIds.has(runId)) {
+      throw new TypeError(`${label} contains a duplicate run identity`);
+    }
+    identities.add(identity);
+    runIds.add(runId);
     if (runCandidateId !== candidateId) {
       throw new TypeError(
         `${label} run ${index} candidateId does not match report`,
@@ -1041,6 +1224,7 @@ function snapshotReport(input: unknown, label: string): EvaluationReport {
   const suppliedAggregate = snapshotMetrics(
     readProperty(report, "publicMetrics", label),
     `${label} public metrics`,
+    MAX_REPORT_METRICS,
   );
   const aggregate = aggregateMetrics(frozenRuns);
   for (const key of Object.keys(aggregate) as Array<
@@ -1055,6 +1239,24 @@ function snapshotReport(input: unknown, label: string): EvaluationReport {
     runs: frozenRuns,
     publicMetrics: aggregate,
   });
+}
+
+function captureReport(input: unknown, label: string): EvaluationReport {
+  try {
+    return snapshotReport(input, label);
+  } catch (error) {
+    if (
+      error instanceof EvaluationInfrastructureError &&
+      error.code === "EVALUATION_INVALID_REPORT"
+    ) {
+      throw error;
+    }
+    throw invalidReport(`${label} is invalid`, error);
+  }
+}
+
+function reportIdentity(run: EvaluationRunReport): string {
+  return `${run.taskId}\u0000${run.runId}`;
 }
 
 function aggregateMetrics(
@@ -1081,33 +1283,46 @@ function aggregateMetrics(
   });
 }
 
-function mergeMetrics(
+function mergeJudgeMetrics(
   first: Readonly<Record<string, number>>,
   second: Readonly<Record<string, number>>,
 ): Readonly<Record<string, number>> {
-  const merged: Record<string, number> = Object.create(null) as Record<
-    string,
-    number
-  >;
-  const firstKeys = Object.keys(first);
-  for (let index = 0; index < firstKeys.length; index += 1) {
-    const key = firstKeys[index];
-    merged[key] = first[key];
-  }
-  const secondKeys = Object.keys(second);
-  for (let index = 0; index < secondKeys.length; index += 1) {
-    const key = secondKeys[index];
-    if (reflectApply(objectHasOwn, merged, [key])) {
-      throw new TypeError(`Duplicate public metric: ${key}`);
+  try {
+    const merged: Record<string, number> = Object.create(null) as Record<
+      string,
+      number
+    >;
+    const firstKeys = Object.keys(first);
+    for (let index = 0; index < firstKeys.length; index += 1) {
+      const key = firstKeys[index];
+      merged[key] = first[key];
     }
-    merged[key] = second[key];
+    const secondKeys = Object.keys(second);
+    for (let index = 0; index < secondKeys.length; index += 1) {
+      const key = secondKeys[index];
+      if (reflectApply(objectHasOwn, merged, [key])) {
+        throw new TypeError(`Duplicate public metric: ${key}`);
+      }
+      merged[key] = second[key];
+    }
+    return snapshotMetrics(
+      merged,
+      "Merged evaluation public metrics",
+      MAX_REPORT_METRICS,
+    );
+  } catch (error) {
+    throw infrastructureFailure(
+      "EVALUATION_JUDGE_FAILED",
+      "Judge metrics could not be composed with runtime metrics",
+      error,
+    );
   }
-  return frozenMetrics(merged);
 }
 
 function snapshotMetrics(
   input: unknown,
   label: string,
+  maximum: number,
 ): Readonly<Record<string, number>> {
   const metrics = requireRecord(input, label);
   let keys: string[];
@@ -1118,8 +1333,8 @@ function snapshotMetrics(
       cause: error,
     });
   }
-  if (keys.length > MAX_METRICS) {
-    throw new TypeError(`${label} must not exceed ${MAX_METRICS} metrics`);
+  if (keys.length > maximum) {
+    throw new TypeError(`${label} must not exceed ${maximum} metrics`);
   }
   keys.sort();
   const snapshot: Record<string, number> = Object.create(null) as Record<
@@ -1150,19 +1365,7 @@ function snapshotMetrics(
 function frozenMetrics(
   input: Readonly<Record<string, number>>,
 ): Readonly<Record<string, number>> {
-  return snapshotMetrics(input, "Public metrics");
-}
-
-function orderedMetrics(
-  metrics: Readonly<Record<string, number>>,
-): Record<string, number> {
-  const ordered: Record<string, number> = {};
-  const keys = Object.keys(metrics).sort();
-  for (let index = 0; index < keys.length; index += 1) {
-    const key = keys[index];
-    ordered[key] = metrics[key];
-  }
-  return ordered;
+  return snapshotMetrics(input, "Public metrics", MAX_SOURCE_METRICS);
 }
 
 function snapshotEvidence(
@@ -1179,10 +1382,71 @@ function snapshotEvidence(
   const evidence: string[] = [];
   for (let index = 0; index < raw.length; index += 1) {
     evidence.push(
-      requireBoundedString(raw[index], `${label}[${index}]`, false),
+      requireBoundedString(
+        raw[index],
+        `${label}[${index}]`,
+        false,
+        MAX_EVIDENCE_ITEM_CODE_POINTS * 2,
+      ),
     );
+    if (
+      countCodePoints(evidence[evidence.length - 1]) >
+      MAX_EVIDENCE_ITEM_CODE_POINTS
+    ) {
+      throw new TypeError(
+        `${label}[${index}] must not exceed ${MAX_EVIDENCE_ITEM_CODE_POINTS} code points`,
+      );
+    }
   }
   return Object.freeze(evidence);
+}
+
+function assertUniqueRequiredEvidence(
+  evidence: readonly string[],
+  label: string,
+): void {
+  const unique = new Set<string>();
+  for (let index = 0; index < evidence.length; index += 1) {
+    if (unique.has(evidence[index])) {
+      throw new TypeError(`${label} contains duplicate required evidence`);
+    }
+    unique.add(evidence[index]);
+  }
+}
+
+function assertTaskEvidenceBudget(
+  expected: readonly string[],
+  candidate: readonly string[],
+  label: string,
+): void {
+  let total = 0;
+  for (let index = 0; index < expected.length; index += 1) {
+    total += countCodePoints(expected[index]);
+  }
+  for (let index = 0; index < candidate.length; index += 1) {
+    total += countCodePoints(candidate[index]);
+  }
+  if (total > MAX_TASK_EVIDENCE_CODE_POINTS) {
+    throw new TypeError(
+      `${label} evidence must not exceed ${MAX_TASK_EVIDENCE_CODE_POINTS} code points`,
+    );
+  }
+}
+
+function countCodePoints(value: string): number {
+  let count = 0;
+  let index = 0;
+  while (index < value.length) {
+    const first = value.charCodeAt(index);
+    if (first >= 0xd800 && first <= 0xdbff && index + 1 < value.length) {
+      const second = value.charCodeAt(index + 1);
+      index += second >= 0xdc00 && second <= 0xdfff ? 2 : 1;
+    } else {
+      index += 1;
+    }
+    count += 1;
+  }
+  return count;
 }
 
 function readClock(now: () => number): number {
@@ -1282,11 +1546,12 @@ function requireBoundedString(
   input: unknown,
   label: string,
   allowEmpty: boolean,
+  maximumCodeUnits = MAX_PROMPT_CODE_UNITS,
 ): string {
   if (
     typeof input !== "string" ||
     (!allowEmpty && input.length === 0) ||
-    input.length > MAX_TEXT_LENGTH
+    input.length > maximumCodeUnits
   ) {
     throw new TypeError(`${label} must be a bounded string`);
   }
@@ -1298,6 +1563,37 @@ function requireFunction(input: unknown, label: string): UnknownFunction {
     throw new TypeError(`${label} must be a non-Proxy function`);
   }
   return input as UnknownFunction;
+}
+
+function captureOwnedMethod(
+  owner: Record<string, unknown>,
+  key: "cleanup" | "dispose",
+  label: string,
+): OwnedCleanup {
+  let descriptor: PropertyDescriptor | undefined;
+  try {
+    descriptor = Object.getOwnPropertyDescriptor(owner, key);
+  } catch (error) {
+    throw new TypeError(`${label} ownership could not be inspected safely`, {
+      cause: error,
+    });
+  }
+  if (descriptor === undefined) {
+    throw new TypeError(`${label} must be an own function`);
+  }
+  let value: unknown;
+  try {
+    value = "value" in descriptor ? descriptor.value : Reflect.get(owner, key);
+  } catch (error) {
+    throw new TypeError(`${label} could not be read safely`, { cause: error });
+  }
+  const method = requireFunction(value, label);
+  let called = false;
+  return () => {
+    if (called) return undefined;
+    called = true;
+    return reflectApply(method, owner, []);
+  };
 }
 
 function isProxy(input: object): boolean {
@@ -1332,6 +1628,139 @@ function readAborted(signal: AbortSignal): boolean {
       error,
     );
   }
+}
+
+function createSharedCancellation(external: AbortSignal): SharedCancellation {
+  const controller = new AbortController();
+  let linked = false;
+  const abort = () => {
+    if (!readAborted(controller.signal)) controller.abort("Evaluation stopped");
+  };
+  const onExternalAbort = () => abort();
+  if (readAborted(external)) {
+    abort();
+  } else {
+    reflectApply(eventTargetAddEventListener, external, [
+      "abort",
+      onExternalAbort,
+      { once: true },
+    ]);
+    linked = true;
+    if (readAborted(external)) abort();
+  }
+  return Object.freeze({
+    signal: controller.signal,
+    abort,
+    unlink: () => {
+      if (!linked) return;
+      linked = false;
+      try {
+        reflectApply(eventTargetRemoveEventListener, external, [
+          "abort",
+          onExternalAbort,
+        ]);
+      } catch {
+        // The shared controller already owns the terminal state.
+      }
+    },
+  });
+}
+
+function invokeFactoryAbortable(
+  operation: () => unknown,
+  signal: AbortSignal,
+  cleanupLateValue: (value: unknown) => unknown,
+): Promise<unknown> {
+  throwIfCancelled(signal);
+  let value: unknown;
+  try {
+    value = operation();
+  } catch (error) {
+    return NativePromise.reject(error);
+  }
+  let observed: Promise<unknown>;
+  try {
+    observed = observeAsync(value);
+  } catch (error) {
+    return NativePromise.reject(error);
+  }
+  return new NativePromise<unknown>((resolve, reject) => {
+    let settled = false;
+    let listening = false;
+    const cleanupListener = () => {
+      if (!listening) return;
+      listening = false;
+      try {
+        reflectApply(eventTargetRemoveEventListener, signal, [
+          "abort",
+          onAbort,
+        ]);
+      } catch {
+        // The selected terminal result is already observed.
+      }
+    };
+    const settle = (kind: "resolve" | "reject", result: unknown) => {
+      if (settled) return;
+      settled = true;
+      cleanupListener();
+      if (kind === "resolve") resolve(result);
+      else reject(result);
+    };
+    const onAbort = () => {
+      settle(
+        "reject",
+        infrastructureFailure(
+          "EVALUATION_CANCELLED",
+          "Evaluation was cancelled",
+        ),
+      );
+    };
+    const continuation = reflectApply(nativePromiseThen, observed, [
+      (result: unknown) => {
+        if (!settled) {
+          settle("resolve", result);
+          return;
+        }
+        observeLateCleanup(() => cleanupLateValue(result));
+      },
+      (error: unknown) => {
+        if (!settled) settle("reject", error);
+      },
+    ]) as Promise<unknown>;
+    void reflectApply(nativePromiseThen, continuation, [
+      () => undefined,
+      () => undefined,
+    ]);
+    try {
+      if (readAborted(signal)) {
+        onAbort();
+        return;
+      }
+      reflectApply(eventTargetAddEventListener, signal, [
+        "abort",
+        onAbort,
+        { once: true },
+      ]);
+      listening = true;
+      if (readAborted(signal)) onAbort();
+    } catch (error) {
+      settle("reject", error);
+    }
+  });
+}
+
+function observeLateCleanup(operation: () => unknown): void {
+  let value: unknown;
+  try {
+    value = operation();
+  } catch {
+    return;
+  }
+  const observed = observeAsync(value);
+  void reflectApply(nativePromiseThen, observed, [
+    () => undefined,
+    () => undefined,
+  ]);
 }
 
 function invokeAbortable(
@@ -1453,4 +1882,11 @@ function infrastructureFailure(
     message,
     cause === undefined ? undefined : { cause },
   );
+}
+
+function invalidReport(
+  message: string,
+  cause?: unknown,
+): EvaluationInfrastructureError {
+  return infrastructureFailure("EVALUATION_INVALID_REPORT", message, cause);
 }

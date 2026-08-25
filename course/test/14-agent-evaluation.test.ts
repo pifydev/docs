@@ -4,12 +4,17 @@ import { expect, test } from "vitest";
 
 import {
   EvaluationInfrastructureError,
+  MAX_EVALUATION_RUNS,
+  MAX_EVIDENCE_ITEMS,
+  MAX_REPORT_METRICS,
+  MAX_SOURCE_METRICS,
   compareEvaluations,
   deterministicEvaluationJudge,
   loadEvaluationTasks,
   runEvaluation,
   serializeEvaluationReport,
   type EvaluationCandidate,
+  type EvaluationReport,
   type EvaluationRuntime,
   type EvaluationWorkspaceFactory,
 } from "../src/index";
@@ -62,6 +67,22 @@ function fixtureCandidate(id = "candidate-a"): EvaluationCandidate {
       completedRuntime((prompt) =>
         prompt.includes("20 and 22") ? ["42"] : ["16"],
       ),
+  };
+}
+
+function singleTask(id: string, expected: readonly string[] = ["42"]): unknown {
+  return {
+    schemaVersion: 1,
+    tasks: [
+      {
+        id,
+        split: "held-out",
+        prompt: id,
+        expectedPublicEvidence: { includes: expected },
+        candidatePublicEvidence: ["42"],
+        expectedVerdict: "pass",
+      },
+    ],
   };
 }
 
@@ -677,7 +698,9 @@ test("serializes a deterministic allowlist and rejects unsafe metrics", async ()
       },
     ],
   };
-  expect(() => serializeEvaluationReport(unsafe)).toThrow(/finite/u);
+  expect(() => serializeEvaluationReport(unsafe)).toThrowError(
+    expect.objectContaining({ code: "EVALUATION_INVALID_REPORT" }),
+  );
 
   const hostileMetrics = Object.create(null) as Record<string, number>;
   Object.defineProperty(hostileMetrics, "secret", {
@@ -691,5 +714,445 @@ test("serializes a deterministic allowlist and rejects unsafe metrics", async ()
       ...report,
       runs: [{ ...report.runs[0], publicMetrics: hostileMetrics }],
     }),
-  ).toThrow(/metrics/u);
+  ).toThrowError(
+    expect.objectContaining({ code: "EVALUATION_INVALID_REPORT" }),
+  );
+});
+
+test("shares cancellation across concurrent workers and fails fast without hanging", async () => {
+  const peerEntered = deferred<void>();
+  let peerAborted = false;
+  const disposed: string[] = [];
+  const cleaned: string[] = [];
+  const signals: AbortSignal[] = [];
+  const workspaceSignals: AbortSignal[] = [];
+  const evaluation = runEvaluation({
+    candidate: {
+      id: "fail-fast",
+      createRuntime: ({ taskId, signal }) => {
+        signals.push(signal);
+        return {
+          async run({ signal: runSignal }) {
+            expect(runSignal).toBe(signal);
+            if (taskId.endsWith("first")) {
+              await peerEntered.promise;
+              throw new Error("primary infrastructure failure");
+            }
+            peerEntered.resolve();
+            signal.addEventListener(
+              "abort",
+              () => {
+                peerAborted = true;
+              },
+              { once: true },
+            );
+            await Promise.resolve();
+            await Promise.resolve();
+            return { status: "completed", publicEvidence: ["42"] };
+          },
+          dispose: () => {
+            disposed.push(taskId);
+            return new Promise<never>(() => undefined);
+          },
+        };
+      },
+    },
+    tasks: {
+      schemaVersion: 1,
+      tasks: [
+        {
+          id: "held-out-first",
+          split: "held-out",
+          prompt: "first",
+          expectedPublicEvidence: { includes: ["42"] },
+          candidatePublicEvidence: ["42"],
+          expectedVerdict: "pass",
+        },
+        {
+          id: "held-out-peer",
+          split: "held-out",
+          prompt: "peer",
+          expectedPublicEvidence: { includes: ["42"] },
+          candidatePublicEvidence: ["42"],
+          expectedVerdict: "pass",
+        },
+      ],
+    },
+    concurrency: 2,
+    workspaceFactory: ({ taskId, signal }) => {
+      workspaceSignals.push(signal);
+      return {
+        path: `/virtual/${taskId}`,
+        cleanup: () => {
+          cleaned.push(taskId);
+          return new Promise<never>(() => undefined);
+        },
+      };
+    },
+  });
+
+  await expect(evaluation).rejects.toMatchObject({
+    code: "EVALUATION_RUNTIME_FAILED",
+  });
+  expect(peerAborted).toBe(true);
+  expect(signals).toHaveLength(2);
+  expect(signals[0]).toBe(signals[1]);
+  expect(workspaceSignals).toEqual(signals);
+  expect(signals[0].aborted).toBe(true);
+  expect(disposed.sort()).toEqual(["held-out-first", "held-out-peer"]);
+  expect(cleaned.sort()).toEqual(["held-out-first", "held-out-peer"]);
+});
+
+test("external cancellation settles ignored factories promptly and cleans late values", async () => {
+  for (const phase of ["workspace", "runtime"] as const) {
+    const controller = new AbortController();
+    const entered = deferred<void>();
+    const gate = deferred<unknown>();
+    const lateCleanup = deferred<void>();
+    let cleaned = 0;
+    let disposed = 0;
+    const workspace = {
+      path: `/virtual/late-${phase}`,
+      cleanup: () => {
+        cleaned += 1;
+        lateCleanup.resolve();
+      },
+    };
+    const runtime: EvaluationRuntime = {
+      run: () => ({ status: "completed", publicEvidence: ["42"] }),
+      dispose: () => {
+        disposed += 1;
+        lateCleanup.resolve();
+      },
+    };
+    const evaluation = runEvaluation({
+      candidate: {
+        id: `late-${phase}`,
+        createRuntime: () => {
+          if (phase === "runtime") {
+            entered.resolve();
+            return gate.promise as Promise<EvaluationRuntime>;
+          }
+          return runtime;
+        },
+      },
+      tasks: singleTask(`held-out-late-${phase}`),
+      signal: controller.signal,
+      workspaceFactory: () => {
+        if (phase === "workspace") {
+          entered.resolve();
+          return gate.promise as Promise<typeof workspace>;
+        }
+        return workspace;
+      },
+    });
+
+    await entered.promise;
+    controller.abort(`stop ${phase}`);
+    let settled = false;
+    void evaluation.then(
+      () => {
+        settled = true;
+      },
+      () => {
+        settled = true;
+      },
+    );
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    const settledBeforeFactory = settled;
+    gate.resolve(phase === "workspace" ? workspace : runtime);
+    await expect(evaluation).rejects.toMatchObject({
+      code: "EVALUATION_CANCELLED",
+    });
+    await lateCleanup.promise;
+    expect(settledBeforeFactory).toBe(true);
+    expect(cleaned).toBe(1);
+    expect(disposed).toBe(phase === "runtime" ? 1 : 0);
+  }
+});
+
+test("registers cleanup ownership before validating workspace and runtime shape", async () => {
+  let invalidWorkspaceCleaned = 0;
+  await expect(
+    runEvaluation({
+      candidate: fixtureCandidate("invalid-workspace"),
+      tasks: singleTask("held-out-invalid-workspace"),
+      workspaceFactory: () => ({
+        path: "",
+        cleanup: () => {
+          invalidWorkspaceCleaned += 1;
+        },
+      }),
+    }),
+  ).rejects.toMatchObject({ code: "EVALUATION_WORKSPACE_FAILED" });
+  expect(invalidWorkspaceCleaned).toBe(1);
+
+  let invalidRuntimeDisposed = 0;
+  let runtimeWorkspaceCleaned = 0;
+  await expect(
+    runEvaluation({
+      candidate: {
+        id: "invalid-runtime",
+        createRuntime: () =>
+          ({
+            run: 42,
+            dispose: () => {
+              invalidRuntimeDisposed += 1;
+            },
+          }) as unknown as EvaluationRuntime,
+      },
+      tasks: singleTask("held-out-invalid-runtime"),
+      workspaceFactory: () => ({
+        path: "/virtual/invalid-runtime",
+        cleanup: () => {
+          runtimeWorkspaceCleaned += 1;
+        },
+      }),
+    }),
+  ).rejects.toMatchObject({ code: "EVALUATION_RUNTIME_FACTORY_FAILED" });
+  expect(invalidRuntimeDisposed).toBe(1);
+  expect(runtimeWorkspaceCleaned).toBe(1);
+});
+
+test("manual report serialization ignores every toJSON hook and rejects proxies", async () => {
+  const report = await runEvaluation({
+    candidate: fixtureCandidate("manual-json"),
+    tasks: await fixture(),
+  });
+  const objectDescriptor = Object.getOwnPropertyDescriptor(
+    Object.prototype,
+    "toJSON",
+  );
+  const arrayDescriptor = Object.getOwnPropertyDescriptor(
+    Array.prototype,
+    "toJSON",
+  );
+  let hooks = 0;
+  const poisoned = { ...report } as EvaluationReport & {
+    toJSON?: () => unknown;
+  };
+  Object.defineProperty(poisoned, "toJSON", {
+    configurable: true,
+    enumerable: true,
+    value: () => {
+      hooks += 1;
+      return { transcript: "own hook leak" };
+    },
+  });
+  try {
+    Object.defineProperty(Object.prototype, "toJSON", {
+      configurable: true,
+      value: () => {
+        hooks += 1;
+        return { prompt: "prototype object leak" };
+      },
+    });
+    Object.defineProperty(Array.prototype, "toJSON", {
+      configurable: true,
+      value: () => {
+        hooks += 1;
+        return ["prototype array leak"];
+      },
+    });
+    const serialized = serializeEvaluationReport(poisoned);
+    expect(hooks).toBe(0);
+    expect(serialized).not.toContain("leak");
+    expect(JSON.parse(serialized)).toMatchObject({
+      candidateId: "manual-json",
+    });
+  } finally {
+    if (objectDescriptor === undefined) {
+      Reflect.deleteProperty(Object.prototype, "toJSON");
+    } else {
+      Object.defineProperty(Object.prototype, "toJSON", objectDescriptor);
+    }
+    if (arrayDescriptor === undefined) {
+      Reflect.deleteProperty(Array.prototype, "toJSON");
+    } else {
+      Object.defineProperty(Array.prototype, "toJSON", arrayDescriptor);
+    }
+  }
+
+  const proxy = new Proxy(report, {
+    get() {
+      throw new Error("proxy transcript leak");
+    },
+  });
+  expect(() => serializeEvaluationReport(proxy)).toThrowError(
+    expect.objectContaining({ code: "EVALUATION_INVALID_REPORT" }),
+  );
+});
+
+test("rejects duplicate report identities and compares exact identity sets", async () => {
+  const baseline = await runEvaluation({
+    candidate: fixtureCandidate("identity-baseline"),
+    tasks: await fixture(),
+  });
+  const duplicate = {
+    candidateId: baseline.candidateId,
+    runs: [baseline.runs[0], baseline.runs[0]],
+    publicMetrics: {
+      totalRuns: 2,
+      passedRuns: 2,
+      failedRuns: 0,
+      errorRuns: 0,
+      passRate: 1,
+      failRate: 0,
+      errorRate: 0,
+    },
+  };
+  expect(() => serializeEvaluationReport(duplicate)).toThrowError(
+    expect.objectContaining({ code: "EVALUATION_INVALID_REPORT" }),
+  );
+  expect(() => compareEvaluations(baseline, duplicate)).toThrowError(
+    expect.objectContaining({ code: "EVALUATION_INVALID_REPORT" }),
+  );
+
+  const candidate = await runEvaluation({
+    candidate: fixtureCandidate("identity-candidate"),
+    tasks: await fixture(),
+  });
+  const reordered = {
+    ...candidate,
+    runs: [candidate.runs[1], candidate.runs[0]],
+  };
+  expect(
+    compareEvaluations(baseline, reordered).runs.map((run) => run.runId),
+  ).toEqual(["run-000001", "run-000002"]);
+});
+
+test("bounds total evaluation and evidence work and rejects duplicate requirements", async () => {
+  expect(MAX_EVALUATION_RUNS).toBe(4_096);
+  expect(MAX_EVIDENCE_ITEMS).toBe(32);
+  const tasks = Array.from({ length: 65 }, (_, index) => ({
+    id: `held-out-budget-${String(index).padStart(3, "0")}`,
+    split: "held-out",
+    prompt: "budget",
+    expectedPublicEvidence: { includes: ["42"] },
+    candidatePublicEvidence: ["42"],
+    expectedVerdict: "pass",
+  }));
+  await expect(
+    runEvaluation({
+      candidate: fixtureCandidate("run-budget"),
+      tasks: { schemaVersion: 1, tasks },
+      repetitions: 64,
+    }),
+  ).rejects.toMatchObject({ code: "EVALUATION_INVALID_OPTIONS" });
+
+  expect(() =>
+    loadEvaluationTasks({
+      schemaVersion: 1,
+      tasks: [
+        {
+          id: "held-out-duplicate-evidence",
+          split: "held-out",
+          prompt: "duplicate",
+          expectedPublicEvidence: { includes: ["42", "42"] },
+          candidatePublicEvidence: ["42"],
+          expectedVerdict: "pass",
+        },
+      ],
+    }),
+  ).toThrow(/duplicate required evidence/u);
+
+  await expect(
+    runEvaluation({
+      candidate: {
+        id: "candidate-evidence-budget",
+        createRuntime: () =>
+          completedRuntime(() =>
+            Array.from({ length: MAX_EVIDENCE_ITEMS + 1 }, () => "42"),
+          ),
+      },
+      tasks: singleTask("held-out-candidate-budget"),
+    }),
+  ).rejects.toMatchObject({ code: "EVALUATION_RUNTIME_FAILED" });
+});
+
+test("default judge uses bounded set membership and observes cancellation while matching", async () => {
+  const report = await runEvaluation({
+    candidate: {
+      id: "set-judge",
+      createRuntime: () => completedRuntime(() => ["42", "42"]),
+    },
+    tasks: singleTask("held-out-set-judge", ["42", "15"]),
+  });
+  expect(report.runs[0]).toMatchObject({
+    verdict: "fail",
+    publicMetrics: {
+      requiredEvidence: 2,
+      matchedEvidence: 1,
+    },
+  });
+});
+
+test("composes source metric caps and classifies composition as judge infrastructure", async () => {
+  expect(MAX_SOURCE_METRICS).toBe(64);
+  expect(MAX_REPORT_METRICS).toBe(128);
+  const runtimeMetrics = Object.fromEntries(
+    Array.from({ length: MAX_SOURCE_METRICS }, (_, index) => [
+      `runtime${String(index).padStart(2, "0")}`,
+      index,
+    ]),
+  );
+  const report = await runEvaluation({
+    candidate: {
+      id: "metric-cap",
+      createRuntime: () => ({
+        run: () => ({
+          status: "completed",
+          publicEvidence: ["42"],
+          publicMetrics: runtimeMetrics,
+        }),
+        dispose: () => undefined,
+      }),
+    },
+    tasks: singleTask("held-out-metric-cap"),
+  });
+  expect(Object.keys(report.runs[0].publicMetrics)).toHaveLength(66);
+  expect(Object.keys(report.runs[0].publicMetrics)).toEqual(
+    [...Object.keys(report.runs[0].publicMetrics)].sort(),
+  );
+
+  const invalidJudgeMetrics: Readonly<Record<string, number>>[] = [
+    { runtime00: 1 },
+    { invalid: Number.NaN },
+  ];
+  for (const judgeMetrics of invalidJudgeMetrics) {
+    await expect(
+      runEvaluation({
+        candidate: {
+          id: "metric-judge-failure",
+          createRuntime: () => ({
+            run: () => ({
+              status: "completed",
+              publicEvidence: ["42"],
+              publicMetrics: { runtime00: 0 },
+            }),
+            dispose: () => undefined,
+          }),
+        },
+        tasks: singleTask("held-out-metric-judge-failure"),
+        judge: {
+          judge: () => ({ verdict: "pass", publicMetrics: judgeMetrics }),
+        },
+      }),
+    ).rejects.toMatchObject({ code: "EVALUATION_JUDGE_FAILED" });
+  }
+
+  const tooManyReportMetrics = Object.fromEntries(
+    Array.from({ length: MAX_REPORT_METRICS + 1 }, (_, index) => [
+      `report${String(index).padStart(3, "0")}`,
+      index,
+    ]),
+  );
+  expect(() =>
+    serializeEvaluationReport({
+      ...report,
+      runs: [{ ...report.runs[0], publicMetrics: tooManyReportMetrics }],
+    }),
+  ).toThrowError(
+    expect.objectContaining({ code: "EVALUATION_INVALID_REPORT" }),
+  );
 });
