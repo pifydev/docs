@@ -194,21 +194,45 @@ function markdownSemanticSegments(source) {
   return segments;
 }
 
+function hasKnownUnreleasedTruncatedSummarySignature(segment) {
+  const normalized = segment.replace(/\s+/g, " ").trim();
+  const mentionsCompactionOrBranchSummary =
+    /(?:compaction|branch)\s+summar(?:y|ies|ization)|(?:summar(?:y|ies|ization)|bản tóm tắt)\s+(?:compaction|branch|nhánh)/i.test(
+      normalized,
+    );
+  const auditedSourceSignature =
+    mentionsCompactionOrBranchSummary &&
+    (/getSummarizationFailure/.test(normalized) ||
+      /stopReason\s*:\s*["']length["']/.test(normalized));
+  const auditedFailureText =
+    /compaction summary generation hit the token cap and the summary is incomplete/i.test(
+      normalized,
+    );
+  const reviewedPhrases = [
+    /Pi does not persist a length-limited summary/i,
+    /Pi rejects a length-limited (?:compaction|branch) summary/i,
+    /Pi rejects a truncated compaction summary/i,
+    /Pi rejects a compaction summary based on (?:its|the) output size/i,
+    /Pi does not persist a compaction summary whose output exceeds its maximum/i,
+    /Pi does not persist a compaction summary when its output is too large/i,
+    /Pi từ chối bản tóm tắt compaction bị cắt cụt/i,
+    /Pi không lưu bản tóm tắt compaction khi đầu ra vượt quá giới hạn tối đa/i,
+    /Pi không lưu bản tóm tắt compaction khi đầu ra quá lớn/i,
+  ];
+
+  return (
+    auditedSourceSignature ||
+    auditedFailureText ||
+    reviewedPhrases.some((signature) => signature.test(normalized))
+  );
+}
+
 function assertTruncatedSummaryClaimsAreUnreleased(source, locale, context) {
-  // This is intentionally a semantic heuristic, not a claim that arbitrary
-  // natural language can be classified completely. It covers the known
-  // post-tag behavior family and keeps unrelated assistant/Tool truncation out.
-  const summaryConcept =
-    /(?:compaction|branch|turn prefix|history)[\s\S]{0,120}(?:summar(?:y|ies|ization)|tóm tắt)|(?:summar(?:y|ies|ization)|tóm tắt)[\s\S]{0,120}(?:compaction|branch|nhánh)/i;
-  const rejectionPredicate =
-    /reject(?:s|ed|ion)?|refus(?:e|es|ed|al)?|(?:does |do )?not persist|cannot[^.\n]{0,60}persist|discard(?:s|ed)?|fail(?:s|ed|ure)?|từ chối|không (?:lưu|ghi)|không thể[^.\n]{0,60}(?:lưu|ghi)|loại bỏ|thất bại/i;
-  const sizePredicate =
-    /truncat|length[- ]limit|token (?:cap|limit)|hit[^.\n]{0,50}token cap|incomplete|\bsize\b|oversiz|too large|output[^.\n]{0,80}(?:exceed|maximum|max)|exceed[^.\n]{0,80}(?:maximum|max|limit|cap)|cắt cụt|giới hạn token|vượt quá|tối đa|kích thước|quá lớn|không hoàn chỉnh|chưa hoàn chỉnh/i;
+  // This deliberately recognizes audited source signatures and a small reviewed
+  // phrase list, not arbitrary natural language. Free-form paraphrases remain a
+  // release-source review responsibility.
   const claims = markdownSemanticSegments(source).filter(
-    (segment) =>
-      summaryConcept.test(segment) &&
-      rejectionPredicate.test(segment) &&
-      sizePredicate.test(segment),
+    hasKnownUnreleasedTruncatedSummarySignature,
   );
   const warning =
     locale === "en" ? /\*\*Unreleased:\*\*/ : /\*\*Chưa phát hành:\*\*/;
@@ -815,13 +839,71 @@ test("active docs do not present the renamed GoogleThinkingLevel identifier as c
   assert.deepEqual(staleGoogleTypeMentions, []);
 });
 
-test("truncated compaction-summary rejection claims require visible unreleased warnings", () => {
-  const unlabeled =
+test("known truncated-summary signatures use a focused positive and negative matrix", () => {
+  const guardedClaims = [
+    "Compaction summaries use `getSummarizationFailure` for a length-stopped generation.",
+    'For a compaction summary, `stopReason: "length"` marks the post-tag behavior.',
+    "Compaction summary generation hit the token cap and the summary is incomplete.",
+    "Pi does not persist a length-limited summary.",
+    "Pi rejects a length-limited branch summary.",
+    "Pi rejects a truncated compaction summary instead of persisting it.",
+    "Pi rejects a compaction summary based on its output size.",
+    "Pi does not persist a compaction summary whose output exceeds its maximum.",
+    "Pi does not persist a compaction summary whose output\nexceeds its maximum.",
+    "Pi does not persist a compaction summary when its output is too large.",
+    "Pi từ chối bản tóm tắt compaction bị cắt cụt.",
+    "Pi không lưu bản tóm tắt compaction khi đầu ra vượt quá giới hạn tối đa.",
+    "Pi không lưu bản tóm tắt compaction khi đầu ra quá lớn.",
+  ];
+  const allowedClaims = [
+    "Compaction does not truncate a single oversized Tool result at execution time.",
+    "A truncated assistant response triggers compaction and one retry; it is not a compaction summary.",
+    "At 0.84.3, a compaction summary can fail when the provider returns an incomplete response.",
+    "Ở 0.84.3, bản tóm tắt compaction có thể thất bại khi nhà cung cấp trả về phản hồi không hoàn chỉnh.",
+    "Compaction summary generation throws an error that reports response size.",
+    "A branch summary fails because the response size is unknown.",
+    "Pi does not persist a compaction summary because the provider only reports the response size.",
+    "Pi không lưu bản tóm tắt compaction vì metadata chỉ ghi kích thước đầu ra.",
+    "A truncated assistant response is discarded before retry; it is not a compaction summary.",
+    "A truncated Tool result is discarded before retry; it is not a compaction summary.",
+    "A truncated assistant response is discarded, not the compaction summary.",
+    "A truncated Tool result is discarded rather than the compaction summary.",
+    "The request is too large, so Pi does not persist the compaction summary output.",
+    "Pi does not reject a truncated compaction summary.",
+    "Pi never discards a length-limited branch summary.",
+    "Pi không từ chối bản tóm tắt compaction bị cắt cụt.",
+    "Pi rejects a truncated Tool result, then creates a compaction summary.",
+    "Pi discards a cut-off assistant response before generating a compaction summary.",
+    "Pi does not persist diagnostics for a compaction summary when provider output is too large.",
+    "The compaction summary is invalid when JSON parsing fails. Its output size is logged for diagnostics.",
+  ];
+
+  for (const claim of guardedClaims) {
+    assert.equal(
+      hasKnownUnreleasedTruncatedSummarySignature(claim),
+      true,
+      claim,
+    );
+  }
+  for (const claim of allowedClaims) {
+    assert.equal(
+      hasKnownUnreleasedTruncatedSummarySignature(claim),
+      false,
+      claim,
+    );
+  }
+});
+
+test("truncated-summary rejection claims require visual localized unreleased warnings", () => {
+  const englishClaim =
     "Pi rejects a truncated compaction summary instead of persisting it.";
+  const vietnameseClaim =
+    "Pi từ chối bản tóm tắt compaction bị cắt cụt và không lưu nó.";
+
   assert.throws(
     () =>
       assertTruncatedSummaryClaimsAreUnreleased(
-        unlabeled,
+        englishClaim,
         "en",
         "synthetic English claim",
       ),
@@ -830,66 +912,7 @@ test("truncated compaction-summary rejection claims require visible unreleased w
   assert.throws(
     () =>
       assertTruncatedSummaryClaimsAreUnreleased(
-        "Pi does not persist a compaction summary when its output is too large.",
-        "en",
-        "synthetic English too-large bypass",
-      ),
-    /must put truncated-summary rejection in a warning callout/,
-  );
-  assert.throws(
-    () =>
-      assertTruncatedSummaryClaimsAreUnreleased(
-        "Pi rejects a compaction summary based on its output size.",
-        "en",
-        "synthetic English output-size bypass",
-      ),
-    /must put truncated-summary rejection in a warning callout/,
-  );
-  assert.throws(
-    () =>
-      assertTruncatedSummaryClaimsAreUnreleased(
-        "Pi không lưu bản tóm tắt compaction khi đầu ra quá lớn.",
-        "vi",
-        "synthetic Vietnamese too-large bypass",
-      ),
-    /must put truncated-summary rejection in a warning callout/,
-  );
-  assert.throws(
-    () =>
-      assertTruncatedSummaryClaimsAreUnreleased(
-        "Pi does not persist a compaction summary whose output exceeds its maximum.",
-        "en",
-        "synthetic English maximum-output bypass",
-      ),
-    /must put truncated-summary rejection in a warning callout/,
-  );
-  assert.throws(
-    () =>
-      assertTruncatedSummaryClaimsAreUnreleased(
-        "Pi không lưu bản tóm tắt compaction khi đầu ra vượt quá giới hạn tối đa.",
-        "vi",
-        "synthetic Vietnamese maximum-output bypass",
-      ),
-    /must put truncated-summary rejection in a warning callout/,
-  );
-  assert.doesNotThrow(() =>
-    assertTruncatedSummaryClaimsAreUnreleased(
-      "Compaction does not truncate a single oversized Tool result at execution time.",
-      "en",
-      "synthetic Tool-output truncation exclusion",
-    ),
-  );
-  assert.doesNotThrow(() =>
-    assertTruncatedSummaryClaimsAreUnreleased(
-      "A truncated assistant response triggers compaction and one retry; it is not a compaction summary.",
-      "en",
-      "synthetic assistant-response truncation exclusion",
-    ),
-  );
-  assert.throws(
-    () =>
-      assertTruncatedSummaryClaimsAreUnreleased(
-        '{% hint style="warning" %}\nPi rejects a truncated compaction summary instead of persisting it.\n{% endhint %}',
+        `{% hint style="warning" %}\n${englishClaim}\n{% endhint %}`,
         "en",
         "synthetic English unlabeled callout",
       ),
@@ -898,7 +921,7 @@ test("truncated compaction-summary rejection claims require visible unreleased w
   assert.throws(
     () =>
       assertTruncatedSummaryClaimsAreUnreleased(
-        "**Unreleased:** Pi rejects a truncated compaction summary instead of persisting it.",
+        `**Unreleased:** ${englishClaim}`,
         "en",
         "synthetic English non-visual warning",
       ),
@@ -907,32 +930,23 @@ test("truncated compaction-summary rejection claims require visible unreleased w
   assert.throws(
     () =>
       assertTruncatedSummaryClaimsAreUnreleased(
-        '{% hint style="warning" %}\nPi từ chối bản tóm tắt compaction bị cắt cụt và không lưu nó.\n{% endhint %}',
+        `{% hint style="warning" %}\n${vietnameseClaim}\n{% endhint %}`,
         "vi",
         "synthetic Vietnamese unlabeled callout",
       ),
     /must visibly label truncated-summary rejection as unreleased/,
   );
-  assert.throws(
-    () =>
-      assertTruncatedSummaryClaimsAreUnreleased(
-        "Pi từ chối bản tóm tắt compaction bị cắt cụt và không lưu nó.",
-        "vi",
-        "synthetic Vietnamese claim",
-      ),
-    /must put truncated-summary rejection in a warning callout/,
-  );
 
   assert.doesNotThrow(() =>
     assertTruncatedSummaryClaimsAreUnreleased(
-      '{% hint style="warning" %}\n**Unreleased:** Pi rejects a truncated compaction summary instead of persisting it.\n{% endhint %}',
+      `{% hint style="warning" %}\n**Unreleased:** ${englishClaim}\n{% endhint %}`,
       "en",
       "synthetic English warning",
     ),
   );
   assert.doesNotThrow(() =>
     assertTruncatedSummaryClaimsAreUnreleased(
-      '{% hint style="warning" %}\n**Chưa phát hành:** Pi từ chối bản tóm tắt compaction bị cắt cụt và không lưu nó.\n{% endhint %}',
+      `{% hint style="warning" %}\n**Chưa phát hành:** ${vietnameseClaim}\n{% endhint %}`,
       "vi",
       "synthetic Vietnamese warning",
     ),
@@ -942,8 +956,7 @@ test("truncated compaction-summary rejection claims require visible unreleased w
       assertActiveTruncatedSummaryClaimsAreUnreleased([
         {
           filename: "content/en/ch07-event-driven.md",
-          source:
-            "Pi rejects a truncated compaction summary instead of persisting it.",
+          source: englishClaim,
         },
       ]),
     /must put truncated-summary rejection in a warning callout/,
