@@ -49,6 +49,18 @@ async function readActiveSources() {
   );
 }
 
+function releaseSourceRef(link) {
+  const match = new URL(link).pathname.match(
+    /^\/(?:earendil-works\/pi|badlogic\/pi-mono)\/(?:blob|tree|commit)\/([^/]+)(?:\/|$)/,
+  );
+  return match?.[1];
+}
+
+function isPublishedReleaseSourceLink(link, release) {
+  const ref = releaseSourceRef(link);
+  return ref === release.tag || ref === release.commit;
+}
+
 test("release fixture identifies published Pi 0.84.3 authority", async () => {
   const release = await readReleaseFixture();
 
@@ -86,25 +98,74 @@ test("active content no longer contains the previous release markers", async () 
   assert.deepEqual(staleFiles, []);
 });
 
+test("parses the exact GitHub source ref for published Pi release links", () => {
+  const release = {
+    tag: "v0.84.3",
+    commit: "4e58f324fae8ebfa98a3d45181fb248072a2afac",
+    upstreamAuditCommit: "dcd461925db2edf69a43c8135db1180d418afd54",
+  };
+  const acceptedLinks = [
+    "https://github.com/earendil-works/pi/blob/v0.84.3/packages/ai/src/index.ts",
+    `https://github.com/badlogic/pi-mono/tree/${release.commit}/packages/agent`,
+    `https://github.com/earendil-works/pi/commit/${release.commit}`,
+  ];
+  const rejectedLinks = [
+    "https://github.com/earendil-works/pi/blob/main/docs/v0.84.3-notes.md",
+    "https://github.com/earendil-works/pi/blob/v0.84.30/file.ts",
+    `https://github.com/earendil-works/pi/blob/${release.upstreamAuditCommit}/file.ts`,
+  ];
+
+  assert.deepEqual(acceptedLinks.map(releaseSourceRef), [
+    release.tag,
+    release.commit,
+    release.commit,
+  ]);
+  assert.deepEqual(rejectedLinks.map(releaseSourceRef), [
+    "main",
+    "v0.84.30",
+    release.upstreamAuditCommit,
+  ]);
+  assert.deepEqual(
+    acceptedLinks.map((link) => isPublishedReleaseSourceLink(link, release)),
+    [true, true, true],
+  );
+  assert.deepEqual(
+    rejectedLinks.map((link) => isPublishedReleaseSourceLink(link, release)),
+    [false, false, false],
+  );
+});
+
 test("0.84.3 source links point to the published tag or release commit", async () => {
   const release = await readReleaseFixture();
   const activeSources = await readActiveSources();
-  const releaseClaimSourceLinks = activeSources.flatMap(
+  const releaseClaimSources = activeSources.filter(({ source }) =>
+    source.includes(release.packageVersion),
+  );
+  const releaseClaimSourceLinks = releaseClaimSources.flatMap(
     ({ filename, source }) =>
-      !source.includes(release.packageVersion)
-        ? []
-        : [
-            ...source.matchAll(
-              /https:\/\/github\.com\/(?:earendil-works\/pi|badlogic\/pi-mono)\/(?:blob|commit|tree)\/[^\s)'"\]]+/g,
-            ),
-          ].map(([link]) => ({ filename, link })),
+      [
+        ...source.matchAll(
+          /https:\/\/github\.com\/(?:earendil-works\/pi|badlogic\/pi-mono)\/(?:blob|commit|tree)\/[^\s)'"\]]+/g,
+        ),
+      ].map(([link]) => ({ filename, link })),
+  );
+  const publishedReleaseSourceLinks = releaseClaimSourceLinks.filter(
+    ({ link }) => isPublishedReleaseSourceLink(link, release),
   );
 
-  for (const { filename, link } of releaseClaimSourceLinks) {
-    assert.equal(link.includes(release.upstreamAuditCommit), false, filename);
+  if (releaseClaimSources.length > 0) {
     assert.ok(
-      link.includes(release.tag) || link.includes(release.commit),
+      publishedReleaseSourceLinks.length > 0,
+      "0.84.3 claims require at least one source link pinned to the published tag or release commit",
+    );
+  }
+
+  for (const { filename, link } of releaseClaimSourceLinks) {
+    assert.notEqual(
+      releaseSourceRef(link),
+      release.upstreamAuditCommit,
       filename,
     );
+    assert.ok(isPublishedReleaseSourceLink(link, release), filename);
   }
 });
