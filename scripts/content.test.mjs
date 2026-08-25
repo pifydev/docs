@@ -173,6 +173,36 @@ test("FAQ contribution guidance uses the canonical content tree", async () => {
   }
 });
 
+test("paired glossaries define the canonical testing and runtime terms", async () => {
+  const requiredTerms = [
+    "test double",
+    "fixture",
+    "harness",
+    "judge",
+    "verdict",
+    "held-out evaluation",
+    "composition root",
+    "fail-closed",
+  ];
+
+  for (const locale of ["en", "vi"]) {
+    const glossary = await readFile(
+      new URL(`content/${locale}/glossary.md`, repositoryRoot),
+      "utf8",
+    );
+    const headings = [...glossary.matchAll(/^## (.+)$/gm)].map(([, heading]) =>
+      heading.toLocaleLowerCase("en-US"),
+    );
+
+    for (const term of requiredTerms) {
+      assert.ok(
+        headings.includes(term),
+        `content/${locale}/glossary.md must define the exact term "${term}"`,
+      );
+    }
+  }
+});
+
 test("repository satisfies the Fumadocs content contract", async () => {
   const errors = await validateRepository(new URL("..", import.meta.url));
   assert.deepEqual(errors, []);

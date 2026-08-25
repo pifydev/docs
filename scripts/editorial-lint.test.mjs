@@ -75,6 +75,13 @@ test("Vietnamese lint accepts natural accented prose", () => {
   assert.deepEqual(inspectDocument(paragraph, "vi", "ch09-compaction.md"), []);
 });
 
+test("Vietnamese lint accepts canonical testing and runtime terms", () => {
+  const paragraph =
+    "Fixture lưu input và expected output cố định; harness chạy hệ thống, judge áp dụng tiêu chí, rồi verdict ghi lại kết luận có cấu trúc.";
+
+  assert.deepEqual(inspectDocument(paragraph, "vi", "glossary.md"), []);
+});
+
 test("editorial lint ignores technical identifiers inside code", () => {
   const markdown = `Keep this sentence concise.
 

@@ -35,6 +35,10 @@ The Pi command-line application published as `@earendil-works/pi-coding-agent`. 
 
 The process of replacing older conversation context with a structured summary while keeping recent messages verbatim. Compaction lets a session continue before it exceeds the model's context window. See [Chapter 9: Context Compaction](ch09-compaction.md).
 
+## Composition Root
+
+The single startup boundary where concrete dependencies are created and connected to the interfaces used by the rest of the application. For example, a CLI composition root can construct the provider adapter, session store, and tools, then inject them into the agent runtime.
+
 ## Context Window
 
 The maximum number of tokens a model can process in one request. Pi estimates current usage and can compact older context before the request exceeds this limit.
@@ -50,6 +54,26 @@ A typed update emitted by a model stream or the agent runtime. Model-stream even
 ## Extension
 
 A TypeScript module loaded inside the coding-agent process. Extensions can register tools and commands, subscribe to lifecycle events, and customize behavior through the documented extension API.
+
+## Fail-closed
+
+A safety behavior that rejects or stops an operation when a required decision is missing, invalid, or unavailable, instead of allowing the operation by default. For example, if a policy [judge](#judge) fails, a fail-closed tool gate records a rejected [verdict](#verdict) and does not execute the tool.
+
+## Fixture
+
+Fixed, reusable input, state, or expected output for one test or evaluation case. A fixture is the case data—for example, a conversation plus scripted model events—while a [harness](#harness) is the infrastructure that runs it.
+
+## Harness
+
+Executable test or evaluation infrastructure that drives the system under test, loads fixtures, captures behavior, and reports results. A harness runs a [fixture](#fixture); it does not decide whether the result is acceptable unless it also invokes a [judge](#judge).
+
+## Held-out Evaluation
+
+An evaluation performed on cases excluded from implementation and prompt tuning. Comparing held-out evaluation results with results from the visible development set helps detect overfitting to known fixtures.
+
+## Judge
+
+An evaluator—implemented by code, a model, or a human—that applies explicit criteria to an observed result. A judge produces a [verdict](#verdict); the [harness](#harness) only supplies the observation and records that outcome.
 
 ## Managed Tools
 
@@ -87,6 +111,10 @@ An agent launched to perform a bounded task on behalf of another agent. Pi suppo
 
 The instruction text sent with model context. The coding agent assembles it from its defaults, project context files, command-line options, and extension contributions. See [Chapter 8: Context Engineering](ch08-context-engineering.md).
 
+## Test Double
+
+A controlled replacement for a real dependency during a test. For example, a scripted model-provider test double can emit deterministic stream events without network access, allowing the harness to exercise the agent loop reproducibly.
+
 ## Tool
 
 A function exposed to the model with a name, description, and TypeBox parameter schema. When the model returns a `ToolCall`, the agent validates the arguments, runs the matching implementation, and adds a `ToolResultMessage`.
@@ -102,3 +130,7 @@ The provider-specific implementation that converts Pi messages and options to a 
 ## Turn
 
 One user request and the model/tool work required to reach the next stable agent state. A turn may contain multiple model calls when the model invokes tools.
+
+## Verdict
+
+The structured outcome produced by a [judge](#judge), such as pass/fail, a score or label, and supporting reasons. The judge is the decision mechanism; the verdict is the recorded result.

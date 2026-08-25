@@ -35,6 +35,10 @@ Một phần tử có kiểu trong nội dung message. Các loại thường g�
 
 Nén ngữ cảnh (compaction) thay phần hội thoại cũ bằng một bản tóm tắt có cấu trúc, đồng thời giữ nguyên các message gần đây. Cơ chế này giúp phiên làm việc tiếp tục trước khi vượt context window của model. Xem [Chương 9: Nén ngữ cảnh](ch09-compaction.md).
 
+## Composition Root
+
+Composition root là ranh giới khởi động duy nhất, nơi ứng dụng tạo các dependency cụ thể rồi kết nối chúng với interface mà phần còn lại của hệ thống sử dụng. Ví dụ, composition root của CLI có thể tạo provider adapter, session store và Tool, sau đó inject chúng vào agent runtime.
+
 ## Context Window
 
 Số token tối đa model có thể xử lý trong một request. Pi ước tính lượng token đang dùng và có thể nén phần ngữ cảnh cũ trước khi vượt giới hạn này.
@@ -50,6 +54,26 @@ Sự kiện (event) có kiểu do model stream hoặc agent runtime phát ra. C�
 ## Extension
 
 Module TypeScript được nạp trong process của coding agent. Extension có thể đăng ký Tool và command, theo dõi lifecycle event và tùy chỉnh hành vi qua extension API được công bố.
+
+## Fail-closed
+
+Fail-closed là hành vi an toàn từ chối hoặc dừng operation khi một quyết định bắt buộc bị thiếu, không hợp lệ hoặc không thể lấy được, thay vì mặc định cho phép operation. Ví dụ, nếu [judge](#judge) của policy gặp lỗi, tool gate theo nguyên tắc fail-closed sẽ ghi [verdict](#verdict) từ chối và không chạy Tool.
+
+## Fixture
+
+Fixture là input, state hoặc expected output cố định, có thể tái sử dụng cho một test case hay evaluation case. Fixture chứa dữ liệu của ca kiểm thử—ví dụ một conversation cùng chuỗi model event đã lập script—còn [harness](#harness) là hạ tầng chạy dữ liệu đó.
+
+## Harness
+
+Harness là hạ tầng thực thi test hoặc evaluation: điều khiển system under test, nạp fixture, thu lại hành vi và báo cáo kết quả. Harness chạy [fixture](#fixture); nó không tự quyết định kết quả có đạt hay không, trừ khi gọi thêm một [judge](#judge).
+
+## Held-out Evaluation
+
+Held-out evaluation là phép đánh giá trên các ca không được dùng trong quá trình implementation hoặc prompt tuning. So sánh kết quả held-out evaluation với tập development hiển thị giúp phát hiện việc tối ưu quá mức cho các fixture đã biết.
+
+## Judge
+
+Judge là bộ đánh giá do code, model hoặc con người thực hiện, dùng tiêu chí rõ ràng để đánh giá một kết quả quan sát được. Judge tạo ra [verdict](#verdict); [harness](#harness) chỉ cung cấp observation và ghi lại kết luận đó.
 
 ## Managed Tools
 
@@ -87,6 +111,10 @@ Agent được khởi chạy để thực hiện một tác vụ giới hạn th
 
 Phần chỉ dẫn được gửi cùng model context. Coding agent ghép system prompt từ giá trị mặc định, file ngữ cảnh dự án, tùy chọn dòng lệnh và nội dung do extension cung cấp. Xem [Chương 8: Kỹ thuật ngữ cảnh](ch08-context-engineering.md).
 
+## Test Double
+
+Test double là thành phần thay thế có kiểm soát cho dependency thật trong khi test. Ví dụ, một test double của model provider chạy theo script có thể phát stream event xác định mà không cần network access, giúp harness kiểm tra agent loop theo cách tái lập được.
+
 ## Tool
 
 Hàm được cung cấp cho model bằng tên, mô tả và TypeBox schema cho tham số. Khi model trả về `ToolCall`, agent kiểm tra arguments, chạy implementation tương ứng và thêm một `ToolResultMessage`.
@@ -102,3 +130,7 @@ Implementation riêng cho từng provider, chịu trách nhiệm chuyển messag
 ## Turn
 
 Một user request cùng toàn bộ model/tool work cần thiết để agent đạt state ổn định tiếp theo. Một lượt có thể chứa nhiều model call khi model gọi Tool.
+
+## Verdict
+
+Verdict là kết luận có cấu trúc do [judge](#judge) tạo ra, chẳng hạn pass/fail, score hoặc label kèm lý do. Judge là cơ chế ra quyết định; verdict là kết quả được ghi lại.
