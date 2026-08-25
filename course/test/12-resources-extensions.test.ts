@@ -7,6 +7,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import {
   ExtensionError,
   ExtensionHost,
+  MAX_RESOURCE_TEXT_BYTES,
   ResourceError,
   ResourceLoader,
   ToolRegistry,
@@ -51,6 +52,21 @@ function listenForUnhandledRejections(
 ): () => void {
   process.on("unhandledRejection", listener);
   return () => process.removeListener("unhandledRejection", listener);
+}
+
+async function settleWithin<Value>(promise: Promise<Value>): Promise<Value> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(
+      () => reject(new Error("operation did not settle")),
+      250,
+    );
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
 }
 
 async function temporaryDirectory(name: string): Promise<string> {
@@ -181,6 +197,59 @@ test("fails closed when a trusted root is replaced after identity capture", asyn
   });
 });
 
+test("enforces the Resource byte cap and fatal UTF-8 decoding", async () => {
+  const root = await temporaryDirectory("resource-limits");
+  await writeFile(
+    join(root, "boundary.txt"),
+    Buffer.alloc(MAX_RESOURCE_TEXT_BYTES, 0x61),
+  );
+  await writeFile(
+    join(root, "oversized.txt"),
+    Buffer.alloc(MAX_RESOURCE_TEXT_BYTES + 1, 0x61),
+  );
+  await writeFile(join(root, "invalid.txt"), Buffer.from([0xc3, 0x28]));
+  const loader = await ResourceLoader.create([
+    { id: "limits", directory: root },
+  ]);
+
+  await expect(loader.loadText("boundary.txt")).resolves.toMatchObject({
+    content: "a".repeat(MAX_RESOURCE_TEXT_BYTES),
+  });
+  await expect(loader.loadText("oversized.txt")).rejects.toMatchObject({
+    code: "RESOURCE_TOO_LARGE",
+  });
+  await expect(loader.loadText("invalid.txt")).rejects.toMatchObject({
+    code: "RESOURCE_INVALID_UTF8",
+  });
+});
+
+test("applies one portable Resource path grammar on every host OS", async () => {
+  const root = await temporaryDirectory("portable-paths");
+  await writeFile(join(root, "safe.txt"), "safe", "utf8");
+  const loader = await ResourceLoader.create([
+    { id: "portable", directory: root },
+  ]);
+  const rejected = [
+    "C:alias.txt",
+    "C:\\absolute.txt",
+    "name:stream",
+    "\\\\server\\share\\file.txt",
+    "\\\\?\\C:\\device.txt",
+    "/absolute.txt",
+    "..\\escape.txt",
+    "folder\\..\\..\\escape.txt",
+  ];
+  for (let index = 0; index < rejected.length; index += 1) {
+    await expect(loader.loadText(rejected[index])).rejects.toMatchObject({
+      code: "RESOURCE_OUTSIDE_TRUSTED_ROOTS",
+    });
+  }
+  await expect(loader.loadText("folder\\..\\safe.txt")).resolves.toMatchObject({
+    path: "safe.txt",
+    content: "safe",
+  });
+});
+
 test("discovers metadata atomically without running Extension factories", async () => {
   const factory = vi.fn(() => ({ activate: vi.fn() }));
   const host = new ExtensionHost({ resources: await emptyResources() });
@@ -210,7 +279,7 @@ test("uses stable contract errors for malformed Resource and Extension input", a
     ResourceLoader.create({ length: 0 } as unknown as []),
   ).rejects.toMatchObject({
     name: "ResourceError",
-    code: "INVALID_RESOURCE_ROOTS",
+    code: "RESOURCE_INVALID_ROOTS",
   });
 
   const host = new ExtensionHost({ resources: await emptyResources() });
@@ -225,7 +294,7 @@ test("uses stable contract errors for malformed Resource and Extension input", a
         null as unknown as ConstructorParameters<typeof ExtensionHost>[0],
       ),
   ).toThrowError(
-    expect.objectContaining({ code: "INVALID_EXTENSION_DEFINITION" }),
+    expect.objectContaining({ code: "EXTENSION_INVALID_OPTIONS" }),
   );
 
   const resources = await emptyResources();
@@ -238,6 +307,61 @@ test("uses stable contract errors for malformed Resource and Extension input", a
     },
   });
   expect(() => new ExtensionHost(hostileOptions)).toThrowError(
+    expect.objectContaining({ code: "EXTENSION_INVALID_OPTIONS" }),
+  );
+});
+
+test("rejects Proxy-wrapped roots, options, registries, and definitions with stable errors", async () => {
+  const root = await temporaryDirectory("proxy-root");
+  const rootDefinitions = [{ id: "root", directory: root }];
+  await expect(
+    ResourceLoader.create(new Proxy(rootDefinitions, {})),
+  ).rejects.toMatchObject({
+    code: "RESOURCE_INVALID_ROOTS",
+  });
+  await expect(
+    ResourceLoader.create([new Proxy(rootDefinitions[0], {})]),
+  ).rejects.toMatchObject({ code: "RESOURCE_INVALID_ROOTS" });
+
+  const resources = await ResourceLoader.create(rootDefinitions);
+  const options = { resources };
+  expect(
+    () =>
+      new ExtensionHost(
+        new Proxy(options, {}) as ConstructorParameters<
+          typeof ExtensionHost
+        >[0],
+      ),
+  ).toThrowError(
+    expect.objectContaining({ code: "EXTENSION_INVALID_OPTIONS" }),
+  );
+  expect(
+    () =>
+      new ExtensionHost({
+        resources: new Proxy(resources, {}),
+      }),
+  ).toThrowError(
+    expect.objectContaining({ code: "EXTENSION_INVALID_OPTIONS" }),
+  );
+  expect(
+    () =>
+      new ExtensionHost({
+        resources,
+        tools: new Proxy(new ToolRegistry(), {}),
+      }),
+  ).toThrowError(
+    expect.objectContaining({ code: "EXTENSION_INVALID_OPTIONS" }),
+  );
+
+  const host = new ExtensionHost({ resources });
+  const definition: ExtensionDefinition = {
+    id: "proxy-definition",
+    create: () => ({ activate: () => undefined }),
+  };
+  expect(() => host.discover(new Proxy([definition], {}))).toThrowError(
+    expect.objectContaining({ code: "INVALID_EXTENSION_DEFINITION" }),
+  );
+  expect(() => host.discover([new Proxy(definition, {})])).toThrowError(
     expect.objectContaining({ code: "INVALID_EXTENSION_DEFINITION" }),
   );
 });
@@ -343,6 +467,114 @@ test("serializes async factories and observes detached thenable rejections", asy
   }
 });
 
+test("closes staged contributions inside a hostile thenable settlement callback", async () => {
+  let lateError: unknown;
+  const host = new ExtensionHost({ resources: await emptyResources() });
+  host.discover([
+    {
+      id: "settlement-boundary",
+      create: () => ({
+        activate: (context) =>
+          ({
+            then(resolve: (value: void) => void) {
+              context.registerTool(echoTool("before-settlement"));
+              resolve();
+              try {
+                context.registerTool(echoTool("after-settlement"));
+              } catch (error) {
+                lateError = error;
+              }
+            },
+          }) as PromiseLike<void>,
+      }),
+    },
+  ]);
+
+  await host.activate("settlement-boundary");
+
+  expect(host.tools.names).toEqual(["before-settlement"]);
+  expect(lateError).toMatchObject({ code: "EXTENSION_ACTIVATION_FAILED" });
+});
+
+test("rejects reentrant emit from a hook promptly without poisoning the host", async () => {
+  let nestedCode: unknown;
+  const host = new ExtensionHost({ resources: await emptyResources() });
+  host.discover([
+    {
+      id: "hook-reentrant",
+      create: () => ({
+        activate(context) {
+          context.onAgentEvent(async () => {
+            try {
+              await host.emit(finishedEvent(99));
+            } catch (error) {
+              nestedCode = (error as ExtensionError).code;
+            }
+          });
+        },
+      }),
+    },
+  ]);
+  await host.activate("hook-reentrant");
+
+  await expect(settleWithin(host.emit(finishedEvent()))).resolves.toEqual([]);
+  expect(nestedCode).toBe("EXTENSION_REENTRANT_OPERATION");
+  await expect(settleWithin(host.emit(finishedEvent(2)))).resolves.toEqual([]);
+  await host.dispose();
+});
+
+test("rejects reentrant dispose during activation promptly and permits recovery", async () => {
+  const host = new ExtensionHost({ resources: await emptyResources() });
+  host.discover([
+    {
+      id: "dispose-during-activation",
+      create: () => ({
+        activate: async () => host.dispose(),
+      }),
+    },
+    {
+      id: "recovery",
+      create: () => ({
+        activate: (context) => context.registerTool(echoTool("recovered")),
+      }),
+    },
+  ]);
+
+  await expect(
+    settleWithin(host.activate("dispose-during-activation")),
+  ).rejects.toMatchObject({ code: "EXTENSION_REENTRANT_OPERATION" });
+  await expect(
+    settleWithin(host.activate("recovery")),
+  ).resolves.toBeUndefined();
+  expect(host.tools.names).toEqual(["recovered"]);
+  await host.dispose();
+});
+
+test("rejects reentrant dispose from a disposer without deadlocking outer disposal", async () => {
+  let nestedCode: unknown;
+  const host = new ExtensionHost({ resources: await emptyResources() });
+  host.discover([
+    {
+      id: "dispose-reentrant",
+      create: () => ({
+        activate(context) {
+          context.onDispose(async () => {
+            try {
+              await host.dispose();
+            } catch (error) {
+              nestedCode = (error as ExtensionError).code;
+            }
+          });
+        },
+      }),
+    },
+  ]);
+  await host.activate("dispose-reentrant");
+
+  await expect(settleWithin(host.dispose())).resolves.toBeUndefined();
+  expect(nestedCode).toBe("EXTENSION_REENTRANT_OPERATION");
+});
+
 test("rolls back a partial activation in reverse order and can recover", async () => {
   const cleanup: string[] = [];
   const host = new ExtensionHost({
@@ -384,6 +616,105 @@ test("rolls back a partial activation in reverse order and can recover", async (
 
   await host.activate("healthy");
   expect(host.tools.names).toEqual(["base", "healthy"]);
+});
+
+test("reports activation and reverse rollback failures in one frozen aggregate", async () => {
+  const cleanup: string[] = [];
+  const host = new ExtensionHost({ resources: await emptyResources() });
+  host.discover([
+    {
+      id: "rollback-failures",
+      create: () => ({
+        activate(context) {
+          context.registerTool(echoTool("never-live"));
+          context.onDispose(() => {
+            cleanup.push("first");
+            throw new Error("cleanup first");
+          });
+          context.onDispose(async () => {
+            cleanup.push("second");
+            throw new Error("cleanup second");
+          });
+          throw new Error("primary activation");
+        },
+      }),
+    },
+    {
+      id: "after-rollback",
+      create: () => ({
+        activate: (context) => context.registerTool(echoTool("after-rollback")),
+      }),
+    },
+  ]);
+
+  let failure: ExtensionError | undefined;
+  try {
+    await host.activate("rollback-failures");
+  } catch (error) {
+    failure = error as ExtensionError;
+  }
+  expect(failure).toMatchObject({
+    code: "EXTENSION_ACTIVATION_ROLLBACK_FAILED",
+  });
+  expect(failure?.cause).toBeInstanceOf(AggregateError);
+  const aggregate = failure?.cause as AggregateError;
+  expect(Object.isFrozen(aggregate)).toBe(true);
+  expect(Object.isFrozen(aggregate.errors)).toBe(true);
+  expect(aggregate.errors.map((error) => (error as Error).message)).toEqual([
+    "primary activation",
+    "cleanup second",
+    "cleanup first",
+  ]);
+  expect(cleanup).toEqual(["second", "first"]);
+  expect(host.tools.names).toEqual([]);
+  await host.activate("after-rollback");
+  expect(host.tools.names).toEqual(["after-rollback"]);
+  await host.dispose();
+});
+
+test("aggregates every disposal failure after attempting all reverse cleanup", async () => {
+  const cleanup: string[] = [];
+  const host = new ExtensionHost({ resources: await emptyResources() });
+  host.discover([
+    {
+      id: "disposal-failures",
+      create: () => ({
+        activate(context) {
+          context.onDispose(() => {
+            cleanup.push("first");
+            throw new Error("dispose first");
+          });
+          context.onDispose(() => {
+            cleanup.push("second");
+            throw new Error("dispose second");
+          });
+        },
+        dispose() {
+          cleanup.push("instance");
+          throw new Error("dispose instance");
+        },
+      }),
+    },
+  ]);
+  await host.activate("disposal-failures");
+
+  let failure: ExtensionError | undefined;
+  try {
+    await host.dispose();
+  } catch (error) {
+    failure = error as ExtensionError;
+  }
+  expect(failure).toMatchObject({ code: "EXTENSION_DISPOSAL_FAILED" });
+  expect(failure?.cause).toBeInstanceOf(AggregateError);
+  const aggregate = failure?.cause as AggregateError;
+  expect(Object.isFrozen(aggregate)).toBe(true);
+  expect(Object.isFrozen(aggregate.errors)).toBe(true);
+  expect(aggregate.errors.map((error) => (error as Error).message)).toEqual([
+    "dispose second",
+    "dispose first",
+    "dispose instance",
+  ]);
+  expect(cleanup).toEqual(["second", "first", "instance"]);
 });
 
 test("rejects duplicate Tool contributions without partially changing the live registry", async () => {
@@ -481,6 +812,94 @@ test("disposes an instance produced after disposal cancelled its pending factory
   });
   await disposal;
   expect(cleanup).toEqual(["instance"]);
+});
+
+test("classifies cooperative abort rejection as cancellation and reads signal intrinsics", async () => {
+  const controller = new AbortController();
+  Object.defineProperties(controller.signal, {
+    aborted: {
+      configurable: true,
+      get() {
+        throw new Error("hostile aborted getter");
+      },
+    },
+    reason: {
+      configurable: true,
+      get() {
+        throw new Error("hostile reason getter");
+      },
+    },
+  });
+  const entered = deferred<void>();
+  const host = new ExtensionHost({ resources: await emptyResources() });
+  host.discover([
+    {
+      id: "cooperative-cancel",
+      create: () => ({
+        activate(context) {
+          entered.resolve();
+          return new Promise((_resolve, reject) => {
+            context.signal.addEventListener(
+              "abort",
+              () => reject(new Error("cooperative stop")),
+              { once: true },
+            );
+          });
+        },
+      }),
+    },
+  ]);
+
+  const activation = host.activate("cooperative-cancel", controller.signal);
+  await entered.promise;
+  controller.abort("cancel requested");
+  await expect(activation).rejects.toMatchObject({
+    code: "EXTENSION_CANCELLED",
+  });
+  await host.dispose();
+});
+
+test("preserves cancellation inside rollback-failure aggregate", async () => {
+  const controller = new AbortController();
+  const entered = deferred<void>();
+  const host = new ExtensionHost({ resources: await emptyResources() });
+  host.discover([
+    {
+      id: "cancel-rollback",
+      create: () => ({
+        activate(context) {
+          context.onDispose(() => {
+            throw new Error("cancel cleanup failed");
+          });
+          entered.resolve();
+          return new Promise((_resolve, reject) => {
+            context.signal.addEventListener(
+              "abort",
+              () => reject(new Error("cooperative rejection")),
+              { once: true },
+            );
+          });
+        },
+      }),
+    },
+  ]);
+
+  const activation = host.activate("cancel-rollback", controller.signal);
+  await entered.promise;
+  controller.abort("stop");
+  let failure: ExtensionError | undefined;
+  try {
+    await activation;
+  } catch (error) {
+    failure = error as ExtensionError;
+  }
+  expect(failure).toMatchObject({
+    code: "EXTENSION_ACTIVATION_ROLLBACK_FAILED",
+  });
+  const aggregate = failure?.cause as AggregateError;
+  expect(aggregate.errors[0]).toMatchObject({ code: "EXTENSION_CANCELLED" });
+  expect((aggregate.errors[1] as Error).message).toBe("cancel cleanup failed");
+  await host.dispose();
 });
 
 test("disposes a factory-created instance even when its activate contract is invalid", async () => {

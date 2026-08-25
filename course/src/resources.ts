@@ -1,14 +1,32 @@
-import { readFile, realpath, stat } from "node:fs/promises";
-import { isAbsolute, normalize, relative, resolve, sep } from "node:path";
+import { AsyncLocalStorage } from "node:async_hooks";
+import { constants as fileSystemConstants } from "node:fs";
+import { open, realpath, stat, type FileHandle } from "node:fs/promises";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 import { types as nodeUtilTypes } from "node:util";
 
 import type { AgentEvent } from "./protocol";
 import { ToolRegistry, type RegisteredCourseTool } from "./tool";
 
 const NativePromise = Promise;
+const NativeAggregateError = AggregateError;
+const NativeTextDecoder = TextDecoder;
 const nativePromiseThen = Promise.prototype.then;
 const reflectApply = Reflect.apply;
 const structuredCloneValue = structuredClone;
+const asyncLocalStorageGetStore = AsyncLocalStorage.prototype.getStore;
+const asyncLocalStorageRun = AsyncLocalStorage.prototype.run;
+const abortSignalAbortedGetter = Object.getOwnPropertyDescriptor(
+  AbortSignal.prototype,
+  "aborted",
+)?.get;
+const abortSignalReasonGetter = Object.getOwnPropertyDescriptor(
+  AbortSignal.prototype,
+  "reason",
+)?.get;
+const abortControllerAbort = AbortController.prototype.abort;
+const eventTargetAddEventListener = EventTarget.prototype.addEventListener;
+const eventTargetRemoveEventListener =
+  EventTarget.prototype.removeEventListener;
 const toolRegistryGet = ToolRegistry.prototype.get;
 const toolRegistryRegisterMany = ToolRegistry.prototype.registerMany;
 const toolRegistrySnapshot = ToolRegistry.prototype.snapshot;
@@ -16,13 +34,19 @@ const nodeIsNativeError = nodeUtilTypes.isNativeError;
 const nodeIsPromise = nodeUtilTypes.isPromise;
 const nodeIsProxy = nodeUtilTypes.isProxy;
 const MAX_ASYNC_OBSERVATION_DEPTH = 32;
+/** Maximum encoded bytes accepted by {@link ResourceLoader.loadText}. */
+export const MAX_RESOURCE_TEXT_BYTES = 1024 * 1024;
+const OPEN_READ_ONLY = fileSystemConstants.O_RDONLY;
+const OPEN_NO_FOLLOW = fileSystemConstants.O_NOFOLLOW ?? 0;
 
 export type ResourceErrorCode =
-  | "INVALID_RESOURCE_ROOTS"
+  | "RESOURCE_INVALID_ROOTS"
   | "DUPLICATE_RESOURCE_ROOT_ID"
   | "RESOURCE_OUTSIDE_TRUSTED_ROOTS"
   | "RESOURCE_ROOT_CHANGED"
   | "RESOURCE_NOT_FILE"
+  | "RESOURCE_TOO_LARGE"
+  | "RESOURCE_INVALID_UTF8"
   | "RESOURCE_IO_FAILED";
 
 export class ResourceError extends Error {
@@ -65,6 +89,12 @@ type RootIdentity = Readonly<{
   birthtimeMs: number | bigint;
 }>;
 
+type FileIdentity = RootIdentity &
+  Readonly<{
+    size: number | bigint;
+    mtimeMs: number | bigint;
+  }>;
+
 type TrustedRoot = Readonly<{
   id: string;
   configuredDirectory: string;
@@ -79,6 +109,8 @@ type TrustedRoot = Readonly<{
  * Creation captures each root's canonical identity. Every load rechecks that
  * identity and confines both the lexical and canonical target paths, so a
  * later symlink, junction, or root replacement cannot broaden trust.
+ * Text is limited to {@link MAX_RESOURCE_TEXT_BYTES} encoded bytes and decoded
+ * with fatal UTF-8 validation.
  */
 export class ResourceLoader {
   readonly #trustedRoots: readonly TrustedRoot[];
@@ -101,14 +133,14 @@ export class ResourceLoader {
       values = snapshotArray(definitions, "Resource roots");
     } catch (error) {
       throw resourceFailure(
-        "INVALID_RESOURCE_ROOTS",
+        "RESOURCE_INVALID_ROOTS",
         "Resource roots must be a dense Array",
         error,
       );
     }
     if (values.length === 0) {
       throw resourceFailure(
-        "INVALID_RESOURCE_ROOTS",
+        "RESOURCE_INVALID_ROOTS",
         "ResourceLoader requires at least one trusted root",
       );
     }
@@ -122,7 +154,7 @@ export class ResourceLoader {
       } catch (error) {
         if (error instanceof ResourceError) throw error;
         throw resourceFailure(
-          "INVALID_RESOURCE_ROOTS",
+          "RESOURCE_INVALID_ROOTS",
           `Resource root ${index} is invalid`,
           error,
         );
@@ -150,7 +182,7 @@ export class ResourceLoader {
       }
       if (!rootStats.isDirectory()) {
         throw resourceFailure(
-          "INVALID_RESOURCE_ROOTS",
+          "RESOURCE_INVALID_ROOTS",
           `Resource root "${definition.id}" is not a directory`,
         );
       }
@@ -215,25 +247,11 @@ export class ResourceLoader {
         );
       }
 
-      let before: Awaited<ReturnType<typeof stat>>;
-      let content: string;
-      try {
-        before = await stat(canonicalTarget);
-        if (!before.isFile()) {
-          throw resourceFailure(
-            "RESOURCE_NOT_FILE",
-            `Resource "${normalizedPath}" in root "${root.id}" is not a file`,
-          );
-        }
-        content = await readFile(canonicalTarget, "utf8");
-      } catch (error) {
-        if (error instanceof ResourceError) throw error;
-        throw resourceFailure(
-          "RESOURCE_IO_FAILED",
-          `Cannot read Resource "${normalizedPath}" from root "${root.id}"`,
-          error,
-        );
-      }
+      const loaded = await readTrustedText(
+        canonicalTarget,
+        normalizedPath,
+        root.id,
+      );
 
       await verifyRootIdentity(root);
       let afterCanonical: string;
@@ -250,7 +268,7 @@ export class ResourceLoader {
       }
       if (
         afterCanonical !== canonicalTarget ||
-        !sameIdentity(identityFromStats(before), identityFromStats(after))
+        !sameFileIdentity(loaded.identity, fileIdentityFromStats(after))
       ) {
         throw resourceFailure(
           "RESOURCE_ROOT_CHANGED",
@@ -261,7 +279,7 @@ export class ResourceLoader {
       return Object.freeze({
         rootId: root.id,
         path: normalizedPath.split(sep).join("/"),
-        content,
+        content: loaded.content,
       });
     }
     return undefined;
@@ -269,13 +287,16 @@ export class ResourceLoader {
 }
 
 export type ExtensionErrorCode =
+  | "EXTENSION_INVALID_OPTIONS"
   | "INVALID_EXTENSION_DEFINITION"
   | "DUPLICATE_EXTENSION_ID"
   | "EXTENSION_NOT_FOUND"
   | "EXTENSION_ALREADY_ACTIVE"
   | "EXTENSION_ACTIVATION_FAILED"
+  | "EXTENSION_ACTIVATION_ROLLBACK_FAILED"
   | "EXTENSION_CANCELLED"
   | "EXTENSION_HOST_DISPOSED"
+  | "EXTENSION_REENTRANT_OPERATION"
   | "EXTENSION_DISPOSAL_FAILED"
   | "INVALID_AGENT_EVENT";
 
@@ -365,6 +386,11 @@ type StagedContribution = {
   disposers: ExtensionDisposer[];
 };
 
+type CallbackInvoker = (
+  callback: unknown,
+  argumentsValue: readonly unknown[],
+) => unknown;
+
 /**
  * Metadata-only discovery and explicit, serialized Extension activation.
  * Contributions are staged and fully validated before one atomic registry
@@ -377,6 +403,8 @@ export class ExtensionHost {
   readonly #active = new Map<string, ActiveExtension>();
   readonly #activationOrder: string[] = [];
   readonly #baseTools: ToolRegistry;
+  readonly #callbackContext = new AsyncLocalStorage<symbol>();
+  readonly #callbackToken = Symbol("ExtensionHost callback context");
   #liveTools: ToolRegistry;
   #tail: Promise<unknown> = NativePromise.resolve();
   #state: "open" | "disposing" | "disposed" = "open";
@@ -393,26 +421,43 @@ export class ExtensionHost {
       tools = readOptionalOwnValue(record, "tools");
     } catch (error) {
       throw extensionFailure(
-        "INVALID_EXTENSION_DEFINITION",
+        "EXTENSION_INVALID_OPTIONS",
         "ExtensionHost options are invalid",
         error,
       );
     }
-    if (!(resources instanceof ResourceLoader)) {
+    if (
+      !(resources instanceof ResourceLoader) ||
+      (isObjectLike(resources) && nodeIsProxy(resources))
+    ) {
       throw extensionFailure(
-        "INVALID_EXTENSION_DEFINITION",
-        "ExtensionHost requires a ResourceLoader",
+        "EXTENSION_INVALID_OPTIONS",
+        "ExtensionHost requires a non-Proxy ResourceLoader",
       );
     }
     this.#resources = resources;
 
-    if (tools instanceof ToolRegistry) {
-      this.#baseTools = reflectApply(toolRegistrySnapshot, tools, []);
-    } else if (tools === undefined) {
-      this.#baseTools = new ToolRegistry();
-    } else {
-      const values = snapshotArray(tools, "ExtensionHost Tools");
-      this.#baseTools = new ToolRegistry(values);
+    try {
+      if (
+        tools instanceof ToolRegistry &&
+        isObjectLike(tools) &&
+        !nodeIsProxy(tools)
+      ) {
+        this.#baseTools = reflectApply(toolRegistrySnapshot, tools, []);
+      } else if (tools === undefined) {
+        this.#baseTools = new ToolRegistry();
+      } else if (isObjectLike(tools) && nodeIsProxy(tools)) {
+        throw new TypeError("ExtensionHost Tools must not be a Proxy");
+      } else {
+        const values = snapshotArray(tools, "ExtensionHost Tools");
+        this.#baseTools = new ToolRegistry(values);
+      }
+    } catch (error) {
+      throw extensionFailure(
+        "EXTENSION_INVALID_OPTIONS",
+        "ExtensionHost Tools are invalid",
+        error,
+      );
     }
     this.#liveTools = reflectApply(toolRegistrySnapshot, this.#baseTools, []);
   }
@@ -438,6 +483,7 @@ export class ExtensionHost {
 
   /** Record immutable metadata only. Factories remain dormant until activate. */
   public discover(definitions: readonly ExtensionDefinition[]): void {
+    this.#assertNotReentrant("discover");
     this.#assertOpen();
     let values: readonly unknown[];
     try {
@@ -483,6 +529,9 @@ export class ExtensionHost {
   }
 
   public activate(id: string, signal?: AbortSignal): Promise<void> {
+    if (this.#isReentrant()) {
+      return NativePromise.reject(reentrantOperationError("activate"));
+    }
     if (this.#state !== "open") {
       return NativePromise.reject(hostDisposedError());
     }
@@ -512,6 +561,9 @@ export class ExtensionHost {
    * and returned as immutable diagnostics.
    */
   public emit(event: AgentEvent): Promise<readonly ExtensionHookFailure[]> {
+    if (this.#isReentrant()) {
+      return NativePromise.reject(reentrantOperationError("emit"));
+    }
     if (this.#state !== "open") {
       return NativePromise.reject(hostDisposedError());
     }
@@ -534,10 +586,11 @@ export class ExtensionHost {
       for (let index = 0; index < hooks.length; index += 1) {
         const record = hooks[index];
         try {
-          const returned = reflectApply(record.hook, undefined, [
-            eventSnapshot,
-          ]);
-          await adoptAsync(returned, `Extension hook ${record.extensionId}`);
+          const returned = this.#invokeCallback(record.hook, [eventSnapshot]);
+          await this.#observeCallbackResult(
+            returned,
+            `Extension hook ${record.extensionId}`,
+          );
         } catch (error) {
           failures.push(
             Object.freeze({
@@ -552,12 +605,22 @@ export class ExtensionHost {
     });
   }
 
-  /** Abort pending activation, then dispose active Extensions in reverse order. */
+  /**
+   * Abort pending activation, then dispose active Extensions in reverse order.
+   * Every disposer runs; failures are reported in one frozen AggregateError.
+   */
   public dispose(): Promise<void> {
+    if (this.#isReentrant()) {
+      return NativePromise.reject(reentrantOperationError("dispose"));
+    }
     if (this.#disposePromise !== undefined) return this.#disposePromise;
     this.#state = "disposing";
     try {
-      this.#currentController?.abort("ExtensionHost disposed");
+      if (this.#currentController !== undefined) {
+        reflectApply(abortControllerAbort, this.#currentController, [
+          "ExtensionHost disposed",
+        ]);
+      }
     } catch {
       // The serialized activation will still observe the host state boundary.
     }
@@ -571,7 +634,11 @@ export class ExtensionHost {
         const id = this.#activationOrder[index];
         const active = this.#active.get(id);
         if (active === undefined) continue;
-        const cleanupFailures = await cleanupExtension(active);
+        const cleanupFailures = await cleanupExtension(
+          active,
+          (callback, argumentsValue) =>
+            this.#invokeCallback(callback, argumentsValue),
+        );
         for (
           let failureIndex = 0;
           failureIndex < cleanupFailures.length;
@@ -589,7 +656,10 @@ export class ExtensionHost {
         throw extensionFailure(
           "EXTENSION_DISPOSAL_FAILED",
           `${failures.length} Extension disposer(s) failed`,
-          failures[0],
+          frozenAggregate(
+            failures,
+            `${failures.length} Extension disposer(s) failed`,
+          ),
         );
       }
     });
@@ -618,8 +688,8 @@ export class ExtensionHost {
 
     try {
       throwIfActivationCancelled(controller.signal, this.#state);
-      const created = reflectApply(definition.create, undefined, []);
-      const rawInstance = await adoptAsync(
+      const created = this.#invokeCallback(definition.create, []);
+      const rawInstance = await this.#observeCallbackResult(
         created,
         `Extension factory ${definition.id}`,
       );
@@ -636,9 +706,14 @@ export class ExtensionHost {
         controller.signal,
         staged,
       );
-      const returned = reflectApply(instance.activate, undefined, [context]);
-      await adoptAsync(returned, `Extension activation ${definition.id}`);
-      staged.open = false;
+      const returned = this.#invokeCallback(instance.activate, [context]);
+      await this.#observeCallbackResult(
+        returned,
+        `Extension activation ${definition.id}`,
+        () => {
+          staged.open = false;
+        },
+      );
       throwIfActivationCancelled(controller.signal, this.#state);
 
       const candidate = reflectApply(toolRegistrySnapshot, this.#liveTools, []);
@@ -668,14 +743,30 @@ export class ExtensionHost {
       this.#statuses.set(definition.id, "active");
     } catch (error) {
       staged.open = false;
-      await cleanupStaged(staged.disposers, instanceDispose);
-      this.#statuses.set(definition.id, "failed");
-      if (error instanceof ExtensionError) throw error;
-      throw extensionFailure(
-        "EXTENSION_ACTIVATION_FAILED",
-        `Extension "${definition.id}" activation failed: ${safeErrorMessage(error)}`,
+      const primary = normalizeActivationFailure(
         error,
+        definition.id,
+        controller.signal,
+        this.#state,
       );
+      const cleanupFailures = await cleanupStaged(
+        staged.disposers,
+        instanceDispose,
+        (callback, argumentsValue) =>
+          this.#invokeCallback(callback, argumentsValue),
+      );
+      this.#statuses.set(definition.id, "failed");
+      if (cleanupFailures.length > 0) {
+        throw extensionFailure(
+          "EXTENSION_ACTIVATION_ROLLBACK_FAILED",
+          `Extension "${definition.id}" activation and rollback failed`,
+          frozenAggregate(
+            [rollbackPrimaryError(error, primary), ...cleanupFailures],
+            `Extension "${definition.id}" activation and rollback failed`,
+          ),
+        );
+      }
+      throw primary;
     } finally {
       staged.open = false;
       detachExternal();
@@ -709,6 +800,44 @@ export class ExtensionHost {
 
   #assertOpen(): void {
     if (this.#state !== "open") throw hostDisposedError();
+  }
+
+  #assertNotReentrant(operation: string): void {
+    if (this.#isReentrant()) throw reentrantOperationError(operation);
+  }
+
+  #isReentrant(): boolean {
+    return (
+      reflectApply(asyncLocalStorageGetStore, this.#callbackContext, []) ===
+      this.#callbackToken
+    );
+  }
+
+  #invokeCallback(
+    callback: unknown,
+    argumentsValue: readonly unknown[],
+  ): unknown {
+    if (typeof callback !== "function") {
+      throw extensionFailure(
+        "INVALID_EXTENSION_DEFINITION",
+        "Extension callback must be a function",
+      );
+    }
+    return reflectApply(asyncLocalStorageRun, this.#callbackContext, [
+      this.#callbackToken,
+      () => reflectApply(callback, undefined, argumentsValue),
+    ]);
+  }
+
+  #observeCallbackResult(
+    value: unknown,
+    label: string,
+    onSettled?: () => void,
+  ): Promise<unknown> {
+    return this.#invokeCallback(
+      () => adoptAsync(value, label, onSettled),
+      [],
+    ) as Promise<unknown>;
   }
 
   #enqueue<Value>(operation: () => Value | PromiseLike<Value>): Promise<Value> {
@@ -792,21 +921,28 @@ function snapshotNewTools(
 
 async function cleanupStaged(
   disposers: readonly ExtensionDisposer[],
-  instanceDispose?: ExtensionDisposer,
+  instanceDispose: ExtensionDisposer | undefined,
+  invoke: CallbackInvoker,
 ): Promise<readonly unknown[]> {
   const failures: unknown[] = [];
   for (let index = disposers.length - 1; index >= 0; index -= 1) {
     try {
-      const returned = reflectApply(disposers[index], undefined, []);
-      await adoptAsync(returned, "Extension rollback disposer");
+      const returned = invoke(disposers[index], []);
+      await (invoke(
+        () => adoptAsync(returned, "Extension rollback disposer"),
+        [],
+      ) as Promise<unknown>);
     } catch (error) {
       failures.push(error);
     }
   }
   if (instanceDispose !== undefined) {
     try {
-      const returned = reflectApply(instanceDispose, undefined, []);
-      await adoptAsync(returned, "Extension instance disposer");
+      const returned = invoke(instanceDispose, []);
+      await (invoke(
+        () => adoptAsync(returned, "Extension instance disposer"),
+        [],
+      ) as Promise<unknown>);
     } catch (error) {
       failures.push(error);
     }
@@ -816,8 +952,9 @@ async function cleanupStaged(
 
 function cleanupExtension(
   active: ActiveExtension,
+  invoke: CallbackInvoker,
 ): Promise<readonly unknown[]> {
-  return cleanupStaged(active.disposers, active.instanceDispose);
+  return cleanupStaged(active.disposers, active.instanceDispose, invoke);
 }
 
 function snapshotExtensionDefinition(
@@ -879,7 +1016,7 @@ function snapshotRootDefinition(
   const directory = readOwnValue(record, "directory");
   if (typeof id !== "string" || id.trim() === "" || id !== id.trim()) {
     throw resourceFailure(
-      "INVALID_RESOURCE_ROOTS",
+      "RESOURCE_INVALID_ROOTS",
       `Resource root ${index} has an invalid ID`,
     );
   }
@@ -889,7 +1026,7 @@ function snapshotRootDefinition(
     directory.includes("\0")
   ) {
     throw resourceFailure(
-      "INVALID_RESOURCE_ROOTS",
+      "RESOURCE_INVALID_ROOTS",
       `Resource root "${id}" has an invalid directory`,
     );
   }
@@ -936,6 +1073,12 @@ function requireObject(
   return value as Record<PropertyKey, unknown>;
 }
 
+function isObjectLike(value: unknown): value is object {
+  return (
+    (typeof value === "object" || typeof value === "function") && value !== null
+  );
+}
+
 function readOwnValue(
   value: Record<PropertyKey, unknown>,
   key: PropertyKey,
@@ -960,18 +1103,48 @@ function readOptionalOwnValue(
 }
 
 function normalizeResourcePath(value: string): string {
-  if (
-    typeof value !== "string" ||
-    value.length === 0 ||
-    value.includes("\0") ||
-    isAbsolute(value)
-  ) {
+  if (typeof value !== "string" || value.length === 0 || value.includes("\0")) {
     throw resourceFailure(
       "RESOURCE_OUTSIDE_TRUSTED_ROOTS",
       "Resource path must be a non-empty relative path",
     );
   }
-  return normalize(value);
+  const portable = value.replaceAll("\\", "/");
+  if (
+    portable.startsWith("/") ||
+    portable.includes(":") ||
+    /^[A-Za-z]:/.test(portable)
+  ) {
+    throw resourceFailure(
+      "RESOURCE_OUTSIDE_TRUSTED_ROOTS",
+      `Resource path "${value}" is not portable and relative`,
+    );
+  }
+
+  const normalized: string[] = [];
+  const segments = portable.split("/");
+  for (let index = 0; index < segments.length; index += 1) {
+    const segment = segments[index];
+    if (segment === "" || segment === ".") continue;
+    if (segment === "..") {
+      if (normalized.length === 0) {
+        throw resourceFailure(
+          "RESOURCE_OUTSIDE_TRUSTED_ROOTS",
+          `Resource path "${value}" escapes trusted roots`,
+        );
+      }
+      normalized.pop();
+      continue;
+    }
+    normalized.push(segment);
+  }
+  if (normalized.length === 0) {
+    throw resourceFailure(
+      "RESOURCE_OUTSIDE_TRUSTED_ROOTS",
+      `Resource path "${value}" does not identify a file`,
+    );
+  }
+  return normalized.join(sep);
 }
 
 function isWithin(root: string, target: string): boolean {
@@ -984,6 +1157,123 @@ function isWithin(root: string, target: string): boolean {
   );
 }
 
+async function readTrustedText(
+  canonicalTarget: string,
+  normalizedPath: string,
+  rootId: string,
+): Promise<Readonly<{ content: string; identity: FileIdentity }>> {
+  let handle: FileHandle;
+  try {
+    handle = await openReadNoFollow(canonicalTarget);
+  } catch (error) {
+    throw resourceFailure(
+      "RESOURCE_IO_FAILED",
+      `Cannot open Resource "${normalizedPath}" from root "${rootId}"`,
+      error,
+    );
+  }
+
+  let primaryFailure: unknown;
+  try {
+    const before = await handle.stat();
+    if (!before.isFile()) {
+      throw resourceFailure(
+        "RESOURCE_NOT_FILE",
+        `Resource "${normalizedPath}" in root "${rootId}" is not a file`,
+      );
+    }
+    if (before.size > MAX_RESOURCE_TEXT_BYTES) {
+      throw resourceFailure(
+        "RESOURCE_TOO_LARGE",
+        `Resource "${normalizedPath}" exceeds ${MAX_RESOURCE_TEXT_BYTES} bytes`,
+      );
+    }
+
+    // Size is validated before this bounded allocation. Reading one extra byte
+    // detects a file that grows past the cap after fstat.
+    const bytes = Buffer.allocUnsafe(MAX_RESOURCE_TEXT_BYTES + 1);
+    let byteCount = 0;
+    while (byteCount < bytes.length) {
+      const result = await handle.read(
+        bytes,
+        byteCount,
+        bytes.length - byteCount,
+        byteCount,
+      );
+      if (result.bytesRead === 0) break;
+      byteCount += result.bytesRead;
+    }
+    if (byteCount > MAX_RESOURCE_TEXT_BYTES) {
+      throw resourceFailure(
+        "RESOURCE_TOO_LARGE",
+        `Resource "${normalizedPath}" exceeds ${MAX_RESOURCE_TEXT_BYTES} bytes`,
+      );
+    }
+
+    const after = await handle.stat();
+    const beforeIdentity = fileIdentityFromStats(before);
+    const afterIdentity = fileIdentityFromStats(after);
+    if (
+      !sameFileIdentity(beforeIdentity, afterIdentity) ||
+      after.size !== byteCount
+    ) {
+      throw resourceFailure(
+        "RESOURCE_ROOT_CHANGED",
+        `Resource "${normalizedPath}" changed while it was being read`,
+      );
+    }
+
+    let content: string;
+    try {
+      const decoder = new NativeTextDecoder("utf-8", { fatal: true });
+      content = decoder.decode(bytes.subarray(0, byteCount));
+    } catch (error) {
+      throw resourceFailure(
+        "RESOURCE_INVALID_UTF8",
+        `Resource "${normalizedPath}" is not valid UTF-8`,
+        error,
+      );
+    }
+    return Object.freeze({ content, identity: afterIdentity });
+  } catch (error) {
+    primaryFailure = error;
+    if (error instanceof ResourceError) throw error;
+    throw resourceFailure(
+      "RESOURCE_IO_FAILED",
+      `Cannot read Resource "${normalizedPath}" from root "${rootId}"`,
+      error,
+    );
+  } finally {
+    try {
+      await handle.close();
+    } catch (error) {
+      if (primaryFailure === undefined) {
+        throw resourceFailure(
+          "RESOURCE_IO_FAILED",
+          `Cannot close Resource "${normalizedPath}" from root "${rootId}"`,
+          error,
+        );
+      }
+    }
+  }
+}
+
+async function openReadNoFollow(path: string): Promise<FileHandle> {
+  if (OPEN_NO_FOLLOW === 0) return open(path, OPEN_READ_ONLY);
+  try {
+    return await open(path, OPEN_READ_ONLY | OPEN_NO_FOLLOW);
+  } catch (error) {
+    if (
+      isFileSystemCode(error, "EINVAL") ||
+      isFileSystemCode(error, "ENOTSUP") ||
+      isFileSystemCode(error, "ENOSYS")
+    ) {
+      return open(path, OPEN_READ_ONLY);
+    }
+    throw error;
+  }
+}
+
 function identityFromStats(
   value: Awaited<ReturnType<typeof stat>>,
 ): RootIdentity {
@@ -994,11 +1284,29 @@ function identityFromStats(
   });
 }
 
+function fileIdentityFromStats(
+  value: Awaited<ReturnType<typeof stat>>,
+): FileIdentity {
+  return Object.freeze({
+    ...identityFromStats(value),
+    size: value.size,
+    mtimeMs: value.mtimeMs,
+  });
+}
+
 function sameIdentity(left: RootIdentity, right: RootIdentity): boolean {
   return (
     left.device === right.device &&
     left.inode === right.inode &&
     left.birthtimeMs === right.birthtimeMs
+  );
+}
+
+function sameFileIdentity(left: FileIdentity, right: FileIdentity): boolean {
+  return (
+    sameIdentity(left, right) &&
+    left.size === right.size &&
+    left.mtimeMs === right.mtimeMs
   );
 }
 
@@ -1059,38 +1367,62 @@ function linkAbortSignal(
   controller: AbortController,
 ): () => void {
   if (external === undefined) return () => undefined;
-  if (!(external instanceof AbortSignal)) {
+  if (!(external instanceof AbortSignal) || nodeIsProxy(external)) {
     throw extensionFailure(
       "EXTENSION_CANCELLED",
-      "Extension activation signal must be an AbortSignal",
+      "Extension activation signal must be a non-Proxy AbortSignal",
     );
   }
   const abort = () => {
     try {
-      controller.abort(external.reason);
+      reflectApply(abortControllerAbort, controller, [
+        readSignalReason(external),
+      ]);
     } catch {
-      controller.abort();
+      reflectApply(abortControllerAbort, controller, []);
     }
   };
-  if (external.aborted) {
+  if (readSignalAborted(external)) {
     abort();
     return () => undefined;
   }
-  external.addEventListener("abort", abort, { once: true });
-  return () => external.removeEventListener("abort", abort);
+  reflectApply(eventTargetAddEventListener, external, [
+    "abort",
+    abort,
+    { once: true },
+  ]);
+  return () => {
+    try {
+      reflectApply(eventTargetRemoveEventListener, external, ["abort", abort]);
+    } catch {
+      // Listener cleanup cannot replace the selected activation outcome.
+    }
+  };
 }
 
 function throwIfActivationCancelled(
   signal: AbortSignal,
   hostState: "open" | "disposing" | "disposed",
 ): void {
-  if (signal.aborted || hostState !== "open") {
+  if (readSignalAborted(signal) || hostState !== "open") {
     throw extensionFailure(
       "EXTENSION_CANCELLED",
       "Extension activation was cancelled",
-      signal.reason,
+      readSignalReason(signal),
     );
   }
+}
+
+function readSignalAborted(signal: AbortSignal): boolean {
+  if (abortSignalAbortedGetter === undefined) {
+    throw new TypeError("AbortSignal.aborted intrinsic is unavailable");
+  }
+  return reflectApply(abortSignalAbortedGetter, signal, []) as boolean;
+}
+
+function readSignalReason(signal: AbortSignal): unknown {
+  if (abortSignalReasonGetter === undefined) return undefined;
+  return reflectApply(abortSignalReasonGetter, signal, []);
 }
 
 function snapshotAgentEvent(value: AgentEvent): AgentEvent {
@@ -1127,10 +1459,37 @@ function deepFreeze(value: unknown, seen: WeakSet<object>): unknown {
   return Object.freeze(value);
 }
 
-function adoptAsync(value: unknown, label: string): Promise<unknown> {
+function adoptAsync(
+  value: unknown,
+  label: string,
+  onSettled?: () => void,
+): Promise<unknown> {
   return new NativePromise<unknown>((resolvePromise, rejectPromise) => {
     const state = { seen: new WeakSet<object>() };
-    adoptValue(value, label, 0, state, resolvePromise, rejectPromise);
+    let boundarySelected = false;
+    const selectBoundary = () => {
+      if (boundarySelected) return;
+      boundarySelected = true;
+      onSettled?.();
+    };
+    const fulfill = (result: unknown) => {
+      try {
+        selectBoundary();
+        resolvePromise(result);
+      } catch (error) {
+        rejectPromise(error);
+      }
+    };
+    const reject = (reason: unknown) => {
+      try {
+        selectBoundary();
+      } catch (error) {
+        rejectPromise(error);
+        return;
+      }
+      rejectPromise(reason);
+    };
+    adoptValue(value, label, 0, state, fulfill, reject, selectBoundary);
   });
 }
 
@@ -1141,6 +1500,7 @@ function adoptValue(
   state: { seen: WeakSet<object> },
   fulfill: (value: unknown) => void,
   reject: (reason: unknown) => void,
+  selectBoundary: () => void,
 ): void {
   if (
     (typeof value !== "object" && typeof value !== "function") ||
@@ -1189,11 +1549,35 @@ function adoptValue(
       (nested: unknown) => {
         if (selected) return;
         selected = true;
-        adoptValue(nested, label, depth + 1, state, fulfill, reject);
+        if (depth === 0) {
+          try {
+            selectBoundary();
+          } catch (error) {
+            reject(error);
+            return;
+          }
+        }
+        adoptValue(
+          nested,
+          label,
+          depth + 1,
+          state,
+          fulfill,
+          reject,
+          selectBoundary,
+        );
       },
       (reason: unknown) => {
         if (selected) return;
         selected = true;
+        if (depth === 0) {
+          try {
+            selectBoundary();
+          } catch (error) {
+            reject(error);
+            return;
+          }
+        }
         reject(reason);
       },
     ]);
@@ -1303,6 +1687,67 @@ function safeErrorMessage(value: unknown): string {
   }
   if (typeof value === "string") return value;
   return "Extension callback failed";
+}
+
+function normalizeActivationFailure(
+  error: unknown,
+  extensionId: string,
+  signal: AbortSignal,
+  hostState: "open" | "disposing" | "disposed",
+): ExtensionError {
+  if (hostState !== "open" || readSignalAborted(signal)) {
+    if (
+      error instanceof ExtensionError &&
+      error.code === "EXTENSION_CANCELLED"
+    ) {
+      return error;
+    }
+    return extensionFailure(
+      "EXTENSION_CANCELLED",
+      `Extension "${extensionId}" activation was cancelled`,
+      error,
+    );
+  }
+  if (error instanceof ExtensionError) return error;
+  return extensionFailure(
+    "EXTENSION_ACTIVATION_FAILED",
+    `Extension "${extensionId}" activation failed: ${safeErrorMessage(error)}`,
+    error,
+  );
+}
+
+function rollbackPrimaryError(
+  original: unknown,
+  normalized: ExtensionError,
+): unknown {
+  if (
+    normalized.code === "EXTENSION_ACTIVATION_FAILED" &&
+    !(original instanceof ExtensionError)
+  ) {
+    return original;
+  }
+  return normalized;
+}
+
+function frozenAggregate(
+  values: readonly unknown[],
+  message: string,
+): AggregateError {
+  const errors: unknown[] = [];
+  for (let index = 0; index < values.length; index += 1) {
+    errors.push(values[index]);
+  }
+  Object.freeze(errors);
+  const aggregate = new NativeAggregateError(errors, message);
+  Object.freeze(aggregate.errors);
+  return Object.freeze(aggregate);
+}
+
+function reentrantOperationError(operation: string): ExtensionError {
+  return extensionFailure(
+    "EXTENSION_REENTRANT_OPERATION",
+    `Extension callback cannot call ExtensionHost.${operation} reentrantly`,
+  );
 }
 
 function hostDisposedError(): ExtensionError {
