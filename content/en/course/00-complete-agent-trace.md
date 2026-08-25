@@ -17,7 +17,7 @@ reviewed_by: Pify maintainers
 
 You will read one complete Agent run before separating it into types, streams, and classes. The trace accepts a user request, opens a model stream, receives an `add` Tool call, executes it, appends the matching result, opens a continuation stream, completes the final text, and ends with `status: "completed"`.
 
-The trace is deliberately small, but its checks are architectural. Event order must remain stable. The Tool call and Tool result must carry the same `toolCallId`. The returned event list and nested arguments must not change after the run. The final text event and terminal result must agree about what the user received.
+The trace is deliberately small, but its contract is architectural. Event order must remain stable. The Tool call and Tool result must carry the same `toolCallId`. The returned event list and nested arguments must not change after the run. The source also uses one `finalText` constant for the final-text event and terminal result. The focused test covers a narrower, explicit set of claims described below.
 
 :::note[Course implementation]
 
@@ -34,19 +34,19 @@ Read these two files together:
 | Role | Exact path | What to inspect |
 | --- | --- | --- |
 | Cumulative source | `course/src/demo/prologue.ts` | The eight immutable events and terminal result |
-| Focused evidence | `course/test/00-complete-agent-trace.test.ts` | Order, ID linkage, deep-freeze checks, and final text |
+| Focused evidence | `course/test/00-complete-agent-trace.test.ts` | Event-type order, shared Tool ID, exact terminal result, and deep-freeze checks |
 
 No API key or network connection is used. The input, Tool arguments, Tool output, and final response are fixed fixtures, so a changed assertion points to a protocol regression rather than model variance.
 
 ## Mechanism
 
-An Agent run is more than the final sentence. It is an ordered protocol whose intermediate records explain why that sentence exists. The prologue assigns `sequence` values `0` through `7`; the test also checks the event types in the same order. A renderer may show selected events, but the underlying trace must keep the causal sequence.
+An Agent run is more than the final sentence. It is an ordered protocol whose intermediate records explain why that sentence exists. Source inspection shows that the prologue assigns `sequence` values `0` through `7`. The focused test checks the event-type array in that source order, but it does not assert the numeric `sequence` fields. A renderer may show selected events, but the underlying trace must keep the causal sequence.
 
 The first model stream ends with `tool_call_completed`, not with a user-facing answer. `tool_execution_started` shows that execution begins only after a complete call exists. `tool_result_appended` places the result in the transcript under the original `toolCallId`. Only then may the second model stream use that result and produce `final_text_completed`.
 
 Stable IDs carry identity across time. The name `add` describes the operation, but it cannot identify one invocation when a model requests `add` twice. `call-add-001` identifies this invocation. A Tool result with the same name but another ID is unrelated and makes the trace invalid.
 
-The trace also separates events from the terminal result. Events are progress records for observers. `result` is the settled value for the caller. The last event records `status: "completed"`, while the result records both that status and `finalText: "The sum is 42."`. A later implementation can stream many events while still offering one value to await.
+The trace also separates events from the terminal result. Events are progress records for observers. `result` is the settled value for the caller. In the source fixture, the last event records `status: "completed"`, and one `finalText` constant supplies both `final_text_completed.text` and `result.finalText`. The focused test asserts the exact result object; it does not separately assert the last event's status or compare the two text fields. A later implementation can stream many events while still offering one value to await.
 
 Immutability makes the fixture dependable. The top-level run, event array, every event, nested Tool arguments, and terminal result are frozen. A subscriber cannot rewrite an earlier event and make a later assertion observe a different history.
 
@@ -79,33 +79,54 @@ sequenceDiagram
 | 6 | `final_text_completed` | The final user-facing text is complete |
 | 7 | `agent_ended` | The run reaches terminal status `completed` |
 
-The second model turn is not an optional rendering detail. Without it, the model never sees the Tool result and cannot ground the final answer in `42`.
+The second model turn is not an optional rendering detail. Without it, the model never receives the Tool result and cannot use `42` when composing the final answer.
 
 ## Build it
 
-The cumulative module is `course/src/demo/prologue.ts`. This focused fragment shows how one stable ID is captured once and reused by both sides of the Tool round:
+The cumulative module is `course/src/demo/prologue.ts`. The following excerpt is copied verbatim from `course/test/00-complete-agent-trace.test.ts`. It compiles in that test file and shows the exact automated evidence for event-type order, Tool linkage, and the terminal result:
 
 ```ts
-const toolCallId = "call-add-001";
+import { expect, test } from "vitest";
 
-const linkedEvents = Object.freeze([
-  Object.freeze({
+import { runPrologue } from "../src/index";
+
+const expectedEventTypes = [
+  "user_message_accepted",
+  "model_stream_opened",
+  "tool_call_completed",
+  "tool_execution_started",
+  "tool_result_appended",
+  "model_stream_opened",
+  "final_text_completed",
+  "agent_ended",
+] as const;
+
+test("follows one complete Agent trace in exact event order", () => {
+  const run = runPrologue();
+
+  expect(run.events.map(({ type }) => type)).toEqual(expectedEventTypes);
+
+  const toolCall = run.events[2];
+  const toolResult = run.events[4];
+
+  expect(toolCall).toMatchObject({
     type: "tool_call_completed",
-    sequence: 2,
-    toolCallId,
-    toolName: "add",
-    arguments: Object.freeze({ left: 20, right: 22 }),
-  }),
-  Object.freeze({
+    toolCallId: "call-add-001",
+  });
+  expect(toolResult).toMatchObject({
     type: "tool_result_appended",
-    sequence: 4,
-    toolCallId,
-    result: 42,
-  }),
-] as const);
+    toolCallId: "call-add-001",
+  });
+  expect(toolResult.toolCallId).toBe(toolCall.toolCallId);
+
+  expect(run.result).toEqual({
+    status: "completed",
+    finalText: "The sum is 42.",
+  });
+});
 ```
 
-The complete module returns the same prebuilt snapshot on every call. That is acceptable at checkpoint `00` because the goal is to establish the contract, not to model runtime work. Notice that freezing the array alone would be shallow. Each event, `arguments`, the terminal result, and the containing object are frozen separately.
+The complete source module returns the same prebuilt snapshot on every call. That is acceptable at checkpoint `00` because the goal is to establish the contract, not to model runtime work. Freezing the array alone would be shallow, so the source separately freezes each event, `arguments`, the terminal result, and the containing object. The second test verifies those freeze boundaries and mutation failures.
 
 When you inspect the test, follow indexes `2` and `4`: they are the Tool call and Tool result. The assertion compares their IDs directly instead of repeating only the expected string. That comparison states the relationship the Agent must preserve.
 
@@ -117,7 +138,7 @@ The focused test is `course/test/00-complete-agent-trace.test.ts`. Run this exac
 npm run test:course:checkpoint -- course/test/00-complete-agent-trace.test.ts
 ```
 
-Vitest should select one file. One test checks all eight event types, the Tool linkage, and the terminal result. The other tries to mutate the returned snapshot and confirms that the attempted writes throw without changing the trace.
+Vitest should select one file. One test checks all eight event types in array order, the shared Tool ID, and the exact terminal result. The other checks the deep-freeze boundaries, attempts mutations, and confirms that the trace retains its original length, arguments, and result text.
 
 ## Failure experiment
 
@@ -137,10 +158,10 @@ Run the focused command again. The event types still appear in the correct order
 ## Acceptance criteria
 
 - The focused command selects only `course/test/00-complete-agent-trace.test.ts` and passes offline.
-- The eight event types and their `sequence` values remain in causal order.
+- The focused test asserts the eight event types in array order; source inspection confirms numeric `sequence` values `0` through `7`.
 - The Tool call and Tool result both use `call-add-001`.
-- The continuation model stream begins after the Tool result is appended.
-- The last event has terminal status `completed`, and the result contains `finalText: "The sum is 42."`.
+- Source inspection shows the continuation model stream after the Tool result.
+- The focused test asserts the exact `{ status: "completed", finalText: "The sum is 42." }` result; source inspection confirms the final event status and shared `finalText` constant.
 - The run object, event array, individual events, Tool arguments, and terminal result reject mutation.
 - The controlled mismatched-ID edit fails the linkage assertion and passes again after restoration.
 

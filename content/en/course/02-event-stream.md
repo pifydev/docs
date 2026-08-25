@@ -88,30 +88,45 @@ The table separates the consumer's event timeline from the caller's result timel
 
 ## Build it
 
-The cumulative module is `course/src/event-stream.ts`. Its central producer paths are small enough to inspect directly:
+The cumulative module is `course/src/event-stream.ts`. Inspect `push()` and `finish()` there to see direct waiter delivery and buffered completion. The following contiguous excerpt is copied verbatim from the start of `course/test/02-event-stream.test.ts` through its first test. It compiles in that test file and exercises the public buffer/result contract:
 
 ```ts
-public push(event: Event): void {
-  this.assertOpen();
+import { expect, test } from "vitest";
 
-  const waiter = this.activeIterator?.waiters.shift();
-  if (waiter !== undefined) {
-    waiter.resolve({ done: false, value: event });
-    return;
-  }
+import { EventStream } from "../src/index";
 
-  this.buffer.push(event);
+type Deferred<Value> = Readonly<{
+  promise: Promise<Value>;
+  resolve: (value: Value | PromiseLike<Value>) => void;
+}>;
+
+function deferred<Value>(): Deferred<Value> {
+  let resolve!: (value: Value | PromiseLike<Value>) => void;
+  const promise = new Promise<Value>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+
+  return { promise, resolve };
 }
 
-public finish(result: Result): void {
-  this.assertOpen();
-  this.state = { status: "finished" };
-  this.resolveResult(result);
-
-  if (this.buffer.length === 0 && this.activeIterator !== undefined) {
-    this.closeIterator(this.activeIterator, { type: "done" });
+async function collect<Value>(source: AsyncIterable<Value>): Promise<Value[]> {
+  const values: Value[] = [];
+  for await (const value of source) {
+    values.push(value);
   }
+  return values;
 }
+
+test("delivers buffered events in push order before the terminal result", async () => {
+  const stream = new EventStream<string, number>();
+
+  stream.push("first");
+  stream.push("second");
+  stream.finish(42);
+
+  await expect(collect(stream)).resolves.toEqual(["first", "second"]);
+  await expect(stream.result).resolves.toBe(42);
+});
 ```
 
 The class installs an internal rejection handler with `void this.result.catch(() => undefined)`. This prevents an ignored terminal result from creating an unhandled-rejection warning. It does not convert the public promise to success: a caller awaiting the original `result` still receives the rejection.

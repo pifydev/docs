@@ -52,7 +52,7 @@ Shape validation runs before linkage validation. The inspector records valid cal
 
 Linkage has five core rules. A Tool-call ID is unique. Each call receives at most one result. A result must refer to a known call and appear later in the transcript. Its `toolName` must equal the call's name. Every well-formed call needs a later result. The stable codes include `DUPLICATE_TOOL_CALL_ID`, `DUPLICATE_TOOL_RESULT`, `ORPHAN_TOOL_RESULT`, `TOOL_RESULT_BEFORE_CALL`, `TOOL_NAME_MISMATCH`, and `MISSING_TOOL_RESULT`, alongside shape errors.
 
-JSON round-trip is a portability check, not a complete trust check. Parsed JSON no longer carries `Object.freeze()` state or TypeScript types. It does retain string discriminants, IDs, ordered arrays, and JSON argument values, so `validateTranscript(restored)` can rebuild confidence at the receiving boundary.
+JSON round-trip is a portability check, not a complete trust check. Parsed JSON no longer carries `Object.freeze()` state or TypeScript types. It does retain string discriminants, IDs, ordered arrays, and JSON argument values. The receiving boundary must call `validateTranscript(restored)` before treating that parsed data as a valid course transcript.
 
 ## Trace or model
 
@@ -81,39 +81,87 @@ The graph distinguishes a structurally valid result from a relationally valid re
 
 ## Build it
 
-The cumulative module is `course/src/messages.ts`. The public constructors let later modules create messages without duplicating shape checks. This compiling fragment builds one valid round and checks it:
+The cumulative module is `course/src/messages.ts`. The public constructors let later modules create messages without duplicating shape checks. The following contiguous excerpt is copied verbatim from the start of `course/test/03-message-ir.test.ts` through its first test. It compiles in that test file and preserves the original import, ordered text blocks, and explicit `isError` value:
 
 ```ts
+import { expect, test } from "vitest";
+
 import {
   assistantMessage,
+  textFromAssistant,
   toolResultMessage,
   userMessage,
   validateTranscript,
-} from "./course/src/messages";
+  type CourseAssistantBlock,
+  type CourseMessage,
+  type TranscriptValidationErrorCode,
+} from "../src/index";
 
-const transcript = [
-  userMessage({ id: "message-user-001", content: "Read package.json." }),
-  assistantMessage({
-    id: "message-assistant-001",
-    content: [
-      { type: "text", text: "I will inspect it." },
-      {
-        type: "toolCall",
-        id: "call-read-001",
-        name: "read",
-        arguments: { path: "package.json" },
-      },
-    ],
-  }),
-  toolResultMessage({
-    id: "message-tool-001",
-    toolCallId: "call-read-001",
-    toolName: "read",
-    content: '{"name":"pify-docs"}',
-  }),
-] as const;
+function errorCodes(
+  transcript: unknown,
+): readonly TranscriptValidationErrorCode[] {
+  return validateTranscript(transcript).map(({ code }) => code);
+}
 
-const errors = validateTranscript(transcript);
+function changingProperty(
+  target: object,
+  key: PropertyKey,
+  firstValue: unknown,
+  laterValue: unknown,
+): () => number {
+  let reads = 0;
+  Object.defineProperty(target, key, {
+    configurable: true,
+    enumerable: true,
+    get(): unknown {
+      reads += 1;
+      return reads === 1 ? firstValue : laterValue;
+    },
+  });
+  return () => reads;
+}
+
+test("constructs a valid Tool round-trip and extracts only assistant text", () => {
+  const transcript = [
+    userMessage({ id: "message-user-001", content: "Read package.json." }),
+    assistantMessage({
+      id: "message-assistant-001",
+      content: [
+        { type: "text", text: "I will inspect it. " },
+        {
+          type: "toolCall",
+          id: "call-read-001",
+          name: "read",
+          arguments: { path: "package.json" },
+        },
+        { type: "text", text: "Then I will summarize it." },
+      ],
+    }),
+    toolResultMessage({
+      id: "message-tool-001",
+      toolCallId: "call-read-001",
+      toolName: "read",
+      content: '{"name":"pify-docs"}',
+      isError: false,
+    }),
+  ] as const;
+
+  expect(validateTranscript(transcript)).toEqual([]);
+  expect(textFromAssistant(transcript[1])).toBe(
+    "I will inspect it. Then I will summarize it.",
+  );
+  expect(transcript).toMatchObject([
+    { id: "message-user-001", role: "user" },
+    { id: "message-assistant-001", role: "assistant" },
+    {
+      id: "message-tool-001",
+      role: "toolResult",
+      toolCallId: "call-read-001",
+      toolName: "read",
+      isError: false,
+    },
+  ]);
+});
 ```
 
 The source uses indexed loops and snapshots array lengths before traversal. It does not call caller-controlled `.entries()`, `.map()`, or nested iterators. Each inspected property is read once where practical, which prevents a getter from changing a field between validation and recording.

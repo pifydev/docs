@@ -27,14 +27,14 @@ The types in `course/src/protocol.ts` belong to the workshop. Their names, field
 
 ## Prerequisites
 
-Complete [checkpoint 00](00-complete-agent-trace.md). You should understand union types, literal types, generics, `Readonly<T>`, `readonly` arrays, `unknown`, type-only imports, and control-flow narrowing. You do not need advanced conditional types; the focused test uses them only to prove that the union discriminants remain exact.
+Complete [checkpoint 00](00-complete-agent-trace.md). You should understand union types, literal types, generics, `Readonly<T>`, `readonly` arrays, `unknown`, type-only imports, and control-flow narrowing. You do not need advanced conditional types; `npm run typecheck` evaluates the assertions in the focused test that keep the union discriminants exact.
 
 Read the protocol and its test side by side:
 
 | Role | Exact path | What to inspect |
 | --- | --- | --- |
 | Cumulative source | `course/src/protocol.ts` | All shared value contracts and `assertNever()` |
-| Focused evidence | `course/test/01-typescript-protocols.test.ts` | Compile-time readonly checks and runtime narrowing |
+| Focused evidence | `course/test/01-typescript-protocols.test.ts` | Runtime assertions plus contracts checked by `npm run typecheck` |
 
 The source intentionally contains no classes, queues, provider adapters, or filesystem operations. Protocol changes should be reviewable without also reasoning about mutable implementation state.
 
@@ -105,14 +105,14 @@ export type MaxStepsRunResult = Readonly<{
 export type FailedRunResult = Readonly<{
   status: "failed";
   messages: readonly CourseMessage[];
-  error: Readonly<{ code: string; message: string }>;
+  error: Readonly<{
+    code: string;
+    message: string;
+  }>;
 }>;
 
 export type RunResult =
-  | CompletedRunResult
-  | CancelledRunResult
-  | MaxStepsRunResult
-  | FailedRunResult;
+  CompletedRunResult | CancelledRunResult | MaxStepsRunResult | FailedRunResult;
 ```
 
 The focused test consumes such unions with the same exhaustive shape application code should use:
@@ -134,7 +134,7 @@ function describeRun(result: RunResult): string {
 }
 ```
 
-The test file also contains `@ts-expect-error` assertions. They prove the compiler rejects reassignment of message IDs, mutation of assistant content, nested JSON writes, a validator that accepts less than `unknown`, synchronous Tool execution, and a non-terminal `"running"` result.
+The test file also contains `@ts-expect-error` assertions for reassigned message IDs, mutated assistant content, nested JSON writes, a validator that accepts less than `unknown`, synchronous Tool execution, and a non-terminal `"running"` result. Those comments become compile-time evidence only when `tsc` checks the file through `npm run typecheck`.
 
 ## Run the focused test
 
@@ -144,7 +144,7 @@ The focused test is `course/test/01-typescript-protocols.test.ts`. Run exactly:
 npm run test:course:checkpoint -- course/test/01-typescript-protocols.test.ts
 ```
 
-Vitest compiles the test before executing it, so incorrect `@ts-expect-error` contracts fail the run. Runtime assertions then verify the exact discriminant sets, event sequence, Tool validation flow, and all four result branches. Run `npm run typecheck` as an additional repository-wide compile check after editing a shared union.
+Vitest transpiles and executes this file, but it does not type-check it. The focused command verifies runtime discriminant values, event order, Tool validation flow, `assertNever()`'s runtime fallback, and all four result branches. Run `npm run typecheck` as required evidence for the `@ts-expect-error`, readonly, variance, asynchronous-execution, and exhaustive-switch contracts.
 
 ## Failure experiment
 
@@ -158,17 +158,18 @@ export type DeferredRunResult = Readonly<{
 }>;
 ```
 
-Do not add a `case "deferred"` branch to `describeRun()` in the focused test. Run:
+In the focused test, update the `RunStatuses` equality assertion so its expected union includes `"deferred"`; this acknowledges the intentional protocol change and keeps that separate regression check accurate. Do not add a `case "deferred"` branch to `describeRun()`. Run:
 
 ```bash
 npm run typecheck
 ```
 
-TypeScript reports that `DeferredRunResult` cannot be passed to the `never` parameter of `assertNever()`. That red result is the desired evidence: a new terminal state cannot enter the protocol without forcing each exhaustive consumer to choose its behavior. Remove the experimental member or implement and test the branch before continuing.
+`npm run typecheck` invokes `tsc --noEmit`, which reports that `DeferredRunResult` cannot be passed to the `never` parameter of `assertNever()`. Vitest alone will not report this omission because it transpiles without type-checking. Remove the experimental member, or implement and test the new branch, then require both typecheck and the focused runtime test to pass.
 
 ## Acceptance criteria
 
 - The focused command selects only `course/test/01-typescript-protocols.test.ts` and passes offline.
+- `npm run typecheck` passes and validates the compile-time assertions in the focused test.
 - Message, assistant-block, model-chunk, event, and run-result unions retain their exact discriminants.
 - Protocol arrays, nested JSON values, event payloads, IDs, and terminal error data reject compile-time mutation.
 - `CourseTool.validate()` accepts `unknown`; `execute()` accepts the narrowed input and returns a `Promise`.
@@ -186,7 +187,7 @@ TypeScript reports that `DeferredRunResult` cannot be passed to the `never` para
 
 Pi's unions are intentionally broader and structurally different. `AgentMessage` includes Pi AI messages plus application-defined custom messages through TypeScript declaration merging. Pi assistant content can include text, thinking, and Tool calls. Pi's `AgentEvent` describes its actual Agent lifecycle, not the five-event union in this workshop.
 
-The course favors closed unions and pervasive compile-time readonly fields so omissions become easy to teach and test. Pi's public interfaces include mutable arrays and richer provider metadata because the production runtime accumulates messages, content, usage, and streaming state. Neither shape can be substituted for the other. Carry over the practices of explicit discriminants, stable Tool-call identity, validation before execution, and exhaustive policy decisions, while importing the SDK's own exported types.
+The course favors closed unions and pervasive compile-time readonly fields so a missing branch produces a visible type error. Pi's public interfaces include mutable arrays and richer provider metadata because the production runtime accumulates messages, content, usage, and streaming state. Neither shape can be substituted for the other. Carry over explicit discriminants, stable Tool-call identity, validation before execution, and a deliberate decision for every union member, while importing the SDK's own exported types.
 
 ## Next checkpoint
 
