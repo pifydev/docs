@@ -404,7 +404,7 @@ type CallbackInvoker = (
 type CallbackObserver = (
   invocation: CallbackInvocation,
   label: string,
-  onSettled?: () => void,
+  onSelected?: () => void,
 ) => Promise<unknown>;
 
 /**
@@ -668,8 +668,8 @@ export class ExtensionHost {
           active,
           (callback, argumentsValue) =>
             this.#invokeCallback(callback, argumentsValue),
-          (invocation, label, onSettled) =>
-            this.#observeCallbackResult(invocation, label, onSettled),
+          (invocation, label, onSelected) =>
+            this.#observeCallbackResult(invocation, label, onSelected),
         );
         for (
           let failureIndex = 0;
@@ -786,8 +786,8 @@ export class ExtensionHost {
         instanceDispose,
         (callback, argumentsValue) =>
           this.#invokeCallback(callback, argumentsValue),
-        (invocation, label, onSettled) =>
-          this.#observeCallbackResult(invocation, label, onSettled),
+        (invocation, label, onSelected) =>
+          this.#observeCallbackResult(invocation, label, onSelected),
       );
       this.#statuses.set(definition.id, "failed");
       if (cleanupFailures.length > 0) {
@@ -878,15 +878,14 @@ export class ExtensionHost {
   #observeCallbackResult(
     invocation: CallbackInvocation,
     label: string,
-    onSettled?: () => void,
+    onSelected?: () => void,
   ): Promise<unknown> {
     try {
       return reflectApply(asyncLocalStorageRun, this.#callbackContext, [
         invocation.context,
         () =>
-          adoptAsync(invocation.value, label, () => {
+          adoptAsync(invocation.value, label, onSelected, () => {
             invocation.context.active = false;
-            onSettled?.();
           }),
       ]) as Promise<unknown>;
     } catch (error) {
@@ -1575,37 +1574,60 @@ function deepFreeze(value: unknown, seen: WeakSet<object>): unknown {
   return Object.freeze(value);
 }
 
+/**
+ * Adopt caller-controlled async values without conflating outer selection
+ * with recursive settlement. Generic resolve(pending) selects immediately,
+ * while final settlement waits for the selected value's complete adoption.
+ */
 function adoptAsync(
   value: unknown,
   label: string,
-  onSettled?: () => void,
+  onSelected?: () => void,
+  onFinalSettled?: () => void,
 ): Promise<unknown> {
   return new NativePromise<unknown>((resolvePromise, rejectPromise) => {
     const state = { seen: new WeakSet<object>() };
-    let boundarySelected = false;
-    const selectBoundary = () => {
-      if (boundarySelected) return;
-      boundarySelected = true;
-      onSettled?.();
+    let outerSelected = false;
+    let finalSettled = false;
+    const selectOuter = () => {
+      if (outerSelected) return;
+      outerSelected = true;
+      onSelected?.();
+    };
+    const selectFinal = () => {
+      if (finalSettled) return;
+      finalSettled = true;
+      onFinalSettled?.();
+    };
+    const rejectBoundaryFailure = (error: unknown) => {
+      try {
+        selectFinal();
+      } catch (finalError) {
+        rejectPromise(finalError);
+        return;
+      }
+      rejectPromise(error);
     };
     const fulfill = (result: unknown) => {
       try {
-        selectBoundary();
+        selectOuter();
+        selectFinal();
         resolvePromise(result);
       } catch (error) {
-        rejectPromise(error);
+        rejectBoundaryFailure(error);
       }
     };
     const reject = (reason: unknown) => {
       try {
-        selectBoundary();
+        selectOuter();
+        selectFinal();
       } catch (error) {
-        rejectPromise(error);
+        rejectBoundaryFailure(error);
         return;
       }
       rejectPromise(reason);
     };
-    adoptValue(value, label, 0, state, fulfill, reject, selectBoundary);
+    adoptValue(value, label, 0, state, fulfill, reject, selectOuter);
   });
 }
 
@@ -1616,7 +1638,7 @@ function adoptValue(
   state: { seen: WeakSet<object> },
   fulfill: (value: unknown) => void,
   reject: (reason: unknown) => void,
-  selectBoundary: () => void,
+  selectOuter: () => void,
 ): void {
   if (
     (typeof value !== "object" && typeof value !== "function") ||
@@ -1667,7 +1689,7 @@ function adoptValue(
         selected = true;
         if (depth === 0) {
           try {
-            selectBoundary();
+            selectOuter();
           } catch (error) {
             reject(error);
             return;
@@ -1680,7 +1702,7 @@ function adoptValue(
           state,
           fulfill,
           reject,
-          selectBoundary,
+          selectOuter,
         );
       },
       (reason: unknown) => {
@@ -1688,7 +1710,7 @@ function adoptValue(
         selected = true;
         if (depth === 0) {
           try {
-            selectBoundary();
+            selectOuter();
           } catch (error) {
             reject(error);
             return;

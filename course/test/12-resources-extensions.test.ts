@@ -496,7 +496,7 @@ test("closes staged contributions inside a hostile thenable settlement callback"
                 lateError = error;
               }
             },
-          }) as PromiseLike<void>,
+          }) as unknown as PromiseLike<void>,
       }),
     },
   ]);
@@ -505,6 +505,77 @@ test("closes staged contributions inside a hostile thenable settlement callback"
 
   expect(host.tools.names).toEqual(["before-settlement"]);
   expect(lateError).toMatchObject({ code: "EXTENSION_ACTIVATION_FAILED" });
+});
+
+test("keeps callback scope active while recursively adopting an outer thenable selection", async () => {
+  const inner = deferred<void>();
+  const releaseDetached = deferred<void>();
+  const detachedFinished = deferred<void>();
+  let lateContributionError: unknown;
+  let pendingOperationCode: unknown;
+  let detachedError: unknown;
+  const host = new ExtensionHost({ resources: await emptyResources() });
+  host.discover([
+    {
+      id: "outer-thenable",
+      create: () => ({
+        activate: (context) =>
+          ({
+            then(resolve: (value: Promise<void>) => void) {
+              context.registerTool(echoTool("selected-before"));
+              setTimeout(() => {
+                void (async () => {
+                  await releaseDetached.promise;
+                  await host.activate("after-final");
+                })()
+                  .catch((error: unknown) => {
+                    detachedError = error;
+                  })
+                  .finally(() => detachedFinished.resolve());
+              }, 0);
+
+              resolve(inner.promise);
+              try {
+                context.registerTool(echoTool("selected-after"));
+              } catch (error) {
+                lateContributionError = error;
+              }
+
+              void (async () => {
+                try {
+                  await host.emit(finishedEvent(120));
+                } catch (error) {
+                  pendingOperationCode = (error as ExtensionError).code;
+                } finally {
+                  inner.resolve();
+                }
+              })();
+            },
+          }) as unknown as PromiseLike<void>,
+      }),
+    },
+    {
+      id: "after-final",
+      create: () => ({
+        activate: (context) => context.registerTool(echoTool("after-final")),
+      }),
+    },
+  ]);
+
+  await expect(
+    settleWithin(host.activate("outer-thenable")),
+  ).resolves.toBeUndefined();
+  expect(lateContributionError).toMatchObject({
+    code: "EXTENSION_ACTIVATION_FAILED",
+  });
+  expect(pendingOperationCode).toBe("EXTENSION_REENTRANT_OPERATION");
+  expect(host.tools.names).toEqual(["selected-before"]);
+
+  releaseDetached.resolve();
+  await detachedFinished.promise;
+  expect(detachedError).toBeUndefined();
+  expect(host.tools.names).toEqual(["selected-before", "after-final"]);
+  await host.dispose();
 });
 
 test("rejects reentrant emit from a hook promptly without poisoning the host", async () => {
