@@ -135,11 +135,11 @@ Pi can expose the following current session context to commands run by the LLM-c
 
 | Variable | Value |
 |---|---|
-| `PI_SESSION_ID` | Current session ID |
-| `PI_SESSION_FILE` | Absolute JSONL path; absent for an in-memory session |
-| `PI_PROVIDER` | Selected Pi provider ID |
-| `PI_MODEL` | Selected Pi model ID |
-| `PI_REASONING_LEVEL` | Effective level: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max` |
+| `PI_SESSION_ID` | Current session ID; always present when the injection conditions below are met |
+| `PI_SESSION_FILE` | Absolute JSONL path; present only for a file-backed session with a session file path |
+| `PI_PROVIDER` | Selected Pi provider ID; present only when `ctx.model` exists |
+| `PI_MODEL` | Selected Pi model ID; present only when `ctx.model` exists |
+| `PI_REASONING_LEVEL` | Effective level: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`; present only when `ctx.thinkingLevel` is truthy |
 
 Default local Bash and PowerShell operations launch a separate child process for each Tool call and use their respective command syntax. Custom operations instead delegate to their configured backend; that backend owns cancellation, cleanup, and whether any execution state persists. The wrapper first removes inherited values for all five session variables. `exposeSessionEnvironment` defaults to `true`, but injection requires an Agent/Extension execution context. `exposeSessionEnvironment: false` suppresses all five session fields even when that context exists. A standalone or custom invocation without that context does not receive them automatically. When injection occurs, the values are resolved before that shell-tool command, so model or reasoning changes affect the next command. The native `powershell` Tool is Windows-only. These variables are not injected into user-entered `!` or `!!` commands.
 

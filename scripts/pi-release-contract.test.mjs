@@ -129,6 +129,17 @@ function sectionStructure(section) {
   };
 }
 
+function assertParagraphContainsAll(source, patterns, context) {
+  const paragraphs = source.split(/\n\s*\n/);
+  const matchingParagraph = paragraphs.find((paragraph) =>
+    patterns.every((pattern) => pattern.test(paragraph)),
+  );
+  assert.ok(
+    matchingParagraph,
+    `${context} must relate ${patterns.join(", ")} in one paragraph`,
+  );
+}
+
 function releaseSourceRef(link) {
   const match = new URL(link).pathname.match(
     /^\/(?:earendil-works\/pi|badlogic\/pi-mono)\/(?:blob|tree|commit)\/([^/]+)(?:\/|$)/,
@@ -186,10 +197,14 @@ test("compile fixture packages are exactly pinned to the published release", asy
 });
 
 test("PowerShell section contracts reject concepts scattered across unrelated sections", () => {
+  const scopedFiller = Array.from(
+    { length: 90 },
+    (_, index) => `scoped-word-${index}`,
+  ).join(" ");
   const scatteredSource = `
 ### Bash and PowerShell are separate shell-tool sessions
 
-The \`powershell\` tool is optional.
+The \`powershell\` tool is optional. ${scopedFiller}
 
 ### Factory appendix
 
@@ -221,7 +236,11 @@ The backend receives \`signal?: AbortSignal\`, while \`DEFAULT_MAX_LINES\` and
           minWords: 80,
         },
       ),
-    /synthetic PowerShell guidance section must contain at least 80 words/,
+    (error) => {
+      assert.match(error.message, /synthetic PowerShell guidance section must cover/);
+      assert.doesNotMatch(error.message, /must contain at least 80 words/);
+      return true;
+    },
   );
 });
 
@@ -230,33 +249,25 @@ test("both Chapter 5 locales explain the optional PowerShell tool contract", asy
   const localeContract = {
     en: {
       heading: "### Bash and PowerShell are separate shell-tool sessions",
-      distinction: /It is a separate Tool from `bash`/,
-      selection: /It is \*\*not\*\* in the default `defaultTools` set/,
-      localBackend:
-        /default local Bash and PowerShell operations start a separate child process for each Tool call/,
-      cancellation: /honor `signal` and `timeout`/,
-      cleanup: /release child handles, transports, timers, and abort listeners in `finally`/,
-      exposureDefault:
-        /`exposeSessionEnvironment` defaults to `true`, but Pi injects the `PI_\*` fields only when the Tool is executed with an Agent\/Extension context/,
-      exposureDisabled:
-        /`exposeSessionEnvironment: false` suppresses them even when that context exists/,
-      exposureWithoutContext:
-        /A standalone or custom invocation without that context does not receive them automatically/,
+      defaultLocal: /default local/i,
+      selectable: /selectable|select/i,
+      notDefault: /not[^.]*default/i,
+      cleanup: /cleanup|clean up|release/i,
+      withoutContext: /without[^.]*context/i,
+      alwaysPresent: /always present|always set/i,
+      fileBacked: /file-backed|session file path/i,
+      truthy: /truthy/i,
     },
     vi: {
       heading: "### Bash và PowerShell là các phiên shell-tool riêng biệt",
-      distinction: /Đây là Tool riêng với `bash`/,
-      selection: /Nó \*\*không\*\* thuộc tập `defaultTools` mặc định/,
-      localBackend:
-        /operations Bash và PowerShell cục bộ mặc định khởi động một child process riêng cho mỗi Tool call/,
-      cancellation: /tuân theo `signal` và `timeout`/,
-      cleanup: /giải phóng child handle, transport, timer và abort listener trong `finally`/,
-      exposureDefault:
-        /`exposeSessionEnvironment` mặc định là `true`, nhưng Pi chỉ inject các field `PI_\*` khi Tool được execute với Agent\/Extension context/,
-      exposureDisabled:
-        /`exposeSessionEnvironment: false` chặn các field này ngay cả khi context đó tồn tại/,
-      exposureWithoutContext:
-        /Standalone hoặc custom invocation không có context đó sẽ không tự động nhận các field này/,
+      defaultLocal: /cục bộ mặc định/i,
+      selectable: /có thể[^.]*chọn|chọn/i,
+      notDefault: /không[^.]*mặc định/i,
+      cleanup: /cleanup|giải phóng|dọn dẹp/i,
+      withoutContext: /không có[^.]*context/i,
+      alwaysPresent: /luôn có|luôn được đặt/i,
+      fileBacked: /file-backed|session file path/i,
+      truthy: /truthy/i,
     },
   };
   const structures = [];
@@ -275,14 +286,13 @@ test("both Chapter 5 locales explain the optional PowerShell tool contract", asy
         /exitCode: number \| null/,
         /DEFAULT_MAX_LINES/,
         /DEFAULT_MAX_BYTES/,
-        contract.distinction,
-        contract.selection,
-        contract.localBackend,
-        contract.cancellation,
-        contract.cleanup,
-        contract.exposureDefault,
-        contract.exposureDisabled,
-        contract.exposureWithoutContext,
+        /`\$`/,
+        /`PS>`/,
+        /PI_SESSION_ID/,
+        /PI_SESSION_FILE/,
+        /PI_PROVIDER/,
+        /PI_MODEL/,
+        /PI_REASONING_LEVEL/,
       ],
       `${locale} Chapter 5 PowerShell guidance`,
       {
@@ -290,6 +300,59 @@ test("both Chapter 5 locales explain the optional PowerShell tool contract", asy
         minWords: 260,
         fenceLanguages: ["typescript", "typescript"],
       },
+    );
+    assertParagraphContainsAll(
+      section.body,
+      [
+        contract.defaultLocal,
+        /Bash/,
+        /PowerShell/,
+        /`\$`/,
+        /`PS>`/,
+        /custom/i,
+        /operations/i,
+      ],
+      `${locale} Chapter 5 default-local prompt scope`,
+    );
+    assertParagraphContainsAll(
+      section.body,
+      [/`powershell`/, /`defaultTools`/, contract.selectable, contract.notDefault],
+      `${locale} Chapter 5 explicit PowerShell selection`,
+    );
+    assertParagraphContainsAll(
+      section.body,
+      [/custom/i, /operations/i, /signal/, /timeout/, contract.cleanup],
+      `${locale} Chapter 5 custom backend lifecycle`,
+    );
+    assertParagraphContainsAll(
+      section.body,
+      [
+        /exposeSessionEnvironment/,
+        /Agent\/Extension/,
+        /false/,
+        contract.withoutContext,
+      ],
+      `${locale} Chapter 5 conditional session exposure`,
+    );
+    assertParagraphContainsAll(
+      section.body,
+      [/PI_SESSION_ID/, contract.alwaysPresent],
+      `${locale} Chapter 5 required session ID`,
+    );
+    assertParagraphContainsAll(
+      section.body,
+      [/PI_SESSION_FILE/, contract.fileBacked],
+      `${locale} Chapter 5 optional session file`,
+    );
+    assertParagraphContainsAll(
+      section.body,
+      [/PI_PROVIDER/, /PI_MODEL/, /ctx\.model/],
+      `${locale} Chapter 5 optional model metadata`,
+    );
+    assertParagraphContainsAll(
+      section.body,
+      [/PI_REASONING_LEVEL/, /thinkingLevel/, contract.truthy],
+      `${locale} Chapter 5 optional reasoning metadata`,
     );
     structures.push(sectionStructure(section));
   }
@@ -330,9 +393,9 @@ test("both API locales document the public PowerShell factory and operations sig
 
 test("both configuration locales distinguish tool selection from shell selection", async () => {
   const references = await readLocalizedContent("reference/configuration.md");
-  const selectionStatement = {
-    en: /Selecting a Tool does not change the host shell/,
-    vi: /Chọn một Tool không thay đổi host shell/,
+  const selectionRelation = {
+    en: [/select/i, /does not change/i, /host shell/i],
+    vi: [/chọn/i, /không thay đổi/i, /host shell/i],
   };
   const headings = {
     en: "### Tool selection",
@@ -348,7 +411,6 @@ test("both configuration locales distinguish tool selection from shell selection
         /"defaultTools": \["read", "bash", "edit", "write"\]/,
         /"defaultTools": \["read", "powershell", "edit", "write"\]/,
         /`powershell`/,
-        selectionStatement[locale],
       ],
       `${locale} configuration PowerShell guidance`,
       {
@@ -356,6 +418,11 @@ test("both configuration locales distinguish tool selection from shell selection
         minWords: 100,
         fenceLanguages: ["json", "json"],
       },
+    );
+    assertParagraphContainsAll(
+      section.body,
+      [/`powershell`/, ...selectionRelation[locale]],
+      `${locale} configuration tool versus host shell selection`,
     );
     structures.push(sectionStructure(section));
   }
@@ -369,29 +436,25 @@ test("both environment locales preserve Bash guidance and add concrete PowerShel
   const localeContract = {
     en: {
       heading: "## Process markers and shell-tool metadata",
-      localBackend:
-        /Default local Bash and PowerShell operations launch a separate child process for each Tool call/,
-      customBackend:
-        /Custom operations instead delegate to their configured backend/,
-      exposureDefault:
-        /`exposeSessionEnvironment` defaults to `true`, but injection requires an Agent\/Extension execution context/,
-      exposureDisabled:
-        /`exposeSessionEnvironment: false` suppresses all five session fields/,
-      exposureWithoutContext:
-        /A standalone or custom invocation without that context does not receive them automatically/,
+      defaultLocal: /default local/i,
+      childProcess: /child process/i,
+      delegatedBackend: /delegate|configured backend/i,
+      cleanup: /cleanup|clean up/i,
+      withoutContext: /without[^.]*context/i,
+      alwaysPresent: /always present|always set/i,
+      fileBacked: /file-backed|session file path/i,
+      truthy: /truthy/i,
     },
     vi: {
       heading: "## Process marker và shell-tool metadata",
-      localBackend:
-        /Operations Bash và PowerShell cục bộ mặc định khởi chạy một child process riêng cho mỗi Tool call/,
-      customBackend:
-        /Custom operations thay vào đó ủy quyền cho backend đã cấu hình/,
-      exposureDefault:
-        /`exposeSessionEnvironment` mặc định là `true`, nhưng việc inject cần Agent\/Extension execution context/,
-      exposureDisabled:
-        /`exposeSessionEnvironment: false` chặn cả năm session field/,
-      exposureWithoutContext:
-        /Standalone hoặc custom invocation không có context đó sẽ không tự động nhận chúng/,
+      defaultLocal: /cục bộ mặc định/i,
+      childProcess: /child process/i,
+      delegatedBackend: /ủy quyền|backend đã cấu hình/i,
+      cleanup: /cleanup|dọn dẹp/i,
+      withoutContext: /không có[^.]*context/i,
+      alwaysPresent: /luôn có|luôn được đặt/i,
+      fileBacked: /file-backed|session file path/i,
+      truthy: /truthy/i,
     },
   };
   const structures = [];
@@ -411,11 +474,6 @@ test("both environment locales preserve Bash guidance and add concrete PowerShel
         /PI_REASONING_LEVEL/,
         /exposeSessionEnvironment: false/,
         /spawnHook: \(context\) =>/,
-        contract.localBackend,
-        contract.customBackend,
-        contract.exposureDefault,
-        contract.exposureDisabled,
-        contract.exposureWithoutContext,
       ],
       `${locale} environment PowerShell guidance`,
       {
@@ -423,6 +481,50 @@ test("both environment locales preserve Bash guidance and add concrete PowerShel
         minWords: 180,
         fenceLanguages: ["ts", "ts", "ts"],
       },
+    );
+    assertParagraphContainsAll(
+      section.body,
+      [
+        contract.defaultLocal,
+        /Bash/,
+        /PowerShell/,
+        contract.childProcess,
+        /custom/i,
+        /operations/i,
+        contract.delegatedBackend,
+        contract.cleanup,
+      ],
+      `${locale} environment local and custom backend distinction`,
+    );
+    assertParagraphContainsAll(
+      section.body,
+      [
+        /exposeSessionEnvironment/,
+        /Agent\/Extension/,
+        /false/,
+        contract.withoutContext,
+      ],
+      `${locale} environment conditional session exposure`,
+    );
+    assertParagraphContainsAll(
+      section.body,
+      [/PI_SESSION_ID/, contract.alwaysPresent],
+      `${locale} environment required session ID`,
+    );
+    assertParagraphContainsAll(
+      section.body,
+      [/PI_SESSION_FILE/, contract.fileBacked],
+      `${locale} environment optional session file`,
+    );
+    assertParagraphContainsAll(
+      section.body,
+      [/PI_PROVIDER/, /PI_MODEL/, /ctx\.model/],
+      `${locale} environment optional model metadata`,
+    );
+    assertParagraphContainsAll(
+      section.body,
+      [/PI_REASONING_LEVEL/, /thinkingLevel/, contract.truthy],
+      `${locale} environment optional reasoning metadata`,
     );
     structures.push(sectionStructure(section));
   }

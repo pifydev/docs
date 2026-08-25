@@ -135,11 +135,11 @@ Pi có thể expose session context hiện tại sau cho command do các LLM-cal
 
 | Variable | Giá trị |
 |---|---|
-| `PI_SESSION_ID` | Session ID hiện tại |
-| `PI_SESSION_FILE` | Absolute path đến JSONL; không có với in-memory session |
-| `PI_PROVIDER` | Pi provider ID đang chọn |
-| `PI_MODEL` | Pi model ID đang chọn |
-| `PI_REASONING_LEVEL` | Level thực tế: `off`, `minimal`, `low`, `medium`, `high`, `xhigh` hoặc `max` |
+| `PI_SESSION_ID` | Session ID hiện tại; luôn có khi các điều kiện inject bên dưới được đáp ứng |
+| `PI_SESSION_FILE` | Absolute path đến JSONL; chỉ có với file-backed session có session file path |
+| `PI_PROVIDER` | Pi provider ID đang chọn; chỉ có khi `ctx.model` tồn tại |
+| `PI_MODEL` | Pi model ID đang chọn; chỉ có khi `ctx.model` tồn tại |
+| `PI_REASONING_LEVEL` | Level thực tế: `off`, `minimal`, `low`, `medium`, `high`, `xhigh` hoặc `max`; chỉ có khi `ctx.thinkingLevel` là truthy |
 
 Operations Bash và PowerShell cục bộ mặc định khởi chạy một child process riêng cho mỗi Tool call và dùng command syntax tương ứng. Custom operations thay vào đó ủy quyền cho backend đã cấu hình; backend đó sở hữu cancellation, cleanup và quyết định execution state có persist hay không. Wrapper trước hết xóa giá trị kế thừa của cả năm session variable. `exposeSessionEnvironment` mặc định là `true`, nhưng việc inject cần Agent/Extension execution context. `exposeSessionEnvironment: false` chặn cả năm session field ngay cả khi context đó tồn tại. Standalone hoặc custom invocation không có context đó sẽ không tự động nhận chúng. Khi việc inject diễn ra, giá trị được resolve trước shell-tool command đó, nên thay đổi model hoặc reasoning tác động đến command kế tiếp. Tool `powershell` native chỉ có trên Windows. Các variable này không được inject vào command `!` hoặc `!!` do người dùng nhập.
 
