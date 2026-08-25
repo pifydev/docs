@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "content/**"
+      - "course/**"
       - "source/**"
       - "scripts/**"
       - "tests/**"
@@ -17,6 +18,7 @@ on:
     branches: [main]
     paths:
       - "content/**"
+      - "course/**"
       - "source/**"
       - "scripts/**"
       - "tests/**"

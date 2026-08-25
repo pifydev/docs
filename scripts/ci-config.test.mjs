@@ -29,13 +29,18 @@ function assertReadOnlyNode22(workflow, job) {
   assert.equal(setupNode.with.cache, "npm");
 }
 
+function assertWorkflowPath(workflow, expectedPath) {
+  assert.ok(workflow.on.pull_request.paths.includes(expectedPath));
+  assert.ok(workflow.on.push.paths.includes(expectedPath));
+}
+
 test("content workflow validates the Fumadocs source tree", async () => {
   const { source, workflow } = await readWorkflow("content-quality.yml");
 
   assert.equal(workflow.name, "Content Quality");
   assertReadOnlyNode22(workflow, "quality");
-  assert.ok(workflow.on.pull_request.paths.includes("content/**"));
-  assert.ok(workflow.on.push.paths.includes("content/**"));
+  assertWorkflowPath(workflow, "content/**");
+  assertWorkflowPath(workflow, "course/**");
   assert.deepEqual(workflowCommands(workflow, "quality"), [
     "npm ci",
     "npm run quality:content",
@@ -46,6 +51,14 @@ test("content workflow validates the Fumadocs source tree", async () => {
   const contentQualityCommands = packageJSON.scripts["quality:content"]
     .split("&&")
     .map((command) => command.trim());
+  assert.equal(packageJSON.scripts["test:course"], "vitest run course/test");
+  assert.equal(packageJSON.scripts["test:course:checkpoint"], "vitest run");
+  assert.equal(
+    contentQualityCommands.filter(
+      (command) => command === "npm run test:course",
+    ).length,
+    1,
+  );
   assert.ok(contentQualityCommands.includes("npm run test:preservation"));
   assert.ok(contentQualityCommands.includes("npm run test:release"));
   assert.match(packageJSON.scripts["lint:content"], /--require-reviewed/);
@@ -59,6 +72,7 @@ test("application workflow builds Next.js without deploying", async () => {
 
   assert.equal(workflow.name, "Next.js Application Build");
   assertReadOnlyNode22(workflow, "build");
+  assertWorkflowPath(workflow, "course/**");
   assert.deepEqual(workflowCommands(workflow, "build"), [
     "npm ci",
     "npm run typecheck",

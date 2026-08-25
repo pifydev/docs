@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "responses": [
+    {
+      "records": [
+        {
+          "type": "response_start",
+          "responseId": "response-tool-001",
+          "role": "assistant"
+        },
+        {
+          "type": "tool_call",
+          "id": "call-add-001",
+          "name": "add",
+          "arguments": {
+            "left": 20,
+            "right": 22
+          }
+        },
+        {
+          "type": "response_end",
+          "responseId": "response-tool-001",
+          "stopReason": "tool_call",
+          "usage": {
+            "inputTokens": 12,
+            "outputTokens": 8
+          }
+        }
+      ]
+    },
+    {
+      "records": [
+        {
+          "type": "response_start",
+          "responseId": "response-text-002",
+          "role": "assistant"
+        },
+        {
+          "type": "text_delta",
+          "text": "The sum is 42."
+        },
+        {
+          "type": "response_end",
+          "responseId": "response-text-002",
+          "stopReason": "stop",
+          "usage": {
+            "inputTokens": 20,
+            "outputTokens": 6
+          }
+        }
+      ]
+    }
+  ],
+  "expected": {
+    "toolCallId": "call-add-001",
+    "toolName": "add",
+    "finalText": "The sum is 42."
+  }
+}

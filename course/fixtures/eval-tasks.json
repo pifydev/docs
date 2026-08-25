@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "tasks": [
+    {
+      "id": "held-out-arithmetic-pass",
+      "split": "held-out",
+      "prompt": "Add 20 and 22, then report the result as a decimal number.",
+      "expectedPublicEvidence": {
+        "includes": ["42"]
+      },
+      "candidatePublicEvidence": ["42"],
+      "expectedVerdict": "pass"
+    },
+    {
+      "id": "held-out-arithmetic-fail",
+      "split": "held-out",
+      "prompt": "Add 7 and 8, then report the result as a decimal number.",
+      "expectedPublicEvidence": {
+        "includes": ["15"]
+      },
+      "candidatePublicEvidence": ["16"],
+      "expectedVerdict": "fail"
+    }
+  ]
+}
