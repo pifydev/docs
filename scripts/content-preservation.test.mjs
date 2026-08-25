@@ -340,6 +340,7 @@ test("the repository content satisfies the historical preservation baseline", as
       "utf8",
     ).then(JSON.parse),
   ]);
+  assert.equal(manifest.pages.length, 54);
   const expectedPages = translations.pages.flatMap((page) => [
     { key: page.key, path: `en/${page.en}` },
     { key: page.key, path: `vi/${page.vi}` },

@@ -242,6 +242,96 @@
       "approvedDeletions": []
     },
     {
+      "key": "how-to-test-agent-deterministically",
+      "path": "en/how-to/test-agent-deterministically.md",
+      "baselineWords": 1286,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 14,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 3,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 1,
+      "approvedDeletions": []
+    },
+    {
+      "key": "how-to-test-agent-deterministically",
+      "path": "vi/how-to/test-agent-deterministically.md",
+      "baselineWords": 1450,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 14,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 3,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 1,
+      "approvedDeletions": []
+    },
+    {
+      "key": "how-to-run-pi-evals",
+      "path": "en/how-to/run-pi-evals.md",
+      "baselineWords": 1829,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 12,
+        "3": 2,
+        "4": 0
+      },
+      "minimumCodeFences": 7,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 5,
+      "approvedDeletions": []
+    },
+    {
+      "key": "how-to-run-pi-evals",
+      "path": "vi/how-to/run-pi-evals.md",
+      "baselineWords": 2025,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 12,
+        "3": 2,
+        "4": 0
+      },
+      "minimumCodeFences": 7,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 5,
+      "approvedDeletions": []
+    },
+    {
+      "key": "how-to-host-session-runtime",
+      "path": "en/how-to/host-session-runtime.md",
+      "baselineWords": 2271,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 13,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 2,
+      "minimumMermaidBlocks": 1,
+      "minimumTables": 4,
+      "approvedDeletions": []
+    },
+    {
+      "key": "how-to-host-session-runtime",
+      "path": "vi/how-to/host-session-runtime.md",
+      "baselineWords": 2485,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 13,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 2,
+      "minimumMermaidBlocks": 1,
+      "minimumTables": 4,
+      "approvedDeletions": []
+    },
+    {
       "key": "reference-api",
       "path": "en/reference/api.md",
       "baselineWords": 239,
@@ -629,6 +719,36 @@
       "minimumCodeFences": 30,
       "minimumMermaidBlocks": 0,
       "minimumTables": 8,
+      "approvedDeletions": []
+    },
+    {
+      "key": "ch11-testing-evaluation",
+      "path": "en/ch11-testing-evaluation.md",
+      "baselineWords": 3371,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 11,
+        "3": 4,
+        "4": 0
+      },
+      "minimumCodeFences": 4,
+      "minimumMermaidBlocks": 1,
+      "minimumTables": 3,
+      "approvedDeletions": []
+    },
+    {
+      "key": "ch11-testing-evaluation",
+      "path": "vi/ch11-testing-evaluation.md",
+      "baselineWords": 4216,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 11,
+        "3": 4,
+        "4": 0
+      },
+      "minimumCodeFences": 4,
+      "minimumMermaidBlocks": 1,
+      "minimumTables": 3,
       "approvedDeletions": []
     },
     {
