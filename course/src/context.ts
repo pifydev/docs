@@ -1,3 +1,5 @@
+import { types as nodeUtilTypes } from "node:util";
+
 import {
   assistantMessage,
   toolResultMessage,
@@ -15,8 +17,13 @@ const reflectApply = Reflect.apply;
 const nativeCharCodeAt = String.prototype.charCodeAt;
 const NativePromise = Promise;
 const nativePromiseResolve = Promise.resolve;
-const nativePromiseRace = Promise.race;
 const nativePromiseThen = Promise.prototype.then;
+const nativePromiseDescriptor = Object.freeze({
+  configurable: true,
+  enumerable: false,
+  value: NativePromise,
+  writable: true,
+});
 const abortSignalAbortedGetter = Object.getOwnPropertyDescriptor(
   AbortSignal.prototype,
   "aborted",
@@ -27,6 +34,8 @@ const abortSignalReasonGetter = Object.getOwnPropertyDescriptor(
 )?.get;
 const addAbortListener = AbortSignal.prototype.addEventListener;
 const removeAbortListener = AbortSignal.prototype.removeEventListener;
+const nodeIsPromise = nodeUtilTypes.isPromise;
+const nodeIsProxy = nodeUtilTypes.isProxy;
 
 /** Hard limits keep validation and budgeting bounded for hostile input. */
 export const MAX_CONTEXT_MESSAGES = 4_096;
@@ -36,6 +45,8 @@ export const MAX_CONTEXT_DEPTH = 32;
 export const MAX_CONTEXT_COLLECTION_ITEMS = 16_384;
 export const MAX_CONTEXT_STRING_UNITS = 65_536;
 export const MAX_CONTEXT_TOTAL_UNITS = 1_000_000;
+/** Maximum nested thenable adoption/observation depth. */
+export const MAX_CONTEXT_ASYNC_DEPTH = 64;
 
 export type ContextRequirement = Readonly<{
   id: string;
@@ -127,6 +138,7 @@ export type ContextCompactionErrorCode =
   | "CONTEXT_SUMMARY_INVALID"
   | "CONTEXT_SUMMARY_INSUFFICIENT"
   | "CONTEXT_SUMMARIZER_FAILED"
+  | "CONTEXT_ASYNC_VALUE_UNOBSERVABLE"
   | "CONTEXT_CANCELLED";
 
 /** Stable public error surface for every fail-closed Context operation. */
@@ -161,6 +173,14 @@ type SnapshotCompactOptions = SnapshotBoundaryOptions &
     summarizer: ContextSummarizer;
     signal: AbortSignal;
   }>;
+
+type AsyncValueBox = Readonly<{ value: unknown }>;
+
+type AsyncObservationState = Readonly<{
+  adoptionSeen: WeakSet<object>;
+  detachedSeen: WeakSet<object>;
+  reportFailure: (error: unknown) => void;
+}>;
 
 const activeContexts = new WeakSet<object>();
 
@@ -1082,56 +1102,442 @@ function snapshotCompactOptions(
   }
 }
 
-async function awaitSummary(
+function awaitSummary(value: unknown, signal: AbortSignal): Promise<unknown> {
+  let pending: Promise<AsyncValueBox>;
+  try {
+    pending = prepareObservedSummary(value);
+  } catch (error) {
+    return rejectedNativePromise(normalizeSummarySetupFailure(error));
+  }
+  return raceObservedSummary(pending, signal);
+}
+
+/**
+ * Observe native Promises through captured intrinsics before consulting any
+ * caller-controlled constructor/then metadata. Generic thenables are adopted
+ * manually so their returned async values can also be consumed.
+ */
+function prepareObservedSummary(value: unknown): Promise<AsyncValueBox> {
+  let resolveBox!: (box: AsyncValueBox) => void;
+  let rejectBox!: (reason?: unknown) => void;
+  const bridge = new NativePromise<AsyncValueBox>((resolve, reject) => {
+    resolveBox = resolve;
+    rejectBox = reject;
+  });
+  let terminal = false;
+  const fulfill = (result: unknown) => {
+    if (terminal) return;
+    terminal = true;
+    resolveBox(Object.freeze({ value: result }));
+  };
+  const reject = (error: unknown) => {
+    if (terminal) return;
+    terminal = true;
+    rejectBox(normalizeSummarySetupFailure(error));
+  };
+  const state: AsyncObservationState = {
+    adoptionSeen: new WeakSet(),
+    detachedSeen: new WeakSet(),
+    reportFailure: reject,
+  };
+
+  try {
+    adoptSummaryValue(value, 0, state, fulfill, reject);
+  } catch (error) {
+    reject(error);
+  }
+  return resolveNativeBridge(bridge);
+}
+
+function resolveNativeBridge(
+  bridge: Promise<AsyncValueBox>,
+): Promise<AsyncValueBox> {
+  const normalized: unknown = reflectApply(
+    nativePromiseResolve,
+    NativePromise,
+    [bridge],
+  );
+  if (!isObjectLike(normalized) || !isNativePromiseValue(normalized)) {
+    throw summaryFailure("Captured Promise.resolve returned invalid data");
+  }
+  return normalized as Promise<AsyncValueBox>;
+}
+
+function adoptSummaryValue(
   value: unknown,
+  depth: number,
+  state: AsyncObservationState,
+  fulfill: (value: unknown) => void,
+  reject: (error: unknown) => void,
+): void {
+  if (depth > MAX_CONTEXT_ASYNC_DEPTH) {
+    reject(
+      summaryFailure(
+        `Context summarizer exceeded ${MAX_CONTEXT_ASYNC_DEPTH} thenable levels`,
+      ),
+    );
+    return;
+  }
+  if (!isObjectLike(value)) {
+    fulfill(value);
+    return;
+  }
+  if (state.adoptionSeen.has(value)) {
+    reject(summaryFailure("Context summarizer returned a thenable cycle"));
+    return;
+  }
+
+  const nativeStatus = attachGenuinePromise(
+    value,
+    (result) => {
+      try {
+        adoptSummaryValue(result, depth + 1, state, fulfill, reject);
+      } catch (error) {
+        reject(error);
+      }
+    },
+    (reason) => reject(summaryFailure("Context summarizer rejected", reason)),
+  );
+  if (nativeStatus === "attached") return;
+  if (nativeStatus === "unobservable") {
+    reject(unobservableAsyncValueError("Context summarizer"));
+    return;
+  }
+
+  state.adoptionSeen.add(value);
+  observeGenericSummaryThenable(value, depth, state, fulfill, reject);
+}
+
+function observeGenericSummaryThenable(
+  value: object,
+  depth: number,
+  state: AsyncObservationState,
+  fulfill: (value: unknown) => void,
+  reject: (error: unknown) => void,
+): void {
+  let then: unknown;
+  try {
+    then = Reflect.get(value, "then");
+  } catch (error) {
+    reject(summaryFailure("Context summarizer then getter threw", error));
+    return;
+  }
+  if (typeof then !== "function") {
+    fulfill(value);
+    return;
+  }
+
+  let selected = false;
+  let callReturned = false;
+  let terminalSetupFailure = false;
+  let selectedKind: "fulfill" | "reject" | undefined;
+  let selectedValue: unknown;
+  const dispatchSelection = () => {
+    if (!callReturned || terminalSetupFailure || selectedKind === undefined) {
+      return;
+    }
+    if (selectedKind === "reject") {
+      reject(
+        summaryFailure("Context summarizer thenable rejected", selectedValue),
+      );
+      return;
+    }
+    try {
+      adoptSummaryValue(selectedValue, depth + 1, state, fulfill, reject);
+    } catch (error) {
+      reject(error);
+    }
+  };
+  const select = (kind: "fulfill" | "reject", result: unknown) => {
+    if (selected || terminalSetupFailure) return;
+    selected = true;
+    selectedKind = kind;
+    selectedValue = result;
+    dispatchSelection();
+  };
+
+  let returned: unknown;
+  try {
+    returned = reflectApply(then, value, [
+      (result: unknown) => select("fulfill", result),
+      (reason: unknown) => select("reject", reason),
+    ]);
+  } catch (error) {
+    callReturned = true;
+    if (!selected) {
+      reject(summaryFailure("Context summarizer then call threw", error));
+      return;
+    }
+    // Promise-compatible settle-once behavior: a callback selected before a
+    // later throw retains ownership of the outcome.
+    dispatchSelection();
+    return;
+  }
+  callReturned = true;
+
+  try {
+    if (returned !== value) {
+      observeDetachedAsyncValue(returned, depth + 1, state);
+    }
+  } catch (error) {
+    terminalSetupFailure = true;
+    reject(error);
+    return;
+  }
+  dispatchSelection();
+}
+
+/** Consume async work returned by a non-standard then() implementation. */
+function observeDetachedAsyncValue(
+  value: unknown,
+  depth: number,
+  state: AsyncObservationState,
+): void {
+  if (!isObjectLike(value)) return;
+  if (depth > MAX_CONTEXT_ASYNC_DEPTH) {
+    throw summaryFailure(
+      `Context async observation exceeded ${MAX_CONTEXT_ASYNC_DEPTH} levels`,
+    );
+  }
+  if (state.detachedSeen.has(value)) return;
+  state.detachedSeen.add(value);
+
+  const consume = (nested: unknown) => {
+    try {
+      observeDetachedAsyncValue(nested, depth + 1, state);
+    } catch (error) {
+      // Detached callbacks can run after Context Compaction has completed.
+      // Report while the summary is pending, but never throw into caller code.
+      state.reportFailure(error);
+    }
+  };
+  const nativeStatus = attachGenuinePromise(value, consume, consume);
+  if (nativeStatus === "attached") return;
+  if (nativeStatus === "unobservable") {
+    throw unobservableAsyncValueError("Context thenable return value");
+  }
+
+  let then: unknown;
+  try {
+    then = Reflect.get(value, "then");
+  } catch (error) {
+    throw summaryFailure("Returned thenable getter threw", error);
+  }
+  if (typeof then !== "function") return;
+
+  let synchronous = true;
+  let callbackFailure: unknown;
+  const consumeSafely = (nested: unknown) => {
+    try {
+      observeDetachedAsyncValue(nested, depth + 1, state);
+    } catch (error) {
+      if (synchronous && callbackFailure === undefined) callbackFailure = error;
+      else state.reportFailure(error);
+    }
+  };
+  let returned: unknown;
+  try {
+    returned = reflectApply(then, value, [consumeSafely, consumeSafely]);
+  } catch (error) {
+    synchronous = false;
+    throw summaryFailure("Returned thenable call threw", error);
+  }
+  synchronous = false;
+  if (callbackFailure !== undefined) throw callbackFailure;
+  if (returned !== value) {
+    observeDetachedAsyncValue(returned, depth + 1, state);
+  }
+}
+
+function attachGenuinePromise(
+  value: object,
+  onFulfilled: (result: unknown) => void,
+  onRejected: (reason: unknown) => void,
+): "attached" | "notPromise" | "unobservable" {
+  let continuation: unknown;
+  const safeFulfilled = noThrowCallback(onFulfilled);
+  const safeRejected = noThrowCallback(onRejected);
+  try {
+    continuation = reflectApply(nativePromiseThen, value, [
+      safeFulfilled,
+      safeRejected,
+    ]);
+  } catch {
+    if (isProxyValue(value)) return "unobservable";
+    if (!isNativePromiseValue(value)) return "notPromise";
+    continuation = attachNativePromiseWithStableSpecies(
+      value,
+      safeFulfilled,
+      safeRejected,
+    );
+    if (continuation === undefined) return "unobservable";
+  }
+  observeNativeContinuation(continuation);
+  return "attached";
+}
+
+function attachNativePromiseWithStableSpecies(
+  value: object,
+  onFulfilled: (result: unknown) => void,
+  onRejected: (reason: unknown) => void,
+): unknown | undefined {
+  try {
+    const prior = Object.getOwnPropertyDescriptor(value, "constructor");
+    if (prior !== undefined && !prior.configurable) return undefined;
+    Object.defineProperty(value, "constructor", nativePromiseDescriptor);
+    try {
+      return reflectApply(nativePromiseThen, value, [onFulfilled, onRejected]);
+    } finally {
+      if (prior === undefined) Reflect.deleteProperty(value, "constructor");
+      else Object.defineProperty(value, "constructor", prior);
+    }
+  } catch {
+    return undefined;
+  }
+}
+
+function observeNativeContinuation(value: unknown): void {
+  if (!isObjectLike(value)) return;
+  try {
+    reflectApply(nativePromiseThen, value, [
+      ignoreSettlement,
+      ignoreSettlement,
+    ]);
+  } catch {
+    // Both source reactions are no-throw callbacks. Under the ordinary Promise
+    // contract the continuation is fulfilled, so no rejection remains to leak.
+  }
+}
+
+function noThrowCallback(
+  callback: (value: unknown) => void,
+): (value: unknown) => void {
+  return (value: unknown) => {
+    try {
+      callback(value);
+    } catch {
+      // Never let caller-controlled settlement create a rejected continuation.
+    }
+  };
+}
+
+function raceObservedSummary(
+  pending: Promise<AsyncValueBox>,
   signal: AbortSignal,
 ): Promise<unknown> {
-  const settlement = reflectApply(nativePromiseResolve, NativePromise, [
-    value,
-  ]) as Promise<unknown>;
-  // Attach a rejection handler immediately; it remains attached if
-  // cancellation wins and the caller-supplied work rejects later.
-  const observed = reflectApply(nativePromiseThen, settlement, [
-    (summary: unknown) => ({ kind: "summary" as const, summary }),
-    (error: unknown) => ({ kind: "error" as const, error }),
-  ]) as Promise<
-    | Readonly<{ kind: "summary"; summary: unknown }>
-    | Readonly<{ kind: "error"; error: unknown }>
-  >;
-  if (readAborted(signal)) throw cancelledError(signal);
+  return new NativePromise<unknown>((resolve, reject) => {
+    let settled = false;
+    let listening = false;
+    const cleanup = () => {
+      if (!listening) return;
+      listening = false;
+      try {
+        reflectApply(removeAbortListener, signal, ["abort", onAbort]);
+      } catch {
+        // Cleanup cannot replace the outcome already selected by the race.
+      }
+    };
+    const settle = (kind: "fulfill" | "reject", result: unknown) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      if (kind === "fulfill") resolve(result);
+      else reject(result);
+    };
+    const onAbort = () => settle("reject", cancelledError(signal));
 
-  let onAbort!: () => void;
-  const cancellation = new NativePromise<Readonly<{ kind: "cancelled" }>>(
-    (resolve) => {
-      onAbort = () => resolve(Object.freeze({ kind: "cancelled" as const }));
+    // Observe before checking cancellation so a late rejection stays consumed.
+    const continuation = reflectApply(nativePromiseThen, pending, [
+      (box: AsyncValueBox) => {
+        try {
+          if (readAborted(signal)) onAbort();
+          else settle("fulfill", box.value);
+        } catch (error) {
+          settle("reject", normalizeSummarySetupFailure(error));
+        }
+      },
+      (error: unknown) => {
+        try {
+          if (readAborted(signal)) onAbort();
+          else settle("reject", normalizeSummarySetupFailure(error));
+        } catch (signalError) {
+          settle("reject", normalizeSummarySetupFailure(signalError));
+        }
+      },
+    ]);
+    observeNativeContinuation(continuation);
+
+    try {
+      if (readAborted(signal)) {
+        onAbort();
+        return;
+      }
       reflectApply(addAbortListener, signal, [
         "abort",
         onAbort,
         { once: true },
       ]);
+      listening = true;
       if (readAborted(signal)) onAbort();
-    },
-  );
-  try {
-    const outcome = await (reflectApply(nativePromiseRace, NativePromise, [
-      [observed, cancellation],
-    ]) as Promise<
-      | Readonly<{ kind: "summary"; summary: unknown }>
-      | Readonly<{ kind: "error"; error: unknown }>
-      | Readonly<{ kind: "cancelled" }>
-    >);
-    if (outcome.kind === "cancelled") throw cancelledError(signal);
-    if (outcome.kind === "error") {
-      throw new ContextCompactionError(
-        "CONTEXT_SUMMARIZER_FAILED",
-        "Context summarizer rejected",
-        { cause: outcome.error },
-      );
+    } catch (error) {
+      settle("reject", normalizeSummarySetupFailure(error));
     }
-    return outcome.summary;
-  } finally {
-    reflectApply(removeAbortListener, signal, ["abort", onAbort]);
+  });
+}
+
+function rejectedNativePromise(error: unknown): Promise<never> {
+  return new NativePromise<never>((_resolve, reject) => reject(error));
+}
+
+function normalizeSummarySetupFailure(error: unknown): ContextCompactionError {
+  if (error instanceof ContextCompactionError) return error;
+  return summaryFailure("Context summarizer async setup failed", error);
+}
+
+function summaryFailure(
+  message: string,
+  cause?: unknown,
+): ContextCompactionError {
+  return cause === undefined
+    ? new ContextCompactionError("CONTEXT_SUMMARIZER_FAILED", message)
+    : new ContextCompactionError("CONTEXT_SUMMARIZER_FAILED", message, {
+        cause,
+      });
+}
+
+function unobservableAsyncValueError(context: string): ContextCompactionError {
+  return new ContextCompactionError(
+    "CONTEXT_ASYNC_VALUE_UNOBSERVABLE",
+    `${context} returned a Proxy-wrapped or locked genuine Promise that standard JavaScript cannot observe; its creator must observe the hidden target before returning it`,
+  );
+}
+
+function isProxyValue(value: unknown): boolean {
+  if (!isObjectLike(value)) return false;
+  try {
+    return reflectApply(nodeIsProxy, undefined, [value]) as boolean;
+  } catch {
+    return true;
   }
+}
+
+function isNativePromiseValue(value: unknown): boolean {
+  if (!isObjectLike(value)) return false;
+  try {
+    return reflectApply(nodeIsPromise, undefined, [value]) as boolean;
+  } catch {
+    return false;
+  }
+}
+
+function isObjectLike(value: unknown): value is object {
+  return (
+    (typeof value === "object" && value !== null) || typeof value === "function"
+  );
+}
+
+function ignoreSettlement(): void {
+  // Intentionally consume an asynchronous settlement.
 }
 
 function throwIfCancelled(signal: AbortSignal): void {

@@ -32,6 +32,47 @@ function deferred<Value>(): Deferred<Value> {
   return { promise, resolve, reject };
 }
 
+function nextEventLoopTurn(): Promise<void> {
+  return new Promise((resolve) => {
+    const channel = new MessageChannel();
+    channel.port1.onmessage = () => {
+      channel.port1.close();
+      channel.port2.close();
+      resolve();
+    };
+    channel.port2.postMessage(undefined);
+  });
+}
+
+function listenForUnhandledRejections(
+  listener: (reason: unknown) => void,
+): () => void {
+  process.on("unhandledRejection", listener);
+  return () => process.removeListener("unhandledRejection", listener);
+}
+
+function creatorObservedLockedRejection(message: string): Readonly<{
+  promise: Promise<never>;
+  creatorObservation: Promise<unknown>;
+}> {
+  const source = deferred<never>();
+  const creatorObservation = Reflect.apply(
+    Promise.prototype.then,
+    source.promise,
+    [undefined, () => undefined],
+  );
+  Object.defineProperties(source.promise, {
+    constructor: {
+      get() {
+        throw new Error("locked hostile Promise constructor getter");
+      },
+    },
+    then: { value: undefined },
+  });
+  source.reject(new Error(message));
+  return { promise: source.promise, creatorObservation };
+}
+
 function toolTranscript(): readonly CourseMessage[] {
   return [
     userMessage({ id: "old-user", content: "Inspect both files." }),
@@ -580,6 +621,126 @@ test("normalizes thrown, rejected, and malformed thenable failures", async () =>
     );
   }
   expect(context.compactions).toEqual([]);
+});
+
+test("observes a late native rejection before reading hostile Promise metadata", async () => {
+  const context = buildActiveContext({ messages: toolTranscript() });
+  const source = deferred<string>();
+  Object.defineProperties(source.promise, {
+    constructor: {
+      configurable: true,
+      get() {
+        throw new Error("hostile Promise constructor getter");
+      },
+    },
+    then: { configurable: true, value: undefined },
+  });
+  const unhandled: unknown[] = [];
+  const removeListener = listenForUnhandledRejections((reason) => {
+    unhandled.push(reason);
+  });
+
+  const operation = compactContext(
+    context,
+    compactionOptions(context, () => source.promise, 30),
+  );
+  source.reject(new Error("late hostile Promise rejection"));
+  await expectContextError(operation, "CONTEXT_SUMMARIZER_FAILED");
+  await nextEventLoopTurn();
+  await nextEventLoopTurn();
+  removeListener();
+  expect(unhandled).toEqual([]);
+  expect(context.compactions).toEqual([]);
+});
+
+test("fails promptly for a Proxy Promise under an explicit creator-observation contract", async () => {
+  const context = buildActiveContext({ messages: toolTranscript() });
+  const source = deferred<never>();
+  const creatorObservation = Reflect.apply(
+    Promise.prototype.then,
+    source.promise,
+    [undefined, () => undefined],
+  );
+  const proxy = new Proxy(source.promise, {});
+  const operation = compactContext(
+    context,
+    compactionOptions(
+      context,
+      (() => proxy) as unknown as ContextSummarizer,
+      30,
+    ),
+  );
+
+  await expectContextError(operation, "CONTEXT_ASYNC_VALUE_UNOBSERVABLE");
+  source.reject(new Error("creator observes hidden target"));
+  await creatorObservation;
+  expect(context.compactions).toEqual([]);
+});
+
+test("fails stably for a creator-observed locked native Promise", async () => {
+  const context = buildActiveContext({ messages: toolTranscript() });
+  const locked = creatorObservedLockedRejection("locked summary rejection");
+  const operation = compactContext(
+    context,
+    compactionOptions(
+      context,
+      (() => locked.promise) as unknown as ContextSummarizer,
+      30,
+    ),
+  );
+
+  await expectContextError(operation, "CONTEXT_ASYNC_VALUE_UNOBSERVABLE");
+  await locked.creatorObservation;
+  expect(context.compactions).toEqual([]);
+});
+
+test("observes a rejected Promise returned by a custom thenable after fulfillment", async () => {
+  const context = buildActiveContext({ messages: toolTranscript() });
+  const unhandled: unknown[] = [];
+  const removeListener = listenForUnhandledRejections((reason) => {
+    unhandled.push(reason);
+  });
+  const summarizer = (() => ({
+    then(resolve: (value: string) => void) {
+      resolve("Observed detached return.");
+      return Promise.reject(new Error("detached then return rejected"));
+    },
+  })) as unknown as ContextSummarizer;
+
+  const result = await compactContext(
+    context,
+    compactionOptions(context, summarizer, 60),
+  );
+  expect(result.status).toBe("compacted");
+  await nextEventLoopTurn();
+  await nextEventLoopTurn();
+  removeListener();
+  expect(unhandled).toEqual([]);
+});
+
+test("rejects a recursively assimilated thenable chain at a bounded depth", async () => {
+  const context = buildActiveContext({ messages: toolTranscript() });
+  let value: unknown = "too deep";
+  for (let index = 0; index < 80; index += 1) {
+    const next = value;
+    value = {
+      then(resolve: (result: unknown) => void) {
+        resolve(next);
+      },
+    };
+  }
+
+  await expectContextError(
+    compactContext(
+      context,
+      compactionOptions(
+        context,
+        (() => value) as unknown as ContextSummarizer,
+        30,
+      ),
+    ),
+    "CONTEXT_SUMMARIZER_FAILED",
+  );
 });
 
 test("rejects a missing safe boundary without calling the summarizer", async () => {
