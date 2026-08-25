@@ -61,10 +61,72 @@ async function readLocalizedContent(relativePath) {
   );
 }
 
-function assertContainsAll(source, patterns, context) {
-  for (const pattern of patterns) {
-    assert.match(source, pattern, `${context} must cover ${pattern}`);
+function markdownWordCount(source) {
+  const prose = source.replace(/^```[\s\S]*?^```/gm, " ");
+  return (prose.match(/[\p{L}\p{N}][\p{L}\p{N}_'-]*/gu) ?? []).length;
+}
+
+function extractMarkdownSection(source, heading, context) {
+  const lines = source.replaceAll("\r\n", "\n").split("\n");
+  const start = lines.indexOf(heading);
+  assert.notEqual(start, -1, `${context} must contain section ${heading}`);
+
+  const headingMatch = /^(#{1,6})\s+/.exec(lines[start]);
+  assert.ok(headingMatch, `${context} must use a Markdown heading`);
+  const depth = headingMatch[1].length;
+  let end = lines.length;
+  for (let index = start + 1; index < lines.length; index += 1) {
+    const candidate = /^(#{1,6})\s+/.exec(lines[index]);
+    if (candidate && candidate[1].length <= depth) {
+      end = index;
+      break;
+    }
   }
+
+  const body = lines.slice(start + 1, end).join("\n").trim();
+  return {
+    body,
+    depth,
+    fenceLanguages: [
+      ...body.matchAll(/^```([A-Za-z0-9_-]+)(?:\s|$)/gm),
+    ].map((match) => match[1]),
+    nestedHeadingDepths: [
+      ...body.matchAll(/^(#{1,6})\s+/gm),
+    ].map((match) => match[1].length),
+  };
+}
+
+function assertContainsAll(source, patterns, context, sectionContract) {
+  const section = sectionContract
+    ? extractMarkdownSection(source, sectionContract.heading, context)
+    : undefined;
+  const target = section?.body ?? source;
+
+  if (sectionContract?.minWords) {
+    assert.ok(
+      markdownWordCount(target) >= sectionContract.minWords,
+      `${context} section must contain at least ${sectionContract.minWords} words`,
+    );
+  }
+  if (sectionContract?.fenceLanguages) {
+    assert.deepEqual(
+      section.fenceLanguages,
+      sectionContract.fenceLanguages,
+      `${context} section must preserve its fenced-code structure`,
+    );
+  }
+  for (const pattern of patterns) {
+    assert.match(target, pattern, `${context} section must cover ${pattern}`);
+  }
+  return section;
+}
+
+function sectionStructure(section) {
+  return {
+    depth: section.depth,
+    fenceLanguages: section.fenceLanguages,
+    nestedHeadingDepths: section.nestedHeadingDepths,
+  };
 }
 
 function releaseSourceRef(link) {
@@ -123,11 +185,73 @@ test("compile fixture packages are exactly pinned to the published release", asy
   }
 });
 
+test("PowerShell section contracts reject concepts scattered across unrelated sections", () => {
+  const scatteredSource = `
+### Bash and PowerShell are separate shell-tool sessions
+
+The \`powershell\` tool is optional.
+
+### Factory appendix
+
+Use \`createPowerShellTool()\` with \`PowerShellOperations\` and \`defaultTools\`.
+
+### Lifecycle appendix
+
+The backend receives \`signal?: AbortSignal\`, while \`DEFAULT_MAX_LINES\` and
+\`DEFAULT_MAX_BYTES\` bound output before cleanup.
+`;
+
+  assert.throws(
+    () =>
+      assertContainsAll(
+        scatteredSource,
+        [
+          /`powershell`/,
+          /`createPowerShellTool\(\)`/,
+          /`PowerShellOperations`/,
+          /`defaultTools`/,
+          /signal\?: AbortSignal/,
+          /DEFAULT_MAX_LINES/,
+          /DEFAULT_MAX_BYTES/,
+          /cleanup/,
+        ],
+        "synthetic PowerShell guidance",
+        {
+          heading: "### Bash and PowerShell are separate shell-tool sessions",
+          minWords: 80,
+        },
+      ),
+    /synthetic PowerShell guidance section must contain at least 80 words/,
+  );
+});
+
 test("both Chapter 5 locales explain the optional PowerShell tool contract", async () => {
   const chapters = await readLocalizedContent("ch05-tool-system.md");
+  const localeContract = {
+    en: {
+      heading: "### Bash and PowerShell are separate shell-tool sessions",
+      distinction: /It is a separate Tool from `bash`/,
+      selection: /It is \*\*not\*\* in the default `defaultTools` set/,
+      localBackend:
+        /default local Bash and PowerShell operations start a separate child process for each Tool call/,
+      cancellation: /honor `signal` and `timeout`/,
+      cleanup: /release child handles, transports, timers, and abort listeners in `finally`/,
+    },
+    vi: {
+      heading: "### Bash và PowerShell là các phiên shell-tool riêng biệt",
+      distinction: /Đây là Tool riêng với `bash`/,
+      selection: /Nó \*\*không\*\* thuộc tập `defaultTools` mặc định/,
+      localBackend:
+        /operations Bash và PowerShell cục bộ mặc định khởi động một child process riêng cho mỗi Tool call/,
+      cancellation: /tuân theo `signal` và `timeout`/,
+      cleanup: /giải phóng child handle, transport, timer và abort listener trong `finally`/,
+    },
+  };
+  const structures = [];
 
   for (const { locale, source } of chapters) {
-    assertContainsAll(
+    const contract = localeContract[locale];
+    const section = assertContainsAll(
       source,
       [
         /`powershell`/,
@@ -139,21 +263,37 @@ test("both Chapter 5 locales explain the optional PowerShell tool contract", asy
         /exitCode: number \| null/,
         /DEFAULT_MAX_LINES/,
         /DEFAULT_MAX_BYTES/,
+        contract.distinction,
+        contract.selection,
+        contract.localBackend,
+        contract.cancellation,
+        contract.cleanup,
       ],
       `${locale} Chapter 5 PowerShell guidance`,
+      {
+        heading: contract.heading,
+        minWords: 260,
+        fenceLanguages: ["typescript", "typescript"],
+      },
     );
+    structures.push(sectionStructure(section));
   }
+  assert.deepEqual(structures[0], structures[1]);
 });
 
 test("both API locales document the public PowerShell factory and operations signature", async () => {
   const references = await readLocalizedContent("reference/api.md");
+  const headings = {
+    en: "### PowerShell Tool factory and operations",
+    vi: "### Factory và operations của PowerShell Tool",
+  };
+  const structures = [];
 
   for (const { locale, source } of references) {
-    assertContainsAll(
+    const section = assertContainsAll(
       source,
       [
-        /createPowerShellTool,\s+type PowerShellOperations,\s+type PowerShellToolOptions,/,
-        /from "@earendil-works\/pi-coding-agent"/,
+        /```ts\s+import \{\s+createPowerShellTool,\s+type PowerShellOperations,\s+type PowerShellToolOptions,\s+\} from "@earendil-works\/pi-coding-agent";\s+```/,
         /createPowerShellTool\(cwd: string, options\?: PowerShellToolOptions\)/,
         /operations\?: PowerShellOperations/,
         /exposeSessionEnvironment\?: boolean/,
@@ -162,8 +302,15 @@ test("both API locales document the public PowerShell factory and operations sig
         /Promise<\{ exitCode: number \| null \}>/,
       ],
       `${locale} API PowerShell guidance`,
+      {
+        heading: headings[locale],
+        minWords: 180,
+        fenceLanguages: ["ts", "ts", "ts", "ts"],
+      },
     );
+    structures.push(sectionStructure(section));
   }
+  assert.deepEqual(structures[0], structures[1]);
 });
 
 test("both configuration locales distinguish tool selection from shell selection", async () => {
@@ -172,31 +319,59 @@ test("both configuration locales distinguish tool selection from shell selection
     en: /Selecting a Tool does not change the host shell/,
     vi: /Chọn một Tool không thay đổi host shell/,
   };
+  const headings = {
+    en: "### Tool selection",
+    vi: "### Chọn tool",
+  };
+  const structures = [];
 
   for (const { locale, source } of references) {
-    assertContainsAll(
+    const section = assertContainsAll(
       source,
       [
         /`defaultTools`/,
         /"defaultTools": \["read", "bash", "edit", "write"\]/,
         /"defaultTools": \["read", "powershell", "edit", "write"\]/,
         /`powershell`/,
-        /`shellPath`/,
-        /`shellCommandPrefix`/,
+        selectionStatement[locale],
       ],
       `${locale} configuration PowerShell guidance`,
+      {
+        heading: headings[locale],
+        minWords: 100,
+        fenceLanguages: ["json", "json"],
+      },
     );
-    assert.match(source, selectionStatement[locale]);
+    structures.push(sectionStructure(section));
   }
+  assert.deepEqual(structures[0], structures[1]);
 });
 
 test("both environment locales preserve Bash guidance and add concrete PowerShell customization", async () => {
   const references = await readLocalizedContent(
     "reference/environment-variables.md",
   );
+  const localeContract = {
+    en: {
+      heading: "## Process markers and shell-tool metadata",
+      localBackend:
+        /Default local Bash and PowerShell operations launch a separate child process for each Tool call/,
+      customBackend:
+        /Custom operations instead delegate to their configured backend/,
+    },
+    vi: {
+      heading: "## Process marker và shell-tool metadata",
+      localBackend:
+        /Operations Bash và PowerShell cục bộ mặc định khởi chạy một child process riêng cho mỗi Tool call/,
+      customBackend:
+        /Custom operations thay vào đó ủy quyền cho backend đã cấu hình/,
+    },
+  };
+  const structures = [];
 
   for (const { locale, source } of references) {
-    assertContainsAll(
+    const contract = localeContract[locale];
+    const section = assertContainsAll(
       source,
       [
         /createBashTool\(process\.cwd\(\), \{/,
@@ -209,10 +384,19 @@ test("both environment locales preserve Bash guidance and add concrete PowerShel
         /PI_REASONING_LEVEL/,
         /exposeSessionEnvironment: false/,
         /spawnHook: \(context\) =>/,
+        contract.localBackend,
+        contract.customBackend,
       ],
       `${locale} environment PowerShell guidance`,
+      {
+        heading: contract.heading,
+        minWords: 180,
+        fenceLanguages: ["ts", "ts", "ts"],
+      },
     );
+    structures.push(sectionStructure(section));
   }
+  assert.deepEqual(structures[0], structures[1]);
 });
 
 test("active content satisfies the published Pi migration contract", async () => {

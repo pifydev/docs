@@ -141,7 +141,7 @@ Commands run by Pi's LLM-callable `bash` and `powershell` tools receive fresh se
 | `PI_MODEL` | Selected Pi model ID |
 | `PI_REASONING_LEVEL` | Effective level: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max` |
 
-The values are resolved before every shell-tool command, after model or reasoning changes. Bash and PowerShell calls use separate child processes and command syntax, but both receive this same Pi session snapshot where the Tool is supported. The native `powershell` Tool is Windows-only. These variables are not injected into user-entered `!` or `!!` commands.
+The values are resolved before every shell-tool command, after model or reasoning changes. Default local Bash and PowerShell operations launch a separate child process for each Tool call and use their respective command syntax. Custom operations instead delegate to their configured backend; that backend owns cancellation, cleanup, and whether any execution state persists. Both paths receive the same Pi session snapshot through the operations environment where the Tool is supported. The native `powershell` Tool is Windows-only. These variables are not injected into user-entered `!` or `!!` commands.
 
 A custom shell tool created with `createBashTool()` or `createPowerShellTool()` exposes the metadata before `spawnHook`, so preserve the received process environment when adding fields. The existing Bash form remains:
 

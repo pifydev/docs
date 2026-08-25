@@ -141,7 +141,7 @@ Command do các LLM-callable tool `bash` và `powershell` của Pi chạy nhận
 | `PI_MODEL` | Pi model ID đang chọn |
 | `PI_REASONING_LEVEL` | Level thực tế: `off`, `minimal`, `low`, `medium`, `high`, `xhigh` hoặc `max` |
 
-Giá trị được resolve trước mỗi shell-tool command, sau khi đổi model hoặc reasoning. Bash call và PowerShell call dùng child process cùng command syntax riêng, nhưng cả hai đều nhận cùng snapshot của Pi session này ở nơi Tool được hỗ trợ. Tool `powershell` native chỉ có trên Windows. Các variable này không được inject vào command `!` hoặc `!!` do người dùng nhập.
+Giá trị được resolve trước mỗi shell-tool command, sau khi đổi model hoặc reasoning. Operations Bash và PowerShell cục bộ mặc định khởi chạy một child process riêng cho mỗi Tool call và dùng command syntax tương ứng. Custom operations thay vào đó ủy quyền cho backend đã cấu hình; backend đó sở hữu cancellation, cleanup và quyết định execution state có persist hay không. Cả hai đường đều nhận cùng snapshot của Pi session qua operations environment ở nơi Tool được hỗ trợ. Tool `powershell` native chỉ có trên Windows. Các variable này không được inject vào command `!` hoặc `!!` do người dùng nhập.
 
 Custom shell tool được tạo bằng `createBashTool()` hoặc `createPowerShellTool()` expose metadata trước `spawnHook`, vì vậy hãy giữ process environment nhận được khi thêm field. Dạng Bash hiện có vẫn là:
 
