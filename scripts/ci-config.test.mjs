@@ -47,6 +47,7 @@ test("content workflow validates the Fumadocs source tree", async () => {
     .split("&&")
     .map((command) => command.trim());
   assert.ok(contentQualityCommands.includes("npm run test:preservation"));
+  assert.ok(contentQualityCommands.includes("npm run test:release"));
   assert.match(packageJSON.scripts["lint:content"], /--require-reviewed/);
   assert.match(packageJSON.scripts["quality:content"], /test:editorial/);
   assert.match(packageJSON.scripts["quality:content"], /lint:editorial/);
