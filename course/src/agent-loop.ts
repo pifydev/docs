@@ -1,3 +1,5 @@
+import { types as nodeUtilTypes } from "node:util";
+
 import { EventStream } from "./event-stream";
 import {
   assistantMessage,
@@ -30,10 +32,27 @@ export const MAX_INITIAL_MESSAGES = 4096;
 export const MAX_MODEL_CHUNKS_PER_STEP = 1024;
 /** Maximum streamed text per model turn, counted in Unicode code points. */
 export const MAX_MODEL_TEXT_CODE_POINTS = 65_536;
+/** Maximum raw content blocks accepted in one assistant response. */
+export const MAX_MODEL_BLOCKS_PER_STEP = 1024;
+/** Maximum nested levels accepted in Tool-call argument JSON. */
+export const MAX_TOOL_ARGUMENT_DEPTH = 32;
+/** Maximum JSON values, including the root, in Tool-call arguments. */
+export const MAX_TOOL_ARGUMENT_NODES = 257;
+/** Maximum object fields plus array slots in Tool-call arguments. */
+export const MAX_TOOL_ARGUMENT_ENTRIES = 256;
+/** Combined Tool-argument key/string budget in Unicode code points. */
+export const MAX_TOOL_ARGUMENT_STRING_CODE_POINTS = 4096;
 
+const reflectApply = Reflect.apply;
 const nativePromiseConstructor = Promise;
 const nativePromiseResolve = Promise.resolve;
 const nativePromiseThen = Promise.prototype.then;
+const nativePromiseDescriptor = Object.freeze({
+  configurable: true,
+  enumerable: false,
+  value: nativePromiseConstructor,
+  writable: true,
+});
 const abortSignalAbortedGetter = Object.getOwnPropertyDescriptor(
   AbortSignal.prototype,
   "aborted",
@@ -46,6 +65,8 @@ const eventTargetAddEventListener = EventTarget.prototype.addEventListener;
 const eventTargetRemoveEventListener =
   EventTarget.prototype.removeEventListener;
 const snapshotToolRegistry = ToolRegistry.prototype.snapshot;
+const nodeIsProxy = nodeUtilTypes.isProxy;
+const nodeIsPromise = nodeUtilTypes.isPromise;
 
 /** Minimal model boundary consumed by the course-only Agent Loop. */
 export type CourseModel = Readonly<{
@@ -98,6 +119,26 @@ type ModelTurn = Readonly<{
 
 type SequenceCounter = { value: number };
 
+type UnicodeCodePointCounter = {
+  count: number;
+  pendingHighSurrogate: boolean;
+};
+
+type JsonTraversalFrame =
+  | Readonly<{ type: "value"; value: unknown; depth: number }>
+  | Readonly<{ type: "exit"; value: object }>;
+
+type JsonTraversalState = {
+  nodes: number;
+  entries: number;
+  stringCodePoints: number;
+  readonly ancestors: WeakSet<object>;
+};
+
+type AssistantContentBudget = {
+  textCodePoints: number;
+};
+
 type ModelIteratorHandle = Readonly<{
   iterator: object;
   next: () => unknown;
@@ -105,6 +146,10 @@ type ModelIteratorHandle = Readonly<{
 
 type InspectedIteratorStep =
   Readonly<{ done: true }> | Readonly<{ done: false; value: unknown }>;
+
+type OperationBox = Readonly<{ value: unknown }>;
+
+type AsyncObservation = "native" | "thenable" | "proxy" | "none";
 
 type NormalizedResponseBlock =
   | Readonly<{ type: "text"; text: string }>
@@ -375,7 +420,12 @@ async function invokeModel(
     );
   }
   if (!(returnedStream instanceof EventStream)) {
-    observeAsyncValue(returnedStream);
+    const observation = observeAsyncValue(returnedStream);
+    if (observation === "proxy") {
+      throw new ModelProtocolError(
+        "model.stream returned a Proxy-wrapped Promise; the loop cannot observe its hidden Promise target, so its creator must observe that target",
+      );
+    }
     throw new ModelProtocolError("model.stream must return an EventStream");
   }
   const stream = returnedStream;
@@ -383,7 +433,10 @@ async function invokeModel(
   const chunks: CourseModelChunk[] = [];
   const iterator = acquireModelIterator(stream);
   let iteratorFinished = false;
-  let textCodePoints = 0;
+  const textCodePoints: UnicodeCodePointCounter = {
+    count: 0,
+    pendingHighSurrogate: false,
+  };
   try {
     while (true) {
       throwIfAborted(signal);
@@ -402,6 +455,7 @@ async function invokeModel(
       try {
         rawStep = await waitForAbort(pendingStep, signal);
       } catch (error) {
+        if (error instanceof ModelProtocolError) throw error;
         if (error instanceof SignalAccessError) throw error;
         throwIfAborted(signal);
         throw new ModelStreamFailure(
@@ -433,13 +487,7 @@ async function invokeModel(
         );
       }
       if (chunk.type === "textDelta") {
-        const deltaCodePoints = countUnicodeCodePoints(chunk.delta);
-        if (deltaCodePoints > MAX_MODEL_TEXT_CODE_POINTS - textCodePoints) {
-          throw new ModelProtocolError(
-            `Model turn exceeded ${MAX_MODEL_TEXT_CODE_POINTS} streamed text code points`,
-          );
-        }
-        textCodePoints += deltaCodePoints;
+        addTextDeltaCodePoints(textCodePoints, chunk.delta);
       }
       throwIfAborted(signal);
       chunks.push(chunk);
@@ -459,6 +507,7 @@ async function invokeModel(
     try {
       rawResponse = await waitForAbort(pendingResponse, signal);
     } catch (error) {
+      if (error instanceof ModelProtocolError) throw error;
       if (error instanceof SignalAccessError) throw error;
       throwIfAborted(signal);
       throw new ModelStreamFailure(errorMessage(error, "Model stream failed"), {
@@ -466,6 +515,7 @@ async function invokeModel(
       });
     }
     throwIfAborted(signal);
+    finishTextCodePointCounter(textCodePoints);
     const response = snapshotResponse(rawResponse, request.id);
     assertChunksMatchResponse(chunks, response.message);
     return Object.freeze({
@@ -556,9 +606,10 @@ function snapshotTranscript(
     if (role === "user") {
       result.push(userMessage({ id: message.id, content: message.content }));
     } else if (role === "assistant") {
-      result.push(
-        assistantMessage({ id: message.id, content: message.content }),
-      );
+      const id = message.id;
+      const content = message.content;
+      assertBoundedAssistantContent(content, `messages[${index}].content`);
+      result.push(assistantMessage({ id, content }));
     } else if (role === "toolResult") {
       result.push(
         toolResultMessage({
@@ -604,6 +655,11 @@ function snapshotChunk(value: unknown, requestId: string): CourseModelChunk {
     assertCorrelatedRequest("chunk", chunkRequestId, requestId);
     let toolCall: CourseToolCall;
     try {
+      assertBoundedAssistantBlock(
+        rawToolCall,
+        "Model Tool-call chunk.toolCall",
+        { textCodePoints: 0 },
+      );
       const snapshot = assistantMessage({
         id: "message-model-chunk-snapshot",
         content: [rawToolCall],
@@ -644,9 +700,15 @@ function snapshotResponse(
     if (rawMessage.role !== "assistant") {
       throw new TypeError("Response message must be an assistant message");
     }
+    const messageId = rawMessage.id;
+    const messageContent = rawMessage.content;
+    assertBoundedAssistantContent(
+      messageContent,
+      "Model response.message.content",
+    );
     const message = assistantMessage({
-      id: rawMessage.id,
-      content: rawMessage.content,
+      id: messageId,
+      content: messageContent,
     });
     if (stopReason !== "stop" && stopReason !== "toolCall") {
       throw new TypeError('Response stopReason must be "stop" or "toolCall"');
@@ -678,6 +740,299 @@ function snapshotResponse(
       { cause: error },
     );
   }
+}
+
+function assertBoundedAssistantContent(
+  value: unknown,
+  path: string,
+): asserts value is readonly CourseAssistantBlock[] {
+  if (isProxyValue(value)) {
+    throw new TypeError(`${path} must not be a Proxy`);
+  }
+  if (!Array.isArray(value)) {
+    throw new TypeError(`${path} must be an array`);
+  }
+  assertArrayPrototype(value, path);
+  const length = readOwnArrayLength(value, path, MAX_MODEL_BLOCKS_PER_STEP);
+  const budget: AssistantContentBudget = { textCodePoints: 0 };
+  for (let index = 0; index < length; index += 1) {
+    const block = readOwnDataProperty(
+      value,
+      String(index),
+      `${path}[${index}]`,
+    );
+    assertBoundedAssistantBlock(block, `${path}[${index}]`, budget);
+  }
+}
+
+function assertBoundedAssistantBlock(
+  value: unknown,
+  path: string,
+  budget: AssistantContentBudget,
+): asserts value is CourseAssistantBlock {
+  assertPlainRecord(value, path);
+  const type = readOwnDataProperty(value, "type", `${path}.type`);
+  if (type === "text") {
+    const text = readOwnDataProperty(value, "text", `${path}.text`);
+    if (typeof text !== "string") {
+      throw new TypeError(`${path}.text must be a string`);
+    }
+    addBoundedStringCodePoints(
+      budget,
+      "textCodePoints",
+      text,
+      MAX_MODEL_TEXT_CODE_POINTS,
+      `${path}.text`,
+    );
+    return;
+  }
+  if (type !== "toolCall") {
+    throw new TypeError(`${path}.type must be "text" or "toolCall"`);
+  }
+
+  const id = readOwnDataProperty(value, "id", `${path}.id`);
+  const name = readOwnDataProperty(value, "name", `${path}.name`);
+  if (typeof id !== "string" || id.trim().length === 0) {
+    throw new TypeError(`${path}.id must be a non-empty string`);
+  }
+  if (typeof name !== "string" || name.trim().length === 0) {
+    throw new TypeError(`${path}.name must be a non-empty string`);
+  }
+  const argumentsValue = readOwnDataProperty(
+    value,
+    "arguments",
+    `${path}.arguments`,
+  );
+  assertBoundedToolArguments(argumentsValue, `${path}.arguments`);
+}
+
+function assertBoundedToolArguments(
+  value: unknown,
+  path: string,
+): asserts value is CourseJsonObject {
+  if (Array.isArray(value) || !isObjectLike(value)) {
+    throw new TypeError(`${path} must be a non-null JSON object, not an array`);
+  }
+
+  const state: JsonTraversalState = {
+    nodes: 0,
+    entries: 0,
+    stringCodePoints: 0,
+    ancestors: new WeakSet<object>(),
+  };
+  const stack: JsonTraversalFrame[] = [{ type: "value", value, depth: 0 }];
+
+  while (stack.length > 0) {
+    const frame = stack.pop();
+    if (frame === undefined) break;
+    if (frame.type === "exit") {
+      state.ancestors.delete(frame.value);
+      continue;
+    }
+
+    state.nodes += 1;
+    if (state.nodes > MAX_TOOL_ARGUMENT_NODES) {
+      throw new TypeError(
+        `${path} exceeds ${MAX_TOOL_ARGUMENT_NODES} JSON values`,
+      );
+    }
+
+    const item = frame.value;
+    if (item === null || typeof item === "boolean") continue;
+    if (typeof item === "number") {
+      if (!Number.isFinite(item)) {
+        throw new TypeError(`${path} must contain only finite JSON numbers`);
+      }
+      continue;
+    }
+    if (typeof item === "string") {
+      addBoundedStringCodePoints(
+        state,
+        "stringCodePoints",
+        item,
+        MAX_TOOL_ARGUMENT_STRING_CODE_POINTS,
+        path,
+      );
+      continue;
+    }
+    if (!isObjectLike(item) || typeof item === "function") {
+      throw new TypeError(`${path} must contain only JSON-compatible values`);
+    }
+    if (frame.depth > MAX_TOOL_ARGUMENT_DEPTH) {
+      throw new TypeError(
+        `${path} exceeds JSON depth ${MAX_TOOL_ARGUMENT_DEPTH}`,
+      );
+    }
+    if (isProxyValue(item)) {
+      throw new TypeError(`${path} must not contain Proxy values`);
+    }
+    if (state.ancestors.has(item)) {
+      throw new TypeError(`${path} must not contain circular references`);
+    }
+    state.ancestors.add(item);
+    stack.push({ type: "exit", value: item });
+
+    if (Array.isArray(item)) {
+      assertArrayPrototype(item, path);
+      const length = readOwnArrayLength(item, path, MAX_TOOL_ARGUMENT_ENTRIES);
+      addJsonEntries(state, length, path);
+      assertNoExtraEnumerableArrayProperties(item, length, path);
+      for (let index = length - 1; index >= 0; index -= 1) {
+        stack.push({
+          type: "value",
+          value: readOwnDataProperty(item, String(index), `${path}[${index}]`),
+          depth: frame.depth + 1,
+        });
+      }
+      continue;
+    }
+
+    assertObjectPrototype(item, path);
+    let inspectedKeys = 0;
+    for (const key in item as Record<string, unknown>) {
+      inspectedKeys += 1;
+      if (inspectedKeys > MAX_TOOL_ARGUMENT_ENTRIES + 1) {
+        throw new TypeError(`${path} has too many enumerable properties`);
+      }
+      const descriptor = Object.getOwnPropertyDescriptor(item, key);
+      if (descriptor === undefined || !descriptor.enumerable) continue;
+      if (!("value" in descriptor)) {
+        throw new TypeError(`${path}.${key} must not be an accessor`);
+      }
+      addJsonEntries(state, 1, path);
+      addBoundedStringCodePoints(
+        state,
+        "stringCodePoints",
+        key,
+        MAX_TOOL_ARGUMENT_STRING_CODE_POINTS,
+        path,
+      );
+      stack.push({
+        type: "value",
+        value: descriptor.value,
+        depth: frame.depth + 1,
+      });
+    }
+  }
+}
+
+function addJsonEntries(
+  state: JsonTraversalState,
+  amount: number,
+  path: string,
+): void {
+  if (amount > MAX_TOOL_ARGUMENT_ENTRIES - state.entries) {
+    throw new TypeError(
+      `${path} exceeds ${MAX_TOOL_ARGUMENT_ENTRIES} JSON entries`,
+    );
+  }
+  state.entries += amount;
+}
+
+function assertPlainRecord(
+  value: unknown,
+  path: string,
+): asserts value is Record<string, unknown> {
+  if (!isObjectLike(value) || typeof value === "function") {
+    throw new TypeError(`${path} must be an object`);
+  }
+  if (isProxyValue(value)) {
+    throw new TypeError(`${path} must not be a Proxy`);
+  }
+  if (Array.isArray(value)) {
+    throw new TypeError(`${path} must be an object, not an array`);
+  }
+  assertObjectPrototype(value, path);
+}
+
+function assertObjectPrototype(value: object, path: string): void {
+  const prototype = Object.getPrototypeOf(value) as unknown;
+  if (prototype !== Object.prototype && prototype !== null) {
+    throw new TypeError(`${path} must use a plain or null prototype`);
+  }
+}
+
+function assertArrayPrototype(value: readonly unknown[], path: string): void {
+  const prototype = Object.getPrototypeOf(value) as unknown;
+  if (prototype !== Array.prototype && prototype !== null) {
+    throw new TypeError(
+      `${path} must use the standard or null Array prototype`,
+    );
+  }
+}
+
+function readOwnArrayLength(
+  value: readonly unknown[],
+  path: string,
+  maximum: number,
+): number {
+  const descriptor = Object.getOwnPropertyDescriptor(value, "length");
+  if (descriptor === undefined || !("value" in descriptor)) {
+    throw new TypeError(`${path}.length must be an own data property`);
+  }
+  const length = descriptor.value as unknown;
+  if (
+    typeof length !== "number" ||
+    !Number.isSafeInteger(length) ||
+    length < 0
+  ) {
+    throw new TypeError(`${path}.length must be a non-negative safe integer`);
+  }
+  if (length > maximum) {
+    throw new TypeError(`${path}.length must not exceed ${maximum}`);
+  }
+  return length;
+}
+
+function readOwnDataProperty(
+  value: object,
+  key: PropertyKey,
+  path: string,
+): unknown {
+  const descriptor = Object.getOwnPropertyDescriptor(value, key);
+  if (descriptor === undefined) {
+    throw new TypeError(`${path} must be an own property`);
+  }
+  if (!("value" in descriptor)) {
+    throw new TypeError(`${path} must not be an accessor`);
+  }
+  return descriptor.value as unknown;
+}
+
+function assertNoExtraEnumerableArrayProperties(
+  value: readonly unknown[],
+  length: number,
+  path: string,
+): void {
+  let inspectedKeys = 0;
+  for (const key in value) {
+    inspectedKeys += 1;
+    if (inspectedKeys > MAX_TOOL_ARGUMENT_ENTRIES + 1) {
+      throw new TypeError(`${path} has too many enumerable properties`);
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (descriptor === undefined || !descriptor.enumerable) continue;
+    const index = canonicalArrayIndex(key);
+    if (index === undefined || index >= length) {
+      throw new TypeError(`${path} must not have extra enumerable properties`);
+    }
+    if (!("value" in descriptor)) {
+      throw new TypeError(`${path}[${index}] must not be an accessor`);
+    }
+  }
+}
+
+function canonicalArrayIndex(value: string): number | undefined {
+  if (value === "0") return 0;
+  if (value.length === 0 || value.charCodeAt(0) === 0x30) return undefined;
+  let result = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    const digit = value.charCodeAt(index) - 0x30;
+    if (digit < 0 || digit > 9) return undefined;
+    result = result * 10 + digit;
+    if (!Number.isSafeInteger(result)) return undefined;
+  }
+  return result;
 }
 
 function assertModelChunkObject(
@@ -1081,9 +1436,9 @@ function normalizeSignalAccessError(error: unknown): SignalAccessError {
 }
 
 function waitForAbort(value: unknown, signal: AbortSignal): Promise<unknown> {
-  let pending: Promise<unknown>;
+  let pending: Promise<OperationBox>;
   try {
-    pending = resolveWithCapturedPromise(value);
+    pending = prepareObservedOperation(value);
   } catch (error) {
     return nativePromiseConstructor.reject(error);
   }
@@ -1127,10 +1482,10 @@ function waitForAbort(value: unknown, signal: AbortSignal): Promise<unknown> {
       nativePromiseThen,
       pending,
       [
-        (result: unknown) => {
+        (result: OperationBox) => {
           try {
             if (readSignalAborted(signal)) onAbort();
-            else settle("resolve", result);
+            else settle("resolve", result.value);
           } catch (error) {
             settle("reject", normalizeSignalAccessError(error));
           }
@@ -1145,7 +1500,7 @@ function waitForAbort(value: unknown, signal: AbortSignal): Promise<unknown> {
         },
       ],
     );
-    observeNativePromise(observation);
+    attachNativePromise(observation, ignoreSettlement, ignoreSettlement);
 
     try {
       if (readSignalAborted(signal)) {
@@ -1167,32 +1522,158 @@ function waitForAbort(value: unknown, signal: AbortSignal): Promise<unknown> {
   });
 }
 
-function resolveWithCapturedPromise(value: unknown): Promise<unknown> {
-  return Reflect.apply(nativePromiseResolve, nativePromiseConstructor, [value]);
+function prepareObservedOperation(value: unknown): Promise<OperationBox> {
+  let resolveBox!: (box: OperationBox) => void;
+  let rejectBox!: (reason?: unknown) => void;
+  const bridge = new nativePromiseConstructor<OperationBox>(
+    (resolve, reject) => {
+      resolveBox = resolve;
+      rejectBox = reject;
+    },
+  );
+  const fulfill = (result: unknown) => {
+    resolveBox(Object.freeze({ value: result }));
+  };
+
+  if (attachNativePromise(value, fulfill, rejectBox)) {
+    return resolveBridge(bridge);
+  }
+  if (isProxyValue(value)) {
+    throw new ModelProtocolError(
+      "Proxy-wrapped Promise/thenable values cannot be observed because Proxy hides the target Promise internal slots; the creator must observe the target",
+    );
+  }
+  if (!isObjectLike(value)) {
+    fulfill(value);
+    return resolveBridge(bridge);
+  }
+
+  let then: unknown;
+  try {
+    then = Reflect.get(value, "then");
+  } catch (error) {
+    throw new ModelProtocolError(
+      "Thenable.then could not be inspected safely",
+      {
+        cause: error,
+      },
+    );
+  }
+  if (typeof then !== "function") {
+    fulfill(value);
+    return resolveBridge(bridge);
+  }
+
+  try {
+    const returned = reflectApply(then, value, [fulfill, rejectBox]);
+    if (returned !== value) observeAsyncValue(returned);
+  } catch (error) {
+    rejectBox(error);
+  }
+  return resolveBridge(bridge);
 }
 
-function observeAsyncValue(value: unknown): void {
-  if (!isObjectLike(value)) return;
+function resolveBridge(bridge: Promise<OperationBox>): Promise<OperationBox> {
+  const normalized: unknown = reflectApply(
+    nativePromiseResolve,
+    nativePromiseConstructor,
+    [bridge],
+  );
+  if (
+    !isObjectLike(normalized) ||
+    !reflectApply(nodeIsPromise, undefined, [normalized])
+  ) {
+    throw new ModelProtocolError(
+      "Captured Promise.resolve returned invalid data",
+    );
+  }
+  return normalized as Promise<OperationBox>;
+}
+
+function observeAsyncValue(value: unknown): AsyncObservation {
+  if (!isObjectLike(value)) return "none";
+  if (attachNativePromise(value, ignoreSettlement, ignoreSettlement)) {
+    return "native";
+  }
+  if (isProxyValue(value)) return "proxy";
+
+  let then: unknown;
   try {
-    observeNativePromise(resolveWithCapturedPromise(value));
+    then = Reflect.get(value, "then");
   } catch {
-    // Invalid thenables are protocol failures either way; observation is best effort.
+    return "none";
+  }
+  if (typeof then !== "function") return "none";
+
+  const pending = prepareObservedOperation(value);
+  attachNativePromise(pending, ignoreSettlement, ignoreSettlement);
+  return "thenable";
+}
+
+function attachNativePromise(
+  value: unknown,
+  onFulfilled: (result: unknown) => void,
+  onRejected: (reason: unknown) => void,
+): boolean {
+  if (!isObjectLike(value)) return false;
+  let observation: unknown;
+  try {
+    observation = reflectApply(nativePromiseThen, value, [
+      onFulfilled,
+      onRejected,
+    ]);
+  } catch {
+    observation = attachNativePromiseWithStableSpecies(
+      value,
+      onFulfilled,
+      onRejected,
+    );
+    if (observation === undefined) return false;
+  }
+  observePromiseContinuation(observation);
+  return true;
+}
+
+function attachNativePromiseWithStableSpecies(
+  value: object,
+  onFulfilled: (result: unknown) => void,
+  onRejected: (reason: unknown) => void,
+): unknown | undefined {
+  try {
+    if (!reflectApply(nodeIsPromise, undefined, [value])) return undefined;
+    const prior = Object.getOwnPropertyDescriptor(value, "constructor");
+    if (prior !== undefined && !prior.configurable) return undefined;
+    Object.defineProperty(value, "constructor", nativePromiseDescriptor);
+    try {
+      return reflectApply(nativePromiseThen, value, [onFulfilled, onRejected]);
+    } finally {
+      if (prior === undefined) Reflect.deleteProperty(value, "constructor");
+      else Object.defineProperty(value, "constructor", prior);
+    }
+  } catch {
+    return undefined;
   }
 }
 
-function observeNativePromise(value: Promise<unknown>): void {
+function observePromiseContinuation(value: unknown): void {
+  if (!isObjectLike(value)) return;
   try {
-    const observation: Promise<unknown> = Reflect.apply(
-      nativePromiseThen,
-      value,
-      [ignoreSettlement, ignoreSettlement],
-    );
-    Reflect.apply(nativePromiseThen, observation, [
+    reflectApply(nativePromiseThen, value, [
       ignoreSettlement,
       ignoreSettlement,
     ]);
   } catch {
-    // Only genuine native promises reach normal paths; hostile values are ignored.
+    // The source Promise already has both reactions. The continuation is
+    // fulfilled because the internal handlers above never throw.
+  }
+}
+
+function isProxyValue(value: unknown): boolean {
+  if (!isObjectLike(value)) return false;
+  try {
+    return reflectApply(nodeIsProxy, undefined, [value]);
+  } catch {
+    return true;
   }
 }
 
@@ -1218,21 +1699,90 @@ function closeIteratorQuietly(iterator: object): void {
   observeAsyncValue(cleanup);
 }
 
-function countUnicodeCodePoints(value: string): number {
+function addTextDeltaCodePoints(
+  counter: UnicodeCodePointCounter,
+  value: string,
+): void {
+  let index = 0;
+  if (counter.pendingHighSurrogate && value.length > 0) {
+    counter.pendingHighSurrogate = false;
+    if (isLowSurrogate(value.charCodeAt(0))) index = 1;
+  }
+
+  while (index < value.length) {
+    const first = value.charCodeAt(index);
+    counter.count += 1;
+    if (counter.count > MAX_MODEL_TEXT_CODE_POINTS) {
+      throw new ModelProtocolError(
+        `Model turn exceeded ${MAX_MODEL_TEXT_CODE_POINTS} streamed text code points`,
+      );
+    }
+    if (isHighSurrogate(first)) {
+      if (index + 1 === value.length) {
+        counter.pendingHighSurrogate = true;
+        index += 1;
+      } else if (isLowSurrogate(value.charCodeAt(index + 1))) {
+        index += 2;
+      } else {
+        index += 1;
+      }
+    } else {
+      index += 1;
+    }
+  }
+}
+
+function finishTextCodePointCounter(counter: UnicodeCodePointCounter): void {
+  // A dangling high surrogate was already reserved as one code point when its
+  // delta arrived. Terminal settlement only makes that state explicit.
+  counter.pendingHighSurrogate = false;
+}
+
+function addBoundedStringCodePoints(
+  state: AssistantContentBudget | JsonTraversalState,
+  key: "textCodePoints" | "stringCodePoints",
+  value: string,
+  maximum: number,
+  path: string,
+): void {
+  const current =
+    key === "textCodePoints"
+      ? (state as AssistantContentBudget).textCodePoints
+      : (state as JsonTraversalState).stringCodePoints;
+  const added = countUnicodeCodePointsUpTo(value, maximum - current);
+  if (added > maximum - current) {
+    throw new TypeError(`${path} exceeds ${maximum} Unicode code points`);
+  }
+  if (key === "textCodePoints") {
+    (state as AssistantContentBudget).textCodePoints = current + added;
+  } else {
+    (state as JsonTraversalState).stringCodePoints = current + added;
+  }
+}
+
+function countUnicodeCodePointsUpTo(value: string, maximum: number): number {
   let count = 0;
   let index = 0;
   while (index < value.length) {
     const first = value.charCodeAt(index);
-    if (first >= 0xd800 && first <= 0xdbff) {
+    if (isHighSurrogate(first)) {
       const second = value.charCodeAt(index + 1);
-      index += second >= 0xdc00 && second <= 0xdfff ? 2 : 1;
+      index += isLowSurrogate(second) ? 2 : 1;
     } else {
       index += 1;
     }
     count += 1;
-    if (count > MAX_MODEL_TEXT_CODE_POINTS) return count;
+    if (count > maximum) return count;
   }
   return count;
+}
+
+function isHighSurrogate(value: number): boolean {
+  return value >= 0xd800 && value <= 0xdbff;
+}
+
+function isLowSurrogate(value: number): boolean {
+  return value >= 0xdc00 && value <= 0xdfff;
 }
 
 function isObjectLike(value: unknown): value is object {

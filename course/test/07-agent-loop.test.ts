@@ -4,8 +4,13 @@ import {
   EventStream,
   MAX_AGENT_STEPS,
   MAX_INITIAL_MESSAGES,
+  MAX_MODEL_BLOCKS_PER_STEP,
   MAX_MODEL_CHUNKS_PER_STEP,
   MAX_MODEL_TEXT_CODE_POINTS,
+  MAX_TOOL_ARGUMENT_DEPTH,
+  MAX_TOOL_ARGUMENT_ENTRIES,
+  MAX_TOOL_ARGUMENT_NODES,
+  MAX_TOOL_ARGUMENT_STRING_CODE_POINTS,
   ScriptedModel,
   ToolRegistry,
   defineTool,
@@ -65,6 +70,19 @@ async function settlementByNextTurn(
     ),
     nextEventLoopTurn().then(() => "pending" as const),
   ]);
+}
+
+function shadowPromiseMetadata<Value>(promise: Promise<Value>): Promise<Value> {
+  Object.defineProperties(promise, {
+    constructor: {
+      configurable: true,
+      get() {
+        throw new Error("hostile Promise constructor getter");
+      },
+    },
+    then: { value: undefined },
+  });
+  return promise;
 }
 
 function user(content = "Add 20 and 22.") {
@@ -1393,4 +1411,689 @@ test("bounds a Tool-heavy response before any Tool effect runs", async () => {
     error: { code: "MODEL_PROTOCOL_ERROR" },
   });
   expect(executions).toBe(0);
+});
+
+test("observes model.stream native Promise rejection before hostile metadata", async () => {
+  const unhandled: unknown[] = [];
+  const removeListener = listenForUnhandledRejections((reason) => {
+    unhandled.push(reason);
+  });
+  const rejected = shadowPromiseMetadata(
+    Promise.reject(new Error("stream metadata rejection")),
+  );
+  const model: CourseModel = {
+    stream() {
+      return rejected as unknown as EventStream<
+        CourseModelChunk,
+        CourseModelResponse
+      >;
+    },
+  };
+
+  const { result } = await settleRun(
+    runAgentLoop({
+      messages: [user()],
+      model,
+      tools: new ToolRegistry(),
+      maxSteps: 1,
+      signal: new AbortController().signal,
+    }),
+  );
+
+  await nextEventLoopTurn();
+  await nextEventLoopTurn();
+  removeListener();
+  expect(result).toMatchObject({
+    status: "failed",
+    error: { code: "MODEL_PROTOCOL_ERROR" },
+  });
+  expect(unhandled).toEqual([]);
+});
+
+test("observes iterator.next native Promise rejection before hostile metadata", async () => {
+  const unhandled: unknown[] = [];
+  const removeListener = listenForUnhandledRejections((reason) => {
+    unhandled.push(reason);
+  });
+  const rejected = shadowPromiseMetadata(
+    Promise.reject(new Error("next metadata rejection")),
+  );
+  const model: CourseModel = {
+    stream() {
+      const stream = new EventStream<CourseModelChunk, CourseModelResponse>();
+      const iterator = {
+        next: () => rejected,
+        [Symbol.asyncIterator]() {
+          return this;
+        },
+      };
+      Object.defineProperty(stream, Symbol.asyncIterator, {
+        value: () => iterator,
+      });
+      return stream;
+    },
+  };
+
+  const { result } = await settleRun(
+    runAgentLoop({
+      messages: [user()],
+      model,
+      tools: new ToolRegistry(),
+      maxSteps: 1,
+      signal: new AbortController().signal,
+    }),
+  );
+
+  await nextEventLoopTurn();
+  await nextEventLoopTurn();
+  removeListener();
+  expect(result).toMatchObject({
+    status: "failed",
+    error: { code: "MODEL_STREAM_FAILED" },
+  });
+  expect(unhandled).toEqual([]);
+});
+
+test("observes iterator cleanup rejection before hostile Promise metadata", async () => {
+  const unhandled: unknown[] = [];
+  const removeListener = listenForUnhandledRejections((reason) => {
+    unhandled.push(reason);
+  });
+  const rejectedCleanup = shadowPromiseMetadata(
+    Promise.reject(new Error("cleanup metadata rejection")),
+  );
+  const model: CourseModel = {
+    stream() {
+      const stream = new EventStream<CourseModelChunk, CourseModelResponse>();
+      const iterator = {
+        next: async () => ({ done: false, value: null }),
+        return: () => rejectedCleanup,
+        [Symbol.asyncIterator]() {
+          return this;
+        },
+      };
+      Object.defineProperty(stream, Symbol.asyncIterator, {
+        value: () => iterator,
+      });
+      return stream;
+    },
+  };
+
+  const { result } = await settleRun(
+    runAgentLoop({
+      messages: [user()],
+      model,
+      tools: new ToolRegistry(),
+      maxSteps: 1,
+      signal: new AbortController().signal,
+    }),
+  );
+
+  await nextEventLoopTurn();
+  await nextEventLoopTurn();
+  removeListener();
+  expect(result).toMatchObject({
+    status: "failed",
+    error: { code: "MODEL_PROTOCOL_ERROR" },
+  });
+  expect(unhandled).toEqual([]);
+});
+
+test("rejects a Proxy-wrapped Promise while the creator observes its target", async () => {
+  const target = Promise.reject(new Error("creator-owned proxy rejection"));
+  const creatorObservation = Reflect.apply(Promise.prototype.then, target, [
+    undefined,
+    () => undefined,
+  ]);
+  const proxy = new Proxy(target, {});
+  const model: CourseModel = {
+    stream() {
+      return proxy as unknown as EventStream<
+        CourseModelChunk,
+        CourseModelResponse
+      >;
+    },
+  };
+
+  const { result } = await settleRun(
+    runAgentLoop({
+      messages: [user()],
+      model,
+      tools: new ToolRegistry(),
+      maxSteps: 1,
+      signal: new AbortController().signal,
+    }),
+  );
+  await creatorObservation;
+
+  expect(result).toMatchObject({
+    status: "failed",
+    error: {
+      code: "MODEL_PROTOCOL_ERROR",
+      message: expect.stringContaining("Proxy-wrapped Promise"),
+    },
+  });
+});
+
+test("counts one Unicode code point when a surrogate pair spans text deltas", async () => {
+  const prefix = "a".repeat(65_535);
+  const finalText = `${prefix}😀`;
+  const model: CourseModel = {
+    stream(request) {
+      const stream = new EventStream<CourseModelChunk, CourseModelResponse>();
+      stream.push({
+        type: "textDelta",
+        requestId: request.id,
+        delta: prefix,
+      });
+      stream.push({
+        type: "textDelta",
+        requestId: request.id,
+        delta: "\ud83d",
+      });
+      stream.push({
+        type: "textDelta",
+        requestId: request.id,
+        delta: "\ude00",
+      });
+      stream.finish(
+        responseFor(
+          request.id,
+          "response-split-surrogate-boundary",
+          [{ type: "text", text: finalText }],
+          "stop",
+        ),
+      );
+      return stream;
+    },
+  };
+
+  const { result } = await settleRun(
+    runAgentLoop({
+      messages: [user()],
+      model,
+      tools: new ToolRegistry(),
+      maxSteps: 1,
+      signal: new AbortController().signal,
+    }),
+  );
+
+  expect(result).toMatchObject({ status: "completed", finalText });
+});
+
+test("keeps a split surrogate pair pending across empty text deltas", async () => {
+  const prefix = "a".repeat(65_535);
+  const finalText = `${prefix}😀`;
+  const model: CourseModel = {
+    stream(request) {
+      const stream = new EventStream<CourseModelChunk, CourseModelResponse>();
+      for (const delta of [prefix, "\ud83d", "", "\ude00"]) {
+        stream.push({ type: "textDelta", requestId: request.id, delta });
+      }
+      stream.finish(
+        responseFor(
+          request.id,
+          "response-split-surrogate-empty-delta",
+          [{ type: "text", text: finalText }],
+          "stop",
+        ),
+      );
+      return stream;
+    },
+  };
+
+  const { result } = await settleRun(
+    runAgentLoop({
+      messages: [user()],
+      model,
+      tools: new ToolRegistry(),
+      maxSteps: 1,
+      signal: new AbortController().signal,
+    }),
+  );
+
+  expect(result).toMatchObject({ status: "completed", finalText });
+});
+
+test("rejects 65,537 Unicode code points even with a split surrogate pair", async () => {
+  const prefix = "a".repeat(65_536);
+  const model: CourseModel = {
+    stream(request) {
+      const stream = new EventStream<CourseModelChunk, CourseModelResponse>();
+      for (const delta of [prefix, "\ud83d", "\ude00"]) {
+        stream.push({ type: "textDelta", requestId: request.id, delta });
+      }
+      stream.finish(
+        responseFor(
+          request.id,
+          "response-split-surrogate-overflow",
+          [{ type: "text", text: `${prefix}😀` }],
+          "stop",
+        ),
+      );
+      return stream;
+    },
+  };
+
+  const { events, result } = await settleRun(
+    runAgentLoop({
+      messages: [user()],
+      model,
+      tools: new ToolRegistry(),
+      maxSteps: 1,
+      signal: new AbortController().signal,
+    }),
+  );
+
+  expect(result).toMatchObject({
+    status: "failed",
+    error: { code: "MODEL_PROTOCOL_ERROR" },
+  });
+  expect(events.filter((event) => event.type === "model.chunk")).toHaveLength(
+    1,
+  );
+});
+
+test("preserves a dangling high surrogate at the exact text boundary", async () => {
+  const finalText = `${"a".repeat(65_535)}\ud83d`;
+  const model = new ScriptedModel([
+    scriptedResponse(
+      "response-dangling-surrogate",
+      [{ type: "text", text: finalText }],
+      "stop",
+    ),
+  ]);
+
+  const { result } = await settleRun(
+    runAgentLoop({
+      messages: [user()],
+      model,
+      tools: new ToolRegistry(),
+      maxSteps: 1,
+      signal: new AbortController().signal,
+    }),
+  );
+
+  expect(result).toMatchObject({ status: "completed", finalText });
+});
+
+test("bounds raw terminal assistant blocks before snapshot materialization", async () => {
+  expect(MAX_MODEL_BLOCKS_PER_STEP).toBe(1024);
+  const tooManyBlocks: CourseAssistantBlock[] = Array.from(
+    { length: 1026 },
+    (_, index) => ({ type: "text", text: index === 0 ? "x" : "" }),
+  );
+  const model: CourseModel = {
+    stream(request) {
+      const stream = new EventStream<CourseModelChunk, CourseModelResponse>();
+      stream.push({ type: "textDelta", requestId: request.id, delta: "x" });
+      stream.finish(
+        responseFor(
+          request.id,
+          "response-terminal-block-overflow",
+          tooManyBlocks,
+          "stop",
+        ),
+      );
+      return stream;
+    },
+  };
+
+  const { result } = await settleRun(
+    runAgentLoop({
+      messages: [user()],
+      model,
+      tools: new ToolRegistry(),
+      maxSteps: 1,
+      signal: new AbortController().signal,
+    }),
+  );
+
+  expect(result).toMatchObject({
+    status: "failed",
+    error: { code: "MODEL_PROTOCOL_ERROR" },
+  });
+});
+
+test("bounds terminal and initial assistant text before snapshot retention", async () => {
+  const oversizedText = "a".repeat(MAX_MODEL_TEXT_CODE_POINTS + 1);
+  const model: CourseModel = {
+    stream(request) {
+      const stream = new EventStream<CourseModelChunk, CourseModelResponse>();
+      stream.push({ type: "textDelta", requestId: request.id, delta: "x" });
+      stream.finish(
+        responseFor(
+          request.id,
+          "response-terminal-text-overflow",
+          [{ type: "text", text: oversizedText }],
+          "stop",
+        ),
+      );
+      return stream;
+    },
+  };
+  await expect(
+    runAgentLoop({
+      messages: [user()],
+      model,
+      tools: new ToolRegistry(),
+      maxSteps: 1,
+      signal: new AbortController().signal,
+    }).result,
+  ).resolves.toMatchObject({
+    status: "failed",
+    error: { code: "MODEL_PROTOCOL_ERROR" },
+  });
+
+  const unusedModel = new ScriptedModel();
+  await expect(
+    runAgentLoop({
+      messages: [
+        user(),
+        {
+          id: "message-initial-text-overflow",
+          role: "assistant",
+          content: [{ type: "text", text: oversizedText }],
+        },
+      ],
+      model: unusedModel,
+      tools: new ToolRegistry(),
+      maxSteps: 1,
+      signal: new AbortController().signal,
+    }).result,
+  ).resolves.toMatchObject({
+    status: "failed",
+    error: { code: "INVALID_TRANSCRIPT" },
+  });
+  expect(unusedModel.callCount).toBe(0);
+});
+
+test("accepts exactly the terminal assistant block boundary", async () => {
+  const boundaryBlocks: CourseAssistantBlock[] = Array.from(
+    { length: MAX_MODEL_BLOCKS_PER_STEP },
+    (_, index) => ({ type: "text", text: index === 0 ? "x" : "" }),
+  );
+  const model: CourseModel = {
+    stream(request) {
+      const stream = new EventStream<CourseModelChunk, CourseModelResponse>();
+      stream.push({ type: "textDelta", requestId: request.id, delta: "x" });
+      stream.finish(
+        responseFor(
+          request.id,
+          "response-terminal-block-boundary",
+          boundaryBlocks,
+          "stop",
+        ),
+      );
+      return stream;
+    },
+  };
+
+  const { result } = await settleRun(
+    runAgentLoop({
+      messages: [user()],
+      model,
+      tools: new ToolRegistry(),
+      maxSteps: 1,
+      signal: new AbortController().signal,
+    }),
+  );
+  expect(result).toMatchObject({ status: "completed", finalText: "x" });
+});
+
+test("rejects oversized initial assistant blocks and Tool arguments", async () => {
+  const model = new ScriptedModel();
+  const oversizedBlocks = Array.from({ length: 1025 }, () => ({
+    type: "text" as const,
+    text: "",
+  }));
+  const oversizedCall = call("bounded", "call-initial-oversized", {
+    x: "a".repeat(4096),
+  });
+  const cases = [
+    [
+      user(),
+      {
+        id: "message-initial-block-overflow",
+        role: "assistant" as const,
+        content: oversizedBlocks,
+      },
+    ],
+    [
+      user(),
+      {
+        id: "message-initial-arguments-overflow",
+        role: "assistant" as const,
+        content: [oversizedCall],
+      },
+      {
+        id: "message-initial-result",
+        role: "toolResult" as const,
+        toolCallId: oversizedCall.id,
+        toolName: oversizedCall.name,
+        content: "ignored",
+        isError: false,
+      },
+    ],
+  ];
+
+  for (const messages of cases) {
+    await expect(
+      runAgentLoop({
+        messages,
+        model,
+        tools: new ToolRegistry(),
+        maxSteps: 1,
+        signal: new AbortController().signal,
+      }).result,
+    ).resolves.toMatchObject({
+      status: "failed",
+      error: { code: "INVALID_TRANSCRIPT" },
+    });
+  }
+  expect(model.callCount).toBe(0);
+});
+
+test("enforces bounded plain JSON Tool arguments before model.chunk", async () => {
+  expect(MAX_TOOL_ARGUMENT_DEPTH).toBe(32);
+  expect(MAX_TOOL_ARGUMENT_NODES).toBe(257);
+  expect(MAX_TOOL_ARGUMENT_ENTRIES).toBe(256);
+  expect(MAX_TOOL_ARGUMENT_STRING_CODE_POINTS).toBe(4096);
+
+  let deepArguments: Record<string, unknown> = {};
+  for (let depth = 0; depth <= MAX_TOOL_ARGUMENT_DEPTH; depth += 1) {
+    deepArguments = { x: deepArguments };
+  }
+  const cases: CourseToolCall[] = [
+    call("bounded", "call-string-overflow", { x: "a".repeat(4096) }),
+    call("bounded", "call-entry-overflow", {
+      x: Array.from({ length: 256 }, () => 0),
+    }),
+    call(
+      "bounded",
+      "call-depth-overflow",
+      deepArguments as CourseToolCall["arguments"],
+    ),
+  ];
+
+  for (const toolCall of cases) {
+    const model: CourseModel = {
+      stream(request) {
+        const stream = new EventStream<CourseModelChunk, CourseModelResponse>();
+        stream.push({ type: "toolCall", requestId: request.id, toolCall });
+        stream.finish(
+          responseFor(
+            request.id,
+            `response-${toolCall.id}`,
+            [toolCall],
+            "toolCall",
+          ),
+        );
+        return stream;
+      },
+    };
+    const { events, result } = await settleRun(
+      runAgentLoop({
+        messages: [user()],
+        model,
+        tools: new ToolRegistry(),
+        maxSteps: 1,
+        signal: new AbortController().signal,
+      }),
+    );
+    expect(result).toMatchObject({
+      status: "failed",
+      error: { code: "MODEL_PROTOCOL_ERROR" },
+    });
+    expect(events.some((event) => event.type === "model.chunk")).toBe(false);
+  }
+});
+
+test("rejects Proxy, accessor, exotic, sparse, and undefined Tool arguments", async () => {
+  let accessorReads = 0;
+  const accessorArguments = Object.defineProperty({}, "x", {
+    enumerable: true,
+    get() {
+      accessorReads += 1;
+      return 1;
+    },
+  });
+  let proxyTraps = 0;
+  const proxyArguments = new Proxy(
+    {},
+    {
+      ownKeys() {
+        proxyTraps += 1;
+        return [];
+      },
+    },
+  );
+  const sparseArguments: unknown[] = [];
+  sparseArguments.length = 1;
+  const invalidArguments: unknown[] = [
+    proxyArguments,
+    accessorArguments,
+    { x: new Date(0) },
+    { x: sparseArguments },
+    { x: undefined },
+  ];
+
+  for (let index = 0; index < invalidArguments.length; index += 1) {
+    const toolCall = call(
+      "bounded",
+      `call-json-shape-${index}`,
+      invalidArguments[index] as CourseToolCall["arguments"],
+    );
+    const model: CourseModel = {
+      stream(request) {
+        const stream = new EventStream<CourseModelChunk, CourseModelResponse>();
+        stream.push({ type: "toolCall", requestId: request.id, toolCall });
+        stream.finish(
+          responseFor(
+            request.id,
+            `response-json-shape-${index}`,
+            [toolCall],
+            "toolCall",
+          ),
+        );
+        return stream;
+      },
+    };
+    const { events, result } = await settleRun(
+      runAgentLoop({
+        messages: [user()],
+        model,
+        tools: new ToolRegistry(),
+        maxSteps: 1,
+        signal: new AbortController().signal,
+      }),
+    );
+    expect(result).toMatchObject({
+      status: "failed",
+      error: { code: "MODEL_PROTOCOL_ERROR" },
+    });
+    expect(events.some((event) => event.type === "model.chunk")).toBe(false);
+  }
+  expect(accessorReads).toBe(0);
+  expect(proxyTraps).toBe(0);
+});
+
+test("accepts null-prototype JSON Tool arguments at the boundary", async () => {
+  const values = Object.setPrototypeOf([0], null) as unknown[];
+  const argumentsValue = Object.assign(Object.create(null), {
+    values,
+  }) as CourseToolCall["arguments"];
+  const toolCall = call("bounded", "call-null-prototype", argumentsValue);
+  let executions = 0;
+  const model = new ScriptedModel([
+    scriptedResponse("response-null-prototype", [toolCall], "toolCall"),
+  ]);
+  const tools = new ToolRegistry([
+    defineTool({
+      name: "bounded",
+      description: "Accept JSON.",
+      validate: (input: unknown) => ({ ok: true as const, value: input }),
+      execute: async () => {
+        executions += 1;
+        return "ok";
+      },
+    }),
+  ]);
+
+  const { result } = await settleRun(
+    runAgentLoop({
+      messages: [user()],
+      model,
+      tools,
+      maxSteps: 1,
+      signal: new AbortController().signal,
+    }),
+  );
+  expect(result.status).toBe("maxSteps");
+  expect(executions).toBe(1);
+});
+
+test("accepts exact Tool argument string, depth, node, and entry boundaries", async () => {
+  let depthBoundary: Record<string, unknown> = {};
+  for (let depth = 0; depth < MAX_TOOL_ARGUMENT_DEPTH; depth += 1) {
+    depthBoundary = { x: depthBoundary };
+  }
+  const entryBoundary = Array.from({ length: 255 }, () => 0);
+  const boundaryCalls = [
+    call("bounded", "call-string-boundary", { x: "a".repeat(4095) }),
+    call(
+      "bounded",
+      "call-depth-boundary",
+      depthBoundary as CourseToolCall["arguments"],
+    ),
+    call("bounded", "call-entry-boundary", { x: entryBoundary }),
+  ];
+  let executions = 0;
+  const registry = new ToolRegistry([
+    defineTool({
+      name: "bounded",
+      description: "Accept bounded arguments.",
+      validate: (input: unknown) => ({ ok: true as const, value: input }),
+      execute: async () => {
+        executions += 1;
+        return "ok";
+      },
+    }),
+  ]);
+  const model = new ScriptedModel([
+    scriptedResponse("response-argument-boundaries", boundaryCalls, "toolCall"),
+  ]);
+
+  const { result } = await settleRun(
+    runAgentLoop({
+      messages: [user()],
+      model,
+      tools: registry,
+      maxSteps: 1,
+      signal: new AbortController().signal,
+    }),
+  );
+
+  expect(result.status).toBe("maxSteps");
+  expect(executions).toBe(3);
 });
