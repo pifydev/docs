@@ -439,6 +439,9 @@ export async function createSerializedSessionRuntimeHost(
   },
   initial: Parameters<typeof createAgentSessionRuntime>[1],
   bindings: {
+    extensionBindings(
+      session: AgentSession,
+    ): Parameters<AgentSession["bindExtensions"]>[0];
     subscribe(session: AgentSession): () => void;
     reportDiagnostics(
       diagnostics: readonly AgentSessionRuntimeDiagnostic[],
@@ -503,6 +506,12 @@ export async function createSerializedSessionRuntimeHost(
     unsubscribe = undefined;
     release?.();
   };
+  const bindSession = async (session: AgentSession) => {
+    clearSubscription();
+    await session.bindExtensions(bindings.extensionBindings(session));
+    unsubscribe = bindings.subscribe(session);
+    bindings.reportDiagnostics(runtime.diagnostics);
+  };
   const assertAvailable = () => {
     if (disposed) throw new Error("session runtime host is disposed");
     if (unusable || replacementInFlight) {
@@ -537,15 +546,12 @@ export async function createSerializedSessionRuntimeHost(
     clearSubscription();
   });
   runtime.setRebindSession(async (session) => {
-    clearSubscription();
-    unsubscribe = bindings.subscribe(session);
-    bindings.reportDiagnostics(runtime.diagnostics);
+    await bindSession(session);
     replacementInFlight = false;
   });
 
   try {
-    unsubscribe = bindings.subscribe(runtime.session);
-    bindings.reportDiagnostics(runtime.diagnostics);
+    await bindSession(runtime.session);
   } catch (error) {
     await runtime.dispose();
     throw error;

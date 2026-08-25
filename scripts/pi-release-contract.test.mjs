@@ -281,6 +281,47 @@ function assertRuntimeGuideExampleParity(markdown, compileFixture, context) {
   );
 }
 
+function assertRuntimeGuideExtensionBindingOrder(markdown, context) {
+  const source = runtimeGuideExampleFence(markdown, context);
+  const helperStart = source.indexOf(
+    "  const bindSession = async (session: AgentSession) => {",
+  );
+  const helperEnd = source.indexOf(
+    "\n  runtime.setBeforeSessionInvalidate",
+    helperStart,
+  );
+  assert.ok(helperStart >= 0, `${context} must define async bindSession`);
+  assert.ok(helperEnd > helperStart, `${context} must scope async bindSession`);
+  const helper = source.slice(helperStart, helperEnd);
+  const extensionBinding =
+    "await session.bindExtensions(bindings.extensionBindings(session));";
+  const hostSubscription = "unsubscribe = bindings.subscribe(session);";
+  assert.equal(
+    helper.split(extensionBinding).length - 1,
+    1,
+    `${context} bindSession must bind Extensions exactly once`,
+  );
+  assert.equal(
+    helper.split(hostSubscription).length - 1,
+    1,
+    `${context} bindSession must install the host subscription exactly once`,
+  );
+  assert.ok(
+    helper.indexOf(extensionBinding) < helper.indexOf(hostSubscription),
+    `${context} must bind Extensions before the host subscription`,
+  );
+  assert.match(
+    source,
+    /runtime\.setRebindSession\(async \(session\) => \{\s+await bindSession\(session\);/,
+    `${context} replacement sessions must use bindSession`,
+  );
+  assert.match(
+    source,
+    /try \{\s+await bindSession\(runtime\.session\);/,
+    `${context} initial session must use bindSession`,
+  );
+}
+
 function assertChapter11ExampleParity(markdown, compileFixture) {
   const displayed = parsedExampleContract(
     chapter11ExampleFence(markdown),
@@ -715,6 +756,53 @@ test("replaceable session runtime parity rejects function and import drift", asy
         "synthetic replaceable session runtime guide",
       ),
     /required imports must match the compile fixture/,
+  );
+});
+
+test("replaceable runtime guides bind Extensions before every host subscription", async () => {
+  const guides = await readLocalizedContent("how-to/host-session-runtime.md");
+
+  for (const { locale, source } of guides) {
+    assert.doesNotThrow(() =>
+      assertRuntimeGuideExtensionBindingOrder(
+        source,
+        `${locale} replaceable session runtime guide`,
+      ),
+    );
+  }
+});
+
+test("replaceable runtime binding guard rejects missing and reordered Extension binding", async () => {
+  const markdown = await readFile(
+    new URL("content/en/how-to/host-session-runtime.md", repositoryRoot),
+    "utf8",
+  );
+  const extensionBinding =
+    "    await session.bindExtensions(bindings.extensionBindings(session));\n";
+  const hostSubscription = "    unsubscribe = bindings.subscribe(session);\n";
+  const missing = markdown.replace(extensionBinding, "");
+  const reordered = markdown.replace(
+    `${extensionBinding}${hostSubscription}`,
+    `${hostSubscription}${extensionBinding}`,
+  );
+  assert.notEqual(missing, markdown);
+  assert.notEqual(reordered, markdown);
+
+  assert.throws(
+    () =>
+      assertRuntimeGuideExtensionBindingOrder(
+        missing,
+        "synthetic missing Extension binding",
+      ),
+    /must bind Extensions exactly once/,
+  );
+  assert.throws(
+    () =>
+      assertRuntimeGuideExtensionBindingOrder(
+        reordered,
+        "synthetic reordered Extension binding",
+      ),
+    /must bind Extensions before the host subscription/,
   );
 });
 

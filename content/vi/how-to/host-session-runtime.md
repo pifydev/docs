@@ -5,6 +5,7 @@ translation_key: how-to-host-session-runtime
 language: vi
 source_url: "https://docs.pify.dev/vi/how-to/host-session-runtime"
 official_refs:
+  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/agent-session.ts"
   - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/agent-session-runtime.ts"
   - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/agent-session-services.ts"
   - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/sdk.ts"
@@ -29,7 +30,7 @@ Sau hướng dẫn này, bạn có thể:
 - chọn giữa factory một session và runtime có thể thay thế;
 - tách intent dùng chung cho process khỏi service phải dựng lại cho cwd đích;
 - tuần tự hóa mọi thao tác thay thế qua một host lock;
-- gỡ listener trước khi session cũ mất hiệu lực rồi bind vào session thay thế;
+- gỡ listener trước khi session cũ mất hiệu lực, bind Extension lifecycle của replacement, rồi mới cài host listener;
 - ngừng công khai runtime nếu bước tạo thất bại sau teardown;
 - xác minh cwd, diagnostic, persistence và disposal tại host boundary.
 
@@ -94,6 +95,9 @@ export async function createSerializedSessionRuntimeHost(
   },
   initial: Parameters<typeof createAgentSessionRuntime>[1],
   bindings: {
+    extensionBindings(
+      session: AgentSession,
+    ): Parameters<AgentSession["bindExtensions"]>[0];
     subscribe(session: AgentSession): () => void;
     reportDiagnostics(
       diagnostics: readonly AgentSessionRuntimeDiagnostic[],
@@ -158,6 +162,12 @@ export async function createSerializedSessionRuntimeHost(
     unsubscribe = undefined;
     release?.();
   };
+  const bindSession = async (session: AgentSession) => {
+    clearSubscription();
+    await session.bindExtensions(bindings.extensionBindings(session));
+    unsubscribe = bindings.subscribe(session);
+    bindings.reportDiagnostics(runtime.diagnostics);
+  };
   const assertAvailable = () => {
     if (disposed) throw new Error("session runtime host is disposed");
     if (unusable || replacementInFlight) {
@@ -192,15 +202,12 @@ export async function createSerializedSessionRuntimeHost(
     clearSubscription();
   });
   runtime.setRebindSession(async (session) => {
-    clearSubscription();
-    unsubscribe = bindings.subscribe(session);
-    bindings.reportDiagnostics(runtime.diagnostics);
+    await bindSession(session);
     replacementInFlight = false;
   });
 
   try {
-    unsubscribe = bindings.subscribe(runtime.session);
-    bindings.reportDiagnostics(runtime.diagnostics);
+    await bindSession(runtime.session);
   } catch (error) {
     await runtime.dispose();
     throw error;
@@ -242,17 +249,19 @@ Factory chủ động trả về bản sao của `services.diagnostics`. Bạn c
 
 Caller truyền `cwd`, `agentDir` và `SessionManager` ban đầu qua argument `initial`. Trong composition root thật, chỉ tạo manager sau khi quyết định startup là session mới, session in-memory, session gần nhất hay một file cụ thể. Cwd hiệu lực của manager phải tồn tại; `createAgentSessionRuntime()` validate boundary này trước khi gọi factory.
 
-Từ góc nhìn caller, bước tạo đầu tiên là atomic: helper chỉ return sau khi factory tạo đủ `AgentSessionRuntime` và subscription đầu tiên đã bind. Nếu authorization, load service hoặc tạo session reject, wrapper không được trả về.
+Từ góc nhìn caller, bước tạo đầu tiên là atomic: helper chỉ return sau khi factory tạo đủ `AgentSessionRuntime`, `bindExtensions(...)` hoàn tất initial Extension lifecycle và host subscription đầu tiên đã bind. Nếu authorization, load service, Extension binding hoặc tạo session reject, wrapper không được trả về.
 
 Không resolve project settings hoặc relative Extension path trước khi biết cwd hiệu lực của session. Resume hoặc import có thể chọn session với cwd khác `process.cwd()`.
 
 ## 5. Bind host subscription vào `AgentSession` hiện tại
 
-`bindings.subscribe(session)` là ownership boundary duy nhất cho UI rendering, RPC notification, telemetry hoặc transcript projection. Nó phải trả về một unsubscribe function idempotent để gỡ mọi listener đã cài cho session đó.
+`bindings.extensionBindings(session)` trả về public options shape qua `Parameters<AgentSession["bindExtensions"]>[0]`; hướng dẫn không cần import non-top-level type `ExtensionBindings` của Pi. Hãy cung cấp mode, UI context, command action, abort/shutdown handler và error listener mà host cần. Các callback có thể capture serialized operation của wrapper nhưng không được bỏ qua lock của nó.
 
-Wrapper bind `runtime.session` ban đầu đúng một lần. Nó cũng report `runtime.diagnostics` tại cùng boundary, nên warning từ cwd cũ không bị trình bày như warning của replacement. Không cache `runtime.session` trong service khác; hãy chuyển event phát sinh từ session qua binding adapter.
+`await session.bindExtensions(...)` apply các binding đó, phát event `session_start` của chính session và cho Extension mở rộng resource đã load. Bước này phải hoàn tất cho initial session và mọi replacement trước khi host công khai event từ session đó. Sau đó `bindings.subscribe(session)` mới là ownership boundary cho UI rendering, RPC notification, telemetry hoặc transcript projection. Nó phải trả về một unsubscribe function idempotent để gỡ mọi host listener đã cài cho session.
 
-Nếu initial binding thất bại, ví dụ dispose runtime vừa tạo rồi reject startup. Đây là fail-closed: host thiếu observation hoặc persistence boundary bắt buộc sẽ không bắt đầu phục vụ request.
+Helper bất đồng bộ `bindSession()` dùng chung áp đặt đúng thứ tự cho cả hai path: clear host subscription cũ, await Extension binding, cài host subscription rồi report diagnostic. Không cache `runtime.session` trong service khác; hãy chuyển event phát sinh từ session qua binding adapter.
+
+Nếu initial Extension hoặc host binding thất bại, ví dụ dispose runtime vừa tạo rồi reject startup. Đây là fail-closed: host thiếu lifecycle, observation hoặc persistence boundary hoàn chỉnh sẽ không bắt đầu phục vụ request.
 
 ## 6. Tuần tự hóa new, resume, fork, clone và import
 
@@ -275,7 +284,7 @@ Before-event bị cancel sẽ return mà không vô hiệu session cũ. Đây l�
 Release lifecycle cung cấp hai callback cho hai thời điểm khác nhau:
 
 - `setBeforeSessionInvalidate()` chạy đồng bộ sau khi handler `session_shutdown` hoàn tất nhưng trước khi session cũ bị dispose. Wrapper đánh dấu replacement đang diễn ra và gỡ listener cũ tại đây.
-- `setRebindSession()` được await sau khi kết quả factory đã apply. Wrapper bind `AgentSession` mới, report diagnostic của nó, rồi mới đánh dấu host available trở lại.
+- `setRebindSession()` được await sau khi kết quả factory đã apply. Wrapper gọi cùng helper `bindSession()`, await `session.bindExtensions(...)` trước khi cài host subscription và report diagnostic. Chỉ sau đó nó mới đánh dấu host available trở lại.
 
 Runtime cập nhật `session`, `services`, `diagnostics` và `modelFallbackMessage` cùng lúc trước callback rebind. Wrapper công khai cwd và diagnostic nhưng chủ động không công khai raw `AgentSessionRuntime`; nhờ vậy request code không thể đọc session cũ đã dispose hoặc replacement chưa bind xong.
 
@@ -287,6 +296,7 @@ sequenceDiagram
     participant Old as Old session
     participant Factory as Runtime factory
     participant Next as Replacement session
+    participant Extensions as Extension binding
     participant Rebind as Subscription rebind
     Caller->>Lock: enqueue new/resume/fork/clone/import
     Lock->>Dispose: begin runtime teardown
@@ -298,7 +308,10 @@ sequenceDiagram
     alt factory succeeds
         Factory-->>Lock: session + services + diagnostics
         Lock->>Next: apply coherent result
-        Lock->>Rebind: bind replacement session
+        Lock->>Extensions: bindExtensions(replacement options)
+        Extensions->>Next: session_start and extend resources
+        Extensions-->>Lock: Extension lifecycle ready
+        Lock->>Rebind: subscribe to replacement session
         Rebind-->>Caller: operation result
     else factory rejects after disposal
         Factory--xLock: reject
@@ -319,7 +332,7 @@ Final shutdown cũng được tuần tự hóa. Ngừng nhận command mới, aw
 
 Replacement trong Pi `0.84.3` không phải rollback transaction. `AgentSessionRuntime` dispose session cũ trước khi await factory mới. Nếu factory reject, runtime propagate error và không chạy bước apply hoặc rebind nội bộ; object cũ đã mất hiệu lực còn replacement dùng được chưa tồn tại.
 
-Wrapper phát hiện đúng boundary này vì `setBeforeSessionInvalidate()` đã đặt `replacementInFlight`, còn `setRebindSession()` thành công mới xóa flag đó. Rejection khi flag vẫn còn sẽ đánh dấu wrapper unusable. Subscription cũ đã được gỡ, không có raw session nào được public, và operation hay state getter sau đó đều reject. Đây là policy no-half-replacement, fail-closed bắt buộc.
+Wrapper phát hiện đúng boundary này vì `setBeforeSessionInvalidate()` đã đặt `replacementInFlight`, còn `setRebindSession()` thành công chỉ xóa flag sau khi cả Extension binding lẫn host binding hoàn tất. Factory rejection, `bindExtensions(...)` rejection hoặc host-subscription failure khi flag vẫn còn sẽ đánh dấu wrapper unusable. Subscription cũ đã được gỡ, không có raw session nào được public, và operation hay state getter sau đó đều reject. Đây là policy no-half-replacement, fail-closed bắt buộc.
 
 Không catch lỗi rồi tiếp tục phục vụ qua một session đã cache. Hãy ghi operation, target path hoặc cwd và error nhưng không log transcript content hay secret. Sau đó kết thúc worker đang sở hữu runtime, hoặc dựng host mới từ một safe startup target tường minh. Chỉ retry tự động khi host vẫn unavailable và mỗi attempt dựng một runtime mới hoàn chỉnh.
 
@@ -336,7 +349,7 @@ Xác minh các invariant sau:
 - [ ] Mỗi replacement thành công tạo đúng một bộ session/services/diagnostics khớp nhau và report diagnostic mới đúng một lần.
 - [ ] Call new, resume, fork, clone và import không bao giờ overlap, kể cả sau khi command trước reject.
 - [ ] Clone gọi `fork(entryId, { position: "at" })`; fork giữ semantics mặc định `"before"`.
-- [ ] Subscription cũ được gỡ trước disposal, còn replacement subscription được cài trước khi host available.
+- [ ] Subscription cũ được gỡ trước disposal; mỗi replacement await `bindExtensions(...)` trước khi cài host subscription và trước khi host available.
 - [ ] Cancellation hoặc pre-validation failure vẫn giữ binding cũ dùng được.
 - [ ] Factory rejection sau invalidation không công khai session nào và vĩnh viễn reject operation sau đó trên wrapper này.
 - [ ] Final disposal abort response đang hoạt động, flush host persistence, phát shutdown qua runtime, unbind và reject access sau đó.
@@ -350,6 +363,7 @@ Mọi claim ở trên đều được khóa tại release commit `4e58f324fae8eb
 
 | Nguồn | Contract được xác minh |
 | --- | --- |
+| [`agent-session.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/agent-session.ts) | Parameter public của `AgentSession.bindExtensions(...)`, apply Extension binding, `session_start` và thứ tự mở rộng resource |
 | [`agent-session-runtime.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/agent-session-runtime.ts) | Factory/result type, getter, method new/resume/fork/import, callback order, teardown-before-create, apply, thay diagnostic và disposal |
 | [`agent-session-services.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/agent-session-services.ts) | Tạo service gắn với cwd, diagnostic và tạo session từ bộ service nhất quán |
 | [`sdk.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/sdk.ts) | Contract trực tiếp của `createAgentSession()` và các public re-export dùng trong hướng dẫn |

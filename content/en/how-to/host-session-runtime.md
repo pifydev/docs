@@ -5,6 +5,7 @@ translation_key: how-to-host-session-runtime
 language: en
 source_url: "https://docs.pify.dev/en/how-to/host-session-runtime"
 official_refs:
+  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/agent-session.ts"
   - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/agent-session-runtime.ts"
   - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/agent-session-services.ts"
   - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/sdk.ts"
@@ -29,7 +30,7 @@ By the end, you will be able to:
 - choose between a one-session factory and a replaceable runtime;
 - keep process-global intent separate from services that must be rebuilt for a target cwd;
 - serialize every replacement operation through one host lock;
-- detach listeners before the old session becomes invalid and bind them to the replacement;
+- detach listeners before the old session becomes invalid, bind the replacement's Extension lifecycle, and only then install host listeners;
 - stop exposing the runtime if creation fails after teardown;
 - verify cwd, diagnostics, persistence, and disposal behavior at the host boundary.
 
@@ -94,6 +95,9 @@ export async function createSerializedSessionRuntimeHost(
   },
   initial: Parameters<typeof createAgentSessionRuntime>[1],
   bindings: {
+    extensionBindings(
+      session: AgentSession,
+    ): Parameters<AgentSession["bindExtensions"]>[0];
     subscribe(session: AgentSession): () => void;
     reportDiagnostics(
       diagnostics: readonly AgentSessionRuntimeDiagnostic[],
@@ -158,6 +162,12 @@ export async function createSerializedSessionRuntimeHost(
     unsubscribe = undefined;
     release?.();
   };
+  const bindSession = async (session: AgentSession) => {
+    clearSubscription();
+    await session.bindExtensions(bindings.extensionBindings(session));
+    unsubscribe = bindings.subscribe(session);
+    bindings.reportDiagnostics(runtime.diagnostics);
+  };
   const assertAvailable = () => {
     if (disposed) throw new Error("session runtime host is disposed");
     if (unusable || replacementInFlight) {
@@ -192,15 +202,12 @@ export async function createSerializedSessionRuntimeHost(
     clearSubscription();
   });
   runtime.setRebindSession(async (session) => {
-    clearSubscription();
-    unsubscribe = bindings.subscribe(session);
-    bindings.reportDiagnostics(runtime.diagnostics);
+    await bindSession(session);
     replacementInFlight = false;
   });
 
   try {
-    unsubscribe = bindings.subscribe(runtime.session);
-    bindings.reportDiagnostics(runtime.diagnostics);
+    await bindSession(runtime.session);
   } catch (error) {
     await runtime.dispose();
     throw error;
@@ -242,17 +249,19 @@ The factory deliberately returns a copy of `services.diagnostics`. Add host-spec
 
 The caller supplies an initial `cwd`, `agentDir`, and `SessionManager` through the `initial` argument. In a real composition root, create the manager only after deciding whether startup means a fresh session, an in-memory session, a recent session, or a specific file. The manager's effective cwd must exist; `createAgentSessionRuntime()` validates that boundary before invoking the factory.
 
-Initial creation is atomic from the caller's perspective: the helper returns only after the factory has produced a complete `AgentSessionRuntime` and the first subscription has been bound. If authorization, service loading, or session creation rejects, no wrapper is returned.
+Initial creation is atomic from the caller's perspective: the helper returns only after the factory has produced a complete `AgentSessionRuntime`, `bindExtensions(...)` has completed the initial Extension lifecycle, and the first host subscription has been bound. If authorization, service loading, Extension binding, or session creation rejects, no wrapper is returned.
 
 Do not resolve project settings or relative Extension paths before the effective session cwd is known. A resume or import can select a session whose cwd differs from `process.cwd()`.
 
 ## 5. Bind host subscriptions to the current `AgentSession`
 
-`bindings.subscribe(session)` is the single ownership boundary for UI rendering, RPC notifications, telemetry, or transcript projection. It must return one idempotent unsubscribe function that removes every listener installed for that session.
+`bindings.extensionBindings(session)` returns the public options shape through `Parameters<AgentSession["bindExtensions"]>[0]`; the guide does not need to import Pi's non-top-level `ExtensionBindings` type. Supply the mode, UI context, command actions, abort/shutdown handlers, and error listener required by your host. The callbacks may close over the wrapper's serialized operations, but they must not bypass its lock.
 
-The wrapper binds the initial `runtime.session` exactly once. It also reports `runtime.diagnostics` at the same boundary, so a warning from the old cwd cannot be presented as a warning from the replacement. Avoid caching `runtime.session` in another service; pass session-derived events through the binding adapter instead.
+`await session.bindExtensions(...)` applies those bindings, emits that session's `session_start` event, and lets Extensions extend the loaded resources. It must complete for the initial session and every replacement before the host publishes events from that session. `bindings.subscribe(session)` then becomes the ownership boundary for UI rendering, RPC notifications, telemetry, or transcript projection. It must return one idempotent unsubscribe function that removes every host listener installed for that session.
 
-If initial binding fails, the example disposes the just-created runtime and rejects startup. This is fail-closed: a host without its required observation and persistence boundary never begins serving requests.
+The shared asynchronous `bindSession()` helper enforces this order for both paths: clear any stale host subscription, await Extension binding, install the host subscription, and report diagnostics. Avoid caching `runtime.session` in another service; pass session-derived events through the binding adapter instead.
+
+If initial Extension or host binding fails, the example disposes the just-created runtime and rejects startup. This is fail-closed: a host without its complete lifecycle, observation, and persistence boundaries never begins serving requests.
 
 ## 6. Serialize new, resume, fork, clone, and import
 
@@ -275,7 +284,7 @@ A cancelled before-event returns without invalidating the old session. It is a n
 The release lifecycle exposes two different callbacks for two different moments:
 
 - `setBeforeSessionInvalidate()` runs synchronously after `session_shutdown` handlers finish but before the old session is disposed. The wrapper marks replacement as in flight and removes old listeners here.
-- `setRebindSession()` is awaited after the factory result has been applied. The wrapper binds the new `AgentSession`, reports its diagnostics, and only then marks the host available again.
+- `setRebindSession()` is awaited after the factory result has been applied. The wrapper calls the same `bindSession()` helper, which awaits `session.bindExtensions(...)` before installing the host subscription and reporting diagnostics. Only then does it mark the host available again.
 
 The runtime updates `session`, `services`, `diagnostics`, and `modelFallbackMessage` together before the rebind callback. The wrapper exposes cwd and diagnostics but deliberately does not expose its raw `AgentSessionRuntime`; this prevents request code from reading a disposed old session or a replacement that has not completed binding.
 
@@ -287,6 +296,7 @@ sequenceDiagram
     participant Old as Old session
     participant Factory as Runtime factory
     participant Next as Replacement session
+    participant Extensions as Extension binding
     participant Rebind as Subscription rebind
     Caller->>Lock: enqueue new/resume/fork/clone/import
     Lock->>Dispose: begin runtime teardown
@@ -298,7 +308,10 @@ sequenceDiagram
     alt factory succeeds
         Factory-->>Lock: session + services + diagnostics
         Lock->>Next: apply coherent result
-        Lock->>Rebind: bind replacement session
+        Lock->>Extensions: bindExtensions(replacement options)
+        Extensions->>Next: session_start and extend resources
+        Extensions-->>Lock: Extension lifecycle ready
+        Lock->>Rebind: subscribe to replacement session
         Rebind-->>Caller: operation result
     else factory rejects after disposal
         Factory--xLock: reject
@@ -319,7 +332,7 @@ Final shutdown is also serialized. Stop accepting new commands, await `host.disp
 
 Replacement in Pi `0.84.3` is not rollback-transactional. `AgentSessionRuntime` disposes the old session before awaiting the new factory. If that factory rejects, it propagates the error and does not call its internal apply or rebind steps; the old object is already invalid and there is no usable replacement.
 
-The wrapper detects this exact boundary because `setBeforeSessionInvalidate()` set `replacementInFlight`, while a successful `setRebindSession()` would have cleared it. A rejection while that flag remains set marks the wrapper unusable. Old subscriptions have already been detached, no raw session is public, and later operations or state getters reject. This is the required no-half-replacement, fail-closed policy.
+The wrapper detects this exact boundary because `setBeforeSessionInvalidate()` set `replacementInFlight`, while a successful `setRebindSession()` would have cleared it only after Extension and host binding both completed. A factory rejection, `bindExtensions(...)` rejection, or host-subscription failure while that flag remains set marks the wrapper unusable. Old subscriptions have already been detached, no raw session is public, and later operations or state getters reject. This is the required no-half-replacement, fail-closed policy.
 
 Do not catch that error and continue serving through a cached session. Record the operation, target path or cwd, and error without logging transcript content or secrets. Then terminate the owning worker, or build a new host from an explicit safe startup target. Automatic retry is acceptable only if the host remains unavailable and each attempt builds a complete new runtime.
 
@@ -336,7 +349,7 @@ Verify these invariants:
 - [ ] Each successful replacement creates a matching session/services/diagnostics set and reports the new diagnostics once.
 - [ ] New, resume, fork, clone, and import calls never overlap, including after an earlier command rejects.
 - [ ] Clone calls `fork(entryId, { position: "at" })`; fork keeps the default `"before"` semantics.
-- [ ] Old subscriptions are removed before disposal, and replacement subscriptions are installed before the host becomes available.
+- [ ] Old subscriptions are removed before disposal; each replacement awaits `bindExtensions(...)` before its host subscription is installed and before the host becomes available.
 - [ ] A cancelled or pre-validation failure keeps the old binding usable.
 - [ ] A factory rejection after invalidation exposes no session and permanently rejects later operations on that wrapper.
 - [ ] Final disposal aborts the active response, flushes host persistence, emits shutdown through the runtime, unbinds, and rejects later access.
@@ -350,6 +363,7 @@ All claims above are pinned to release commit `4e58f324fae8ebfa98a3d45181fb24807
 
 | Source | Contract verified |
 | --- | --- |
+| [`agent-session.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/agent-session.ts) | Public `AgentSession.bindExtensions(...)` parameter, Extension binding application, `session_start`, and resource extension order |
 | [`agent-session-runtime.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/agent-session-runtime.ts) | Factory/result types, getters, new/resume/fork/import methods, callback order, teardown-before-create, apply, diagnostics replacement, and disposal |
 | [`agent-session-services.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/agent-session-services.ts) | Cwd-bound service creation, diagnostics, and session creation from coherent services |
 | [`sdk.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/sdk.ts) | Direct `createAgentSession()` contract and public re-exports used by the guide |
