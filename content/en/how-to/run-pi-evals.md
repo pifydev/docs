@@ -63,7 +63,7 @@ Before spending a provider request, confirm `git rev-parse HEAD` prints `4e58f32
 
 ## 2. Run one smoke eval
 
-The pinned `src/smoke.eval.ts` disables all Tools and asks for the capital of France. It hard-asserts the exact trimmed answer `Paris`, an empty harness-error list, the selected provider and model, and a positive token count. Run only that file first:
+The pinned smoke eval in `src/smoke.eval.ts` disables all Tools and asks for the capital of France. It hard-asserts the exact trimmed answer `Paris`, an empty harness-error list, the selected provider and model, and a positive token count. Run only that file first:
 
 ```bash
 npm run eval -- --provider openai --model gpt-5.6-sol src/smoke.eval.ts
@@ -81,7 +81,7 @@ The runner prints `default-model=<provider>/<model>` and the resolved artifact d
 
 ## 3. Understand the Pi coding-agent harness
 
-`createPiCodingAgentHarness(...)` is the Pi-specific bridge to `vitest-evals`. One `describeEval(...)` suite owns one harness. The release implementation performs these boundaries for every run:
+The Pi coding-agent harness comes from `createPiCodingAgentHarness(...)`, the Pi-specific bridge to `vitest-evals`. One `describeEval(...)` suite owns one harness. The release implementation performs these boundaries for every run:
 
 1. resolve either the harness's explicit `{ provider, id }` model or the paired `PI_PROVIDER`/`PI_MODEL` default;
 2. create a new temporary root with separate `workspace`, `agent`, and `sessions` locations;

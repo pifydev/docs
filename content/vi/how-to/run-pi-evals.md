@@ -63,7 +63,7 @@ Trước khi tốn một provider request, hãy xác nhận `git rev-parse HEAD`
 
 ## 2. Chạy một smoke eval
 
-File `src/smoke.eval.ts` đã pin disable toàn bộ Tool và hỏi thủ đô nước Pháp. Nó hard-assert câu trả lời sau khi trim phải đúng `Paris`, harness-error list rỗng, provider/model đúng lựa chọn và token count dương. Trước tiên chỉ chạy file đó:
+Smoke eval đã pin tại `src/smoke.eval.ts` sẽ tắt toàn bộ Tool và hỏi thủ đô nước Pháp. Nó hard-assert câu trả lời sau khi trim phải đúng `Paris`, harness-error list rỗng, provider/model đúng lựa chọn và token count dương. Trước tiên chỉ chạy file đó:
 
 ```bash
 npm run eval -- --provider openai --model gpt-5.6-sol src/smoke.eval.ts
@@ -81,7 +81,7 @@ Runner in `default-model=<provider>/<model>` và artifact directory đã resolve
 
 ## 3. Hiểu Pi coding-agent harness
 
-`createPiCodingAgentHarness(...)` là bridge riêng của Pi sang `vitest-evals`. Mỗi suite `describeEval(...)` sở hữu một harness. Implementation trong bản phát hành thực hiện các boundary sau cho từng run:
+Pi coding-agent harness đến từ `createPiCodingAgentHarness(...)`, bridge riêng của Pi sang `vitest-evals`. Mỗi suite `describeEval(...)` sở hữu một harness. Implementation trong bản phát hành thực hiện các boundary sau cho từng run:
 
 1. resolve model `{ provider, id }` tường minh của harness hoặc cặp default `PI_PROVIDER`/`PI_MODEL`;
 2. tạo root tạm mới với các vị trí `workspace`, `agent`, `sessions` tách biệt;
