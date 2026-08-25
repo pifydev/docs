@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -10,6 +10,11 @@ import { pathToFileURL } from "node:url";
 import { validateFrontmatter } from "./validate-frontmatter.mjs";
 
 const exec = promisify(execFile);
+const publicLocales = ["en", "vi"];
+
+function publicDocumentCount(manifest, locales = publicLocales) {
+  return manifest.pages.length * locales.length;
+}
 
 async function withChapterFixture(chapter, callback) {
   const root = await mkdtemp(path.join(tmpdir(), "pify-frontmatter-"));
@@ -54,13 +59,27 @@ status: reviewed
 }
 
 test("frontmatter validation covers every public document", async () => {
+  const manifest = JSON.parse(
+    await readFile(
+      new URL("../content/translation-manifest.json", import.meta.url),
+      "utf8",
+    ),
+  );
+  const expectedCount = publicDocumentCount(manifest);
   const { stdout } = await exec("node", ["scripts/validate-frontmatter.mjs"]);
-  assert.match(stdout, /Validated 46 public content files/);
+  assert.match(
+    stdout,
+    new RegExp(`Validated ${expectedCount} public content files`),
+  );
   assert.match(stdout, /All frontmatter is valid/);
 
   const result = await validateFrontmatter(new URL("../", import.meta.url));
-  assert.equal(result.count, 46);
+  assert.equal(result.count, expectedCount);
   assert.deepEqual(result.errors, []);
+});
+
+test("frontmatter count expectation follows the manifest and public locales", () => {
+  assert.equal(publicDocumentCount({ pages: [{}, {}, {}] }, ["en", "vi"]), 6);
 });
 
 test("frontmatter validation accepts chapter 11 and still rejects chapter 12", async () => {

@@ -3,6 +3,8 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 
+import ts from "typescript";
+
 const repositoryRoot = new URL("../", import.meta.url);
 const releaseFixtureURL = new URL(
   "fixtures/pi-release-0843.json",
@@ -13,6 +15,118 @@ const compileFixturePackages = [
   "@earendil-works/pi-agent-core",
   "@earendil-works/pi-coding-agent",
 ];
+const chapter11ExampleFunction = "verifyDeterministicAgentRoundTrip";
+
+function chapter11ExampleFence(markdown) {
+  const matches = [
+    ...markdown.matchAll(
+      /^```(?:ts|typescript)\s*\r?\n([\s\S]*?)\r?\n```\s*$/gm,
+    ),
+  ].filter((match) =>
+    match[1].includes(`function ${chapter11ExampleFunction}`),
+  );
+  assert.equal(
+    matches.length,
+    1,
+    `Chapter 11 must contain exactly one TypeScript fence for ${chapter11ExampleFunction}`,
+  );
+  return matches[0][1].replaceAll("\r\n", "\n");
+}
+
+function parsedExampleContract(source, label) {
+  const sourceFile = ts.createSourceFile(
+    label,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const functions = sourceFile.statements.filter(
+    (statement) =>
+      ts.isFunctionDeclaration(statement) &&
+      statement.name?.text === chapter11ExampleFunction,
+  );
+  assert.equal(
+    functions.length,
+    1,
+    `${label} must define exactly one ${chapter11ExampleFunction} function`,
+  );
+
+  const imports = new Map();
+  for (const statement of sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement)) continue;
+    const moduleName = statement.moduleSpecifier.text;
+    const clause = statement.importClause;
+    if (!clause) continue;
+
+    if (clause.name) {
+      imports.set(clause.name.text, {
+        local: clause.name.text,
+        imported: "default",
+        module: moduleName,
+        typeOnly: clause.isTypeOnly,
+      });
+    }
+    if (clause.namedBindings && ts.isNamedImports(clause.namedBindings)) {
+      for (const element of clause.namedBindings.elements) {
+        imports.set(element.name.text, {
+          local: element.name.text,
+          imported: element.propertyName?.text ?? element.name.text,
+          module: moduleName,
+          typeOnly: clause.isTypeOnly || element.isTypeOnly,
+        });
+      }
+    }
+  }
+
+  const identifiers = new Set();
+  const visit = (node) => {
+    if (ts.isIdentifier(node)) identifiers.add(node.text);
+    ts.forEachChild(node, visit);
+  };
+  visit(functions[0]);
+
+  const requiredImports = [...identifiers]
+    .filter((identifier) => imports.has(identifier))
+    .map((identifier) => imports.get(identifier))
+    .sort((left, right) => left.local.localeCompare(right.local));
+  const allImports = [...imports.values()].sort((left, right) =>
+    left.local.localeCompare(right.local),
+  );
+  const functionSource = source
+    .slice(functions[0].getStart(sourceFile), functions[0].end)
+    .replaceAll("\r\n", "\n")
+    .trim();
+
+  return { allImports, functionSource, requiredImports };
+}
+
+function assertChapter11ExampleParity(markdown, compileFixture) {
+  const displayed = parsedExampleContract(
+    chapter11ExampleFence(markdown),
+    "Chapter 11 displayed example",
+  );
+  const compiled = parsedExampleContract(
+    compileFixture.replaceAll("\r\n", "\n"),
+    "Pi 0.84.3 compile fixture",
+  );
+
+  assert.deepEqual(
+    displayed.allImports,
+    displayed.requiredImports,
+    "Chapter 11 displayed example must not carry unused imports",
+  );
+  assert.equal(
+    displayed.functionSource,
+    compiled.functionSource,
+    "Chapter 11 displayed function must match the compile fixture",
+  );
+  assert.deepEqual(
+    displayed.requiredImports,
+    compiled.requiredImports,
+    "Chapter 11 required imports must match the compile fixture",
+  );
+}
 
 async function readReleaseFixture() {
   return JSON.parse(await readFile(releaseFixtureURL, "utf8"));
@@ -330,6 +444,55 @@ test("compile fixture packages are exactly pinned to the published release", asy
   for (const packageName of compileFixturePackages) {
     assert.equal(packageJSON.devDependencies[packageName], "0.84.3");
   }
+});
+
+test("Chapter 11 deterministic example stays synchronized with the compile fixture", async () => {
+  const [markdown, compileFixture] = await Promise.all([
+    readFile(
+      new URL("content/en/ch11-testing-evaluation.md", repositoryRoot),
+      "utf8",
+    ),
+    readFile(
+      new URL("tests/fixtures/pi-sdk-0843.contract.ts", repositoryRoot),
+      "utf8",
+    ),
+  ]);
+
+  assert.doesNotThrow(() =>
+    assertChapter11ExampleParity(markdown, compileFixture),
+  );
+});
+
+test("Chapter 11 parity guard rejects function and required-import drift", async () => {
+  const [markdown, compileFixture] = await Promise.all([
+    readFile(
+      new URL("content/en/ch11-testing-evaluation.md", repositoryRoot),
+      "utf8",
+    ),
+    readFile(
+      new URL("tests/fixtures/pi-sdk-0843.contract.ts", repositoryRoot),
+      "utf8",
+    ),
+  ]);
+  const changedFunction = markdown.replace(
+    'fauxText("The total is 42.")',
+    'fauxText("The total is forty-two.")',
+  );
+  const changedImport = markdown.replace(
+    'from "@earendil-works/pi-agent-core";',
+    'from "@earendil-works/pi-agent-core/node";',
+  );
+  assert.notEqual(changedFunction, markdown);
+  assert.notEqual(changedImport, markdown);
+
+  assert.throws(
+    () => assertChapter11ExampleParity(changedFunction, compileFixture),
+    /displayed function must match the compile fixture/,
+  );
+  assert.throws(
+    () => assertChapter11ExampleParity(changedImport, compileFixture),
+    /required imports must match the compile fixture/,
+  );
 });
 
 test("PowerShell section contracts reject concepts scattered across unrelated sections", () => {
