@@ -1778,6 +1778,69 @@ test("does not expose a mutable NonRecoverableToolError provenance collection", 
   });
 });
 
+test("loads and guards Proxy output without process.getBuiltinModule", async () => {
+  const runtimeProcess = Reflect.get(globalThis, "process");
+  if (typeof runtimeProcess !== "object" || runtimeProcess === null) {
+    throw new Error("Node process is unavailable");
+  }
+  const originalGetBuiltinModule = Object.getOwnPropertyDescriptor(
+    runtimeProcess,
+    "getBuiltinModule",
+  );
+  if (originalGetBuiltinModule === undefined) {
+    throw new Error("process.getBuiltinModule descriptor is unavailable");
+  }
+
+  vi.resetModules();
+  let compatibleModule: typeof import("../src/tool");
+  try {
+    Object.defineProperty(runtimeProcess, "getBuiltinModule", {
+      configurable: true,
+      value: undefined,
+      writable: true,
+    });
+    compatibleModule = await import("../src/tool");
+  } finally {
+    Object.defineProperty(
+      runtimeProcess,
+      "getBuiltinModule",
+      originalGetBuiltinModule,
+    );
+    vi.resetModules();
+  }
+
+  let ownKeysCalls = 0;
+  const output = new Proxy(
+    {},
+    {
+      ownKeys() {
+        ownKeysCalls += 1;
+        return [];
+      },
+    },
+  );
+  const registry = new compatibleModule.ToolRegistry([
+    compatibleModule.defineTool({
+      name: "runtime-compatible-proxy-check",
+      description: "Use captured node:util guards on all supported Node 22.",
+      validate: (input) => ({ ok: true, value: input }),
+      execute: async () => output,
+    }),
+  ]);
+
+  await expect(
+    compatibleModule.executeToolCall(
+      registry,
+      call("runtime-compatible-proxy-check"),
+      new AbortController().signal,
+    ),
+  ).resolves.toMatchObject({
+    isError: true,
+    content: expect.stringContaining("TOOL_OUTPUT_SERIALIZATION_FAILED"),
+  });
+  expect(ownKeysCalls).toBe(0);
+});
+
 test("accepts nested cross-realm plain JSON outputs", async () => {
   const crossRealmOutput = runInNewContext(`({
     z: 3,

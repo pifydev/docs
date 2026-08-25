@@ -1,3 +1,5 @@
+import { types as nodeUtilTypes } from "node:util";
+
 import { assistantMessage, toolResultMessage } from "./messages";
 import type {
   CourseJsonObject,
@@ -27,16 +29,10 @@ type NonRecoverableToolErrorRegistry = Readonly<{
   isRegistered: (value: unknown) => boolean;
 }>;
 
-type NodeUtilTypes = Readonly<{
-  isProxy: (value: unknown) => boolean;
-  isNativeError: (value: unknown) => boolean;
-}>;
-
 const ownedToolContractErrors = new WeakSet<object>();
 const reflectApply = Reflect.apply;
 const weakSetAdd = WeakSet.prototype.add;
 const weakSetHas = WeakSet.prototype.has;
-const nodeUtilTypes = loadNodeUtilTypes();
 const nonRecoverableRegistryKey = Symbol.for(
   "pify.course.NonRecoverableToolError.provenance.v1",
 );
@@ -1112,35 +1108,6 @@ function loadNonRecoverableToolErrorRegistry(): NonRecoverableToolErrorRegistry 
     );
   }
   return existing.value as NonRecoverableToolErrorRegistry;
-}
-
-function loadNodeUtilTypes(): NodeUtilTypes {
-  const runtimeProcess = Reflect.get(globalThis, "process");
-  if (!isObjectLike(runtimeProcess)) {
-    throw new TypeError("Node process is required for safe Tool inspection");
-  }
-  const getBuiltinModule = Reflect.get(runtimeProcess, "getBuiltinModule");
-  if (typeof getBuiltinModule !== "function") {
-    throw new TypeError(
-      "process.getBuiltinModule() is required for safe Tool inspection",
-    );
-  }
-  const nodeUtil = reflectApply(getBuiltinModule, runtimeProcess, [
-    "node:util",
-  ]);
-  if (!isObjectLike(nodeUtil)) {
-    throw new TypeError("node:util is required for safe Tool inspection");
-  }
-  const types = Reflect.get(nodeUtil, "types");
-  if (!isObjectLike(types)) {
-    throw new TypeError("node:util types are unavailable");
-  }
-  const isProxy = Reflect.get(types, "isProxy");
-  const isNativeError = Reflect.get(types, "isNativeError");
-  if (typeof isProxy !== "function" || typeof isNativeError !== "function") {
-    throw new TypeError("Required node:util type guards are unavailable");
-  }
-  return Object.freeze({ isProxy, isNativeError });
 }
 
 function isPreparedNonRecoverableToolError(value: unknown): value is Error {
