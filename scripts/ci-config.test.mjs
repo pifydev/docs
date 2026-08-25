@@ -95,6 +95,18 @@ test("duplicate PR sync workflow is absent", async () => {
   );
 });
 
+test("Vitest discovers application and course unit tests", async () => {
+  const config = await readFile(
+    new URL("vitest.config.ts", repositoryRoot),
+    "utf8",
+  );
+
+  assert.match(
+    config,
+    /include:\s*\[\s*"tests\/\*\*\/\*\.test\.ts",\s*"course\/test\/\*\*\/\*\.test\.ts",?\s*\]/,
+  );
+});
+
 test("Mermaid validation supplies the documented Chromium CI sandbox override", async () => {
   const validator = await readFile(
     new URL("scripts/validate-mermaid.mjs", repositoryRoot),
