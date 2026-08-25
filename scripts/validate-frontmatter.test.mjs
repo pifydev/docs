@@ -1,11 +1,57 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
+import { pathToFileURL } from "node:url";
 
 import { validateFrontmatter } from "./validate-frontmatter.mjs";
 
 const exec = promisify(execFile);
+
+async function withChapterFixture(chapter, callback) {
+  const root = await mkdtemp(path.join(tmpdir(), "pify-frontmatter-"));
+  const manifest = {
+    pages: [
+      {
+        key: "ch11-testing-evaluation",
+        en: "ch11-testing-evaluation.md",
+        vi: "ch11-testing-evaluation.md",
+      },
+    ],
+  };
+  const frontmatter = `---
+title: Testing and evaluation
+translation_key: ch11-testing-evaluation
+language: LOCALE
+chapter: ${chapter}
+source_url: https://docs.pify.dev/LOCALE/ch11-testing-evaluation
+status: reviewed
+---
+`;
+
+  try {
+    await mkdir(path.join(root, "content", "en"), { recursive: true });
+    await mkdir(path.join(root, "content", "vi"), { recursive: true });
+    await writeFile(
+      path.join(root, "content", "translation-manifest.json"),
+      JSON.stringify(manifest),
+    );
+    await Promise.all(
+      ["en", "vi"].map((locale) =>
+        writeFile(
+          path.join(root, "content", locale, "ch11-testing-evaluation.md"),
+          frontmatter.replaceAll("LOCALE", locale),
+        ),
+      ),
+    );
+    await callback(pathToFileURL(`${root}${path.sep}`));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
 
 test("frontmatter validation covers every public document", async () => {
   const { stdout } = await exec("node", ["scripts/validate-frontmatter.mjs"]);
@@ -15,4 +61,24 @@ test("frontmatter validation covers every public document", async () => {
   const result = await validateFrontmatter(new URL("../", import.meta.url));
   assert.equal(result.count, 46);
   assert.deepEqual(result.errors, []);
+});
+
+test("frontmatter validation accepts chapter 11 and still rejects chapter 12", async () => {
+  await withChapterFixture(11, async (rootURL) => {
+    const result = await validateFrontmatter(rootURL);
+    assert.deepEqual(result.errors, []);
+  });
+
+  await withChapterFixture(12, async (rootURL) => {
+    const result = await validateFrontmatter(rootURL);
+    assert.equal(result.errors.length, 2);
+    assert.match(
+      result.errors[0],
+      /chapter must be an integer from 1 through 11/,
+    );
+    assert.match(
+      result.errors[1],
+      /chapter must be an integer from 1 through 11/,
+    );
+  });
 });

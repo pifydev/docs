@@ -76,9 +76,9 @@ export async function validateFrontmatter(rootURL) {
         data.chapter !== undefined &&
         (!Number.isInteger(data.chapter) ||
           data.chapter < 1 ||
-          data.chapter > 10)
+          data.chapter > 11)
       ) {
-        errors.push(`${label}: chapter must be an integer from 1 through 10`);
+        errors.push(`${label}: chapter must be an integer from 1 through 11`);
       }
       if (data.status !== undefined && !statuses.includes(data.status)) {
         errors.push(`${label}: status must be ${statuses.join("|")}`);
