@@ -1,4 +1,5 @@
 import { EventStream } from "./event-stream";
+import { claimIteratorOnce } from "./iterator-ownership";
 import { assistantMessage, toolResultMessage, userMessage } from "./messages";
 import type {
   CourseAssistantMessage,
@@ -8,8 +9,6 @@ import type {
   CourseModelResponse,
   CourseToolCall,
 } from "./protocol";
-
-const claimedResponseIterators = new WeakSet<object>();
 
 export type ScriptedResponseFactory = (
   request: CourseModelRequest,
@@ -103,13 +102,12 @@ export class ScriptedModel {
 
     const response = factory(request, signal);
     assertResponseIterator(response);
-    if (claimedResponseIterators.has(response)) {
+    if (!claimIteratorOnce(response)) {
       throw new ScriptedModelError(
         "SCRIPT_ITERATOR_REUSED",
         "A scripted response iterator may be consumed by only one model call",
       );
     }
-    claimedResponseIterators.add(response);
     let responseFinished = false;
 
     try {

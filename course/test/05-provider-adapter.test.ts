@@ -4,9 +4,11 @@ import providerToolRoundtrip from "../fixtures/provider-tool-roundtrip.json" wit
 import {
   FixtureProviderAdapter,
   FixtureProviderError,
+  ScriptedModel,
   type CourseModelChunk,
   type CourseModelRequest,
   type CourseModelResponse,
+  type ScriptedResponseFactory,
 } from "../src/index";
 
 type Deferred<Value> = Readonly<{
@@ -377,22 +379,24 @@ test("ignores inherited usage fields and never invokes inherited getters", async
     enumerable: true,
     value: 1,
   });
-  const stream = new FixtureProviderAdapter(
-    fixtureWith([
-      {
-        type: "response_start",
-        responseId: "response-inherited-usage",
-        role: "assistant",
-      },
-      { type: "text_delta", text: "must fail closed" },
-      {
-        type: "response_end",
-        responseId: "response-inherited-usage",
-        stopReason: "stop",
-        usage,
-      },
-    ]),
-  ).stream(request("request-inherited-usage"), new AbortController().signal);
+  const records = async function* (): AsyncGenerator<unknown, void, void> {
+    yield {
+      type: "response_start",
+      responseId: "response-inherited-usage",
+      role: "assistant",
+    };
+    yield { type: "text_delta", text: "must fail closed" };
+    yield {
+      type: "response_end",
+      responseId: "response-inherited-usage",
+      stopReason: "stop",
+      usage,
+    };
+  };
+  const stream = new FixtureProviderAdapter(fixtureWith(records())).stream(
+    request("request-inherited-usage"),
+    new AbortController().signal,
+  );
 
   const [events, result] = await settleStream(stream);
   expect(events).toMatchObject({
@@ -408,11 +412,10 @@ test("ignores inherited usage fields and never invokes inherited getters", async
 
 test("fixture snapshots are unaffected by later prototype mutation", async () => {
   let inheritedReads = 0;
-  const usagePrototype = { inputTokens: 1 };
-  const usage = Object.create(usagePrototype) as Record<string, unknown>;
-  Object.defineProperty(usage, "outputTokens", {
-    enumerable: true,
-    value: 1,
+  const usage = Object.create(null) as Record<string, unknown>;
+  Object.defineProperties(usage, {
+    inputTokens: { configurable: true, enumerable: true, value: 1 },
+    outputTokens: { configurable: true, enumerable: true, value: 1 },
   });
   const adapter = new FixtureProviderAdapter(
     fixtureWith([
@@ -421,7 +424,7 @@ test("fixture snapshots are unaffected by later prototype mutation", async () =>
         responseId: "response-prototype-mutation",
         role: "assistant",
       },
-      { type: "text_delta", text: "must fail closed" },
+      { type: "text_delta", text: "snapshotted before mutation" },
       {
         type: "response_end",
         responseId: "response-prototype-mutation",
@@ -430,13 +433,14 @@ test("fixture snapshots are unaffected by later prototype mutation", async () =>
       },
     ]),
   );
-  Object.defineProperty(usagePrototype, "inputTokens", {
-    configurable: true,
+  const hostilePrototype = Object.defineProperty({}, "inputTokens", {
     get() {
       inheritedReads += 1;
       throw new Error("mutated prototype must not be consulted");
     },
   });
+  Reflect.deleteProperty(usage, "inputTokens");
+  Object.setPrototypeOf(usage, hostilePrototype);
   const stream = adapter.stream(
     request("request-prototype-mutation"),
     new AbortController().signal,
@@ -444,12 +448,15 @@ test("fixture snapshots are unaffected by later prototype mutation", async () =>
 
   const [events, result] = await settleStream(stream);
   expect(events).toMatchObject({
-    status: "rejected",
-    reason: { code: "PROVIDER_INVALID_EVENT" },
+    status: "fulfilled",
+    value: [{ delta: "snapshotted before mutation" }],
   });
   expect(result).toMatchObject({
-    status: "rejected",
-    reason: { code: "PROVIDER_INVALID_EVENT" },
+    status: "fulfilled",
+    value: {
+      id: "response-prototype-mutation",
+      usage: { inputTokens: 1, outputTokens: 1 },
+    },
   });
   expect(inheritedReads).toBe(0);
 });
@@ -805,6 +812,65 @@ test("rejects non-JSON Tool arguments instead of casting unknown payloads", asyn
   });
 });
 
+test("rejects exotic Tool argument prototypes at every JSON depth", async () => {
+  class ClassArguments {
+    public readonly value = 1;
+  }
+
+  const cases: readonly Readonly<{ label: string; argumentsValue: unknown }>[] =
+    [
+      {
+        label: "Date root",
+        argumentsValue: new Date("2026-08-25T00:00:00.000Z"),
+      },
+      { label: "class root", argumentsValue: new ClassArguments() },
+      {
+        label: "nested Date",
+        argumentsValue: {
+          nested: { createdAt: new Date("2026-08-25T00:00:00.000Z") },
+        },
+      },
+      {
+        label: "nested class",
+        argumentsValue: { nested: new ClassArguments() },
+      },
+    ];
+
+  for (let index = 0; index < cases.length; index += 1) {
+    const current = cases[index];
+    const responseId = `response-exotic-prototype-${index}`;
+    const records = async function* (): AsyncGenerator<unknown, void, void> {
+      yield { type: "response_start", responseId, role: "assistant" };
+      yield {
+        type: "tool_call",
+        id: `call-exotic-prototype-${index}`,
+        name: "inspect",
+        arguments: current.argumentsValue,
+      };
+      yield {
+        type: "response_end",
+        responseId,
+        stopReason: "tool_call",
+        usage: { inputTokens: 1, outputTokens: 1 },
+      };
+    };
+    const stream = new FixtureProviderAdapter(fixtureWith(records())).stream(
+      request(`request-exotic-prototype-${index}`),
+      new AbortController().signal,
+    );
+    const [events, result] = await settleStream(stream);
+
+    expect(events, current.label).toMatchObject({
+      status: "rejected",
+      reason: { code: "PROVIDER_INVALID_EVENT" },
+    });
+    expect(result, current.label).toMatchObject({
+      status: "rejected",
+      reason: { code: "PROVIDER_INVALID_EVENT" },
+    });
+  }
+});
+
 test("fails closed when the finite fixture queue is exhausted", async () => {
   const adapter = new FixtureProviderAdapter({
     schemaVersion: 1,
@@ -1018,6 +1084,99 @@ test("rejects sequential shared-iterator reuse across adapter instances", async 
   expect(result).toMatchObject({
     status: "rejected",
     reason: { code: "PROVIDER_ITERATOR_REUSED" },
+  });
+});
+
+test("prevents concurrent iterator reuse from ScriptedModel into provider adapter", async () => {
+  const releaseTerminal = deferred<void>();
+  const sharedIterator = (async function* () {
+    yield {
+      type: "textDelta",
+      requestId: "request-cross-owner",
+      delta: "owned by ScriptedModel",
+    } as const;
+    await releaseTerminal.promise;
+    return {
+      id: "response-cross-owner",
+      requestId: "request-cross-owner",
+      message: {
+        id: "message-response-cross-owner",
+        role: "assistant",
+        content: [{ type: "text", text: "owned by ScriptedModel" }],
+      },
+      stopReason: "stop",
+      usage: { inputTokens: 1, outputTokens: 1 },
+    } as const;
+  })();
+  const model = new ScriptedModel([
+    (() => sharedIterator) as ScriptedResponseFactory,
+  ]);
+  const modelStream = model.stream(
+    request("request-cross-owner"),
+    new AbortController().signal,
+  );
+  const modelEvents = modelStream[Symbol.asyncIterator]();
+  await expect(modelEvents.next()).resolves.toMatchObject({
+    done: false,
+    value: {
+      requestId: "request-cross-owner",
+      delta: "owned by ScriptedModel",
+    },
+  });
+
+  const providerStream = new FixtureProviderAdapter(
+    fixtureWith({ [Symbol.asyncIterator]: () => sharedIterator }),
+  ).stream(request("request-cross-intruder"), new AbortController().signal);
+  const providerSettlement = settleStream(providerStream);
+  releaseTerminal.resolve();
+
+  await expect(modelEvents.next()).resolves.toEqual({
+    done: true,
+    value: undefined,
+  });
+  await expect(modelStream.result).resolves.toMatchObject({
+    id: "response-cross-owner",
+    requestId: "request-cross-owner",
+  });
+  const [events, result] = await providerSettlement;
+  expect(events).toMatchObject({
+    status: "rejected",
+    reason: { code: "PROVIDER_ITERATOR_REUSED" },
+  });
+  expect(result).toMatchObject({
+    status: "rejected",
+    reason: { code: "PROVIDER_ITERATOR_REUSED" },
+  });
+});
+
+test("prevents sequential iterator reuse from provider adapter into ScriptedModel", async () => {
+  const sharedIterator = asyncTextRecords("response-provider-owner")[
+    Symbol.asyncIterator
+  ]();
+  const providerStream = new FixtureProviderAdapter(
+    fixtureWith({ [Symbol.asyncIterator]: () => sharedIterator }),
+  ).stream(request("request-provider-owner"), new AbortController().signal);
+  await expect(collect(providerStream)).resolves.toHaveLength(1);
+  await expect(providerStream.result).resolves.toMatchObject({
+    id: "response-provider-owner",
+    requestId: "request-provider-owner",
+  });
+
+  const model = new ScriptedModel([
+    (() => sharedIterator) as unknown as ScriptedResponseFactory,
+  ]);
+  const modelStream = model.stream(
+    request("request-scripted-intruder"),
+    new AbortController().signal,
+  );
+  const [events, result] = await settleStream(modelStream);
+  expect(events).toMatchObject({
+    status: "rejected",
+    reason: { code: "SCRIPT_ITERATOR_REUSED" },
+  });
+  expect(result).toMatchObject({
+    status: "rejected",
+    reason: { code: "SCRIPT_ITERATOR_REUSED" },
   });
 });
 

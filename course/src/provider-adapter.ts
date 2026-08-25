@@ -1,4 +1,5 @@
 import { EventStream } from "./event-stream";
+import { claimIteratorOnce } from "./iterator-ownership";
 import { assistantMessage } from "./messages";
 import type {
   CourseAssistantBlock,
@@ -74,7 +75,6 @@ type ParseState = {
   terminal: CourseModelResponse | undefined;
 };
 
-const claimedAsyncIterators = new WeakSet<object>();
 const ownedProviderErrors = new WeakSet<FixtureProviderError>();
 
 /**
@@ -185,6 +185,7 @@ function snapshotFixture(fixture: unknown): RecordSource[] {
     if (!isRecord(fixture)) {
       throw invalidFixture("Fixture must be an object");
     }
+    assertOrdinaryJsonObject(fixture, "Fixture");
 
     const schemaVersion = readOwnProperty(
       fixture,
@@ -230,6 +231,7 @@ function snapshotFixture(fixture: unknown): RecordSource[] {
           `Fixture responses[${responseIndex}] must be an object`,
         );
       }
+      assertOrdinaryJsonObject(entry, `Fixture responses[${responseIndex}]`);
       const recordsProperty = readOwnProperty(
         entry,
         "records",
@@ -327,13 +329,12 @@ function createRecordCursor(source: RecordSource): RecordCursor {
   if (!isRecord(iterator)) {
     throw invalidFixture("Async fixture record source returned no iterator");
   }
-  if (claimedAsyncIterators.has(iterator)) {
+  if (!claimIteratorOnce(iterator)) {
     throw providerError(
       "PROVIDER_ITERATOR_REUSED",
       "An async fixture iterator may be consumed once",
     );
   }
-  claimedAsyncIterators.add(iterator);
 
   let nextMethod: unknown;
   try {
@@ -794,6 +795,7 @@ function snapshotUnknown(
       return Object.freeze(snapshot);
     }
 
+    assertOrdinaryJsonObject(value, path);
     const snapshot: Record<string, unknown> = Object.create(null);
     const keys = Reflect.ownKeys(value);
     const keyCount = keys.length;
@@ -851,6 +853,7 @@ function parseCourseJsonObjectValue(
   path: string,
   ancestors: WeakSet<object>,
 ): CourseJsonObject {
+  assertOrdinaryJsonObject(value, path);
   if (ancestors.has(value)) {
     throw new TypeError(`${path} must not contain cycles`);
   }
@@ -878,6 +881,20 @@ function parseCourseJsonObjectValue(
     return Object.freeze(snapshot);
   } finally {
     ancestors.delete(value);
+  }
+}
+
+function assertOrdinaryJsonObject(value: object, path: string): void {
+  let prototype: unknown;
+  try {
+    prototype = Object.getPrototypeOf(value);
+  } catch {
+    throw new TypeError(`${path} prototype could not be inspected safely`);
+  }
+  if (prototype !== Object.prototype && prototype !== null) {
+    throw new TypeError(
+      `${path} must use Object.prototype or a null prototype`,
+    );
   }
 }
 
