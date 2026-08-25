@@ -831,6 +831,70 @@ test("isolates hostile entries and blocks while preserving earlier diagnostics",
   ).toBe(true);
 });
 
+test("retains readable call IDs before later Tool properties throw", () => {
+  const hostileCall = {
+    type: "toolCall",
+    id: "call-hostile-name",
+    arguments: { path: "README.md" },
+  };
+  Object.defineProperty(hostileCall, "name", {
+    enumerable: true,
+    get(): never {
+      throw new Error("hostile Tool call name");
+    },
+  });
+  const callErrors = validateTranscript([
+    {
+      id: "message-assistant-hostile-name",
+      role: "assistant",
+      content: [hostileCall],
+    },
+    {
+      id: "message-tool-after-hostile-call",
+      role: "toolResult",
+      toolCallId: "call-hostile-name",
+      toolName: "read",
+      content: "contents",
+      isError: false,
+    },
+  ]);
+  const callCodes = callErrors.map(({ code }) => code);
+  expect(callCodes).toEqual(["INVALID_MESSAGE"]);
+  expect(callCodes).not.toContain("ORPHAN_TOOL_RESULT");
+
+  const hostileResult = {
+    id: "message-tool-hostile-name",
+    role: "toolResult",
+    toolCallId: "call-hostile-result-name",
+    content: "contents",
+    isError: false,
+  };
+  Object.defineProperty(hostileResult, "toolName", {
+    enumerable: true,
+    get(): never {
+      throw new Error("hostile Tool result name");
+    },
+  });
+  const resultErrors = validateTranscript([
+    {
+      id: "message-assistant-before-hostile-result",
+      role: "assistant",
+      content: [
+        {
+          type: "toolCall",
+          id: "call-hostile-result-name",
+          name: "read",
+          arguments: { path: "README.md" },
+        },
+      ],
+    },
+    hostileResult,
+  ]);
+  const resultCodes = resultErrors.map(({ code }) => code);
+  expect(resultCodes).toEqual(["INVALID_MESSAGE"]);
+  expect(resultCodes).not.toContain("MISSING_TOOL_RESULT");
+});
+
 test("constructors reject malformed direct input with precise errors", () => {
   expect(() =>
     assistantMessage({

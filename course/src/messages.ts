@@ -378,9 +378,9 @@ function inspectAssistantBlock(
     }
 
     const rawCallId = value.id;
+    callId = isNonEmptyString(rawCallId) ? rawCallId : undefined;
     const rawName = value.name;
     const argumentsValue = value.arguments;
-    callId = isNonEmptyString(rawCallId) ? rawCallId : undefined;
     const callName = isNonEmptyString(rawName) ? rawName : undefined;
     let valid = true;
 
@@ -449,10 +449,10 @@ function inspectToolResult(
   let toolCallId: CourseToolCallId | undefined;
   try {
     const rawToolCallId = value.toolCallId;
+    toolCallId = isNonEmptyString(rawToolCallId) ? rawToolCallId : undefined;
     const rawToolName = value.toolName;
     const content = value.content;
     const isError = value.isError;
-    toolCallId = isNonEmptyString(rawToolCallId) ? rawToolCallId : undefined;
     const toolName = isNonEmptyString(rawToolName) ? rawToolName : undefined;
     let valid = true;
 
