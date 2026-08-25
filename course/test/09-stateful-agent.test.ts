@@ -3,7 +3,9 @@ import { expect, test } from "vitest";
 import {
   Agent,
   AgentBusyError,
+  AgentMessageLimitError,
   EventStream,
+  MAX_AGENT_MESSAGES,
   ScriptedModel,
   ToolRegistry,
   defineTool,
@@ -164,13 +166,19 @@ test("cancels an active model wait and settles exactly once", async () => {
   ]);
   const agent = new Agent({ model });
   let terminalCancellation: boolean | undefined;
+  const cancellationResultPromises: Promise<RunResult>[] = [];
   agent.subscribe((event) => {
     if (event.type === "run.finished") {
       terminalCancellation = agent.cancel("too late");
     }
   });
+  agent.subscribe(async (event) => {
+    if (event.type === "run.finished") await cancellationResultPromises[0];
+  });
   const run = agent.prompt("wait");
+  cancellationResultPromises.push(run.result);
   await entered.promise;
+  const retainedFollowUp = agent.followUp("resume after cancellation");
 
   expect(agent.cancel("user stopped the run")).toBe(true);
   expect(agent.cancel("duplicate cancellation")).toBe(false);
@@ -189,6 +197,22 @@ test("cancels an active model wait and settles exactly once", async () => {
   );
   expect(terminalCancellation).toBe(false);
   expect(agent.isRunning).toBe(false);
+
+  model.appendResponse(
+    scriptedResponse("response-after-cancel", [
+      { type: "text", text: "resumed" },
+    ]),
+  );
+  model.appendResponse(
+    scriptedResponse("response-retained-follow-up", [
+      { type: "text", text: "follow-up complete" },
+    ]),
+  );
+  await expect(agent.continue().result).resolves.toMatchObject({
+    status: "completed",
+    finalText: "follow-up complete",
+  });
+  expect(model.requests.at(-1)?.messages.at(-1)).toEqual(retainedFollowUp);
 });
 
 test("injects each steering item at the next completed Turn boundary", async () => {
@@ -242,6 +266,11 @@ test("injects each steering item at the next completed Turn boundary", async () 
     finalText: "Both corrections applied.",
   });
   expect(model.requests).toHaveLength(3);
+  expect(model.requests.map((request) => request.id)).toEqual([
+    "request-001",
+    "request-002",
+    "request-003",
+  ]);
   expect(
     model.requests[1].messages
       .filter((message) => message.role === "user")
@@ -324,6 +353,73 @@ test("delivers subscribers in order, isolates failures, and honors unsubscribe",
     },
   ]);
   expect(Object.isFrozen(agent.subscriberErrors)).toBe(true);
+});
+
+test("subscriber Promises never block later listeners or Agent settlement", async () => {
+  const model = new ScriptedModel([
+    scriptedResponse("response-no-listener-deadlock-1", [
+      { type: "text", text: "first" },
+    ]),
+    scriptedResponse("response-no-listener-deadlock-2", [
+      { type: "text", text: "second" },
+    ]),
+  ]);
+  const agent = new Agent({ model });
+  const invocations: string[] = [];
+  let activeResult: Promise<RunResult>;
+  agent.subscribe(async (event) => {
+    if (event.type !== "model.chunk") return;
+    invocations.push("pending-first");
+    await activeResult;
+  });
+  agent.subscribe((event) => {
+    if (event.type === "model.chunk") invocations.push("second");
+  });
+
+  const first = agent.prompt("first");
+  activeResult = first.result;
+  await expect(first.result).resolves.toMatchObject({ status: "completed" });
+  expect(invocations).toEqual(["pending-first", "second"]);
+  expect(agent.isRunning).toBe(false);
+
+  const second = agent.prompt("second");
+  activeResult = second.result;
+  await expect(second.result).resolves.toMatchObject({ status: "completed" });
+  expect(invocations).toEqual([
+    "pending-first",
+    "second",
+    "pending-first",
+    "second",
+  ]);
+  expect(agent.subscriberErrors).toEqual([]);
+});
+
+test("an accepted cancellation wins the completed-result adoption race", async () => {
+  const model = new ScriptedModel([
+    scriptedResponse("response-cancel-race", [
+      { type: "text", text: "must not commit" },
+    ]),
+  ]);
+  const agent = new Agent({ model });
+  const cancellationAccepted = deferred<boolean>();
+  agent.subscribe((event) => {
+    if (event.type !== "model.chunk") return;
+    queueMicrotask(() => {
+      cancellationAccepted.resolve(agent.cancel("race cancellation"));
+    });
+  });
+
+  const run = agent.prompt("race");
+  await expect(cancellationAccepted.promise).resolves.toBe(true);
+  const { events, result } = await settle(run);
+
+  expect(result).toMatchObject({
+    status: "cancelled",
+    reason: "race cancellation",
+  });
+  expect(events.filter((event) => event.type === "run.finished")).toHaveLength(
+    1,
+  );
 });
 
 test("serializes reentrant steering from a subscriber without corrupting state", async () => {
@@ -432,7 +528,12 @@ test("snapshots model and Tool configuration at construction", async () => {
         scripted.stream(request, signal);
     },
   };
-  const tools = new ToolRegistry();
+  class HostileRegistry extends ToolRegistry {
+    public override snapshot(): ToolRegistry {
+      return this;
+    }
+  }
+  const tools = new HostileRegistry();
   const agent = new Agent({ model, tools, maxSteps: 2 });
   tools.register(
     defineTool({
@@ -449,4 +550,85 @@ test("snapshots model and Tool configuration at construction", async () => {
   expect(
     result.messages.find((message) => message.role === "toolResult"),
   ).toMatchObject({ role: "toolResult", toolName: "late", isError: true });
+});
+
+test("enforces maxSteps across subloops and emits one terminal event", async () => {
+  const repeatedCall = (number: number) =>
+    scriptedResponse(
+      `response-max-${number}`,
+      [
+        {
+          type: "toolCall" as const,
+          id: `call-max-${number}`,
+          name: "ping",
+          arguments: {},
+        },
+      ],
+      "toolCall",
+    );
+  const model = new ScriptedModel([repeatedCall(1), repeatedCall(2)]);
+  const tools = new ToolRegistry([
+    defineTool({
+      name: "ping",
+      description: "Return pong.",
+      validate: () => ({ ok: true as const, value: undefined }),
+      execute: async () => "pong",
+    }),
+  ]);
+  const agent = new Agent({ model, tools, maxSteps: 2 });
+
+  const { events, result } = await settle(agent.prompt("loop"));
+
+  expect(result).toMatchObject({ status: "maxSteps", maxSteps: 2 });
+  expect(model.requests.map((request) => request.id)).toEqual([
+    "request-001",
+    "request-002",
+  ]);
+  expect(events.filter((event) => event.type === "run.finished")).toHaveLength(
+    1,
+  );
+});
+
+test("rejects impossible queued work before stranding it at the message cap", async () => {
+  const initialMessages = Array.from(
+    { length: MAX_AGENT_MESSAGES - 2 },
+    (_, index) => ({
+      id: `initial-${index + 1}`,
+      role: "user" as const,
+      content: `message ${index + 1}`,
+    }),
+  );
+  const release = deferred<void>();
+  const entered = deferred<void>();
+  const model = new ScriptedModel([
+    async function* (request) {
+      entered.resolve();
+      await release.promise;
+      yield { type: "textDelta", requestId: request.id, delta: "complete" };
+      return responseFor(
+        request,
+        "response-at-cap",
+        [{ type: "text", text: "complete" }],
+        "stop",
+      );
+    },
+  ]);
+  const agent = new Agent({ model, messages: initialMessages });
+  const run = agent.prompt("message 4095");
+  await entered.promise;
+
+  expect(() => agent.followUp("would be stranded")).toThrow(
+    AgentMessageLimitError,
+  );
+  expect(() => agent.followUp("still impossible")).toThrowError(
+    expect.objectContaining({ code: "AGENT_MESSAGE_LIMIT" }),
+  );
+  release.resolve();
+
+  await expect(run.result).resolves.toMatchObject({ status: "completed" });
+  expect(agent.messages).toHaveLength(MAX_AGENT_MESSAGES);
+  expect(agent.isRunning).toBe(false);
+  expect(() => agent.steer("cannot fit later")).toThrowError(
+    expect.objectContaining({ code: "AGENT_MESSAGE_LIMIT" }),
+  );
 });

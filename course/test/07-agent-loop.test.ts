@@ -210,6 +210,66 @@ test("rejects a non-positive or non-integer maxSteps before starting a run", () 
   expect(model.callCount).toBe(0);
 });
 
+test("validates a request sequence start while preserving the standalone default", async () => {
+  const tools = new ToolRegistry();
+  const signal = new AbortController().signal;
+  const defaultModel = new ScriptedModel([
+    scriptedResponse(
+      "response-default-sequence",
+      [{ type: "text", text: "default" }],
+      "stop",
+    ),
+  ]);
+  await runAgentLoop({
+    messages: [user()],
+    model: defaultModel,
+    tools,
+    maxSteps: 1,
+    signal,
+  }).result;
+  expect(defaultModel.requests[0].id).toBe("request-001");
+
+  const offsetModel = new ScriptedModel([
+    scriptedResponse(
+      "response-offset-sequence",
+      [{ type: "text", text: "offset" }],
+      "stop",
+    ),
+  ]);
+  await runAgentLoop({
+    messages: [user()],
+    model: offsetModel,
+    tools,
+    maxSteps: 1,
+    signal,
+    requestSequenceStart: 4,
+  }).result;
+  expect(offsetModel.requests[0].id).toBe("request-005");
+
+  for (const requestSequenceStart of [-1, 1.5, MAX_AGENT_STEPS]) {
+    expect(() =>
+      runAgentLoop({
+        messages: [user()],
+        model: new ScriptedModel(),
+        tools,
+        maxSteps: 1,
+        signal,
+        requestSequenceStart,
+      }),
+    ).toThrowError("requestSequenceStart");
+  }
+  expect(() =>
+    runAgentLoop({
+      messages: [user()],
+      model: new ScriptedModel(),
+      tools,
+      maxSteps: 2,
+      signal,
+      requestSequenceStart: MAX_AGENT_STEPS - 1,
+    }),
+  ).toThrowError("requestSequenceStart");
+});
+
 test("completes a direct answer with immutable snapshots and exact sequence numbers", async () => {
   const callerMessages = [user()];
   const model = new ScriptedModel([

@@ -82,6 +82,8 @@ export type RunAgentLoopOptions = Readonly<{
   tools: ToolRegistry;
   maxSteps: number;
   signal: AbortSignal;
+  /** Zero-based request number already consumed by an owning lifecycle. */
+  requestSequenceStart?: number;
 }>;
 
 class ModelProtocolError extends Error {
@@ -178,12 +180,23 @@ export function runAgentLoop(
   const tools = options.tools;
   const maxSteps = options.maxSteps;
   const signal = options.signal;
+  const requestSequenceStart = options.requestSequenceStart ?? 0;
 
   if (!Number.isSafeInteger(maxSteps) || maxSteps <= 0) {
     throw new TypeError("maxSteps must be a positive safe integer");
   }
   if (maxSteps > MAX_AGENT_STEPS) {
     throw new TypeError(`maxSteps must not exceed ${MAX_AGENT_STEPS}`);
+  }
+  if (
+    !Number.isSafeInteger(requestSequenceStart) ||
+    requestSequenceStart < 0 ||
+    requestSequenceStart >= MAX_AGENT_STEPS ||
+    requestSequenceStart + maxSteps > MAX_AGENT_STEPS
+  ) {
+    throw new TypeError(
+      `requestSequenceStart must be a non-negative safe integer whose requested steps do not exceed ${MAX_AGENT_STEPS}`,
+    );
   }
   if (typeof model !== "object" || model === null) {
     throw new TypeError("model must implement the CourseModel contract");
@@ -237,6 +250,7 @@ export function runAgentLoop(
     modelStream,
     tools: toolSnapshot,
     maxSteps,
+    requestSequenceStart,
     signal,
   });
   void produceRun(output, transcript, context).catch((error: unknown) => {
@@ -256,6 +270,7 @@ async function produceRun(
     modelStream: CourseModel["stream"];
     tools: ToolRegistry;
     maxSteps: number;
+    requestSequenceStart: number;
     signal: AbortSignal;
   }>,
 ): Promise<void> {
@@ -272,7 +287,10 @@ async function produceRun(
 
     for (let step = 1; step <= context.maxSteps; step += 1) {
       throwIfAborted(context.signal);
-      const request = requestSnapshot(step, transcript);
+      const request = requestSnapshot(
+        context.requestSequenceStart + step,
+        transcript,
+      );
       const turn = await invokeModel(
         output,
         sequence,

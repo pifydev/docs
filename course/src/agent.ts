@@ -19,6 +19,26 @@ import type {
 } from "./protocol";
 import { ToolRegistry } from "./tool";
 
+const reflectApply = Reflect.apply;
+const nativePromiseThen = Promise.prototype.then;
+const nativePromiseConstructor = Promise;
+const nativePromiseDescriptor = Object.freeze({
+  configurable: true,
+  enumerable: false,
+  value: nativePromiseConstructor,
+  writable: true,
+});
+const queueMicrotaskStable = queueMicrotask;
+const abortSignalAbortedGetter = Object.getOwnPropertyDescriptor(
+  AbortSignal.prototype,
+  "aborted",
+)?.get;
+const abortSignalReasonGetter = Object.getOwnPropertyDescriptor(
+  AbortSignal.prototype,
+  "reason",
+)?.get;
+const snapshotToolRegistry = ToolRegistry.prototype.snapshot;
+
 /** Bound retained work so an idle caller cannot grow the queue indefinitely. */
 export const MAX_AGENT_QUEUED_MESSAGES = 256;
 /** Agent-owned transcripts remain valid inputs to the low-level loop. */
@@ -71,6 +91,17 @@ export class AgentBusyError extends Error {
   }
 }
 
+/** Stable capacity error for transcript and retained queue projections. */
+export class AgentMessageLimitError extends Error {
+  public readonly code = "AGENT_MESSAGE_LIMIT" as const;
+
+  public constructor(message: string) {
+    super(message);
+    this.name = "AgentMessageLimitError";
+    Object.freeze(this);
+  }
+}
+
 /**
  * Stateful owner around the course's stateless Agent Loop.
  *
@@ -110,7 +141,11 @@ export class Agent {
     ) {
       throw new TypeError("Agent tools must be a ToolRegistry");
     }
-    this.#tools = (suppliedTools ?? new ToolRegistry()).snapshot();
+    this.#tools = reflectApply(
+      snapshotToolRegistry,
+      suppliedTools ?? new ToolRegistry(),
+      [],
+    );
     this.#maxSteps = suppliedMaxSteps ?? MAX_AGENT_STEPS;
     assertMaxSteps(this.#maxSteps);
     this.#transcript = snapshotTranscript(suppliedMessages ?? []);
@@ -152,17 +187,15 @@ export class Agent {
   /** Add a user message and begin one serialized logical run. */
   public prompt(content: string): EventStream<AgentEvent, RunResult> {
     this.#assertIdle();
+    this.#assertPromptReservation();
     const hasIdleSteering = this.#steeringQueue.length > 0;
-    this.#assertTranscriptCapacity(hasIdleSteering ? 2 : 1);
     const message = this.#createUserMessage(content);
     this.#transcript = Object.freeze([...this.#transcript, message]);
     const accepted = [message];
     if (hasIdleSteering) {
-      const steering = this.#dequeue(this.#steeringQueue);
-      if (steering === undefined) {
+      if (!this.#appendNextQueuedMessage(this.#steeringQueue, accepted)) {
         throw new Error("Agent steering queue changed during prompt setup");
       }
-      this.#appendQueuedMessage(steering, accepted);
     }
     return this.#startRun(accepted);
   }
@@ -177,19 +210,17 @@ export class Agent {
     if (tail === undefined) {
       throw new Error("Cannot continue without transcript messages");
     }
+    this.#assertContinueReservation(tail);
 
     const accepted: CourseUserMessage[] = [];
-    const steering = this.#dequeue(this.#steeringQueue);
-    if (steering !== undefined) {
-      this.#appendQueuedMessage(steering, accepted);
+    if (this.#appendNextQueuedMessage(this.#steeringQueue, accepted)) {
+      // Steering owns the initial safe boundary.
     } else if (tail.role === "assistant") {
-      const followUp = this.#dequeue(this.#followUpQueue);
-      if (followUp === undefined) {
+      if (!this.#appendNextQueuedMessage(this.#followUpQueue, accepted)) {
         throw new Error(
           "Cannot continue from an assistant message without queued work",
         );
       }
-      this.#appendQueuedMessage(followUp, accepted);
     }
 
     return this.#startRun(accepted);
@@ -216,7 +247,7 @@ export class Agent {
     if (
       active === undefined ||
       active.terminalSelected ||
-      active.controller.signal.aborted
+      readSignalAborted(active.controller.signal)
     ) {
       return false;
     }
@@ -230,9 +261,36 @@ export class Agent {
 
   #assertTranscriptCapacity(additional: number): void {
     if (this.#transcript.length + additional <= MAX_AGENT_MESSAGES) return;
-    throw new RangeError(
+    throw new AgentMessageLimitError(
       `Agent transcript must not exceed ${MAX_AGENT_MESSAGES} messages`,
     );
+  }
+
+  #assertProjectedCapacity(projected: number): void {
+    if (projected <= MAX_AGENT_MESSAGES) return;
+    throw new AgentMessageLimitError(
+      `Agent transcript and queued work must not exceed ${MAX_AGENT_MESSAGES} messages`,
+    );
+  }
+
+  #assertPromptReservation(): void {
+    const steering = this.#steeringQueue.length;
+    const followUp = this.#followUpQueue.length;
+    const queued = steering + followUp;
+    // One idle steering item shares the prompted model Turn. With no steering,
+    // the prompt itself owns an additional assistant terminal.
+    const projected =
+      this.#transcript.length + 1 + 2 * queued + (steering === 0 ? 1 : 0);
+    this.#assertProjectedCapacity(projected);
+  }
+
+  #assertContinueReservation(tail: CourseMessage): void {
+    const steering = this.#steeringQueue.length;
+    const followUp = this.#followUpQueue.length;
+    const queued = steering + followUp;
+    let projected = this.#transcript.length + 2 * queued;
+    if (tail.role !== "assistant" && steering === 0) projected += 1;
+    this.#assertProjectedCapacity(projected);
   }
 
   #createUserMessage(content: string): CourseUserMessage {
@@ -248,10 +306,11 @@ export class Agent {
     const pendingCount =
       this.#steeringQueue.length + this.#followUpQueue.length;
     if (pendingCount >= MAX_AGENT_QUEUED_MESSAGES) {
-      throw new RangeError(
+      throw new AgentMessageLimitError(
         `Agent queue must not exceed ${MAX_AGENT_QUEUED_MESSAGES} messages`,
       );
     }
+    this.#assertEnqueueReservation(kind);
     const message = this.#createUserMessage(content);
     const pending = Object.freeze({
       order: this.#nextQueueOrder,
@@ -264,19 +323,34 @@ export class Agent {
     return message;
   }
 
-  #dequeue(queue: PendingMessage[]): PendingMessage | undefined {
-    if (queue.length === 0) return undefined;
-    this.#assertTranscriptCapacity(1);
-    return queue.shift();
+  #assertEnqueueReservation(kind: PendingMessage["kind"]): void {
+    const steering = this.#steeringQueue.length + (kind === "steering" ? 1 : 0);
+    const followUp = this.#followUpQueue.length + (kind === "followUp" ? 1 : 0);
+    const queued = steering + followUp;
+    const active =
+      this.#activeRun !== undefined && !this.#activeRun.terminalSelected;
+    let projected = this.#transcript.length + 2 * queued;
+    if (active) {
+      projected += 1;
+    } else {
+      const tail = this.#transcript.at(-1);
+      if (tail === undefined) projected += steering === 0 ? 2 : 1;
+      else if (tail.role !== "assistant" && steering === 0) projected += 1;
+    }
+    this.#assertProjectedCapacity(projected);
   }
 
-  #appendQueuedMessage(
-    pending: PendingMessage,
+  #appendNextQueuedMessage(
+    queue: PendingMessage[],
     accepted: CourseUserMessage[],
-  ): void {
+  ): boolean {
+    const pending = queue[0];
+    if (pending === undefined) return false;
     this.#assertTranscriptCapacity(1);
     this.#transcript = Object.freeze([...this.#transcript, pending.message]);
     accepted.push(pending.message);
+    queue.shift();
+    return true;
   }
 
   #startRun(
@@ -318,12 +392,16 @@ export class Agent {
         state,
       );
     } catch (error) {
-      terminal = failedResult(
-        this.#transcript,
-        "AGENT_STATE_FAILED",
-        errorMessage(error, "Stateful Agent lifecycle failed"),
-      );
-      await this.#emitTerminal(active, state, terminal);
+      terminal =
+        error instanceof AgentMessageLimitError
+          ? failedResult(this.#transcript, "AGENT_MESSAGE_LIMIT", error.message)
+          : failedResult(
+              this.#transcript,
+              "AGENT_STATE_FAILED",
+              errorMessage(error, "Stateful Agent lifecycle failed"),
+            );
+      terminal = this.#normalizeCancellation(active, terminal);
+      this.#emitTerminal(active, state, terminal);
     } finally {
       if (this.#activeRun?.token === active.token) {
         this.#activeRun = undefined;
@@ -338,7 +416,7 @@ export class Agent {
     state: LogicalRunState,
   ): Promise<RunResult> {
     for (let index = 0; index < initiallyAccepted.length; index += 1) {
-      await this.#emitAccepted(active, state, initiallyAccepted[index]);
+      this.#emitAccepted(active, state, initiallyAccepted[index]);
     }
 
     while (true) {
@@ -360,6 +438,7 @@ export class Agent {
         tools: this.#tools,
         maxSteps: 1,
         signal: active.controller.signal,
+        requestSequenceStart: state.turns,
       });
 
       for await (const event of inner) {
@@ -369,10 +448,20 @@ export class Agent {
         ) {
           continue;
         }
-        await this.#emitForwarded(active, state, event);
+        this.#emitForwarded(active, state, event);
       }
 
       const result = await inner.result;
+      if (readSignalAborted(active.controller.signal)) {
+        return this.#finishWith(
+          active,
+          state,
+          cancelledResult(
+            this.#transcript,
+            readCancellationReason(active.controller.signal),
+          ),
+        );
+      }
       state.turns += 1;
       if (result.messages.length > MAX_AGENT_MESSAGES) {
         return this.#finishWith(
@@ -399,37 +488,32 @@ export class Agent {
             maxStepsResult(this.#transcript, this.#maxSteps),
           );
         }
-        await this.#acceptNextSteering(active, state);
+        this.#acceptNextSteering(active, state);
         continue;
       }
 
-      const steeringAccepted = await this.#acceptNextSteering(active, state);
+      if (this.#steeringQueue.length > 0 && state.turns >= this.#maxSteps) {
+        return this.#finishWith(
+          active,
+          state,
+          maxStepsResult(this.#transcript, this.#maxSteps),
+        );
+      }
+      const steeringAccepted = this.#acceptNextSteering(active, state);
       if (steeringAccepted) {
-        if (state.turns >= this.#maxSteps) {
-          return this.#finishWith(
-            active,
-            state,
-            maxStepsResult(this.#transcript, this.#maxSteps),
-          );
-        }
         continue;
       }
 
-      const followUp = this.#dequeue(this.#followUpQueue);
-      if (followUp !== undefined) {
-        this.#assertTranscriptCapacity(1);
-        this.#transcript = Object.freeze([
-          ...this.#transcript,
-          followUp.message,
-        ]);
-        await this.#emitAccepted(active, state, followUp.message);
-        if (state.turns >= this.#maxSteps) {
-          return this.#finishWith(
-            active,
-            state,
-            maxStepsResult(this.#transcript, this.#maxSteps),
-          );
-        }
+      if (this.#followUpQueue.length > 0 && state.turns >= this.#maxSteps) {
+        return this.#finishWith(
+          active,
+          state,
+          maxStepsResult(this.#transcript, this.#maxSteps),
+        );
+      }
+      const accepted: CourseUserMessage[] = [];
+      if (this.#appendNextQueuedMessage(this.#followUpQueue, accepted)) {
+        this.#emitAccepted(active, state, accepted[0]);
         continue;
       }
 
@@ -437,91 +521,119 @@ export class Agent {
     }
   }
 
-  async #acceptNextSteering(
-    active: ActiveRun,
-    state: LogicalRunState,
-  ): Promise<boolean> {
-    const steering = this.#dequeue(this.#steeringQueue);
-    if (steering === undefined) return false;
-    this.#assertTranscriptCapacity(1);
-    this.#transcript = Object.freeze([...this.#transcript, steering.message]);
-    await this.#emitAccepted(active, state, steering.message);
+  #acceptNextSteering(active: ActiveRun, state: LogicalRunState): boolean {
+    const accepted: CourseUserMessage[] = [];
+    if (!this.#appendNextQueuedMessage(this.#steeringQueue, accepted)) {
+      return false;
+    }
+    this.#emitAccepted(active, state, accepted[0]);
     return true;
   }
 
-  async #finishWith(
+  #finishWith(
     active: ActiveRun,
     state: LogicalRunState,
     result: RunResult,
-  ): Promise<RunResult> {
-    const ownedResult = snapshotRunResult(result);
+  ): RunResult {
+    const ownedResult = this.#normalizeCancellation(
+      active,
+      snapshotRunResult(result),
+    );
     this.#transcript = ownedResult.messages;
-    await this.#emitTerminal(active, state, ownedResult);
+    this.#emitTerminal(active, state, ownedResult);
     return ownedResult;
   }
 
-  async #emitAccepted(
+  #normalizeCancellation(active: ActiveRun, result: RunResult): RunResult {
+    if (
+      result.status === "cancelled" ||
+      active.terminalSelected ||
+      !readSignalAborted(active.controller.signal)
+    ) {
+      return result;
+    }
+    return cancelledResult(
+      this.#transcript,
+      readCancellationReason(active.controller.signal),
+    );
+  }
+
+  #emitAccepted(
     active: ActiveRun,
     state: LogicalRunState,
     message: CourseUserMessage,
-  ): Promise<void> {
+  ): void {
     const event: AgentEvent = Object.freeze({
       type: "message.accepted",
       sequence: state.sequence,
       payload: Object.freeze({ message }),
     });
     state.sequence += 1;
-    await this.#publish(active, event);
+    this.#publish(active, event);
   }
 
-  async #emitForwarded(
+  #emitForwarded(
     active: ActiveRun,
     state: LogicalRunState,
     source: Exclude<
       AgentEvent,
       Readonly<{ type: "message.accepted" | "run.finished" }>
     >,
-  ): Promise<void> {
+  ): void {
     const event = Object.freeze({
       ...source,
       sequence: state.sequence,
     }) as AgentEvent;
     state.sequence += 1;
-    await this.#publish(active, event);
+    this.#publish(active, event);
   }
 
-  async #emitTerminal(
+  #emitTerminal(
     active: ActiveRun,
     state: LogicalRunState,
     result: RunResult,
-  ): Promise<void> {
+  ): void {
+    const terminalResult = this.#normalizeCancellation(active, result);
     active.terminalSelected = true;
     const event: AgentEvent = Object.freeze({
       type: "run.finished",
       sequence: state.sequence,
-      payload: Object.freeze({ result }),
+      payload: Object.freeze({ result: terminalResult }),
     });
     state.sequence += 1;
-    await this.#publish(active, event);
+    this.#publish(active, event);
   }
 
-  async #publish(active: ActiveRun, event: AgentEvent): Promise<void> {
+  #publish(active: ActiveRun, event: AgentEvent): void {
     active.output.push(event);
     const subscribers = Array.from(this.#listeners.entries());
     for (let index = 0; index < subscribers.length; index += 1) {
       const [listenerId, subscriber] = subscribers[index];
+      let returned: unknown;
       try {
-        await subscriber(event, active.controller.signal);
+        returned = subscriber(event, active.controller.signal);
       } catch (error) {
-        this.#subscriberFailures.push(
-          Object.freeze({
-            eventType: event.type,
-            listenerId,
-            message: errorMessage(error, "Agent subscriber failed"),
-          }),
-        );
+        this.#recordSubscriberFailure(event.type, listenerId, error);
+        continue;
       }
+      observeSubscriberSettlement(returned, (error) => {
+        this.#recordSubscriberFailure(event.type, listenerId, error);
+      });
     }
+  }
+
+  #recordSubscriberFailure(
+    eventType: AgentEvent["type"],
+    listenerId: number,
+    error: unknown,
+  ): void {
+    this.#subscriberFailures.push(
+      Object.freeze({
+        eventType,
+        listenerId,
+        message: errorMessage(error, "Agent subscriber failed"),
+      }),
+    );
   }
 }
 
@@ -558,7 +670,7 @@ function snapshotTranscript(
     throw new TypeError("Agent messages must be an array");
   }
   if (value.length > MAX_AGENT_MESSAGES) {
-    throw new RangeError(
+    throw new AgentMessageLimitError(
       `Agent transcript must not exceed ${MAX_AGENT_MESSAGES} messages`,
     );
   }
@@ -657,6 +769,17 @@ function maxStepsResult(
   });
 }
 
+function cancelledResult(
+  messages: readonly CourseMessage[],
+  reason: string,
+): RunResult {
+  return Object.freeze({
+    status: "cancelled",
+    messages: Object.freeze(messages.slice()),
+    reason,
+  });
+}
+
 function failedResult(
   messages: readonly CourseMessage[],
   code: string,
@@ -680,4 +803,116 @@ function errorMessage(error: unknown, fallback: string): string {
   } catch {
     return fallback;
   }
+}
+
+function readSignalAborted(signal: AbortSignal): boolean {
+  if (abortSignalAbortedGetter === undefined) {
+    throw new Error("AbortSignal.aborted is unavailable");
+  }
+  return reflectApply(abortSignalAbortedGetter, signal, []) as boolean;
+}
+
+function readCancellationReason(signal: AbortSignal): string {
+  if (abortSignalReasonGetter === undefined) return "Agent run cancelled";
+  const reason = reflectApply(abortSignalReasonGetter, signal, []);
+  return errorMessage(reason, "Agent run cancelled");
+}
+
+function observeSubscriberSettlement(
+  value: unknown,
+  onRejected: (reason: unknown) => void,
+): void {
+  if (!isObjectLike(value)) return;
+  if (attachNativePromise(value, onRejected)) return;
+
+  let then: unknown;
+  try {
+    then = Reflect.get(value, "then");
+  } catch (error) {
+    deferSubscriberFailure(onRejected, error);
+    return;
+  }
+  if (typeof then !== "function") return;
+
+  let settled = false;
+  const fulfill = () => {
+    if (settled) return;
+    settled = true;
+  };
+  const reject = (reason: unknown) => {
+    if (settled) return;
+    settled = true;
+    deferSubscriberFailure(onRejected, reason);
+  };
+  try {
+    reflectApply(then, value, [fulfill, reject]);
+  } catch (error) {
+    reject(error);
+  }
+}
+
+function attachNativePromise(
+  value: object,
+  onRejected: (reason: unknown) => void,
+): boolean {
+  let continuation: unknown;
+  try {
+    continuation = reflectApply(nativePromiseThen, value, [
+      undefined,
+      onRejected,
+    ]);
+  } catch {
+    continuation = attachNativePromiseWithStableSpecies(value, onRejected);
+    if (continuation === undefined) return false;
+  }
+  observePromiseContinuation(continuation);
+  return true;
+}
+
+function attachNativePromiseWithStableSpecies(
+  value: object,
+  onRejected: (reason: unknown) => void,
+): unknown | undefined {
+  try {
+    const prior = Object.getOwnPropertyDescriptor(value, "constructor");
+    if (prior !== undefined && !prior.configurable) return undefined;
+    Object.defineProperty(value, "constructor", nativePromiseDescriptor);
+    try {
+      return reflectApply(nativePromiseThen, value, [undefined, onRejected]);
+    } finally {
+      if (prior === undefined) Reflect.deleteProperty(value, "constructor");
+      else Object.defineProperty(value, "constructor", prior);
+    }
+  } catch {
+    return undefined;
+  }
+}
+
+function observePromiseContinuation(value: unknown): void {
+  if (!isObjectLike(value)) return;
+  try {
+    reflectApply(nativePromiseThen, value, [
+      ignoreSettlement,
+      ignoreSettlement,
+    ]);
+  } catch {
+    // The source already owns both reactions; continuation metadata is hostile.
+  }
+}
+
+function deferSubscriberFailure(
+  onRejected: (reason: unknown) => void,
+  reason: unknown,
+): void {
+  reflectApply(queueMicrotaskStable, undefined, [() => onRejected(reason)]);
+}
+
+function ignoreSettlement(): void {
+  // Intentionally observe a continuation without joining Agent lifecycle.
+}
+
+function isObjectLike(value: unknown): value is object {
+  return (
+    (typeof value === "object" && value !== null) || typeof value === "function"
+  );
 }
