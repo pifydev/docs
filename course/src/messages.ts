@@ -114,13 +114,12 @@ export function textFromAssistant(message: CourseAssistantMessage): string {
 export function validateTranscript(
   transcript: unknown,
 ): readonly TranscriptValidationError[] {
-  if (!Array.isArray(transcript)) {
-    return freezeErrors([
-      error("INVALID_TRANSCRIPT", -1, "Transcript must be an array"),
-    ]);
-  }
-
   try {
+    if (!Array.isArray(transcript)) {
+      return freezeErrors([
+        error("INVALID_TRANSCRIPT", -1, "Transcript must be an array"),
+      ]);
+    }
     return inspectTranscript(transcript);
   } catch {
     return freezeErrors([
@@ -139,6 +138,8 @@ function inspectTranscript(
   const errors: TranscriptValidationError[] = [];
   const callsById = new Map<CourseToolCallId, ObservedToolCall[]>();
   const results: ObservedToolResult[] = [];
+  const malformedCallIds = new Set<CourseToolCallId>();
+  const malformedResultCallIds = new Set<CourseToolCallId>();
 
   for (const [messageIndex, message] of transcript.entries()) {
     if (!isRecord(message) || typeof message.role !== "string") {
@@ -151,10 +152,41 @@ function inspectTranscript(
       continue;
     }
 
+    if (!isNonEmptyString(message.id)) {
+      addError(
+        errors,
+        "INVALID_MESSAGE",
+        messageIndex,
+        "Message ID must be a non-empty string",
+      );
+      continue;
+    }
+
     if (message.role === "assistant") {
-      inspectAssistant(message, messageIndex, callsById, errors);
+      inspectAssistant(
+        message,
+        messageIndex,
+        callsById,
+        malformedCallIds,
+        errors,
+      );
     } else if (message.role === "toolResult") {
-      inspectToolResult(message, messageIndex, results, errors);
+      inspectToolResult(
+        message,
+        messageIndex,
+        results,
+        malformedResultCallIds,
+        errors,
+      );
+    } else if (message.role === "user") {
+      if (typeof message.content !== "string") {
+        addError(
+          errors,
+          "INVALID_MESSAGE",
+          messageIndex,
+          "User message content must be a string",
+        );
+      }
     } else if (message.role !== "user") {
       addError(
         errors,
@@ -168,6 +200,7 @@ function inspectTranscript(
   for (const result of results) {
     const calls = callsById.get(result.toolCallId);
     if (calls === undefined) {
+      if (malformedCallIds.has(result.toolCallId)) continue;
       addError(
         errors,
         "ORPHAN_TOOL_RESULT",
@@ -204,7 +237,7 @@ function inspectTranscript(
           result.toolCallId === call.id &&
           result.messageIndex > call.messageIndex,
       );
-      if (!hasLaterResult) {
+      if (!hasLaterResult && !malformedResultCallIds.has(call.id)) {
         addError(
           errors,
           "MISSING_TOOL_RESULT",
@@ -222,6 +255,7 @@ function inspectAssistant(
   message: Record<string, unknown>,
   messageIndex: number,
   callsById: Map<CourseToolCallId, ObservedToolCall[]>,
+  malformedCallIds: Set<CourseToolCallId>,
   errors: TranscriptValidationError[],
 ): void {
   if (!Array.isArray(message.content)) {
@@ -235,9 +269,51 @@ function inspectAssistant(
   }
 
   for (const block of message.content) {
-    if (!isRecord(block) || block.type !== "toolCall") continue;
+    if (!isRecord(block)) {
+      addError(
+        errors,
+        "INVALID_MESSAGE",
+        messageIndex,
+        "Assistant content block must be an object",
+      );
+      continue;
+    }
 
+    if (block.type === "text") {
+      if (typeof block.text !== "string") {
+        addError(
+          errors,
+          "INVALID_MESSAGE",
+          messageIndex,
+          "Assistant text block text must be a string",
+        );
+      }
+      continue;
+    }
+
+    if (block.type !== "toolCall") {
+      addError(
+        errors,
+        "INVALID_MESSAGE",
+        messageIndex,
+        "Assistant content block has an unsupported type",
+      );
+      continue;
+    }
+
+    let valid = true;
+    const callId = isNonEmptyString(block.id) ? block.id : undefined;
+    if (callId === undefined) {
+      valid = false;
+      addError(
+        errors,
+        "INVALID_MESSAGE",
+        messageIndex,
+        "Tool call ID must be a non-empty string",
+      );
+    }
     if (typeof block.name !== "string" || block.name.trim().length === 0) {
+      valid = false;
       addError(
         errors,
         "EMPTY_TOOL_NAME",
@@ -246,6 +322,7 @@ function inspectAssistant(
       );
     }
     if (!isValidJsonObject(block.arguments)) {
+      valid = false;
       addError(
         errors,
         "INVALID_TOOL_ARGUMENTS",
@@ -253,18 +330,16 @@ function inspectAssistant(
         "Tool call arguments must be a non-null JSON object and not an array",
       );
     }
-    if (typeof block.id !== "string" || block.id.length === 0) {
-      addError(
-        errors,
-        "INVALID_MESSAGE",
-        messageIndex,
-        "Tool call ID must be a non-empty string",
-      );
+    if (callId === undefined) {
+      continue;
+    }
+    if (!valid) {
+      malformedCallIds.add(callId);
       continue;
     }
 
     const call: ObservedToolCall = {
-      id: block.id,
+      id: callId,
       name: typeof block.name === "string" ? block.name : "",
       messageIndex,
     };
@@ -287,12 +362,24 @@ function inspectToolResult(
   message: Record<string, unknown>,
   messageIndex: number,
   results: ObservedToolResult[],
+  malformedResultCallIds: Set<CourseToolCallId>,
   errors: TranscriptValidationError[],
 ): void {
-  if (
-    typeof message.toolName !== "string" ||
-    message.toolName.trim().length === 0
-  ) {
+  let valid = true;
+  const toolCallId = isNonEmptyString(message.toolCallId)
+    ? message.toolCallId
+    : undefined;
+  if (toolCallId === undefined) {
+    valid = false;
+    addError(
+      errors,
+      "INVALID_MESSAGE",
+      messageIndex,
+      "Tool result call ID must be a non-empty string",
+    );
+  }
+  if (!isNonEmptyString(message.toolName)) {
+    valid = false;
     addError(
       errors,
       "EMPTY_TOOL_NAME",
@@ -300,21 +387,32 @@ function inspectToolResult(
       "Tool result name must be a non-empty string",
     );
   }
-  if (
-    typeof message.toolCallId !== "string" ||
-    message.toolCallId.length === 0
-  ) {
+  if (typeof message.content !== "string") {
+    valid = false;
     addError(
       errors,
       "INVALID_MESSAGE",
       messageIndex,
-      "Tool result call ID must be a non-empty string",
+      "Tool result content must be a string",
     );
+  }
+  if (typeof message.isError !== "boolean") {
+    valid = false;
+    addError(
+      errors,
+      "INVALID_MESSAGE",
+      messageIndex,
+      "Tool result isError must be a boolean",
+    );
+  }
+  if (toolCallId === undefined) return;
+  if (!valid) {
+    malformedResultCallIds.add(toolCallId);
     return;
   }
 
   results.push({
-    toolCallId: message.toolCallId,
+    toolCallId,
     toolName: typeof message.toolName === "string" ? message.toolName : "",
     messageIndex,
   });
@@ -437,6 +535,10 @@ function hasJsonObjectPrototype(value: object): boolean {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
 }
 
 function assertString(value: unknown, path: string): asserts value is string {

@@ -299,6 +299,156 @@ test("inspection never throws and reports empty names and invalid arguments", ()
   ]);
   expect(Object.isFrozen(adversarialErrors)).toBe(true);
   expect(Object.isFrozen(adversarialErrors[0])).toBe(true);
+
+  const revocableTranscript = Proxy.revocable<unknown[]>([], {});
+  revocableTranscript.revoke();
+  expect(() => validateTranscript(revocableTranscript.proxy)).not.toThrow();
+  const revokedProxyErrors = validateTranscript(revocableTranscript.proxy);
+  expect(revokedProxyErrors).toEqual([
+    {
+      code: "INVALID_TRANSCRIPT",
+      messageIndex: -1,
+      message: "Transcript could not be inspected safely",
+    },
+  ]);
+  expect(Object.isFrozen(revokedProxyErrors)).toBe(true);
+  expect(Object.isFrozen(revokedProxyErrors[0])).toBe(true);
+});
+
+test("reports every malformed normalized message shape without throwing", () => {
+  const malformedTranscripts: readonly Readonly<{
+    label: string;
+    transcript: unknown;
+    expectedCodes: readonly TranscriptValidationErrorCode[];
+  }>[] = [
+    {
+      label: "user without required fields",
+      transcript: [{ role: "user" }],
+      expectedCodes: ["INVALID_MESSAGE"],
+    },
+    {
+      label: "user with non-string content",
+      transcript: [{ id: "message-user-invalid", role: "user", content: 42 }],
+      expectedCodes: ["INVALID_MESSAGE"],
+    },
+    {
+      label: "assistant text block without text",
+      transcript: [
+        {
+          id: "message-assistant-missing-text",
+          role: "assistant",
+          content: [{ type: "text" }],
+        },
+      ],
+      expectedCodes: ["INVALID_MESSAGE"],
+    },
+    {
+      label: "assistant with an unsupported block type",
+      transcript: [
+        {
+          id: "message-assistant-bogus-block",
+          role: "assistant",
+          content: [{ type: "image", url: "file.png" }],
+        },
+      ],
+      expectedCodes: ["INVALID_MESSAGE"],
+    },
+    {
+      label: "Tool result without required fields",
+      transcript: [
+        {
+          id: "message-tool-invalid",
+          role: "toolResult",
+          toolCallId: "call-invalid-result",
+        },
+      ],
+      expectedCodes: ["EMPTY_TOOL_NAME", "INVALID_MESSAGE"],
+    },
+    {
+      label: "Tool result with an invalid message ID",
+      transcript: [
+        {
+          id: " ",
+          role: "toolResult",
+          toolCallId: "call-invalid-message-id",
+          toolName: "read",
+          content: "contents",
+          isError: false,
+        },
+      ],
+      expectedCodes: ["INVALID_MESSAGE"],
+    },
+  ];
+
+  for (const { label, transcript, expectedCodes } of malformedTranscripts) {
+    expect(
+      () => validateTranscript(transcript),
+      `${label} must not throw`,
+    ).not.toThrow();
+
+    const errors = validateTranscript(transcript);
+    expect(
+      errors.map(({ code }) => code),
+      `${label} must report its structural error`,
+    ).toEqual(expect.arrayContaining([...expectedCodes]));
+    expect(errors.every(({ messageIndex }) => messageIndex === 0)).toBe(true);
+    expect(Object.isFrozen(errors)).toBe(true);
+    expect(
+      errors.every((validationError) => Object.isFrozen(validationError)),
+    ).toBe(true);
+  }
+});
+
+test("does not cascade malformed calls or results into linkage errors", () => {
+  const malformedCallWithResult = [
+    {
+      id: "message-assistant-malformed-call",
+      role: "assistant",
+      content: [
+        {
+          type: "toolCall",
+          id: "call-malformed",
+          name: "read",
+          arguments: [],
+        },
+      ],
+    },
+    {
+      id: "message-tool-for-malformed-call",
+      role: "toolResult",
+      toolCallId: "call-malformed",
+      toolName: "read",
+      content: "contents",
+      isError: false,
+    },
+  ];
+  const validCallWithMalformedResult = [
+    {
+      id: "message-assistant-valid-call",
+      role: "assistant",
+      content: [
+        {
+          type: "toolCall",
+          id: "call-malformed-result",
+          name: "read",
+          arguments: { path: "README.md" },
+        },
+      ],
+    },
+    {
+      id: "message-tool-malformed-result",
+      role: "toolResult",
+      toolCallId: "call-malformed-result",
+      toolName: "read",
+      content: 42,
+      isError: false,
+    },
+  ];
+
+  expect(errorCodes(malformedCallWithResult)).toEqual([
+    "INVALID_TOOL_ARGUMENTS",
+  ]);
+  expect(errorCodes(validCallWithMalformedResult)).toEqual(["INVALID_MESSAGE"]);
 });
 
 test("constructors reject malformed direct input with precise errors", () => {
