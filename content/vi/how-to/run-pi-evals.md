@@ -231,7 +231,9 @@ Trước tiên hoàn tất kiểm tra hoặc copy phần bằng chứng đã red
 npm run clean --workspace=@earendil-works/pi-evals
 ```
 
-Tại commit đã pin, lệnh này chuyển tiếp sang `shx rm -rf .eval` với `packages/evals` là workspace. Nó xóa toàn bộ local eval run trong package đó, không chỉ run mới nhất, vì vậy hãy kiểm tra printed path và retention decision trước khi thực thi. Harness đã xóa root project/agent tạm của từng run; command này xóa report directory và attachment directory bền hơn.
+Tại commit đã pin, lệnh này chuyển tiếp sang `shx rm -rf .eval` với `packages/evals` là workspace. Script cố định này chỉ xóa directory mặc định `packages/evals/.eval`. Nó không xóa directory tương đối hoặc tuyệt đối được chọn qua `PI_EVAL_ARTIFACT_DIR`. Harness đã xóa root project/agent tạm của từng run; command này chỉ xóa report directory và attachment directory mặc định được giữ lại.
+
+Custom path tương đối hoặc tuyệt đối cần được cleanup riêng, tường minh và chỉ sau khi đã validate target theo retention policy của bạn. Hãy resolve giá trị đã cấu hình thành exact path, xác nhận target đó đúng là eval artifact directory cần xóa, rồi mới dùng command phù hợp với platform. Không bao giờ truyền environment value chưa resolve, repository root, home directory hoặc parent directory quá rộng vào thao tác xóa đệ quy.
 
 Trong automation, đặt cleanup ở final step chạy cả khi success lẫn failure, nhưng chỉ upload output đã redact và được duyệt. Đừng log session content hoặc environment variable chứa secret trong cleanup diagnostic.
 
@@ -259,4 +261,4 @@ Mọi link dưới đây đều pin vào release commit `4e58f324fae8ebfa98a3d45
 - [ ] Comparative suite giữ `judgeThreshold: null` và phân biệt task verdict với infrastructure error.
 - [ ] Telemetry được diễn giải cùng eligible-pair coverage và giá trị unavailable, không chỉ headline delta.
 - [ ] Sensitive artifact được access-control, review, redact trước khi chia sẻ và có retention period.
-- [ ] Chỉ chạy cleanup sau khi bằng chứng cần thiết đã được giữ an toàn.
+- [ ] Default `.eval` cleanup và cleanup cho custom artifact path được validate riêng sau khi bằng chứng cần thiết đã được giữ an toàn.

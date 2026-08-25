@@ -110,6 +110,13 @@ const localeContracts = {
     telemetry: /telemetry/i,
     artifacts: /artifacts?/i,
     cleanup: /cleanup|clean up/i,
+    customCleanupCaveat: [
+      /only removes[^.]*default[^.]*packages\/evals\/\.eval/i,
+      /does not remove[^.]*PI_EVAL_ARTIFACT_DIR/i,
+      /relative[^.]*absolute|absolute[^.]*relative/i,
+      /separate[^.]*explicit[^.]*validated cleanup/i,
+      /retention policy/i,
+    ],
     optionalModelExecution:
       /model-backed (?:execution|evaluation)[^.]*optional|optional[^.]*model-backed (?:execution|evaluation)/i,
     infraVsVerdict: [/infrastructure (?:error|failure)/i, /task verdict/i],
@@ -129,6 +136,13 @@ const localeContracts = {
     telemetry: /telemetry/i,
     artifacts: /artifacts?/i,
     cleanup: /cleanup|dọn dẹp/i,
+    customCleanupCaveat: [
+      /chỉ xóa[^.]*mặc định[^.]*packages\/evals\/\.eval/i,
+      /không xóa[^.]*PI_EVAL_ARTIFACT_DIR/i,
+      /tương đối[^.]*tuyệt đối|relative[^.]*absolute/i,
+      /cleanup[^.]*riêng[^.]*tường minh[^.]*validate/i,
+      /retention policy/i,
+    ],
     optionalModelExecution:
       /model-backed (?:execution|evaluation)[^.\n]*(?:tùy chọn|không bắt buộc)|(?:tùy chọn|không bắt buộc)[^.\n]*model-backed (?:execution|evaluation)/i,
     infraVsVerdict: [/(?:infrastructure error|lỗi hạ tầng)/i, /task verdict/i],
@@ -244,6 +258,13 @@ function validateGuideDocument(source, locale) {
     contract.cleanup,
     `${locale}: section 9 cleanup`,
   );
+  for (const pattern of contract.customCleanupCaveat) {
+    assertMatches(
+      numbered[9].body,
+      pattern,
+      `${locale}: section 9 custom artifact cleanup caveat`,
+    );
+  }
   assertMatches(
     outcome.body,
     contract.optionalModelExecution,
@@ -390,5 +411,18 @@ test("rejects a topic token present only in frontmatter", async () => {
   assert.throws(
     () => validateGuideDocument(mutated, "en"),
     /section 7.*telemetry/i,
+  );
+});
+
+test("rejects removal of the custom artifact cleanup caveat", async () => {
+  const source = await readFile(GUIDE_PATHS.en, "utf8");
+  const mutated = source.replace(
+    /The fixed script only removes[\s\S]*?under your own retention policy\./,
+    "The command removes every local eval run.",
+  );
+  assert.notEqual(mutated, source, "the cleanup caveat must be removed");
+  assert.throws(
+    () => validateGuideDocument(mutated, "en"),
+    /section 9 custom artifact cleanup caveat/i,
   );
 });

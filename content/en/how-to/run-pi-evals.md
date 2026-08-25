@@ -231,7 +231,9 @@ First finish inspection or copy the intentionally retained, redacted evidence. T
 npm run clean --workspace=@earendil-works/pi-evals
 ```
 
-At the pinned commit this delegates to `shx rm -rf .eval` with `packages/evals` as the workspace. It removes all local eval runs under that package, not only the latest run, so verify the printed path and retention decision before executing it. The harness has already removed each temporary project/agent root; this command removes the durable report and attachment directory.
+At the pinned commit this delegates to `shx rm -rf .eval` with `packages/evals` as the workspace. The fixed script only removes the default `packages/evals/.eval` directory. It does not remove a relative or absolute directory selected through `PI_EVAL_ARTIFACT_DIR`. The harness has already removed each temporary project/agent root; this command removes only the default durable report and attachment directory.
+
+Custom relative or absolute paths require separate, explicit, validated cleanup under your own retention policy. Resolve the configured value to an exact path, confirm that target is the intended eval artifact directory, and use a platform-appropriate command only after validation. Never pass an unresolved environment value, repository root, home directory, or broad parent directory to recursive deletion.
 
 For automation, clean up in a final step that runs on both success and failure, but upload only approved redacted outputs. Do not log session contents or secret-bearing environment variables as part of cleanup diagnostics.
 
@@ -259,4 +261,4 @@ Every link below is pinned to release commit `4e58f324fae8ebfa98a3d45181fb248072
 - [ ] Comparative suites keep `judgeThreshold: null` and distinguish a task verdict from an infrastructure error.
 - [ ] Telemetry is interpreted with eligible-pair coverage and unavailable values, not only the headline delta.
 - [ ] Sensitive artifacts are access-controlled, reviewed, redacted before sharing, and assigned a retention period.
-- [ ] Cleanup runs only after the required evidence has been retained safely.
+- [ ] Default `.eval` cleanup and any custom artifact-path cleanup are validated separately after the required evidence has been retained safely.
