@@ -83,16 +83,19 @@ function extractMarkdownSection(source, heading, context) {
     }
   }
 
-  const body = lines.slice(start + 1, end).join("\n").trim();
+  const body = lines
+    .slice(start + 1, end)
+    .join("\n")
+    .trim();
   return {
     body,
     depth,
-    fenceLanguages: [
-      ...body.matchAll(/^```([A-Za-z0-9_-]+)(?:\s|$)/gm),
-    ].map((match) => match[1]),
-    nestedHeadingDepths: [
-      ...body.matchAll(/^(#{1,6})\s+/gm),
-    ].map((match) => match[1].length),
+    fenceLanguages: [...body.matchAll(/^```([A-Za-z0-9_-]+)(?:\s|$)/gm)].map(
+      (match) => match[1],
+    ),
+    nestedHeadingDepths: [...body.matchAll(/^(#{1,6})\s+/gm)].map(
+      (match) => match[1].length,
+    ),
   };
 }
 
@@ -138,6 +141,44 @@ function assertParagraphContainsAll(source, patterns, context) {
     matchingParagraph,
     `${context} must relate ${patterns.join(", ")} in one paragraph`,
   );
+}
+
+function assertTruncatedSummaryClaimsAreUnreleased(source, locale, context) {
+  const blocks = source
+    .split(/\n\s*\n/)
+    .flatMap((block) => (block.includes("\n|") ? block.split("\n") : [block]));
+  const claims = blocks.filter(
+    (block) =>
+      /(?:compaction|branch)[^.\n]{0,100}(?:summar|tóm tắt)|(?:summar|tóm tắt)[^.\n]{0,100}(?:compaction|branch)/i.test(
+        block,
+      ) &&
+      /truncat|length-limited|token (?:cap|limit)|cắt cụt|giới hạn token/i.test(
+        block,
+      ) &&
+      /reject|refus|not persist|discard|từ chối|không lưu|loại bỏ/i.test(block),
+  );
+  const warning =
+    locale === "en" ? /\*\*Unreleased:\*\*/ : /\*\*Chưa phát hành:\*\*/;
+
+  for (const claim of claims) {
+    assert.match(
+      claim,
+      /\{% hint style="warning" %\}/,
+      `${context} must put truncated-summary rejection in a warning callout`,
+    );
+    assert.match(
+      claim,
+      warning,
+      `${context} must visibly label truncated-summary rejection as unreleased`,
+    );
+  }
+}
+
+function assertActiveTruncatedSummaryClaimsAreUnreleased(sources) {
+  for (const { filename, source } of sources) {
+    const locale = filename.startsWith("content/vi/") ? "vi" : "en";
+    assertTruncatedSummaryClaimsAreUnreleased(source, locale, filename);
+  }
 }
 
 function releaseSourceRef(link) {
@@ -237,7 +278,10 @@ The backend receives \`signal?: AbortSignal\`, while \`DEFAULT_MAX_LINES\` and
         },
       ),
     (error) => {
-      assert.match(error.message, /synthetic PowerShell guidance section must cover/);
+      assert.match(
+        error.message,
+        /synthetic PowerShell guidance section must cover/,
+      );
       assert.doesNotMatch(error.message, /must contain at least 80 words/);
       return true;
     },
@@ -316,7 +360,12 @@ test("both Chapter 5 locales explain the optional PowerShell tool contract", asy
     );
     assertParagraphContainsAll(
       section.body,
-      [/`powershell`/, /`defaultTools`/, contract.selectable, contract.notDefault],
+      [
+        /`powershell`/,
+        /`defaultTools`/,
+        contract.selectable,
+        contract.notDefault,
+      ],
       `${locale} Chapter 5 explicit PowerShell selection`,
     );
     assertParagraphContainsAll(
@@ -427,6 +476,272 @@ test("both configuration locales distinguish tool selection from shell selection
     structures.push(sectionStructure(section));
   }
   assert.deepEqual(structures[0], structures[1]);
+});
+
+test("Chapter 7 Extension catalogs specify the 0.84.3 compaction-failure terminal contract", async () => {
+  const chapters = await readLocalizedContent("ch07-event-driven.md");
+  const localeContract = {
+    en: {
+      heading: "### Extension events form a separate contract",
+      awaited: /awaited/i,
+      afterEnd: /after `compaction_end`/i,
+      manual: /manual[^.]*rejects/i,
+      automatic: /automatic post-start[^.]*returns `false`/i,
+    },
+    vi: {
+      heading: "### Sự kiện Extension có hợp đồng riêng",
+      awaited: /được chờ hoàn tất/i,
+      afterEnd: /sau `compaction_end`/i,
+      manual: /thủ công[^.]*reject/i,
+      automatic: /tự động sau khi bắt đầu[^.]*trả `false`/i,
+    },
+  };
+  const structures = [];
+
+  for (const { locale, source } of chapters) {
+    const contract = localeContract[locale];
+    const section = assertContainsAll(
+      source,
+      [
+        /`session_compact_failed`/,
+        /reason: "manual" \| "threshold" \| "overflow"/,
+        /errorMessage\?: string/,
+        /aborted: boolean/,
+        /willRetry: boolean/,
+        /fromExtension: boolean/,
+      ],
+      `${locale} Chapter 7 compaction-failure catalog`,
+      { heading: contract.heading, minWords: 105 },
+    );
+    assertParagraphContainsAll(
+      section.body,
+      [
+        /`compaction_end`/,
+        /`session_compact_failed`/,
+        contract.awaited,
+        contract.afterEnd,
+      ],
+      `${locale} Chapter 7 compaction-failure timing`,
+    );
+    assertParagraphContainsAll(
+      section.body,
+      [/`session_compact_failed`/, contract.manual, contract.automatic],
+      `${locale} Chapter 7 compaction-failure settlement`,
+    );
+    structures.push(sectionStructure(section));
+  }
+  assert.deepEqual(structures[0], structures[1]);
+});
+
+test("Chapter 9 compaction lifecycle specifies failed-event payload, order, and terminal behavior", async () => {
+  const chapters = await readLocalizedContent("ch09-compaction.md");
+  const localeContract = {
+    en: {
+      heading:
+        "### Public events and Extension hooks serve different consumers",
+      afterEnd: /after `compaction_end`/i,
+      beforeSettlement: /before[^.]*rejects|before[^.]*returns `false`/i,
+      manual: /manual[^.]*rejects/i,
+      automatic: /automatic[^.]*returns `false`/i,
+      noEntry: /Neither path writes a new compaction entry/i,
+    },
+    vi: {
+      heading:
+        "### Sự kiện công khai và hook Extension phục vụ các thành phần khác nhau",
+      afterEnd: /sau `compaction_end`/i,
+      beforeSettlement: /trước khi[^.]*reject|trước khi[^.]*trả `false`/i,
+      manual: /thủ công[^.]*reject/i,
+      automatic: /tự động[^.]*trả `false`/i,
+      noEntry: /Cả hai đường đều không ghi mục compaction mới/i,
+    },
+  };
+  const structures = [];
+
+  for (const { locale, source } of chapters) {
+    const contract = localeContract[locale];
+    const section = assertContainsAll(
+      source,
+      [
+        /type: "session_compact_failed"/,
+        /reason: "manual" \| "threshold" \| "overflow"/,
+        /errorMessage\?: string/,
+        /aborted: boolean/,
+        /willRetry: boolean/,
+        /fromExtension: boolean/,
+      ],
+      `${locale} Chapter 9 compaction-failure lifecycle`,
+      {
+        heading: contract.heading,
+        minWords: 180,
+        fenceLanguages: ["text", "typescript"],
+      },
+    );
+    assertParagraphContainsAll(
+      section.body,
+      [
+        /`compaction_end`/,
+        /`session_compact_failed`/,
+        /await|chờ/,
+        contract.afterEnd,
+        contract.beforeSettlement,
+      ],
+      `${locale} Chapter 9 compaction-failure ordering`,
+    );
+    assertParagraphContainsAll(
+      section.body,
+      [
+        /`session_compact_failed`/,
+        contract.manual,
+        contract.automatic,
+        contract.noEntry,
+      ],
+      `${locale} Chapter 9 compaction-failure terminal behavior`,
+    );
+    structures.push(sectionStructure(section));
+  }
+  assert.deepEqual(structures[0], structures[1]);
+});
+
+test("provider, API, and configuration guidance distinguish Google API and normalized thinking levels", async () => {
+  const documentContracts = [
+    {
+      path: "ch04-model-invocation.md",
+      headings: {
+        en: "### Reasoning levels and provider translation",
+        vi: "### Reasoning level và phép chuyển đổi theo provider",
+      },
+      minWords: 210,
+    },
+    {
+      path: "reference/api.md",
+      headings: { en: "### Model metadata", vi: "### Metadata của model" },
+      minWords: 75,
+    },
+    {
+      path: "reference/configuration.md",
+      headings: { en: "### Model and thinking", vi: "### Model và thinking" },
+      minWords: 45,
+    },
+  ];
+
+  for (const documentContract of documentContracts) {
+    const documents = await readLocalizedContent(documentContract.path);
+    const structures = [];
+    for (const { locale, source } of documents) {
+      const section = assertContainsAll(
+        source,
+        [
+          /: GoogleApiThinkingLevel/,
+          /: ResolvedGoogleThinkingLevel|Record<ResolvedGoogleThinkingLevel/,
+          /from "@earendil-works\/pi-ai"/,
+          /"THINKING_LEVEL_UNSPECIFIED"/,
+          /"MINIMAL"/,
+          /"LOW"/,
+          /"MEDIUM"/,
+          /"HIGH"/,
+          /"minimal" \| "low" \| "medium" \| "high"/,
+          /API-facing|hướng API/i,
+          /normalized|chuẩn hóa/i,
+        ],
+        `${locale} ${documentContract.path} Google thinking-level guidance`,
+        {
+          heading: documentContract.headings[locale],
+          minWords: documentContract.minWords,
+        },
+      );
+      structures.push(sectionStructure(section));
+    }
+    assert.deepEqual(structures[0], structures[1]);
+  }
+});
+
+test("active docs do not present the renamed GoogleThinkingLevel identifier as current", async () => {
+  const activeSources = await readActiveSources();
+  const staleGoogleTypeMentions = activeSources
+    .filter(({ source }) => /\bGoogleThinkingLevel\b/.test(source))
+    .map(({ filename }) => filename);
+
+  assert.deepEqual(staleGoogleTypeMentions, []);
+});
+
+test("truncated compaction-summary rejection claims require visible unreleased warnings", () => {
+  const unlabeled =
+    "Pi rejects a truncated compaction summary instead of persisting it.";
+  assert.throws(
+    () =>
+      assertTruncatedSummaryClaimsAreUnreleased(
+        unlabeled,
+        "en",
+        "synthetic English claim",
+      ),
+    /must put truncated-summary rejection in a warning callout/,
+  );
+  assert.throws(
+    () =>
+      assertTruncatedSummaryClaimsAreUnreleased(
+        '{% hint style="warning" %}\nPi rejects a truncated compaction summary instead of persisting it.\n{% endhint %}',
+        "en",
+        "synthetic English unlabeled callout",
+      ),
+    /must visibly label truncated-summary rejection as unreleased/,
+  );
+  assert.throws(
+    () =>
+      assertTruncatedSummaryClaimsAreUnreleased(
+        "**Unreleased:** Pi rejects a truncated compaction summary instead of persisting it.",
+        "en",
+        "synthetic English non-visual warning",
+      ),
+    /must put truncated-summary rejection in a warning callout/,
+  );
+  assert.throws(
+    () =>
+      assertTruncatedSummaryClaimsAreUnreleased(
+        '{% hint style="warning" %}\nPi từ chối bản tóm tắt compaction bị cắt cụt và không lưu nó.\n{% endhint %}',
+        "vi",
+        "synthetic Vietnamese unlabeled callout",
+      ),
+    /must visibly label truncated-summary rejection as unreleased/,
+  );
+  assert.throws(
+    () =>
+      assertTruncatedSummaryClaimsAreUnreleased(
+        "Pi từ chối bản tóm tắt compaction bị cắt cụt và không lưu nó.",
+        "vi",
+        "synthetic Vietnamese claim",
+      ),
+    /must put truncated-summary rejection in a warning callout/,
+  );
+
+  assert.doesNotThrow(() =>
+    assertTruncatedSummaryClaimsAreUnreleased(
+      '{% hint style="warning" %}\n**Unreleased:** Pi rejects a truncated compaction summary instead of persisting it.\n{% endhint %}',
+      "en",
+      "synthetic English warning",
+    ),
+  );
+  assert.doesNotThrow(() =>
+    assertTruncatedSummaryClaimsAreUnreleased(
+      '{% hint style="warning" %}\n**Chưa phát hành:** Pi từ chối bản tóm tắt compaction bị cắt cụt và không lưu nó.\n{% endhint %}',
+      "vi",
+      "synthetic Vietnamese warning",
+    ),
+  );
+  assert.throws(
+    () =>
+      assertActiveTruncatedSummaryClaimsAreUnreleased([
+        {
+          filename: "content/en/ch07-event-driven.md",
+          source:
+            "Pi rejects a truncated compaction summary instead of persisting it.",
+        },
+      ]),
+    /must put truncated-summary rejection in a warning callout/,
+  );
+});
+
+test("active docs do not claim post-tag truncated-summary rejection as released", async () => {
+  assertActiveTruncatedSummaryClaimsAreUnreleased(await readActiveSources());
 });
 
 test("both environment locales preserve Bash guidance and add concrete PowerShell customization", async () => {

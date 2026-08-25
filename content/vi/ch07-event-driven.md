@@ -248,6 +248,25 @@ type AgentSessionEvent =
 
 Một số tên trùng với sự kiện lõi, nhưng payload và bảo đảm do Extension API định nghĩa. Chẳng hạn, `turn_start` của Extension thêm `turnIndex` và `timestamp`; `agent_end` của Extension không có `willRetry` như sự kiện mà session gửi tới bên đăng ký; `tool_call` và `context` có thể thay đổi quá trình thực thi, còn `tool_execution_start` và `message_update` chỉ thông báo trạng thái vòng đời.
 
+Payload lỗi chính xác không chỉ là một tên trong danh mục:
+
+```typescript
+type SessionCompactFailedEvent = {
+  type: "session_compact_failed";
+  reason: "manual" | "threshold" | "overflow";
+  errorMessage?: string;
+  aborted: boolean;
+  willRetry: boolean;
+  fromExtension: boolean;
+};
+```
+
+`errorMessage` có mặt với lỗi không phải abort và bị bỏ qua khi hủy hoặc gặp `AbortError`; `aborted` biểu diễn rõ khác biệt đó. `fromExtension` cho biết nội dung compaction do Extension cung cấp đang được dùng khi lần chạy lỗi, chứ không chỉ cho biết có đăng ký handler `session_before_compact`. Đây là sự kiện kết thúc nên `willRetry` bằng `false` ngay cả khi `reason` là `"overflow"` và một lần compaction thành công lẽ ra sẽ thử lại lượt bị ngắt.
+
+Pi phát đồng bộ sự kiện session `compaction_end` trước, sau đó `session_compact_failed` mới được phân phối và được chờ hoàn tất sau `compaction_end`. Vì vậy, failed hook hoàn tất trước khi promise của `compact()` thủ công reject hoặc đường tự động trả `false`.
+
+Với lần chạy thủ công, `compact()` chỉ reject sau khi các handler `session_compact_failed` hoàn tất; với lỗi tự động sau khi bắt đầu và có phát sự kiện này, vòng lặp compaction chỉ trả `false` sau khi các handler đó hoàn tất. Cả hai đường kết thúc đều không ghi thêm mục compaction mới. Đường tự động tự xử lý thao tác hủy, abort, lỗi tạo summary thông thường và việc phục hồi overflow đã dùng hết một lần retry thay vì ném các kết quả đó cho caller. Trường hợp không có model, không thể chuẩn bị hoặc lỗi authentication trước `compaction_start` có thể trả `false` mà không phát `compaction_end` hay `session_compact_failed`.
+
 ## 3. Phân phối, thứ tự listener và thời điểm hoàn tất
 
 ### `Agent.subscribe()` là đăng ký có chờ

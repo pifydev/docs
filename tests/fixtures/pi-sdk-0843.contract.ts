@@ -4,6 +4,7 @@ import {
   fauxText,
   fauxToolCall,
   type GoogleApiThinkingLevel,
+  type GoogleOptions,
   type ResolvedGoogleThinkingLevel,
 } from "@earendil-works/pi-ai";
 import { Agent } from "@earendil-works/pi-agent-core";
@@ -26,9 +27,19 @@ const sessionRuntimeFactory =
   createAgentSessionRuntime satisfies typeof createAgentSessionRuntime;
 const powerShellToolFactory =
   createPowerShellTool satisfies typeof createPowerShellTool;
-const googleThinkingLevel = "HIGH" satisfies GoogleApiThinkingLevel;
-const resolvedGoogleThinkingLevel =
-  "high" satisfies ResolvedGoogleThinkingLevel;
+const googleApiThinkingLevel: GoogleApiThinkingLevel = "HIGH";
+const googleApiOptions = {
+  thinking: { enabled: true, level: googleApiThinkingLevel },
+} satisfies GoogleOptions;
+const normalizedGoogleThinkingBudgets: Record<
+  ResolvedGoogleThinkingLevel,
+  number
+> = {
+  minimal: 1_024,
+  low: 2_048,
+  medium: 8_192,
+  high: 16_384,
+};
 const powerShellOperations: PowerShellOperations = {
   async exec(command, cwd, { onData, signal, timeout, env }) {
     void [command, cwd, timeout, env];
@@ -59,8 +70,9 @@ void [
   sessionFactory,
   sessionRuntimeFactory,
   powerShellToolFactory,
-  googleThinkingLevel,
-  resolvedGoogleThinkingLevel,
+  googleApiThinkingLevel,
+  googleApiOptions,
+  normalizedGoogleThinkingBudgets,
   powerShellOperations,
   powerShellToolOptions,
   customizedPowerShellTool,

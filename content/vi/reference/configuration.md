@@ -75,6 +75,19 @@ console.log({
 
 `defaultProvider` và `defaultModel` xác định model mặc định. `--model` được ưu tiên cho một lần chạy; session được resume có thể khôi phục model đã ghi khi không truyền model tường minh qua CLI. `defaultThinkingLevel` nhận `off`, `minimal`, `low`, `medium`, `high`, `xhigh` hoặc `max`. `thinkingBudgets` cung cấp token budget cho provider hoặc compatible model có hỗ trợ.
 
+Đừng nhầm các setting mang semantics đó với option gửi trực tiếp tới Google API. `GoogleApiThinkingLevel`, được export từ `@earendil-works/pi-ai`, là union kiểu enum hướng API `"THINKING_LEVEL_UNSPECIFIED" | "MINIMAL" | "LOW" | "MEDIUM" | "HIGH"` dùng cho `GoogleOptions.thinking.level` và `GoogleVertexOptions.thinking.level`. `ResolvedGoogleThinkingLevel` là union đã chuẩn hóa trong adapter `"minimal" | "low" | "medium" | "high"`, dùng sau khi Pi resolve capability mapping của model. Cả hai type đều không mở rộng tập giá trị của `defaultThinkingLevel`; chúng mô tả các ranh giới trong mã provider.
+
+```ts title="google-provider-levels.ts"
+import type {
+  GoogleApiThinkingLevel,
+  ResolvedGoogleThinkingLevel,
+} from "@earendil-works/pi-ai";
+
+const directRequestLevel: GoogleApiThinkingLevel = "HIGH";
+const resolvedAdapterLevel: ResolvedGoogleThinkingLevel = "high";
+void [directRequestLevel, resolvedAdapterLevel];
+```
+
 `hideThinkingBlock` ẩn thinking khỏi transcript. `showCacheMissNotices` hiện thông báo trong transcript cho prompt-cache miss đáng kể. Model vẫn quyết định thinking level và budget nào được hỗ trợ.
 
 `enabledModels` cung cấp pattern cho thao tác chuyển model bằng Ctrl+P; `--models` override scope đó trong một lần chạy. Provider endpoint và credential không nằm trong object setting `providers`. Hãy đặt endpoint được hỗ trợ trong `~/.pi/agent/models.json` hoặc Provider configuration, đồng thời giữ credential trong authentication store hoặc environment được hỗ trợ. Xem <a href="/vi/how-to/plug-new-model">Thêm một nhà cung cấp mô hình</a>.

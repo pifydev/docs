@@ -418,6 +418,24 @@ googleThinking.thinkingConfig = {
 };
 ```
 
+Pi 0.84.3 exports two Google-specific types from the side-effect-free package root, and their casing marks different semantic boundaries. `GoogleApiThinkingLevel` is the API-facing enum-like union `"THINKING_LEVEL_UNSPECIFIED" | "MINIMAL" | "LOW" | "MEDIUM" | "HIGH"`; it belongs in `GoogleOptions.thinking.level` and `GoogleVertexOptions.thinking.level`. `ResolvedGoogleThinkingLevel` is the adapter's normalized union `"minimal" | "low" | "medium" | "high"`, produced after Pi resolves a model's semantic `ModelThinkingLevel`. It deliberately excludes `off`, `xhigh`, and `max` because resolution maps or rejects those before request construction.
+
+```typescript
+import type {
+  GoogleApiThinkingLevel,
+  GoogleOptions,
+  ResolvedGoogleThinkingLevel,
+} from "@earendil-works/pi-ai";
+
+const requestLevel: GoogleApiThinkingLevel = "HIGH";
+const googleOptions = {
+  thinking: { enabled: true, level: requestLevel },
+} satisfies GoogleOptions;
+
+const adapterLevel: ResolvedGoogleThinkingLevel = "high";
+void [googleOptions, adapterLevel];
+```
+
 Anthropic adaptive-thinking models use effort; older capable models use a token budget. OpenAI APIs use reasoning-effort fields with API-specific option names. Gemini families may use a discrete thinking level or a token budget. Bedrock follows the selected model family and can carry Anthropic reasoning content in Converse blocks. `streamSimple()` owns these translations, while `stream()` exposes each API's full options after model narrowing.
 
 Pi now has seven model capability levels, not the historical five-tier scale. Pseudocode: this ladder pairs the standard token budgets with the levels that have them:

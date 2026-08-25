@@ -472,6 +472,15 @@ Extension dưới đây ghi nhận kết quả của cả ba hook mà không tha
 ```typescript
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
+type SessionCompactFailedEvent = {
+  type: "session_compact_failed";
+  reason: "manual" | "threshold" | "overflow";
+  errorMessage?: string;
+  aborted: boolean;
+  willRetry: boolean;
+  fromExtension: boolean;
+};
+
 export default function compactionAudit(pi: ExtensionAPI) {
   pi.on("session_before_compact", async (event, ctx) => {
     ctx.ui.notify(`Compaction requested: ${event.reason}`, "info");
@@ -485,11 +494,20 @@ export default function compactionAudit(pi: ExtensionAPI) {
   });
 
   pi.on("session_compact_failed", async (event, ctx) => {
-    const detail = event.aborted ? "aborted" : (event.errorMessage ?? "failed");
+    const failure: SessionCompactFailedEvent = event;
+    const detail = failure.aborted
+      ? "aborted"
+      : (failure.errorMessage ?? "failed");
     ctx.ui.notify(`Compaction ${detail}`, "warning");
   });
 }
 ```
+
+Payload kết thúc gồm năm field đó không có mục compaction hay số token. `errorMessage` chỉ có mặt với lỗi không phải abort; `aborted` bằng true khi hook yêu cầu hủy hoặc tín hiệu bị abort. `fromExtension` chỉ bằng true khi nội dung compaction tùy chỉnh đang được dùng tại thời điểm lỗi. Vì sự kiện ghi một kết quả kết thúc, `willRetry` bằng false ngay cả với lần overflow mà đường thành công lẽ ra sẽ retry.
+
+Session phát đồng bộ `compaction_end`, rồi chờ `session_compact_failed` hoàn tất sau `compaction_end`, trước khi `compact()` thủ công reject hoặc đường tự động trả `false`. Vì vậy, handler lỗi có thể ghi xong telemetry trước khi caller quan sát settlement kết thúc.
+
+Với lỗi thủ công, `compact()` reject sau `session_compact_failed`; với thao tác hủy, abort, lỗi summary hoặc phục hồi overflow đã dùng hết một lần retry trên đường tự động, đường tự động trả `false` sau `session_compact_failed`. Cả hai đường đều không ghi mục compaction mới, và implementation tự động xử lý nội bộ các kết quả kết thúc này thay vì ném chúng cho caller.
 
 Kết quả thay thế từ `session_before_compact` phải có `summary`, `firstKeptEntryId` và `tokensBefore`; `usage` cùng `details` là tùy chọn. Pi không kiểm tra lại điểm cắt cho kết quả đó, nên trình xử lý thường phải chép `firstKeptEntryId` và `tokensBefore` đã chuẩn bị. Extension nhận ranh giới đã chuẩn bị, hai vùng thông điệp, bản tóm tắt trước, thao tác tệp, lý do, ý định thử lại, các mục nhánh và `AbortSignal` đang hoạt động. Lần gọi mô hình tùy chỉnh nên truyền tín hiệu này và trả về mức sử dụng do nhà cung cấp báo cáo.
 

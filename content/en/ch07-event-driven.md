@@ -248,6 +248,25 @@ type AgentSessionEvent =
 
 Several names overlap with core events, but the payloads and guarantees belong to the Extension API. For example, Extension `turn_start` adds `turnIndex` and `timestamp`; Extension `agent_end` does not add the session subscriber's `willRetry`; `tool_call` and `context` can change execution, while `tool_execution_start` and `message_update` report lifecycle state.
 
+The exact failure payload is not a token-only catalog entry:
+
+```typescript
+type SessionCompactFailedEvent = {
+  type: "session_compact_failed";
+  reason: "manual" | "threshold" | "overflow";
+  errorMessage?: string;
+  aborted: boolean;
+  willRetry: boolean;
+  fromExtension: boolean;
+};
+```
+
+`errorMessage` is present for non-abort failures and omitted for cancellation or an `AbortError`; `aborted` makes that distinction explicit. `fromExtension` says that extension-provided compaction content was active when the attempt failed, not merely that a `session_before_compact` handler was registered. A failed event is terminal, so `willRetry` is `false` even when `reason` is `"overflow"` and a successful compaction would have retried the interrupted turn.
+
+Pi emits the synchronous session `compaction_end` first; `session_compact_failed` is dispatched and awaited after `compaction_end`. The failed hook therefore settles before the manual `compact()` promise rejects or the automatic path returns `false`.
+
+For a manual attempt, `compact()` rejects only after `session_compact_failed` handlers settle; for an automatic post-start failure that emits this event, the compaction loop returns `false` only after those handlers settle. Neither terminal path appends a new compaction entry. Automatic cancellation, abort, ordinary summary failure, and exhausted one-retry overflow recovery are handled inside the automatic path rather than thrown to its caller. A no-model result, unavailable preparation, or authentication error before `compaction_start` can return `false` without emitting `compaction_end` or `session_compact_failed`.
+
 ## 3. Delivery, listener order, and settlement
 
 ### `Agent.subscribe()` is an awaited subscription

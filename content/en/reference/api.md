@@ -145,6 +145,30 @@ const model = {
 console.log(model.provider, model.contextWindow);
 ```
 
+Google exposes two public thinking-level types from `@earendil-works/pi-ai`. `GoogleApiThinkingLevel` is the API-facing union `"THINKING_LEVEL_UNSPECIFIED" | "MINIMAL" | "LOW" | "MEDIUM" | "HIGH"`, matching the enum-like values accepted by `GoogleOptions.thinking.level` and `GoogleVertexOptions.thinking.level`. `ResolvedGoogleThinkingLevel` is the normalized adapter union `"minimal" | "low" | "medium" | "high"`; it represents the result after model-level resolution and is appropriate for internal mapping tables, not request options.
+
+```ts title="google-thinking-types.ts"
+import type {
+  GoogleApiThinkingLevel,
+  GoogleOptions,
+  ResolvedGoogleThinkingLevel,
+} from "@earendil-works/pi-ai";
+
+const apiLevel: GoogleApiThinkingLevel = "HIGH";
+const options = {
+  thinking: { enabled: true, level: apiLevel },
+} satisfies GoogleOptions;
+
+const normalizedBudgets: Record<ResolvedGoogleThinkingLevel, number> = {
+  minimal: 1_024,
+  low: 2_048,
+  medium: 8_192,
+  high: 16_384,
+};
+
+void [options, normalizedBudgets];
+```
+
 Cost tiers, when present, compare `input + cacheRead + cacheWrite` with `inputTokensAbove`; the highest matching threshold prices the whole request.
 
 ### Context, messages, and tools

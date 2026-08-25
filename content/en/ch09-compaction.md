@@ -469,6 +469,15 @@ This copyable Extension records all three hook outcomes without replacing the bu
 ```typescript
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
+type SessionCompactFailedEvent = {
+  type: "session_compact_failed";
+  reason: "manual" | "threshold" | "overflow";
+  errorMessage?: string;
+  aborted: boolean;
+  willRetry: boolean;
+  fromExtension: boolean;
+};
+
 export default function compactionAudit(pi: ExtensionAPI) {
   pi.on("session_before_compact", async (event, ctx) => {
     ctx.ui.notify(`Compaction requested: ${event.reason}`, "info");
@@ -482,11 +491,20 @@ export default function compactionAudit(pi: ExtensionAPI) {
   });
 
   pi.on("session_compact_failed", async (event, ctx) => {
-    const detail = event.aborted ? "aborted" : (event.errorMessage ?? "failed");
+    const failure: SessionCompactFailedEvent = event;
+    const detail = failure.aborted
+      ? "aborted"
+      : (failure.errorMessage ?? "failed");
     ctx.ui.notify(`Compaction ${detail}`, "warning");
   });
 }
 ```
+
+That five-field terminal payload has no compaction entry or token counts. `errorMessage` is present only for a non-abort failure; `aborted` is true for hook cancellation or signal abort. `fromExtension` is true only when custom compaction content was active at failure time. Because the event records a terminal outcome, `willRetry` is false even for an overflow attempt whose successful path would have retried.
+
+The session emits `compaction_end` synchronously and then awaits `session_compact_failed` after `compaction_end`, before manual `compact()` rejects or the automatic path returns `false`. A failure handler can therefore finish telemetry before the caller observes terminal settlement.
+
+For manual failure, `compact()` rejects after `session_compact_failed`; for automatic cancellation, abort, summary failure, or exhausted overflow recovery, the automatic path returns `false` after `session_compact_failed`. Neither path writes a new compaction entry, and the automatic implementation handles these terminal outcomes internally rather than throwing them to its caller.
 
 A replacement returned from `session_before_compact` must provide `summary`, `firstKeptEntryId`, and `tokensBefore`; `usage` and `details` are optional. Pi does not re-run cut-point validation on that replacement, so a handler should normally copy the prepared `firstKeptEntryId` and `tokensBefore`. The Extension receives the prepared boundary, both message regions, previous summary, file operations, reason, retry intent, branch entries, and the active `AbortSignal`. A custom model call should pass that signal and return its provider usage.
 

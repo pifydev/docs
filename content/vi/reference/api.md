@@ -145,6 +145,30 @@ const model = {
 console.log(model.provider, model.contextWindow);
 ```
 
+Google expose hai thinking-level type công khai từ `@earendil-works/pi-ai`. `GoogleApiThinkingLevel` là union kiểu enum hướng API `"THINKING_LEVEL_UNSPECIFIED" | "MINIMAL" | "LOW" | "MEDIUM" | "HIGH"`, khớp với các giá trị mà `GoogleOptions.thinking.level` và `GoogleVertexOptions.thinking.level` nhận. `ResolvedGoogleThinkingLevel` là union đã chuẩn hóa trong adapter `"minimal" | "low" | "medium" | "high"`; type này biểu diễn kết quả sau bước resolution theo model và phù hợp cho bảng ánh xạ nội bộ, không phải request option.
+
+```ts title="google-thinking-types.ts"
+import type {
+  GoogleApiThinkingLevel,
+  GoogleOptions,
+  ResolvedGoogleThinkingLevel,
+} from "@earendil-works/pi-ai";
+
+const apiLevel: GoogleApiThinkingLevel = "HIGH";
+const options = {
+  thinking: { enabled: true, level: apiLevel },
+} satisfies GoogleOptions;
+
+const normalizedBudgets: Record<ResolvedGoogleThinkingLevel, number> = {
+  minimal: 1_024,
+  low: 2_048,
+  medium: 8_192,
+  high: 16_384,
+};
+
+void [options, normalizedBudgets];
+```
+
 Khi có cost tier, hệ thống so sánh `input + cacheRead + cacheWrite` với `inputTokensAbove`; threshold khớp cao nhất định giá toàn bộ request.
 
 ### Context, message và tool

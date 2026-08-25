@@ -418,6 +418,24 @@ googleThinking.thinkingConfig = {
 };
 ```
 
+Pi 0.84.3 export hai type riêng cho Google từ package root không có side effect; kiểu chữ của chúng đánh dấu hai ranh giới semantics khác nhau. `GoogleApiThinkingLevel` là union kiểu enum hướng API `"THINKING_LEVEL_UNSPECIFIED" | "MINIMAL" | "LOW" | "MEDIUM" | "HIGH"`; type này dùng cho `GoogleOptions.thinking.level` và `GoogleVertexOptions.thinking.level`. `ResolvedGoogleThinkingLevel` là union đã chuẩn hóa trong adapter `"minimal" | "low" | "medium" | "high"`, được tạo sau khi Pi resolve `ModelThinkingLevel` mang semantics của model. Type này chủ động loại `off`, `xhigh` và `max` vì bước resolution ánh xạ hoặc từ chối chúng trước khi dựng request.
+
+```typescript
+import type {
+  GoogleApiThinkingLevel,
+  GoogleOptions,
+  ResolvedGoogleThinkingLevel,
+} from "@earendil-works/pi-ai";
+
+const requestLevel: GoogleApiThinkingLevel = "HIGH";
+const googleOptions = {
+  thinking: { enabled: true, level: requestLevel },
+} satisfies GoogleOptions;
+
+const adapterLevel: ResolvedGoogleThinkingLevel = "high";
+void [googleOptions, adapterLevel];
+```
+
 Model Anthropic có adaptive thinking dùng effort; model cũ có reasoning capability dùng token budget. OpenAI API dùng reasoning-effort field với API-specific option name. Tùy họ model, Gemini dùng thinking level rời rạc hoặc token budget. Bedrock đi theo model family được chọn và có thể mang Anthropic reasoning content trong Converse block. `streamSimple()` sở hữu các phép ánh xạ này, còn `stream()` expose full option của từng API sau khi model được narrow.
 
 Pi hiện có bảy model capability level, không còn là thang năm cấp trong tài liệu cũ. Pseudocode: ladder này ghép standard token budget với các level có budget đó:
