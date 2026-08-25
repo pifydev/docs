@@ -160,7 +160,7 @@ Sự bất đối xứng này giúp `read` không trình bày dòng đầu bị 
 
 ### Quy tắc 500 đơn vị của grep
 
-[`truncateLine()`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/tools/truncate.ts#L264-L275) giữ 500 code unit JavaScript đầu tiên rồi nối `... [truncated]`. `grep` áp dụng hàm này cho dòng khớp và dòng ngữ cảnh tùy chọn. Một thông báo yêu cầu model dùng `read` để xem dòng đầy đủ.
+[`truncateLine()`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/tools/truncate.ts) giữ 500 code unit JavaScript đầu tiên rồi nối `... [truncated]`. `grep` áp dụng hàm này cho dòng khớp và dòng ngữ cảnh tùy chọn. Một thông báo yêu cầu model dùng `read` để xem dòng đầy đủ.
 
 Giới hạn này xử lý vấn đề hẹp hơn giới hạn 50 KiB. Một dòng đã minify có thể lấn át danh sách kết quả khớp hữu ích ngay cả khi tổng đầu ra vẫn dưới 50 KiB. Giới hạn 100 kết quả khớp, 500 code unit trên mỗi dòng và 50 KiB tổng thể bảo vệ ba chiều khác nhau.
 
@@ -238,7 +238,7 @@ Pi chỉ hỏi khi tìm thấy tài nguyên chỉ được nạp nếu project t
 
 ### `DefaultResourceLoader`: tìm kiếm, bổ sung và thay thế
 
-[`DefaultResourceLoader`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/resource-loader.ts#L159-L340) phối hợp `SettingsManager`, `DefaultPackageManager` và việc nạp Extension, file ngữ cảnh, skill, mẫu prompt, theme cùng đầu vào system prompt.
+[`DefaultResourceLoader`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/resource-loader.ts) phối hợp `SettingsManager`, `DefaultPackageManager` và việc nạp Extension, file ngữ cảnh, skill, mẫu prompt, theme cùng đầu vào system prompt.
 
 Khi có bộ phân giải project trust, luồng `reload()` trước hết nạp tập extension ở trạng thái không tin cậy. Bước khởi tạo này gồm extension người dùng/toàn cục và extension CLI tạm thời. Sau khi bộ phân giải trả về, bộ nạp đặt `SettingsManager.projectTrusted`, nạp lại cài đặt theo trạng thái đó, phân giải package cùng tài nguyên cục bộ đã bật, nạp từng loại tài nguyên, tìm file ngữ cảnh rồi phân giải đầu vào prompt.
 
@@ -570,13 +570,13 @@ Quy tắc bắt buộc vẫn nên nằm trong file ngữ cảnh hoặc system pr
 
 Các tham chiếu phần triển khai của chương này được ghim theo Pi `0.84.3` tại `4e58f324fae8ebfa98a3d45181fb248072a2afac`:
 
-- [Phép cắt đầu ra Tool và ranh giới Unicode](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/tools/truncate.ts#L11-L275)
+- [Phép cắt đầu ra Tool và ranh giới Unicode](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/tools/truncate.ts)
 - [Dấu tiếp tục của `read`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/tools/read.ts#L271-L317) và [giới hạn của `grep`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/tools/grep.ts#L321-L361)
-- [Cách tìm file ngữ cảnh và `DefaultResourceLoader`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/resource-loader.ts#L71-L193)
-- [Thư mục tài nguyên được kiểm soát theo mức tin cậy của dự án](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/package-manager.ts#L2360-L2515) và [ranh giới trust](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/docs/security.md#L3-L37)
-- [Cách ghép system prompt](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/system-prompt.ts#L28-L168) và [định dạng metadata của skill](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/skills.ts#L347-L380)
+- [Cách tìm file ngữ cảnh và `DefaultResourceLoader`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/resource-loader.ts)
+- [Thư mục tài nguyên được kiểm soát theo mức tin cậy của dự án](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/package-manager.ts) và [ranh giới trust](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/docs/security.md)
+- [Cách ghép system prompt](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/system-prompt.ts) và [định dạng metadata của skill](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/skills.ts#L347-L380)
 - [Giá trị mặc định và ngưỡng compaction](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/compaction/compaction.ts#L126-L237)
-- [Cách thu thập và sinh bản tóm tắt nhánh](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/compaction/branch-summarization.ts#L96-L378)
+- [Cách thu thập và sinh bản tóm tắt nhánh](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/compaction/branch-summarization.ts)
 - [Bản chiếu ngữ cảnh của phiên](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/session-manager.ts#L380-L469)
 
 > **Đọc tiếp:** [Chương 9: Nén ngữ cảnh](ch09-compaction.md)

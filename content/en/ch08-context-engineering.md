@@ -160,7 +160,7 @@ This asymmetry prevents a file read from pretending that a partial first line is
 
 ### grep's 500-unit line rule
 
-[`truncateLine()`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/tools/truncate.ts#L264-L275) keeps the first 500 JavaScript string units and appends `... [truncated]`. `grep` applies it to matches and optional context lines. A notice tells the model to use `read` for the full line.
+[`truncateLine()`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/tools/truncate.ts) keeps the first 500 JavaScript string units and appends `... [truncated]`. `grep` applies it to matches and optional context lines. A notice tells the model to use `read` for the full line.
 
 That limit answers a narrower problem than the 50 KiB cap. A single minified line could dominate a list of otherwise useful matches even when the aggregate output remains below 50 KiB. The 100-match limit, 500-unit per-line limit, and 50 KiB aggregate limit each guard a different dimension.
 
@@ -238,7 +238,7 @@ Pi asks only when it finds trust-requiring resources and no current-or-parent sa
 
 ### `DefaultResourceLoader`: discovery, additions, and overrides
 
-[`DefaultResourceLoader`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/resource-loader.ts#L159-L340) coordinates `SettingsManager`, `DefaultPackageManager`, Extension loading, context files, skills, prompt templates, themes, and system-prompt inputs.
+[`DefaultResourceLoader`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/resource-loader.ts) coordinates `SettingsManager`, `DefaultPackageManager`, Extension loading, context files, skills, prompt templates, themes, and system-prompt inputs.
 
 Its `reload()` flow first loads an untrusted extension set when a trust resolver is present. That bootstrap contains user/global and temporary CLI extensions. After the resolver returns, the loader sets `SettingsManager.projectTrusted`, reloads settings for that state, resolves enabled package and local resources, loads each resource class, discovers context files, and resolves prompt inputs.
 
@@ -570,13 +570,13 @@ Mandatory rules still belong in context files or the system prompt. Optional kno
 
 The implementation references for this chapter are pinned to Pi `0.84.3` at `4e58f324fae8ebfa98a3d45181fb248072a2afac`:
 
-- [Tool truncation and Unicode boundaries](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/tools/truncate.ts#L11-L275)
+- [Tool truncation and Unicode boundaries](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/tools/truncate.ts)
 - [`read` continuation markers](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/tools/read.ts#L271-L317) and [`grep` limits](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/tools/grep.ts#L321-L361)
-- [Context-file discovery and `DefaultResourceLoader`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/resource-loader.ts#L71-L193)
-- [Trust-gated resource roots](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/package-manager.ts#L2360-L2515) and [the trust boundary](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/docs/security.md#L3-L37)
-- [System-prompt assembly](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/system-prompt.ts#L28-L168) and [skill metadata formatting](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/skills.ts#L347-L380)
+- [Context-file discovery and `DefaultResourceLoader`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/resource-loader.ts)
+- [Trust-gated resource roots](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/package-manager.ts) and [the trust boundary](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/docs/security.md)
+- [System-prompt assembly](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/system-prompt.ts) and [skill metadata formatting](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/skills.ts#L347-L380)
 - [Compaction defaults and threshold](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/compaction/compaction.ts#L126-L237)
-- [Branch collection and generation](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/compaction/branch-summarization.ts#L96-L378)
+- [Branch collection and generation](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/compaction/branch-summarization.ts)
 - [Session-context projection](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/session-manager.ts#L380-L469)
 
 > **Next up:** [Chapter 9: Context Compaction](ch09-compaction.md)
