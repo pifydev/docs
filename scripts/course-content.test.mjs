@@ -1,5 +1,16 @@
 import assert from "node:assert/strict";
-import { access, readFile, readdir } from "node:fs/promises";
+import {
+  access,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  writeFile,
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import matter from "gray-matter";
@@ -30,6 +41,23 @@ const checkpoints = [
 const courseFilenames = [
   "index.mdx",
   ...checkpoints.map(({ slug }) => `${slug}.md`),
+];
+const approvedAttributionMetadataKeys = new Set([
+  "officialrefs",
+  "translator",
+  "reviewedby",
+]);
+const forbiddenAttributionMetadataFragments = [
+  "source",
+  "adapted",
+  "adaptation",
+  "license",
+  "licensing",
+  "author",
+  "attribution",
+  "copyright",
+  "provenance",
+  "credit",
 ];
 
 const headingContracts = {
@@ -122,18 +150,48 @@ function publicCourseFilenameErrors(directoryFilenames) {
   ];
 }
 
+async function publicMarkdownRelativePaths(directoryPath, relativePath = "") {
+  const currentDirectory = relativePath
+    ? path.join(directoryPath, ...relativePath.split("/"))
+    : directoryPath;
+  const entries = await readdir(currentDirectory, { withFileTypes: true });
+  const publicPaths = [];
+
+  for (const entry of entries) {
+    const entryPath = relativePath
+      ? `${relativePath}/${entry.name}`
+      : entry.name;
+    if (entry.isDirectory()) {
+      publicPaths.push(
+        ...(await publicMarkdownRelativePaths(directoryPath, entryPath)),
+      );
+    } else if (entry.isFile() && /\.(?:md|mdx)$/i.test(entry.name)) {
+      publicPaths.push(entryPath);
+    }
+  }
+
+  return publicPaths.sort();
+}
+
+function stringValues(value) {
+  if (typeof value === "string") return [value];
+  if (Array.isArray(value)) return value.flatMap(stringValues);
+  if (value && typeof value === "object") {
+    return Object.values(value).flatMap(stringValues);
+  }
+  return [];
+}
+
 function assertNoPerPageAttribution(source, label) {
   const parsed = matter(source);
   const disallowedMetadata = Object.keys(parsed.data).filter((key) => {
     const normalized = key.toLowerCase().replaceAll(/[^a-z0-9]/g, "");
-    return [
-      "source",
-      "adapted",
-      "adaptation",
-      "license",
-      "licensing",
-      "author",
-    ].some((prefix) => normalized.startsWith(prefix));
+    if (approvedAttributionMetadataKeys.has(normalized)) {
+      return false;
+    }
+    return forbiddenAttributionMetadataFragments.some((fragment) =>
+      normalized.includes(fragment),
+    );
   });
   assert.deepEqual(
     disallowedMetadata,
@@ -152,8 +210,12 @@ function assertNoPerPageAttribution(source, label) {
     /\bGPL[-\s]?(?:v(?:ersion)?\s*)?3(?:\.0)?(?:-only)?\b/i,
     /GNU\s+General\s+Public\s+License(?:\s+(?:version|v))?\s*3(?:\.0)?/i,
   ];
+  const noticeTargets = [source, ...stringValues(parsed.data)];
   const matchedNotices = noticePatterns.filter((pattern) =>
-    pattern.test(parsed.content),
+    noticeTargets.some((target) => {
+      pattern.lastIndex = 0;
+      return pattern.test(target);
+    }),
   );
   assert.deepEqual(
     matchedNotices,
@@ -166,10 +228,14 @@ test("attribution guard rejects normalized metadata key variants", () => {
   const metadataKeys = [
     "sourceUrl",
     "source-url",
+    "piSourceUrl",
     "adaptedFrom",
     "adaptation-notice",
+    "translatedAndAdapted",
     "licenseNotice",
+    "pageLicense",
     "authorName",
+    "originalAuthor",
   ];
 
   for (const key of metadataKeys) {
@@ -181,6 +247,28 @@ test("attribution guard rejects normalized metadata key variants", () => {
         ),
       /metadata/i,
       `${key} must be rejected after key normalization`,
+    );
+  }
+});
+
+test("attribution guard scans forbidden values in approved metadata", () => {
+  const metadataValues = [
+    ["official_refs", "https://github.com/hahhforest/pi-textbook"],
+    ["translator", "translated and adapted from another page"],
+    ["reviewed_by", "Released under GPLv3"],
+    ["description", "Author: Original writer"],
+    ["description", "source_commit: 20dd3a7"],
+  ];
+
+  for (const [key, value] of metadataValues) {
+    assert.throws(
+      () =>
+        assertNoPerPageAttribution(
+          `---\n${key}: ${JSON.stringify(value)}\n---\n\nCourse body.\n`,
+          `${key} value`,
+        ),
+      /notice|banner/i,
+      `${key} must not allow the forbidden value ${value}`,
     );
   }
 });
@@ -238,6 +326,28 @@ test("public course filename contract rejects missing and extra route files", ()
     publicCourseFilenameErrors([...exactDirectory, "unplanned-route.MD"]),
     ["unexpected public course file: unplanned-route.MD"],
   );
+  assert.deepEqual(
+    publicCourseFilenameErrors([...exactDirectory, "bonus/index.md"]),
+    ["unexpected public course file: bonus/index.md"],
+  );
+});
+
+test("public course file discovery includes normalized nested routes", async () => {
+  const fixtureRoot = await mkdtemp(path.join(tmpdir(), "pify-course-files-"));
+
+  try {
+    await mkdir(path.join(fixtureRoot, "bonus"));
+    await writeFile(path.join(fixtureRoot, "ROOT.MDX"), "root");
+    await writeFile(path.join(fixtureRoot, "bonus", "index.md"), "nested");
+    await writeFile(path.join(fixtureRoot, "bonus", "notes.txt"), "ignored");
+
+    assert.deepEqual(await publicMarkdownRelativePaths(fixtureRoot), [
+      "ROOT.MDX",
+      "bonus/index.md",
+    ]);
+  } finally {
+    await rm(fixtureRoot, { recursive: true, force: true });
+  }
 });
 
 test("course directories contain exactly 32 localized public files", async () => {
@@ -245,12 +355,9 @@ test("course directories contain exactly 32 localized public files", async () =>
 
   for (const locale of ["en", "vi"]) {
     const directory = `content/${locale}/course`;
-    const entries = await readdir(new URL(`${directory}/`, repositoryRoot), {
-      withFileTypes: true,
-    });
-    const filenames = entries
-      .filter((entry) => entry.isFile())
-      .map((entry) => entry.name);
+    const filenames = await publicMarkdownRelativePaths(
+      fileURLToPath(new URL(`${directory}/`, repositoryRoot)),
+    );
     errors.push(
       ...publicCourseFilenameErrors(filenames).map(
         (error) => `${directory}: ${error}`,
