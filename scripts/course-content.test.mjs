@@ -47,18 +47,23 @@ const approvedAttributionMetadataKeys = new Set([
   "translator",
   "reviewedby",
 ]);
-const forbiddenAttributionMetadataFragments = [
+const forbiddenAttributionMetadataTokens = new Set([
   "source",
+  "sources",
   "adapted",
   "adaptation",
   "license",
+  "licence",
   "licensing",
+  "licencing",
   "author",
+  "authors",
+  "authorship",
   "attribution",
   "copyright",
+  "copyrighted",
   "provenance",
-  "credit",
-];
+]);
 
 const headingContracts = {
   en: [
@@ -182,6 +187,15 @@ function stringValues(value) {
   return [];
 }
 
+function metadataKeyTokens(key) {
+  return key
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+    .split(/[^A-Za-z0-9]+/)
+    .filter(Boolean)
+    .map((token) => token.toLowerCase());
+}
+
 function assertNoPerPageAttribution(source, label) {
   const parsed = matter(source);
   const disallowedMetadata = Object.keys(parsed.data).filter((key) => {
@@ -189,8 +203,8 @@ function assertNoPerPageAttribution(source, label) {
     if (approvedAttributionMetadataKeys.has(normalized)) {
       return false;
     }
-    return forbiddenAttributionMetadataFragments.some((fragment) =>
-      normalized.includes(fragment),
+    return metadataKeyTokens(key).some((token) =>
+      forbiddenAttributionMetadataTokens.has(token),
     );
   });
   assert.deepEqual(
@@ -307,6 +321,27 @@ ordinary payload text, and the tác giả field can remain part of that example.
 `;
 
   assert.doesNotThrow(() => assertNoPerPageAttribution(source, "ordinary"));
+});
+
+test("attribution guard allows legitimate metadata with overlapping substrings", () => {
+  const metadataKeys = [
+    "resourceLinks",
+    "resources",
+    "resource_count",
+    "authoritativeRefs",
+    "creditBudget",
+  ];
+
+  for (const key of metadataKeys) {
+    assert.doesNotThrow(
+      () =>
+        assertNoPerPageAttribution(
+          `---\n${key}: safe value\n---\n\nCourse body.\n`,
+          key,
+        ),
+      `${key} is not attribution metadata`,
+    );
+  }
 });
 
 test("public course filename contract rejects missing and extra route files", () => {
