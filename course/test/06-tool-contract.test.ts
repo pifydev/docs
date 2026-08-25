@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { runInNewContext as evaluateInNewContext } from "node:vm";
+
 import { expect, test, vi } from "vitest";
 
 import {
@@ -64,56 +67,11 @@ function listenForUnhandledRejections(
 }
 
 function toolSource(): string {
-  const runtimeProcess = Reflect.get(globalThis, "process");
-  if (typeof runtimeProcess !== "object" || runtimeProcess === null) {
-    throw new Error("Node process is unavailable");
-  }
-  const getBuiltinModule = Reflect.get(runtimeProcess, "getBuiltinModule");
-  if (typeof getBuiltinModule !== "function") {
-    throw new Error("process.getBuiltinModule() is unavailable");
-  }
-  const fileSystem: unknown = Reflect.apply(getBuiltinModule, runtimeProcess, [
-    "node:fs",
-  ]);
-  if (typeof fileSystem !== "object" || fileSystem === null) {
-    throw new Error("node:fs is unavailable");
-  }
-  const readFileSync = Reflect.get(fileSystem, "readFileSync");
-  if (typeof readFileSync !== "function") {
-    throw new Error("node:fs.readFileSync() is unavailable");
-  }
-  const source: unknown = Reflect.apply(readFileSync, fileSystem, [
-    new URL("../src/tool.ts", import.meta.url),
-    "utf8",
-  ]);
-  if (typeof source !== "string") {
-    throw new Error("tool.ts was not read as text");
-  }
-  return source;
+  return readFileSync(new URL("../src/tool.ts", import.meta.url), "utf8");
 }
 
 function runInNewContext(source: string): unknown {
-  const runtimeProcess = Reflect.get(globalThis, "process");
-  if (typeof runtimeProcess !== "object" || runtimeProcess === null) {
-    throw new Error("Node process is unavailable");
-  }
-  const getBuiltinModule = Reflect.get(runtimeProcess, "getBuiltinModule");
-  if (typeof getBuiltinModule !== "function") {
-    throw new Error("process.getBuiltinModule() is unavailable");
-  }
-  const virtualMachine: unknown = Reflect.apply(
-    getBuiltinModule,
-    runtimeProcess,
-    ["node:vm"],
-  );
-  if (typeof virtualMachine !== "object" || virtualMachine === null) {
-    throw new Error("node:vm is unavailable");
-  }
-  const run = Reflect.get(virtualMachine, "runInNewContext");
-  if (typeof run !== "function") {
-    throw new Error("node:vm.runInNewContext() is unavailable");
-  }
-  return Reflect.apply(run, virtualMachine, [source]);
+  return evaluateInNewContext(source);
 }
 
 function call(
@@ -1778,67 +1736,43 @@ test("does not expose a mutable NonRecoverableToolError provenance collection", 
   });
 });
 
-test("loads and guards Proxy output without process.getBuiltinModule", async () => {
-  const runtimeProcess = Reflect.get(globalThis, "process");
-  if (typeof runtimeProcess !== "object" || runtimeProcess === null) {
-    throw new Error("Node process is unavailable");
-  }
-  const originalGetBuiltinModule = Object.getOwnPropertyDescriptor(
-    runtimeProcess,
-    "getBuiltinModule",
-  );
-  if (originalGetBuiltinModule === undefined) {
-    throw new Error("process.getBuiltinModule descriptor is unavailable");
-  }
-
+test("reloads and guards Proxy output through standard Node imports", async () => {
   vi.resetModules();
-  let compatibleModule: typeof import("../src/tool");
+  const compatibleModule = await import("../src/tool");
   try {
-    Object.defineProperty(runtimeProcess, "getBuiltinModule", {
-      configurable: true,
-      value: undefined,
-      writable: true,
-    });
-    compatibleModule = await import("../src/tool");
-  } finally {
-    Object.defineProperty(
-      runtimeProcess,
-      "getBuiltinModule",
-      originalGetBuiltinModule,
+    let ownKeysCalls = 0;
+    const output = new Proxy(
+      {},
+      {
+        ownKeys() {
+          ownKeysCalls += 1;
+          return [];
+        },
+      },
     );
+    const registry = new compatibleModule.ToolRegistry([
+      compatibleModule.defineTool({
+        name: "runtime-compatible-proxy-check",
+        description: "Use captured node:util guards on all supported Node 22.",
+        validate: (input) => ({ ok: true, value: input }),
+        execute: async () => output,
+      }),
+    ]);
+
+    await expect(
+      compatibleModule.executeToolCall(
+        registry,
+        call("runtime-compatible-proxy-check"),
+        new AbortController().signal,
+      ),
+    ).resolves.toMatchObject({
+      isError: true,
+      content: expect.stringContaining("TOOL_OUTPUT_SERIALIZATION_FAILED"),
+    });
+    expect(ownKeysCalls).toBe(0);
+  } finally {
     vi.resetModules();
   }
-
-  let ownKeysCalls = 0;
-  const output = new Proxy(
-    {},
-    {
-      ownKeys() {
-        ownKeysCalls += 1;
-        return [];
-      },
-    },
-  );
-  const registry = new compatibleModule.ToolRegistry([
-    compatibleModule.defineTool({
-      name: "runtime-compatible-proxy-check",
-      description: "Use captured node:util guards on all supported Node 22.",
-      validate: (input) => ({ ok: true, value: input }),
-      execute: async () => output,
-    }),
-  ]);
-
-  await expect(
-    compatibleModule.executeToolCall(
-      registry,
-      call("runtime-compatible-proxy-check"),
-      new AbortController().signal,
-    ),
-  ).resolves.toMatchObject({
-    isError: true,
-    content: expect.stringContaining("TOOL_OUTPUT_SERIALIZATION_FAILED"),
-  });
-  expect(ownKeysCalls).toBe(0);
 });
 
 test("accepts nested cross-realm plain JSON outputs", async () => {

@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { expect, test, vi } from "vitest";
 
 import providerToolRoundtrip from "../fixtures/provider-tool-roundtrip.json" with { type: "json" };
@@ -76,32 +78,10 @@ function loadRoundtripFixture(): unknown {
 }
 
 function providerAdapterSource(): string {
-  const runtimeProcess = Reflect.get(globalThis, "process");
-  if (typeof runtimeProcess !== "object" || runtimeProcess === null) {
-    throw new Error("Node process is unavailable");
-  }
-  const getBuiltinModule = Reflect.get(runtimeProcess, "getBuiltinModule");
-  if (typeof getBuiltinModule !== "function") {
-    throw new Error("process.getBuiltinModule() is unavailable");
-  }
-  const fileSystem: unknown = Reflect.apply(getBuiltinModule, runtimeProcess, [
-    "node:fs",
-  ]);
-  if (typeof fileSystem !== "object" || fileSystem === null) {
-    throw new Error("node:fs is unavailable");
-  }
-  const readFileSync = Reflect.get(fileSystem, "readFileSync");
-  if (typeof readFileSync !== "function") {
-    throw new Error("node:fs.readFileSync() is unavailable");
-  }
-  const source: unknown = Reflect.apply(readFileSync, fileSystem, [
+  return readFileSync(
     new URL("../src/provider-adapter.ts", import.meta.url),
     "utf8",
-  ]);
-  if (typeof source !== "string") {
-    throw new Error("provider-adapter.ts was not read as text");
-  }
-  return source;
+  );
 }
 
 function asyncTextRecords(responseId: string): AsyncIterable<unknown> {
