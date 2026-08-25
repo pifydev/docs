@@ -2,6 +2,10 @@ import { expect, test, vi } from "vitest";
 
 import {
   COURSE_TOOL_OUTPUT_CAP_CHARACTERS,
+  COURSE_TOOL_SERIALIZATION_MAX_COLLECTION_ENTRIES,
+  COURSE_TOOL_SERIALIZATION_MAX_DEPTH,
+  COURSE_TOOL_SERIALIZATION_MAX_NODES,
+  COURSE_TOOL_SERIALIZATION_MAX_STRING_CHARACTERS,
   COURSE_TOOL_TRUNCATION_MARKER,
   NonRecoverableToolError,
   ToolContractError,
@@ -23,6 +27,39 @@ function deferred<Value>(): Deferred<Value> {
     resolve = resolvePromise;
   });
   return { promise, resolve };
+}
+
+function nextEventLoopTurn(): Promise<void> {
+  return new Promise((resolve) => {
+    const channel = new MessageChannel();
+    channel.port1.onmessage = () => {
+      channel.port1.close();
+      channel.port2.close();
+      resolve();
+    };
+    channel.port2.postMessage(undefined);
+  });
+}
+
+function listenForUnhandledRejections(
+  listener: (reason: unknown) => void,
+): () => void {
+  const runtimeProcess = Reflect.get(globalThis, "process");
+  if (typeof runtimeProcess !== "object" || runtimeProcess === null) {
+    throw new Error("Node process is unavailable");
+  }
+  const on = Reflect.get(runtimeProcess, "on");
+  const removeListener = Reflect.get(runtimeProcess, "removeListener");
+  if (typeof on !== "function" || typeof removeListener !== "function") {
+    throw new Error("Node process event methods are unavailable");
+  }
+  Reflect.apply(on, runtimeProcess, ["unhandledRejection", listener]);
+  return () => {
+    Reflect.apply(removeListener, runtimeProcess, [
+      "unhandledRejection",
+      listener,
+    ]);
+  };
 }
 
 function call(
@@ -181,6 +218,20 @@ test("registerMany validates an entire hostile batch before one atomic mutation"
     expect.objectContaining({ code: "INVALID_TOOL_BATCH" }),
   );
   expect(registry.names).toEqual(["existing"]);
+});
+
+test("normalizes revoked batch Proxies as INVALID_TOOL_BATCH", () => {
+  const revoked = Proxy.revocable([], {});
+  revoked.revoke();
+
+  expect(
+    () => new ToolRegistry(revoked.proxy as readonly unknown[]),
+  ).toThrowError(
+    expect.objectContaining({
+      name: "ToolContractError",
+      code: "INVALID_TOOL_BATCH",
+    }),
+  );
 });
 
 test("registerMany rejects duplicate names inside a batch and against the registry", () => {
@@ -393,6 +444,92 @@ test("normalizes validators that throw or return malformed decisions", async () 
   });
 });
 
+test("rejects async validators immediately while observing their rejection", async () => {
+  const rejection = new Error("async validator rejected later");
+  const execute = vi.fn(async () => "unreachable");
+  const unhandled: unknown[] = [];
+  const onUnhandled = (reason: unknown) => unhandled.push(reason);
+  const stopListening = listenForUnhandledRejections(onUnhandled);
+
+  try {
+    const registry = new ToolRegistry([
+      defineTool({
+        name: "async-validator",
+        description: "Invalid asynchronous validator.",
+        validate: () => Promise.reject(rejection) as never,
+        execute,
+      }),
+    ]);
+
+    await expect(
+      executeToolCall(
+        registry,
+        call("async-validator"),
+        new AbortController().signal,
+      ),
+    ).resolves.toMatchObject({
+      isError: true,
+      content: expect.stringContaining("TOOL_VALIDATION_FAILED"),
+    });
+    await nextEventLoopTurn();
+    expect(unhandled).toEqual([]);
+    expect(execute).not.toHaveBeenCalled();
+  } finally {
+    stopListening();
+  }
+});
+
+test("observes hostile validator then getters, calls, and returned rejections", async () => {
+  const unhandled: unknown[] = [];
+  const onUnhandled = (reason: unknown) => unhandled.push(reason);
+  const stopListening = listenForUnhandledRejections(onUnhandled);
+  let getterReads = 0;
+  let callCount = 0;
+  const getterThenable = Object.defineProperty({}, "then", {
+    get() {
+      getterReads += 1;
+      throw new Error("hostile then getter");
+    },
+  });
+  const callingThenable = {
+    then() {
+      callCount += 1;
+      return Promise.reject(new Error("hostile returned rejection"));
+    },
+  };
+  const registry = new ToolRegistry([
+    defineTool({
+      name: "then-getter-validator",
+      description: "Invalid then getter.",
+      validate: () => getterThenable as never,
+      execute: async () => "unreachable",
+    }),
+    defineTool({
+      name: "then-call-validator",
+      description: "Invalid then call.",
+      validate: () => callingThenable as never,
+      execute: async () => "unreachable",
+    }),
+  ]);
+
+  try {
+    for (const name of ["then-getter-validator", "then-call-validator"]) {
+      await expect(
+        executeToolCall(registry, call(name), new AbortController().signal),
+      ).resolves.toMatchObject({
+        isError: true,
+        content: expect.stringContaining("TOOL_VALIDATION_FAILED"),
+      });
+    }
+    await nextEventLoopTurn();
+    expect(getterReads).toBe(1);
+    expect(callCount).toBe(1);
+    expect(unhandled).toEqual([]);
+  } finally {
+    stopListening();
+  }
+});
+
 test("propagates cancellation before validation without invoking the Tool", async () => {
   const validate = vi.fn((input: unknown) => ({
     ok: true as const,
@@ -522,6 +659,160 @@ test("interrupts execution through AbortSignal without timers", async () => {
   expect(receivedSignal).toBe(controller.signal);
 });
 
+test("observes a secondary Tool rejection when execution synchronously aborts", async () => {
+  const controller = new AbortController();
+  const abortReason = new DOMException("primary cancellation", "AbortError");
+  const secondary = new Error("secondary Tool rejection");
+  const unhandled: unknown[] = [];
+  const onUnhandled = (reason: unknown) => unhandled.push(reason);
+  const stopListening = listenForUnhandledRejections(onUnhandled);
+  const registry = new ToolRegistry([
+    defineTool({
+      name: "abort-and-reject",
+      description: "Abort while returning a rejected promise.",
+      validate: (input) => ({ ok: true, value: input }),
+      execute: () => {
+        controller.abort(abortReason);
+        return Promise.reject(secondary);
+      },
+    }),
+  ]);
+
+  try {
+    await expect(
+      executeToolCall(registry, call("abort-and-reject"), controller.signal),
+    ).rejects.toBe(abortReason);
+    await nextEventLoopTurn();
+    expect(unhandled).toEqual([]);
+  } finally {
+    stopListening();
+  }
+});
+
+test.each(["getter", "call"] as const)(
+  "does not trust an overridden addEventListener %s and settles once",
+  async (overrideKind) => {
+    const controller = new AbortController();
+    const abortReason = new DOMException(
+      "abort through intrinsic",
+      "AbortError",
+    );
+    const secondary = new Error("observed after abort");
+    let overrideUses = 0;
+    if (overrideKind === "getter") {
+      Object.defineProperty(controller.signal, "addEventListener", {
+        get() {
+          overrideUses += 1;
+          throw new Error("hostile addEventListener getter");
+        },
+      });
+    } else {
+      Object.defineProperty(controller.signal, "addEventListener", {
+        value() {
+          overrideUses += 1;
+          throw new Error("hostile addEventListener call");
+        },
+      });
+    }
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => unhandled.push(reason);
+    const stopListening = listenForUnhandledRejections(onUnhandled);
+    const registry = new ToolRegistry([
+      defineTool({
+        name: `hostile-add-${overrideKind}`,
+        description: "Use captured EventTarget intrinsics.",
+        validate: (input) => ({ ok: true, value: input }),
+        execute: () => {
+          controller.abort(abortReason);
+          return Promise.reject(secondary);
+        },
+      }),
+    ]);
+    let settlements = 0;
+
+    try {
+      const execution = executeToolCall(
+        registry,
+        call(`hostile-add-${overrideKind}`),
+        controller.signal,
+      );
+      void execution.then(
+        () => {
+          settlements += 1;
+        },
+        () => {
+          settlements += 1;
+        },
+      );
+      await expect(execution).rejects.toBe(abortReason);
+      await nextEventLoopTurn();
+      expect(overrideUses).toBe(0);
+      expect(settlements).toBe(1);
+      expect(unhandled).toEqual([]);
+    } finally {
+      stopListening();
+    }
+  },
+);
+
+test.each(["getter", "call"] as const)(
+  "does not trust an overridden removeEventListener %s or leave execution pending",
+  async (overrideKind) => {
+    const controller = new AbortController();
+    let overrideUses = 0;
+    if (overrideKind === "getter") {
+      Object.defineProperty(controller.signal, "removeEventListener", {
+        get() {
+          overrideUses += 1;
+          throw new Error("hostile removeEventListener getter");
+        },
+      });
+    } else {
+      Object.defineProperty(controller.signal, "removeEventListener", {
+        value() {
+          overrideUses += 1;
+          throw new Error("hostile removeEventListener call");
+        },
+      });
+    }
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => unhandled.push(reason);
+    const stopListening = listenForUnhandledRejections(onUnhandled);
+    const registry = new ToolRegistry([
+      defineTool({
+        name: `hostile-remove-${overrideKind}`,
+        description: "Settle despite hostile cleanup methods.",
+        validate: (input) => ({ ok: true, value: input }),
+        execute: async () => ({ settled: true }),
+      }),
+    ]);
+    let outcome: "pending" | "fulfilled" | "rejected" = "pending";
+    const execution = executeToolCall(
+      registry,
+      call(`hostile-remove-${overrideKind}`),
+      controller.signal,
+    );
+    void execution.then(
+      () => {
+        outcome = "fulfilled";
+      },
+      () => {
+        outcome = "rejected";
+      },
+    );
+
+    try {
+      await nextEventLoopTurn();
+      expect(outcome).toBe("fulfilled");
+      expect(overrideUses).toBe(0);
+      expect(unhandled).toEqual([]);
+    } finally {
+      controller.abort();
+      stopListening();
+    }
+  },
+);
+
 test("checks cancellation after resolution and safe output inspection", async () => {
   const controller = new AbortController();
   const reason = new DOMException("cancel during output", "AbortError");
@@ -556,14 +847,20 @@ test("serializes hostile structured output without getters, toJSON, prototypes, 
   let getterReads = 0;
   let toJsonCalls = 0;
   let inheritedReads = 0;
-  const prototype = Object.defineProperty({}, "inherited", {
-    enumerable: true,
+  const inheritedKey = "__course_tool_inherited_trap__";
+  const priorInheritedDescriptor = Object.getOwnPropertyDescriptor(
+    Object.prototype,
+    inheritedKey,
+  );
+  Object.defineProperty(Object.prototype, inheritedKey, {
+    configurable: true,
+    enumerable: false,
     get() {
       inheritedReads += 1;
       throw new Error("prototype must not be read");
     },
   });
-  const output = Object.create(prototype) as Record<string, unknown>;
+  const output = {} as Record<string, unknown>;
   const cycle: Record<string, unknown> = {};
   cycle.self = cycle;
   Object.defineProperties(output, {
@@ -594,24 +891,65 @@ test("serializes hostile structured output without getters, toJSON, prototypes, 
     }),
   ]);
 
-  const first = await executeToolCall(
-    registry,
-    call("safe-json"),
-    new AbortController().signal,
-  );
-  const second = await executeToolCall(
-    registry,
-    call("safe-json", {}, "call-safe-json-002"),
-    new AbortController().signal,
-  );
+  try {
+    const first = await executeToolCall(
+      registry,
+      call("safe-json"),
+      new AbortController().signal,
+    );
+    const second = await executeToolCall(
+      registry,
+      call("safe-json", {}, "call-safe-json-002"),
+      new AbortController().signal,
+    );
 
-  expect(first.content).toBe(
-    '{"aBigInt":"9007199254740993n","cycle":{"self":"[Circular]"},"getter":"[Accessor omitted]","toJSON":"[Function]","zUndefined":"[Undefined]"}',
-  );
-  expect(second.content).toBe(first.content);
-  expect(getterReads).toBe(0);
-  expect(toJsonCalls).toBe(0);
-  expect(inheritedReads).toBe(0);
+    expect(first.content).toBe(
+      '{"aBigInt":"9007199254740993n","cycle":{"self":"[Circular]"},"getter":"[Accessor omitted]","toJSON":"[Function]","zUndefined":"[Undefined]"}',
+    );
+    expect(second.content).toBe(first.content);
+    expect(getterReads).toBe(0);
+    expect(toJsonCalls).toBe(0);
+    expect(inheritedReads).toBe(0);
+  } finally {
+    if (priorInheritedDescriptor === undefined) {
+      Reflect.deleteProperty(Object.prototype, inheritedKey);
+    } else {
+      Object.defineProperty(
+        Object.prototype,
+        inheritedKey,
+        priorInheritedDescriptor,
+      );
+    }
+  }
+});
+
+test.each([
+  ["Date", new Date("2026-08-25T00:00:00.000Z")],
+  ["Map", new Map([["key", "value"]])],
+  ["Set", new Set(["value"])],
+  ["RegExp", /unsupported/u],
+  ["boxed primitive", new String("unsupported")],
+  ["class instance", new (class UnsupportedOutput {})()],
+] as const)("rejects unsupported %s Tool output", async (_label, output) => {
+  const registry = new ToolRegistry([
+    defineTool({
+      name: "unsupported-output",
+      description: "Return a non-plain object.",
+      validate: (input) => ({ ok: true, value: input }),
+      execute: async () => output,
+    }),
+  ]);
+
+  await expect(
+    executeToolCall(
+      registry,
+      call("unsupported-output"),
+      new AbortController().signal,
+    ),
+  ).resolves.toMatchObject({
+    isError: true,
+    content: expect.stringContaining("TOOL_OUTPUT_SERIALIZATION_FAILED"),
+  });
 });
 
 test("bounds output to 4096 Unicode characters including one deterministic marker", async () => {
@@ -634,6 +972,133 @@ test("bounds output to 4096 Unicode characters including one deterministic marke
   expect([...result.content]).toHaveLength(COURSE_TOOL_OUTPUT_CAP_CHARACTERS);
   expect(result.content.endsWith(COURSE_TOOL_TRUNCATION_MARKER)).toBe(true);
   expect(result.content.match(/\[Tool output truncated\]/gu)).toHaveLength(1);
+});
+
+test("bounds serializer work for an 8-million-character string", async () => {
+  const huge = "x".repeat(8_000_000);
+  const registry = new ToolRegistry([
+    defineTool({
+      name: "huge-string",
+      description: "Exercise bounded string consumption.",
+      validate: (input) => ({ ok: true, value: input }),
+      execute: async () => huge,
+    }),
+  ]);
+
+  const result = await executeToolCall(
+    registry,
+    call("huge-string"),
+    new AbortController().signal,
+  );
+
+  expect(result.isError).toBe(false);
+  expect([...result.content]).toHaveLength(COURSE_TOOL_OUTPUT_CAP_CHARACTERS);
+  expect(result.content.endsWith(COURSE_TOOL_TRUNCATION_MARKER)).toBe(true);
+  expect(COURSE_TOOL_SERIALIZATION_MAX_STRING_CHARACTERS).toBe(4096);
+});
+
+test("bounds sparse-array descriptor visits instead of walking a million slots", async () => {
+  let descriptorVisits = 0;
+  const sparse = new Array(1_000_000);
+  const output = new Proxy(sparse, {
+    getOwnPropertyDescriptor(target, property) {
+      descriptorVisits += 1;
+      return Reflect.getOwnPropertyDescriptor(target, property);
+    },
+  });
+  const registry = new ToolRegistry([
+    defineTool({
+      name: "sparse-output",
+      description: "Exercise collection visit limits.",
+      validate: (input) => ({ ok: true, value: input }),
+      execute: async () => output,
+    }),
+  ]);
+
+  const result = await executeToolCall(
+    registry,
+    call("sparse-output"),
+    new AbortController().signal,
+  );
+
+  expect(result.isError).toBe(false);
+  expect(result.content.endsWith(COURSE_TOOL_TRUNCATION_MARKER)).toBe(true);
+  expect(COURSE_TOOL_SERIALIZATION_MAX_COLLECTION_ENTRIES).toBe(256);
+  expect(descriptorVisits).toBeLessThanOrEqual(
+    COURSE_TOOL_SERIALIZATION_MAX_COLLECTION_ENTRIES + 2,
+  );
+});
+
+test("bounds deep and wide output with explicit depth and node budgets", async () => {
+  const deep: Record<string, unknown> = {};
+  let cursor = deep;
+  for (let depth = 0; depth < 100_000; depth += 1) {
+    const next: Record<string, unknown> = {};
+    cursor.next = next;
+    cursor = next;
+  }
+  const wide = Array.from(
+    { length: COURSE_TOOL_SERIALIZATION_MAX_NODES + 100 },
+    () => ({}),
+  );
+  const registry = new ToolRegistry([
+    defineTool({
+      name: "deep-output",
+      description: "Exercise depth limits.",
+      validate: (input) => ({ ok: true, value: input }),
+      execute: async () => deep,
+    }),
+    defineTool({
+      name: "wide-output",
+      description: "Exercise node limits.",
+      validate: (input) => ({ ok: true, value: input }),
+      execute: async () => wide,
+    }),
+  ]);
+
+  for (const name of ["deep-output", "wide-output"]) {
+    await expect(
+      executeToolCall(registry, call(name), new AbortController().signal),
+    ).resolves.toMatchObject({
+      isError: false,
+      content: expect.stringMatching(/\[Tool output truncated\]$/u),
+    });
+  }
+  expect(COURSE_TOOL_SERIALIZATION_MAX_DEPTH).toBe(32);
+  expect(COURSE_TOOL_SERIALIZATION_MAX_NODES).toBe(128);
+});
+
+test("normalizes revoked Tool-call and argument Proxies as INVALID_TOOL_CALL", async () => {
+  const revokedCall = Proxy.revocable({}, {});
+  revokedCall.revoke();
+  await expect(
+    executeToolCall(
+      new ToolRegistry(),
+      revokedCall.proxy as CourseToolCall,
+      new AbortController().signal,
+    ),
+  ).rejects.toMatchObject({
+    name: "ToolContractError",
+    code: "INVALID_TOOL_CALL",
+  });
+
+  const revokedArguments = Proxy.revocable({}, {});
+  revokedArguments.revoke();
+  await expect(
+    executeToolCall(
+      new ToolRegistry(),
+      {
+        type: "toolCall",
+        id: "call-revoked-arguments",
+        name: "missing",
+        arguments: revokedArguments.proxy,
+      } as CourseToolCall,
+      new AbortController().signal,
+    ),
+  ).rejects.toMatchObject({
+    name: "ToolContractError",
+    code: "INVALID_TOOL_CALL",
+  });
 });
 
 test("snapshots Tool calls before validation and ignores caller mutation", async () => {
@@ -722,5 +1187,80 @@ test("ToolContractError exposes stable readonly registry boundary codes", () => 
     name: "ToolContractError",
     code: "INVALID_TOOL_BATCH",
     message: "Tool batch must not be sparse",
+  });
+});
+
+test("external throws cannot forge internal ToolContractError provenance", async () => {
+  const forged = new ToolContractError(
+    "DUPLICATE_TOOL_NAME",
+    "external code chose this label",
+  );
+  const definition = {
+    get name(): string {
+      throw forged;
+    },
+    description: "Must normalize the boundary.",
+    validate: (input: unknown) => ({ ok: true as const, value: input }),
+    execute: async (input: unknown) => input,
+  };
+  expect(() => defineTool(definition)).toThrowError(
+    expect.objectContaining({
+      name: "ToolContractError",
+      code: "INVALID_TOOL_DEFINITION",
+    }),
+  );
+
+  const registry = new ToolRegistry([
+    defineTool({
+      name: "forged-execution-error",
+      description: "Normalize external contract-looking errors.",
+      validate: (input) => ({ ok: true, value: input }),
+      execute: async () => {
+        throw forged;
+      },
+    }),
+  ]);
+  await expect(
+    executeToolCall(
+      registry,
+      call("forged-execution-error"),
+      new AbortController().signal,
+    ),
+  ).resolves.toMatchObject({
+    isError: true,
+    content: expect.stringContaining("TOOL_EXECUTION_FAILED"),
+  });
+});
+
+test("a forged NonRecoverableToolError prototype stays recoverable", async () => {
+  const forged = Object.assign(
+    Object.create(NonRecoverableToolError.prototype) as Record<string, unknown>,
+    {
+      name: "NonRecoverableToolError",
+      code: "NON_RECOVERABLE_TOOL_ERROR",
+      nonRecoverable: true,
+      message: "prototype-only forgery",
+    },
+  );
+  const registry = new ToolRegistry([
+    defineTool({
+      name: "forged-programmer-error",
+      description: "Reject prototype-only markers.",
+      validate: (input) => ({ ok: true, value: input }),
+      execute: async () => {
+        throw forged;
+      },
+    }),
+  ]);
+
+  await expect(
+    executeToolCall(
+      registry,
+      call("forged-programmer-error"),
+      new AbortController().signal,
+    ),
+  ).resolves.toMatchObject({
+    isError: true,
+    content: expect.stringContaining("TOOL_EXECUTION_FAILED"),
   });
 });

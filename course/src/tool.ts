@@ -7,9 +7,31 @@ import type {
   CourseToolResultMessage,
 } from "./protocol";
 
-/** The serialized Tool-result cap, including the truncation marker. */
+/** The serialized Tool-result cap in Unicode code points, marker included. */
 export const COURSE_TOOL_OUTPUT_CAP_CHARACTERS = 4096;
 export const COURSE_TOOL_TRUNCATION_MARKER = "\n[Tool output truncated]";
+/** Maximum nested object/array levels inspected by the course serializer. */
+export const COURSE_TOOL_SERIALIZATION_MAX_DEPTH = 32;
+/** Maximum values inspected by the course serializer. */
+export const COURSE_TOOL_SERIALIZATION_MAX_NODES = 128;
+/** Maximum own properties or array slots inspected across one output. */
+export const COURSE_TOOL_SERIALIZATION_MAX_COLLECTION_ENTRIES = 256;
+/** Maximum Unicode code points consumed from keys and string values. */
+export const COURSE_TOOL_SERIALIZATION_MAX_STRING_CHARACTERS = 4096;
+
+const ownedToolContractErrors = new WeakSet<object>();
+const ownedNonRecoverableToolErrors = new WeakSet<object>();
+const abortSignalAbortedGetter = Object.getOwnPropertyDescriptor(
+  AbortSignal.prototype,
+  "aborted",
+)?.get;
+const abortSignalReasonGetter = Object.getOwnPropertyDescriptor(
+  AbortSignal.prototype,
+  "reason",
+)?.get;
+const eventTargetAddEventListener = EventTarget.prototype.addEventListener;
+const eventTargetRemoveEventListener =
+  EventTarget.prototype.removeEventListener;
 
 export type ToolContractErrorCode =
   | "INVALID_TOOL_DEFINITION"
@@ -39,6 +61,7 @@ export class NonRecoverableToolError extends Error {
   public constructor(message: string, options?: ErrorOptions) {
     super(message, options);
     this.name = "NonRecoverableToolError";
+    ownedNonRecoverableToolErrors.add(this);
   }
 }
 
@@ -52,6 +75,11 @@ export type RegisteredCourseTool = Readonly<{
 type ValidationDecision =
   | Readonly<{ ok: true; value: unknown }>
   | Readonly<{ ok: false; error: string }>;
+
+type UnexpectedAsyncObservation = Readonly<{
+  detected: boolean;
+  error?: unknown;
+}>;
 
 type ToolResultErrorCode =
   | "TOOL_NOT_FOUND"
@@ -96,7 +124,7 @@ export class ToolRegistry {
     for (let index = 0; index < batch.length; index += 1) {
       const tool = batch[index];
       if (pendingNames.has(tool.name) || this.#tools.has(tool.name)) {
-        throw new ToolContractError(
+        throw createToolContractError(
           "DUPLICATE_TOOL_NAME",
           `Tool name "${tool.name}" is already registered`,
         );
@@ -118,7 +146,7 @@ export async function executeToolCall(
 ): Promise<CourseToolResultMessage> {
   throwIfAborted(signal);
   if (!(registry instanceof ToolRegistry)) {
-    throw new ToolContractError(
+    throw createToolContractError(
       "INVALID_TOOL_CALL",
       "executeToolCall requires a ToolRegistry",
     );
@@ -143,8 +171,10 @@ export async function executeToolCall(
 
   throwIfAborted(signal);
   let rawValidation: unknown;
+  let asyncValidation: UnexpectedAsyncObservation | undefined;
   try {
     rawValidation = tool.validate(toolCall.arguments);
+    asyncValidation = observeUnexpectedAsyncValidation(rawValidation);
   } catch (error) {
     propagateExceptionalFailure(error, signal);
     return createErrorResult(
@@ -154,6 +184,17 @@ export async function executeToolCall(
     );
   }
   throwIfAborted(signal);
+
+  if (asyncValidation?.detected === true) {
+    return createErrorResult(
+      toolCall,
+      "TOOL_VALIDATION_FAILED",
+      failureMessage(
+        asyncValidation.error,
+        "Tool validation must return synchronously",
+      ),
+    );
+  }
 
   let validation: ValidationDecision;
   try {
@@ -221,8 +262,18 @@ export async function executeToolCall(
 function snapshotDefinitionBatch(
   definitions: readonly unknown[],
 ): RegisteredCourseTool[] {
-  if (!Array.isArray(definitions)) {
-    throw new ToolContractError(
+  let isArray: boolean;
+  try {
+    isArray = Array.isArray(definitions);
+  } catch (cause) {
+    throw createToolContractError(
+      "INVALID_TOOL_BATCH",
+      "Tool definition batch could not be inspected",
+      { cause },
+    );
+  }
+  if (!isArray) {
+    throw createToolContractError(
       "INVALID_TOOL_BATCH",
       "Tool definitions must be an array",
     );
@@ -232,14 +283,14 @@ function snapshotDefinitionBatch(
   try {
     length = Reflect.get(definitions, "length");
   } catch (cause) {
-    throw new ToolContractError(
+    throw createToolContractError(
       "INVALID_TOOL_BATCH",
       "Tool definition batch length could not be inspected",
       { cause },
     );
   }
   if (!Number.isSafeInteger(length) || (length as number) < 0) {
-    throw new ToolContractError(
+    throw createToolContractError(
       "INVALID_TOOL_BATCH",
       "Tool definition batch length must be a non-negative safe integer",
     );
@@ -253,15 +304,15 @@ function snapshotDefinitionBatch(
     try {
       hasEntry = Object.hasOwn(definitions, index);
       if (!hasEntry) {
-        throw new ToolContractError(
+        throw createToolContractError(
           "INVALID_TOOL_BATCH",
           `Tool definition batch must not be sparse at index ${index}`,
         );
       }
       definition = Reflect.get(definitions, index);
     } catch (cause) {
-      if (isToolContractError(cause)) throw cause;
-      throw new ToolContractError(
+      if (isOwnedToolContractError(cause)) throw cause;
+      throw createToolContractError(
         "INVALID_TOOL_BATCH",
         `Tool definition at index ${index} could not be inspected`,
         { cause },
@@ -274,7 +325,7 @@ function snapshotDefinitionBatch(
 
 function snapshotToolDefinition(value: unknown): RegisteredCourseTool {
   if (!isObjectLike(value)) {
-    throw new ToolContractError(
+    throw createToolContractError(
       "INVALID_TOOL_DEFINITION",
       "Tool definition must be an object",
     );
@@ -285,25 +336,25 @@ function snapshotToolDefinition(value: unknown): RegisteredCourseTool {
   const validate = readOwnToolField(value, "validate");
   const execute = readOwnToolField(value, "execute");
   if (typeof name !== "string" || name.trim().length === 0) {
-    throw new ToolContractError(
+    throw createToolContractError(
       "INVALID_TOOL_DEFINITION",
       "Tool name must be a non-empty string",
     );
   }
   if (typeof description !== "string" || description.trim().length === 0) {
-    throw new ToolContractError(
+    throw createToolContractError(
       "INVALID_TOOL_DEFINITION",
       `Tool "${name}" description must be a non-empty string`,
     );
   }
   if (typeof validate !== "function") {
-    throw new ToolContractError(
+    throw createToolContractError(
       "INVALID_TOOL_DEFINITION",
       `Tool "${name}" validate must be a function`,
     );
   }
   if (typeof execute !== "function") {
-    throw new ToolContractError(
+    throw createToolContractError(
       "INVALID_TOOL_DEFINITION",
       `Tool "${name}" execute must be a function`,
     );
@@ -327,15 +378,15 @@ function readOwnToolField(
 ): unknown {
   try {
     if (!Object.hasOwn(definition, key)) {
-      throw new ToolContractError(
+      throw createToolContractError(
         "INVALID_TOOL_DEFINITION",
         `Tool definition must have an own ${key} field`,
       );
     }
     return Reflect.get(definition, key);
   } catch (cause) {
-    if (isToolContractError(cause)) throw cause;
-    throw new ToolContractError(
+    if (isOwnedToolContractError(cause)) throw cause;
+    throw createToolContractError(
       "INVALID_TOOL_DEFINITION",
       `Tool definition ${key} could not be inspected`,
       { cause },
@@ -344,8 +395,23 @@ function readOwnToolField(
 }
 
 function snapshotToolCall(value: unknown): CourseToolCall {
+  try {
+    return inspectToolCall(value);
+  } catch (cause) {
+    if (isOwnedToolContractError(cause) && cause.code === "INVALID_TOOL_CALL") {
+      throw cause;
+    }
+    throw createToolContractError(
+      "INVALID_TOOL_CALL",
+      "Tool call could not be inspected safely",
+      { cause },
+    );
+  }
+}
+
+function inspectToolCall(value: unknown): CourseToolCall {
   if (!isObjectLike(value)) {
-    throw new ToolContractError(
+    throw createToolContractError(
       "INVALID_TOOL_CALL",
       "Tool call must be an object",
     );
@@ -361,7 +427,7 @@ function snapshotToolCall(value: unknown): CourseToolCall {
     name = readOwn(value, "name");
     argumentsValue = readOwn(value, "arguments");
   } catch (cause) {
-    throw new ToolContractError(
+    throw createToolContractError(
       "INVALID_TOOL_CALL",
       "Tool call fields could not be inspected",
       { cause },
@@ -369,25 +435,25 @@ function snapshotToolCall(value: unknown): CourseToolCall {
   }
 
   if (type !== "toolCall") {
-    throw new ToolContractError(
+    throw createToolContractError(
       "INVALID_TOOL_CALL",
       'Tool call type must be "toolCall"',
     );
   }
   if (typeof id !== "string" || id.trim().length === 0) {
-    throw new ToolContractError(
+    throw createToolContractError(
       "INVALID_TOOL_CALL",
       "Tool call ID must be a non-empty string",
     );
   }
   if (typeof name !== "string" || name.trim().length === 0) {
-    throw new ToolContractError(
+    throw createToolContractError(
       "INVALID_TOOL_CALL",
       "Tool call name must be a non-empty string",
     );
   }
   if (!isCourseJsonObjectCandidate(argumentsValue)) {
-    throw new ToolContractError(
+    throw createToolContractError(
       "INVALID_TOOL_CALL",
       `Tool call "${id}" arguments must be an object`,
     );
@@ -404,7 +470,7 @@ function snapshotToolCall(value: unknown): CourseToolCall {
     }
     return block;
   } catch (cause) {
-    throw new ToolContractError(
+    throw createToolContractError(
       "INVALID_TOOL_CALL",
       `Tool call "${id}" arguments are invalid`,
       { cause },
@@ -433,6 +499,75 @@ function snapshotValidation(value: unknown): ValidationDecision {
   throw new TypeError("Tool validation ok must be a boolean");
 }
 
+function observeUnexpectedAsyncValidation(
+  value: unknown,
+): UnexpectedAsyncObservation {
+  if (!isObjectLike(value)) return { detected: false };
+
+  let then: unknown;
+  try {
+    then = Reflect.get(value, "then");
+  } catch (error) {
+    return { detected: true, error };
+  }
+  if (typeof then !== "function") return { detected: false };
+
+  try {
+    const returned = Reflect.apply(then, value, [
+      ignoreSettlement,
+      ignoreSettlement,
+    ]);
+    observeReturnedThenable(returned);
+    return { detected: true };
+  } catch (error) {
+    return { detected: true, error };
+  }
+}
+
+function observeReturnedThenable(value: unknown): void {
+  if (!isObjectLike(value)) return;
+
+  try {
+    Reflect.apply(Promise.prototype.then, value, [
+      ignoreSettlement,
+      ignoreSettlement,
+    ]);
+    return;
+  } catch {
+    // A non-Promise thenable needs one best-effort observation below.
+  }
+
+  let then: unknown;
+  try {
+    then = Reflect.get(value, "then");
+  } catch {
+    return;
+  }
+  if (typeof then !== "function") return;
+  try {
+    const returned = Reflect.apply(then, value, [
+      ignoreSettlement,
+      ignoreSettlement,
+    ]);
+    if (returned !== value && isObjectLike(returned)) {
+      try {
+        Reflect.apply(Promise.prototype.then, returned, [
+          ignoreSettlement,
+          ignoreSettlement,
+        ]);
+      } catch {
+        // Hostile secondary thenables are already isolated from this boundary.
+      }
+    }
+  } catch {
+    // The validator is invalid either way; observation must never escape.
+  }
+}
+
+function ignoreSettlement(): void {
+  // Intentionally consume asynchronous validator settlements.
+}
+
 function createErrorResult(
   toolCall: CourseToolCall,
   code: ToolResultErrorCode,
@@ -454,132 +589,307 @@ function createResult(
     id: `tool-result-${toolCall.id}`,
     toolCallId: toolCall.id,
     toolName: toolCall.name,
-    content: truncateOutput(content),
+    content,
     isError,
   });
 }
 
 function serializeSafely(value: unknown): string {
-  return serializeValue(value, new WeakSet<object>());
+  const state: SerializationState = {
+    writer: new BoundedOutputWriter(),
+    ancestors: new WeakSet<object>(),
+    nodesVisited: 0,
+    collectionEntriesVisited: 0,
+    stringCharactersVisited: 0,
+  };
+  writeSerializedValue(value, 0, state);
+  return state.writer.finish();
 }
 
-function serializeValue(value: unknown, ancestors: WeakSet<object>): string {
-  if (value === null) return "null";
-  if (typeof value === "string") return quote(value);
-  if (typeof value === "boolean") return value ? "true" : "false";
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? quoteNumber(value) : "null";
-  }
-  if (typeof value === "bigint") return quote(`${value}n`);
-  if (typeof value === "undefined") return quote("[Undefined]");
-  if (typeof value === "symbol") return quote("[Symbol]");
-  if (typeof value === "function") return quote("[Function]");
+type SerializationState = {
+  readonly writer: BoundedOutputWriter;
+  readonly ancestors: WeakSet<object>;
+  nodesVisited: number;
+  collectionEntriesVisited: number;
+  stringCharactersVisited: number;
+};
 
-  if (ancestors.has(value)) return quote("[Circular]");
-  ancestors.add(value);
-  try {
-    const descriptors = Object.getOwnPropertyDescriptors(value);
-    if (Array.isArray(value)) {
-      return serializeArray(descriptors, ancestors);
+class BoundedOutputWriter {
+  #text = "";
+  #characters = 0;
+  #truncated = false;
+
+  public get truncated(): boolean {
+    return this.#truncated;
+  }
+
+  public append(value: string): boolean {
+    let index = 0;
+    while (index < value.length) {
+      if (this.#characters >= COURSE_TOOL_OUTPUT_CAP_CHARACTERS) {
+        this.#truncated = true;
+        return false;
+      }
+      const width = unicodeCodePointWidth(value, index);
+      this.#text += value.slice(index, index + width);
+      this.#characters += 1;
+      index += width;
     }
-    return serializeObject(descriptors, ancestors);
-  } finally {
-    ancestors.delete(value);
+    return true;
+  }
+
+  public truncate(): void {
+    this.#truncated = true;
+  }
+
+  public finish(): string {
+    if (!this.#truncated) return this.#text;
+    const prefixCharacters =
+      COURSE_TOOL_OUTPUT_CAP_CHARACTERS -
+      countUnicodeCharacters(COURSE_TOOL_TRUNCATION_MARKER);
+    return (
+      takeUnicodePrefix(this.#text, prefixCharacters) +
+      COURSE_TOOL_TRUNCATION_MARKER
+    );
   }
 }
 
-function serializeArray(
-  descriptors: PropertyDescriptorMap,
-  ancestors: WeakSet<object>,
-): string {
-  const length = descriptors.length?.value;
+function writeSerializedValue(
+  value: unknown,
+  depth: number,
+  state: SerializationState,
+): void {
+  if (state.writer.truncated) return;
+  if (state.nodesVisited >= COURSE_TOOL_SERIALIZATION_MAX_NODES) {
+    state.writer.truncate();
+    return;
+  }
+  state.nodesVisited += 1;
+
+  if (value === null) {
+    state.writer.append("null");
+    return;
+  }
+  if (typeof value === "string") {
+    writeQuotedString(value, state, true);
+    return;
+  }
+  if (typeof value === "boolean") {
+    state.writer.append(value ? "true" : "false");
+    return;
+  }
+  if (typeof value === "number") {
+    state.writer.append(
+      Number.isFinite(value)
+        ? Object.is(value, -0)
+          ? "0"
+          : String(value)
+        : "null",
+    );
+    return;
+  }
+  if (typeof value === "bigint") {
+    writeQuotedString(`${value}n`, state, true);
+    return;
+  }
+  if (typeof value === "undefined") {
+    writeQuotedString("[Undefined]", state, false);
+    return;
+  }
+  if (typeof value === "symbol") {
+    writeQuotedString("[Symbol]", state, false);
+    return;
+  }
+  if (typeof value === "function") {
+    writeQuotedString("[Function]", state, false);
+    return;
+  }
+
+  if (depth > COURSE_TOOL_SERIALIZATION_MAX_DEPTH) {
+    state.writer.truncate();
+    return;
+  }
+  if (state.ancestors.has(value)) {
+    writeQuotedString("[Circular]", state, false);
+    return;
+  }
+
+  const isArray = Array.isArray(value);
+  const prototype = Object.getPrototypeOf(value);
+  if (isArray) {
+    if (prototype !== Array.prototype && prototype !== null) {
+      throw new TypeError("Tool output arrays must use a plain prototype");
+    }
+  } else if (prototype !== Object.prototype && prototype !== null) {
+    throw new TypeError(
+      "Tool output objects must be plain or have a null prototype",
+    );
+  }
+
+  state.ancestors.add(value);
+  try {
+    if (isArray) {
+      writeSerializedArray(value, depth, state);
+    } else {
+      writeSerializedObject(value, depth, state);
+    }
+  } finally {
+    state.ancestors.delete(value);
+  }
+}
+
+function writeSerializedArray(
+  value: object,
+  depth: number,
+  state: SerializationState,
+): void {
+  const lengthDescriptor = Object.getOwnPropertyDescriptor(value, "length");
+  const length = lengthDescriptor?.value;
   if (!Number.isSafeInteger(length) || (length as number) < 0) {
     throw new TypeError("Tool output array has an invalid length");
   }
 
-  const items: string[] = [];
-  for (let index = 0; index < length; index += 1) {
-    const descriptor = descriptors[String(index)];
+  if (!state.writer.append("[")) return;
+  const arrayLength = length as number;
+  for (let index = 0; index < arrayLength; index += 1) {
+    if (!visitCollectionEntry(state)) return;
+    if (index > 0 && !state.writer.append(",")) return;
+    const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
     if (descriptor === undefined) {
-      items.push(quote("[Empty]"));
+      writeQuotedString("[Empty]", state, false);
     } else if ("value" in descriptor) {
-      items.push(serializeValue(descriptor.value, ancestors));
+      writeSerializedValue(descriptor.value, depth + 1, state);
     } else {
-      items.push(quote("[Accessor omitted]"));
+      writeQuotedString("[Accessor omitted]", state, false);
+    }
+    if (state.writer.truncated) return;
+  }
+  state.writer.append("]");
+}
+
+function writeSerializedObject(
+  value: object,
+  depth: number,
+  state: SerializationState,
+): void {
+  if (!state.writer.append("{")) return;
+  const ownKeys = Reflect.ownKeys(value);
+  const remainingVisits =
+    COURSE_TOOL_SERIALIZATION_MAX_COLLECTION_ENTRIES -
+    state.collectionEntriesVisited;
+  if (ownKeys.length > remainingVisits) {
+    state.writer.truncate();
+    return;
+  }
+
+  const fields: Array<
+    Readonly<{ key: string; descriptor: PropertyDescriptor }>
+  > = [];
+  for (let index = 0; index < ownKeys.length; index += 1) {
+    if (!visitCollectionEntry(state)) return;
+    const key = ownKeys[index];
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (descriptor === undefined) {
+      throw new TypeError("Tool output property disappeared during inspection");
+    }
+    if (typeof key === "string" && descriptor.enumerable === true) {
+      fields.push({ key, descriptor });
     }
   }
-  return `[${items.join(",")}]`;
+  fields.sort((left, right) =>
+    left.key < right.key ? -1 : left.key > right.key ? 1 : 0,
+  );
+
+  for (let index = 0; index < fields.length; index += 1) {
+    if (index > 0 && !state.writer.append(",")) return;
+    const field = fields[index];
+    writeQuotedString(field.key, state, true);
+    if (!state.writer.append(":")) return;
+    if ("value" in field.descriptor) {
+      writeSerializedValue(field.descriptor.value, depth + 1, state);
+    } else {
+      writeQuotedString("[Accessor omitted]", state, false);
+    }
+    if (state.writer.truncated) return;
+  }
+  state.writer.append("}");
 }
 
-function serializeObject(
-  descriptors: PropertyDescriptorMap,
-  ancestors: WeakSet<object>,
-): string {
-  const keys = Object.keys(descriptors)
-    .filter((key) => descriptors[key].enumerable === true)
-    .sort();
-  const fields: string[] = [];
-  for (let index = 0; index < keys.length; index += 1) {
-    const key = keys[index];
-    const descriptor = descriptors[key];
-    const serialized =
-      "value" in descriptor
-        ? serializeValue(descriptor.value, ancestors)
-        : quote("[Accessor omitted]");
-    fields.push(`${quote(key)}:${serialized}`);
+function visitCollectionEntry(state: SerializationState): boolean {
+  if (
+    state.collectionEntriesVisited >=
+    COURSE_TOOL_SERIALIZATION_MAX_COLLECTION_ENTRIES
+  ) {
+    state.writer.truncate();
+    return false;
   }
-  return `{${fields.join(",")}}`;
+  state.collectionEntriesVisited += 1;
+  return true;
 }
 
-function quote(value: string): string {
-  const serialized = JSON.stringify(value);
-  if (serialized === undefined) {
-    throw new TypeError("A string could not be serialized");
+function writeQuotedString(
+  value: string,
+  state: SerializationState,
+  consumeBudget: boolean,
+): void {
+  if (!state.writer.append('"')) return;
+  let index = 0;
+  while (index < value.length) {
+    if (
+      consumeBudget &&
+      state.stringCharactersVisited >=
+        COURSE_TOOL_SERIALIZATION_MAX_STRING_CHARACTERS
+    ) {
+      state.writer.truncate();
+      return;
+    }
+    const width = unicodeCodePointWidth(value, index);
+    const first = value.charCodeAt(index);
+    const validPair = width === 2;
+    let encoded: string;
+    if (validPair) {
+      encoded = value.slice(index, index + 2);
+    } else if ((first >= 0xd800 && first <= 0xdfff) || first < 0x20) {
+      encoded = `\\u${first.toString(16).padStart(4, "0")}`;
+    } else if (first === 0x22) {
+      encoded = '\\"';
+    } else if (first === 0x5c) {
+      encoded = "\\\\";
+    } else {
+      encoded = value[index];
+    }
+    if (consumeBudget) state.stringCharactersVisited += 1;
+    if (!state.writer.append(encoded)) return;
+    index += width;
   }
-  return serialized;
+  state.writer.append('"');
 }
 
-function quoteNumber(value: number): string {
-  const serialized = JSON.stringify(value);
-  if (serialized === undefined) {
-    throw new TypeError("A number could not be serialized");
-  }
-  return serialized;
-}
-
-function truncateOutput(value: string): string {
-  if (countUnicodeCharacters(value) <= COURSE_TOOL_OUTPUT_CAP_CHARACTERS) {
-    return value;
-  }
-
-  const prefixLimit =
-    COURSE_TOOL_OUTPUT_CAP_CHARACTERS -
-    countUnicodeCharacters(COURSE_TOOL_TRUNCATION_MARKER);
-  let prefixEnd = 0;
-  let count = 0;
-  while (prefixEnd < value.length && count < prefixLimit) {
-    const first = value.charCodeAt(prefixEnd);
-    const isHighSurrogate = first >= 0xd800 && first <= 0xdbff;
-    const second = value.charCodeAt(prefixEnd + 1);
-    const hasLowSurrogate = second >= 0xdc00 && second <= 0xdfff;
-    prefixEnd += isHighSurrogate && hasLowSurrogate ? 2 : 1;
-    count += 1;
-  }
-  return value.slice(0, prefixEnd) + COURSE_TOOL_TRUNCATION_MARKER;
+function unicodeCodePointWidth(value: string, index: number): 1 | 2 {
+  const first = value.charCodeAt(index);
+  if (first < 0xd800 || first > 0xdbff) return 1;
+  const second = value.charCodeAt(index + 1);
+  return second >= 0xdc00 && second <= 0xdfff ? 2 : 1;
 }
 
 function countUnicodeCharacters(value: string): number {
   let count = 0;
   let index = 0;
   while (index < value.length) {
-    const first = value.charCodeAt(index);
-    const isHighSurrogate = first >= 0xd800 && first <= 0xdbff;
-    const second = value.charCodeAt(index + 1);
-    const hasLowSurrogate = second >= 0xdc00 && second <= 0xdfff;
-    index += isHighSurrogate && hasLowSurrogate ? 2 : 1;
+    index += unicodeCodePointWidth(value, index);
     count += 1;
   }
   return count;
+}
+
+function takeUnicodePrefix(value: string, characters: number): string {
+  let count = 0;
+  let index = 0;
+  while (index < value.length && count < characters) {
+    index += unicodeCodePointWidth(value, index);
+    count += 1;
+  }
+  return value.slice(0, index);
 }
 
 function propagateExceptionalFailure(
@@ -593,19 +903,21 @@ function propagateExceptionalFailure(
 function isNonRecoverableToolError(
   value: unknown,
 ): value is NonRecoverableToolError {
-  try {
-    return value instanceof NonRecoverableToolError;
-  } catch {
-    return false;
-  }
+  return isObjectLike(value) && ownedNonRecoverableToolErrors.has(value);
 }
 
-function isToolContractError(value: unknown): value is ToolContractError {
-  try {
-    return value instanceof ToolContractError;
-  } catch {
-    return false;
-  }
+function createToolContractError(
+  code: ToolContractErrorCode,
+  message: string,
+  options?: ErrorOptions,
+): ToolContractError {
+  const error = new ToolContractError(code, message, options);
+  ownedToolContractErrors.add(error);
+  return error;
+}
+
+function isOwnedToolContractError(value: unknown): value is ToolContractError {
+  return isObjectLike(value) && ownedToolContractErrors.has(value);
 }
 
 function failureMessage(error: unknown, fallback: string): string {
@@ -648,44 +960,107 @@ function isCourseJsonObjectCandidate(
 }
 
 function throwIfAborted(signal: AbortSignal): void {
-  if (!signal.aborted) return;
-  throw (
-    signal.reason ?? new DOMException("The operation was aborted", "AbortError")
-  );
+  if (!readSignalAborted(signal)) return;
+  throw readSignalAbortReason(signal);
 }
 
 function waitForAbort<Value>(
   pending: Promise<Value>,
   signal: AbortSignal,
 ): Promise<Value> {
-  throwIfAborted(signal);
-
   return new Promise<Value>((resolve, reject) => {
     let settled = false;
-    const onAbort = () => {
-      if (settled) return;
-      settled = true;
-      reject(
-        signal.reason ??
-          new DOMException("The operation was aborted", "AbortError"),
-      );
+    let listening = false;
+
+    const cleanup = () => {
+      if (!listening) return;
+      listening = false;
+      try {
+        Reflect.apply(eventTargetRemoveEventListener, signal, [
+          "abort",
+          onAbort,
+        ]);
+      } catch {
+        // Cleanup cannot replace the already selected terminal outcome.
+      }
     };
 
-    signal.addEventListener("abort", onAbort, { once: true });
-    if (signal.aborted) onAbort();
-    void pending.then(
+    const settle = (outcome: "resolve" | "reject", value: Value | unknown) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      if (outcome === "resolve") {
+        resolve(value as Value);
+      } else {
+        reject(value);
+      }
+    };
+
+    const onAbort = () => {
+      let reason: unknown;
+      try {
+        reason = readSignalAbortReason(signal);
+      } catch (error) {
+        reason = error;
+      }
+      settle("reject", reason);
+    };
+
+    const observation = pending.then(
       (value) => {
-        if (settled) return;
-        settled = true;
-        signal.removeEventListener("abort", onAbort);
-        resolve(value);
+        try {
+          if (readSignalAborted(signal)) {
+            onAbort();
+          } else {
+            settle("resolve", value);
+          }
+        } catch (error) {
+          settle("reject", error);
+        }
       },
       (error: unknown) => {
-        if (settled) return;
-        settled = true;
-        signal.removeEventListener("abort", onAbort);
-        reject(error);
+        try {
+          if (readSignalAborted(signal)) {
+            onAbort();
+          } else {
+            settle("reject", error);
+          }
+        } catch (signalError) {
+          settle("reject", signalError);
+        }
       },
     );
+    void observation.then(undefined, ignoreSettlement);
+
+    try {
+      if (readSignalAborted(signal)) {
+        onAbort();
+        return;
+      }
+      listening = true;
+      Reflect.apply(eventTargetAddEventListener, signal, [
+        "abort",
+        onAbort,
+        { once: true },
+      ]);
+      if (readSignalAborted(signal)) onAbort();
+    } catch (error) {
+      settle("reject", error);
+    }
   });
+}
+
+function readSignalAborted(signal: AbortSignal): boolean {
+  if (abortSignalAbortedGetter === undefined) {
+    throw new TypeError("AbortSignal.aborted is unavailable");
+  }
+  return Reflect.apply(abortSignalAbortedGetter, signal, []) as boolean;
+}
+
+function readSignalAbortReason(signal: AbortSignal): unknown {
+  if (abortSignalReasonGetter === undefined) {
+    return new DOMException("The operation was aborted", "AbortError");
+  }
+  const reason = Reflect.apply(abortSignalReasonGetter, signal, []);
+  return reason ?? new DOMException("The operation was aborted", "AbortError");
 }
