@@ -1,4 +1,5 @@
 export { runPrologue } from "./demo/prologue";
+export * from "./agent-loop";
 export * from "./event-stream";
 export * from "./messages";
 export * from "./provider-adapter";
