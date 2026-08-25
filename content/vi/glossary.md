@@ -61,7 +61,7 @@ Fail-closed là hành vi an toàn từ chối hoặc dừng operation khi một 
 
 ## Fixture
 
-Fixture là input, state hoặc expected output cố định, có thể tái sử dụng cho một test case hay evaluation case. Fixture chứa dữ liệu của ca kiểm thử—ví dụ một conversation cùng chuỗi model event đã lập script—còn [harness](#harness) là hạ tầng chạy dữ liệu đó.
+Fixture là input, state hoặc expected output cố định, có thể tái sử dụng cho một test case hay evaluation case. Fixture chứa dữ liệu của ca kiểm thử—ví dụ một conversation cùng chuỗi model event được định sẵn bằng script—còn [harness](#harness) là hạ tầng chạy dữ liệu đó.
 
 ## Harness
 
@@ -69,11 +69,11 @@ Harness là hạ tầng thực thi test hoặc evaluation: điều khiển syste
 
 ## Held-out Evaluation
 
-Held-out evaluation là phép đánh giá trên các ca không được dùng trong quá trình implementation hoặc prompt tuning. So sánh kết quả held-out evaluation với tập development hiển thị giúp phát hiện việc tối ưu quá mức cho các fixture đã biết.
+Held-out evaluation là phép đánh giá trên các ca không được dùng trong quá trình implementation hoặc prompt tuning. So sánh kết quả held-out evaluation với development set đã biết giúp phát hiện việc tối ưu quá mức cho các fixture đã biết.
 
 ## Judge
 
-Judge là bộ đánh giá do code, model hoặc con người thực hiện, dùng tiêu chí rõ ràng để đánh giá một kết quả quan sát được. Judge tạo ra [verdict](#verdict); [harness](#harness) chỉ cung cấp observation và ghi lại kết luận đó.
+Judge là bộ đánh giá áp dụng tiêu chí rõ ràng cho một kết quả quan sát được. Judge có thể được triển khai bằng code hoặc model, cũng có thể do con người trực tiếp thực hiện. Judge tạo ra [verdict](#verdict); [harness](#harness) chỉ cung cấp observation và ghi lại kết luận đó.
 
 ## Managed Tools
 
