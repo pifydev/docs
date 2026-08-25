@@ -6,6 +6,7 @@ import {
   AgentMessageLimitError,
   EventStream,
   MAX_AGENT_MESSAGES,
+  MAX_MODEL_CHUNKS_PER_STEP,
   ScriptedModel,
   ToolRegistry,
   defineTool,
@@ -631,4 +632,106 @@ test("rejects impossible queued work before stranding it at the message cap", as
   expect(() => agent.steer("cannot fit later")).toThrowError(
     expect.objectContaining({ code: "AGENT_MESSAGE_LIMIT" }),
   );
+});
+
+test("rejects follow-up at tool.finished when unknown Tool results can consume the cap", async () => {
+  const initialMessages = Array.from(
+    { length: MAX_AGENT_MESSAGES - 6 },
+    (_, index) => ({
+      id: `tool-cap-initial-${index + 1}`,
+      role: "user" as const,
+      content: `message ${index + 1}`,
+    }),
+  );
+  const toolCalls = Array.from({ length: 4 }, (_, index) => ({
+    type: "toolCall" as const,
+    id: `call-cap-${index + 1}`,
+    name: "cap-tool",
+    arguments: {},
+  }));
+  const model = new ScriptedModel([
+    scriptedResponse("response-tool-cap", toolCalls, "toolCall"),
+  ]);
+  const tools = new ToolRegistry([
+    defineTool({
+      name: "cap-tool",
+      description: "Return one bounded result.",
+      validate: () => ({ ok: true as const, value: undefined }),
+      execute: async () => "done",
+    }),
+  ]);
+  const agent = new Agent({
+    model,
+    tools,
+    maxSteps: 1,
+    messages: initialMessages,
+  });
+  let enqueueFailure: unknown;
+  let attempted = false;
+  agent.subscribe((event) => {
+    if (attempted || event.type !== "tool.finished") return;
+    attempted = true;
+    try {
+      agent.followUp("must not become stranded");
+    } catch (error) {
+      enqueueFailure = error;
+    }
+  });
+
+  const { events, result } = await settle(agent.prompt("fill final slots"));
+
+  expect(enqueueFailure).toBeInstanceOf(AgentMessageLimitError);
+  expect(enqueueFailure).toMatchObject({ code: "AGENT_MESSAGE_LIMIT" });
+  expect(result).toMatchObject({ status: "maxSteps", maxSteps: 1 });
+  expect(result.messages).toHaveLength(MAX_AGENT_MESSAGES);
+  expect(events.filter((event) => event.type === "run.finished")).toHaveLength(
+    1,
+  );
+  expect(() => agent.continue()).toThrow(AgentMessageLimitError);
+});
+
+test("accepts exactly one active queue item when worst-case reservation fits", async () => {
+  const activeTranscriptLength =
+    MAX_AGENT_MESSAGES - (1 + MAX_MODEL_CHUNKS_PER_STEP) - 1;
+  const initialMessages = Array.from(
+    { length: activeTranscriptLength - 1 },
+    (_, index) => ({
+      id: `reservation-initial-${index + 1}`,
+      role: "user" as const,
+      content: `message ${index + 1}`,
+    }),
+  );
+  const entered = deferred<void>();
+  const release = deferred<void>();
+  const model = new ScriptedModel([
+    async function* (request) {
+      entered.resolve();
+      await release.promise;
+      yield { type: "textDelta", requestId: request.id, delta: "first" };
+      return responseFor(
+        request,
+        "response-reservation-first",
+        [{ type: "text", text: "first" }],
+        "stop",
+      );
+    },
+    scriptedResponse("response-reservation-follow-up", [
+      { type: "text", text: "queued work completed" },
+    ]),
+  ]);
+  const agent = new Agent({ model, messages: initialMessages });
+  const run = agent.prompt("active boundary");
+  await entered.promise;
+
+  const accepted = agent.followUp("fits exactly");
+  expect(() => agent.steer("one beyond reservation")).toThrowError(
+    expect.objectContaining({ code: "AGENT_MESSAGE_LIMIT" }),
+  );
+  release.resolve();
+
+  await expect(run.result).resolves.toMatchObject({
+    status: "completed",
+    finalText: "queued work completed",
+  });
+  expect(model.requests.at(-1)?.messages.at(-1)).toEqual(accepted);
 });

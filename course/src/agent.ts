@@ -1,6 +1,7 @@
 import {
   MAX_AGENT_STEPS,
   MAX_INITIAL_MESSAGES,
+  MAX_MODEL_CHUNKS_PER_STEP,
   runAgentLoop,
   type CourseModel,
 } from "./agent-loop";
@@ -329,14 +330,21 @@ export class Agent {
     const queued = steering + followUp;
     const active =
       this.#activeRun !== undefined && !this.#activeRun.terminalSelected;
-    let projected = this.#transcript.length + 2 * queued;
     if (active) {
-      projected += 1;
-    } else {
-      const tail = this.#transcript.at(-1);
-      if (tail === undefined) projected += steering === 0 ? 2 : 1;
-      else if (tail.role !== "assistant" && steering === 0) projected += 1;
+      // The active low-level Turn has not been adopted into #transcript yet.
+      // Every accepted model chunk could be a Tool call, yielding one
+      // assistant message plus one Tool-result message per chunk. Reserve that
+      // full unknown output and each explicit queued user message.
+      this.#assertProjectedCapacity(
+        this.#transcript.length + 1 + MAX_MODEL_CHUNKS_PER_STEP + queued,
+      );
+      return;
     }
+
+    let projected = this.#transcript.length + 2 * queued;
+    const tail = this.#transcript.at(-1);
+    if (tail === undefined) projected += steering === 0 ? 2 : 1;
+    else if (tail.role !== "assistant" && steering === 0) projected += 1;
     this.#assertProjectedCapacity(projected);
   }
 
