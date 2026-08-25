@@ -3,6 +3,7 @@ import { expect, test, vi } from "vitest";
 import {
   COURSE_TOOL_OUTPUT_CAP_CHARACTERS,
   COURSE_TOOL_SERIALIZATION_MAX_COLLECTION_ENTRIES,
+  COURSE_TOOL_SERIALIZATION_MAX_BIGINT_BITS,
   COURSE_TOOL_SERIALIZATION_MAX_DEPTH,
   COURSE_TOOL_SERIALIZATION_MAX_NODES,
   COURSE_TOOL_SERIALIZATION_MAX_STRING_CHARACTERS,
@@ -60,6 +61,59 @@ function listenForUnhandledRejections(
       listener,
     ]);
   };
+}
+
+function toolSource(): string {
+  const runtimeProcess = Reflect.get(globalThis, "process");
+  if (typeof runtimeProcess !== "object" || runtimeProcess === null) {
+    throw new Error("Node process is unavailable");
+  }
+  const getBuiltinModule = Reflect.get(runtimeProcess, "getBuiltinModule");
+  if (typeof getBuiltinModule !== "function") {
+    throw new Error("process.getBuiltinModule() is unavailable");
+  }
+  const fileSystem: unknown = Reflect.apply(getBuiltinModule, runtimeProcess, [
+    "node:fs",
+  ]);
+  if (typeof fileSystem !== "object" || fileSystem === null) {
+    throw new Error("node:fs is unavailable");
+  }
+  const readFileSync = Reflect.get(fileSystem, "readFileSync");
+  if (typeof readFileSync !== "function") {
+    throw new Error("node:fs.readFileSync() is unavailable");
+  }
+  const source: unknown = Reflect.apply(readFileSync, fileSystem, [
+    new URL("../src/tool.ts", import.meta.url),
+    "utf8",
+  ]);
+  if (typeof source !== "string") {
+    throw new Error("tool.ts was not read as text");
+  }
+  return source;
+}
+
+function runInNewContext(source: string): unknown {
+  const runtimeProcess = Reflect.get(globalThis, "process");
+  if (typeof runtimeProcess !== "object" || runtimeProcess === null) {
+    throw new Error("Node process is unavailable");
+  }
+  const getBuiltinModule = Reflect.get(runtimeProcess, "getBuiltinModule");
+  if (typeof getBuiltinModule !== "function") {
+    throw new Error("process.getBuiltinModule() is unavailable");
+  }
+  const virtualMachine: unknown = Reflect.apply(
+    getBuiltinModule,
+    runtimeProcess,
+    ["node:vm"],
+  );
+  if (typeof virtualMachine !== "object" || virtualMachine === null) {
+    throw new Error("node:vm is unavailable");
+  }
+  const run = Reflect.get(virtualMachine, "runInNewContext");
+  if (typeof run !== "function") {
+    throw new Error("node:vm.runInNewContext() is unavailable");
+  }
+  return Reflect.apply(run, virtualMachine, [source]);
 }
 
 function call(
@@ -530,6 +584,114 @@ test("observes hostile validator then getters, calls, and returned rejections", 
   }
 });
 
+test("uses captured Promise intrinsics for shadowed and prototype-patched native rejections", async () => {
+  const unhandled: unknown[] = [];
+  const onUnhandled = (reason: unknown) => unhandled.push(reason);
+  const stopListening = listenForUnhandledRejections(onUnhandled);
+  const originalThen = Object.getOwnPropertyDescriptor(
+    Promise.prototype,
+    "then",
+  );
+  const originalResolve = Object.getOwnPropertyDescriptor(Promise, "resolve");
+  if (originalThen === undefined || originalResolve === undefined) {
+    stopListening();
+    throw new Error("Promise intrinsic descriptors are unavailable");
+  }
+
+  try {
+    const validationRejection = new Error("native validation rejection");
+    const invalidValidation = Promise.reject(validationRejection);
+    Object.defineProperty(invalidValidation, "then", {
+      configurable: true,
+      value: undefined,
+    });
+    const validationRegistry = new ToolRegistry([
+      defineTool({
+        name: "shadowed-validation-promise",
+        description: "Return an invalid native Promise validator.",
+        validate: () => invalidValidation as never,
+        execute: async () => "unreachable",
+      }),
+    ]);
+    Object.defineProperty(Promise.prototype, "then", {
+      configurable: true,
+      value() {
+        throw new Error("patched Promise.prototype.then must be ignored");
+      },
+    });
+    Object.defineProperty(Promise, "resolve", {
+      configurable: true,
+      value() {
+        throw new Error("patched Promise.resolve must be ignored");
+      },
+    });
+    let validationExecution: Promise<unknown>;
+    try {
+      validationExecution = executeToolCall(
+        validationRegistry,
+        call("shadowed-validation-promise"),
+        new AbortController().signal,
+      );
+    } finally {
+      Object.defineProperty(Promise.prototype, "then", originalThen);
+      Object.defineProperty(Promise, "resolve", originalResolve);
+    }
+    await expect(validationExecution).resolves.toMatchObject({
+      isError: true,
+      content: expect.stringContaining("TOOL_VALIDATION_FAILED"),
+    });
+
+    const executionRejection = new Error("native execute rejection");
+    const invalidExecution = Promise.reject(executionRejection);
+    Object.defineProperty(invalidExecution, "then", {
+      configurable: true,
+      value: undefined,
+    });
+    const executionRegistry = new ToolRegistry([
+      defineTool({
+        name: "shadowed-execution-promise",
+        description: "Reject through captured Promise intrinsics.",
+        validate: (input) => ({ ok: true, value: input }),
+        execute: () => invalidExecution,
+      }),
+    ]);
+    Object.defineProperty(Promise.prototype, "then", {
+      configurable: true,
+      value() {
+        throw new Error("patched Promise.prototype.then must be ignored");
+      },
+    });
+    Object.defineProperty(Promise, "resolve", {
+      configurable: true,
+      value() {
+        throw new Error("patched Promise.resolve must be ignored");
+      },
+    });
+    let toolExecution: Promise<unknown>;
+    try {
+      toolExecution = executeToolCall(
+        executionRegistry,
+        call("shadowed-execution-promise"),
+        new AbortController().signal,
+      );
+    } finally {
+      Object.defineProperty(Promise.prototype, "then", originalThen);
+      Object.defineProperty(Promise, "resolve", originalResolve);
+    }
+    await expect(toolExecution).resolves.toMatchObject({
+      isError: true,
+      content: expect.stringContaining("native execute rejection"),
+    });
+    await nextEventLoopTurn();
+    expect(unhandled).toEqual([]);
+  } finally {
+    Object.defineProperty(Promise.prototype, "then", originalThen);
+    Object.defineProperty(Promise, "resolve", originalResolve);
+    await nextEventLoopTurn();
+    stopListening();
+  }
+});
+
 test("propagates cancellation before validation without invoking the Tool", async () => {
   const validate = vi.fn((input: unknown) => ({
     ok: true as const,
@@ -904,7 +1066,7 @@ test("serializes hostile structured output without getters, toJSON, prototypes, 
     );
 
     expect(first.content).toBe(
-      '{"aBigInt":"9007199254740993n","cycle":{"self":"[Circular]"},"getter":"[Accessor omitted]","toJSON":"[Function]","zUndefined":"[Undefined]"}',
+      '{"aBigInt":"9007199254740993n","cycle":{"self":"[Circular]"},"toJSON":"[Function]","zUndefined":"[Undefined]"}',
     );
     expect(second.content).toBe(first.content);
     expect(getterReads).toBe(0);
@@ -1066,6 +1228,113 @@ test("bounds deep and wide output with explicit depth and node budgets", async (
   }
   expect(COURSE_TOOL_SERIALIZATION_MAX_DEPTH).toBe(32);
   expect(COURSE_TOOL_SERIALIZATION_MAX_NODES).toBe(128);
+});
+
+test("enumerates a 250k-key plain object without eager full-key APIs", async () => {
+  const output = Object.create(null) as Record<string, unknown>;
+  for (let index = 0; index < 250_000; index += 1) {
+    output[`key-${index.toString().padStart(6, "0")}`] = index;
+  }
+  const registry = new ToolRegistry([
+    defineTool({
+      name: "huge-object",
+      description: "Exercise bounded own-property enumeration.",
+      validate: (input) => ({ ok: true, value: input }),
+      execute: async () => output,
+    }),
+  ]);
+
+  const result = await executeToolCall(
+    registry,
+    call("huge-object"),
+    new AbortController().signal,
+  );
+
+  expect(result.isError).toBe(false);
+  expect([...result.content].length).toBeLessThanOrEqual(
+    COURSE_TOOL_OUTPUT_CAP_CHARACTERS,
+  );
+  expect(result.content.endsWith(COURSE_TOOL_TRUNCATION_MARKER)).toBe(true);
+  expect(toolSource()).not.toMatch(/\b(?:Reflect\.ownKeys|Object\.keys)\b/u);
+});
+
+test("uses explicit JSON property semantics without invoking accessors", async () => {
+  let accessorReads = 0;
+  let toJsonCalls = 0;
+  const symbolKey = Symbol("ignored");
+  const output = { visible: 1 } as Record<PropertyKey, unknown>;
+  Object.defineProperties(output, {
+    hidden: { enumerable: false, value: "ignored" },
+    accessor: {
+      enumerable: true,
+      get() {
+        accessorReads += 1;
+        return "must not be read";
+      },
+    },
+    toJSON: {
+      enumerable: true,
+      value() {
+        toJsonCalls += 1;
+        return { replaced: true };
+      },
+    },
+  });
+  output[symbolKey] = "ignored";
+  const registry = new ToolRegistry([
+    defineTool({
+      name: "json-property-semantics",
+      description: "Inspect only own enumerable string properties.",
+      validate: (input) => ({ ok: true, value: input }),
+      execute: async () => output,
+    }),
+  ]);
+
+  const result = await executeToolCall(
+    registry,
+    call("json-property-semantics"),
+    new AbortController().signal,
+  );
+
+  expect(result.content).toBe('{"toJSON":"[Function]","visible":1}');
+  expect(accessorReads).toBe(0);
+  expect(toJsonCalls).toBe(0);
+});
+
+test("bounds BigInt magnitude before decimal conversion", async () => {
+  const one = BigInt(1);
+  const accepted =
+    (one << BigInt(COURSE_TOOL_SERIALIZATION_MAX_BIGINT_BITS)) - one;
+  const oversized = one << BigInt(2_000_000);
+  const registry = new ToolRegistry([
+    defineTool({
+      name: "bounded-bigint",
+      description: "Serialize only bounded BigInt magnitudes.",
+      validate(input) {
+        const value = input as { oversized?: unknown };
+        return { ok: true, value: value.oversized === true };
+      },
+      execute: async (useOversized) => (useOversized ? oversized : accepted),
+    }),
+  ]);
+
+  const acceptedResult = await executeToolCall(
+    registry,
+    call("bounded-bigint", { oversized: false }),
+    new AbortController().signal,
+  );
+  const oversizedResult = await executeToolCall(
+    registry,
+    call("bounded-bigint", { oversized: true }, "call-bigint-oversized"),
+    new AbortController().signal,
+  );
+
+  expect(COURSE_TOOL_SERIALIZATION_MAX_BIGINT_BITS).toBe(4096);
+  expect(acceptedResult.isError).toBe(false);
+  expect(acceptedResult.content.endsWith('n"')).toBe(true);
+  expect(acceptedResult.content).not.toContain(COURSE_TOOL_TRUNCATION_MARKER);
+  expect(oversizedResult.isError).toBe(false);
+  expect(oversizedResult.content).toBe(COURSE_TOOL_TRUNCATION_MARKER);
 });
 
 test("normalizes revoked Tool-call and argument Proxies as INVALID_TOOL_CALL", async () => {
@@ -1232,6 +1501,44 @@ test("external throws cannot forge internal ToolContractError provenance", async
   });
 });
 
+test("freezes internal ToolContractErrors and reclassifies replay at its new boundary", () => {
+  const registry = new ToolRegistry([echoTool("captured")]);
+  let captured: unknown;
+  try {
+    registry.register(echoTool("captured"));
+  } catch (error) {
+    captured = error;
+  }
+  expect(captured).toBeInstanceOf(ToolContractError);
+  expect(captured).toMatchObject({ code: "DUPLICATE_TOOL_NAME" });
+  expect(Object.isFrozen(captured)).toBe(true);
+  expect(Reflect.set(captured as object, "code", "INVALID_TOOL_CALL")).toBe(
+    false,
+  );
+  expect(Reflect.set(captured as object, "message", "mutated")).toBe(false);
+
+  const replayingDefinition = {
+    get name(): string {
+      throw captured;
+    },
+    description: "Replay an authentic prior boundary error.",
+    validate: (input: unknown) => ({ ok: true as const, value: input }),
+    execute: async (input: unknown) => input,
+  };
+  let replayed: unknown;
+  try {
+    defineTool(replayingDefinition);
+  } catch (error) {
+    replayed = error;
+  }
+  expect(replayed).not.toBe(captured);
+  expect(replayed).toMatchObject({
+    name: "ToolContractError",
+    code: "INVALID_TOOL_DEFINITION",
+  });
+  expect(Object.isFrozen(replayed)).toBe(true);
+});
+
 test("a forged NonRecoverableToolError prototype stays recoverable", async () => {
   const forged = Object.assign(
     Object.create(NonRecoverableToolError.prototype) as Record<string, unknown>,
@@ -1262,5 +1569,63 @@ test("a forged NonRecoverableToolError prototype stays recoverable", async () =>
   ).resolves.toMatchObject({
     isError: true,
     content: expect.stringContaining("TOOL_EXECUTION_FAILED"),
+  });
+});
+
+test("shares NonRecoverableToolError provenance across module reloads and subclasses", async () => {
+  vi.resetModules();
+  const copyA = await import("../src/tool");
+  class ReloadedInvariantError extends copyA.NonRecoverableToolError {}
+  const direct = new copyA.NonRecoverableToolError("copy A direct error");
+  const subclassed = new ReloadedInvariantError("copy A subclass error");
+
+  vi.resetModules();
+  const copyB = await import("../src/tool");
+  for (const [index, failure] of [direct, subclassed].entries()) {
+    const registry = new copyB.ToolRegistry([
+      copyB.defineTool({
+        name: `cross-module-programmer-error-${index}`,
+        description: "Propagate a constructor-authorized error.",
+        validate: (input) => ({ ok: true, value: input }),
+        execute: async () => {
+          throw failure;
+        },
+      }),
+    ]);
+
+    await expect(
+      copyB.executeToolCall(
+        registry,
+        call(`cross-module-programmer-error-${index}`),
+        new AbortController().signal,
+      ),
+    ).rejects.toBe(failure);
+  }
+});
+
+test("accepts nested cross-realm plain JSON outputs", async () => {
+  const crossRealmOutput = runInNewContext(`({
+    z: 3,
+    nested: { ok: true },
+    list: [1, { value: "cross-realm" }]
+  })`);
+  const registry = new ToolRegistry([
+    defineTool({
+      name: "cross-realm-output",
+      description: "Accept structural JSON containers from another realm.",
+      validate: (input) => ({ ok: true, value: input }),
+      execute: async () => crossRealmOutput,
+    }),
+  ]);
+
+  await expect(
+    executeToolCall(
+      registry,
+      call("cross-realm-output"),
+      new AbortController().signal,
+    ),
+  ).resolves.toMatchObject({
+    isError: false,
+    content: '{"list":[1,{"value":"cross-realm"}],"nested":{"ok":true},"z":3}',
   });
 });

@@ -18,9 +18,20 @@ export const COURSE_TOOL_SERIALIZATION_MAX_NODES = 128;
 export const COURSE_TOOL_SERIALIZATION_MAX_COLLECTION_ENTRIES = 256;
 /** Maximum Unicode code points consumed from keys and string values. */
 export const COURSE_TOOL_SERIALIZATION_MAX_STRING_CHARACTERS = 4096;
+/** Maximum accepted BigInt magnitude in binary bits before decimal conversion. */
+export const COURSE_TOOL_SERIALIZATION_MAX_BIGINT_BITS = 4096;
 
 const ownedToolContractErrors = new WeakSet<object>();
-const ownedNonRecoverableToolErrors = new WeakSet<object>();
+const reflectApply = Reflect.apply;
+const weakSetAdd = WeakSet.prototype.add;
+const weakSetHas = WeakSet.prototype.has;
+const nonRecoverableRegistryKey = Symbol.for(
+  "pify.course.NonRecoverableToolError.provenance.v1",
+);
+const sharedNonRecoverableToolErrors = loadNonRecoverableToolErrorRegistry();
+const nativePromiseConstructor = Promise;
+const nativePromiseResolve = Promise.resolve;
+const nativePromiseThen = Promise.prototype.then;
 const abortSignalAbortedGetter = Object.getOwnPropertyDescriptor(
   AbortSignal.prototype,
   "aborted",
@@ -32,6 +43,8 @@ const abortSignalReasonGetter = Object.getOwnPropertyDescriptor(
 const eventTargetAddEventListener = EventTarget.prototype.addEventListener;
 const eventTargetRemoveEventListener =
   EventTarget.prototype.removeEventListener;
+const maximumSerializableBigIntMagnitude =
+  BigInt(1) << BigInt(COURSE_TOOL_SERIALIZATION_MAX_BIGINT_BITS);
 
 export type ToolContractErrorCode =
   | "INVALID_TOOL_DEFINITION"
@@ -50,6 +63,7 @@ export class ToolContractError extends Error {
     super(message, options);
     this.name = "ToolContractError";
     this.code = code;
+    Object.freeze(this);
   }
 }
 
@@ -61,7 +75,7 @@ export class NonRecoverableToolError extends Error {
   public constructor(message: string, options?: ErrorOptions) {
     super(message, options);
     this.name = "NonRecoverableToolError";
-    ownedNonRecoverableToolErrors.add(this);
+    reflectApply(weakSetAdd, sharedNonRecoverableToolErrors, [this]);
   }
 }
 
@@ -220,7 +234,9 @@ export async function executeToolCall(
   const context = Object.freeze({ signal, toolCallId: toolCall.id });
   let pendingOutput: Promise<unknown>;
   try {
-    pendingOutput = Promise.resolve(tool.execute(validation.value, context));
+    pendingOutput = resolveWithCapturedPromise(
+      tool.execute(validation.value, context),
+    );
   } catch (error) {
     propagateExceptionalFailure(error, signal);
     return createErrorResult(
@@ -303,18 +319,25 @@ function snapshotDefinitionBatch(
     let definition: unknown;
     try {
       hasEntry = Object.hasOwn(definitions, index);
-      if (!hasEntry) {
-        throw createToolContractError(
-          "INVALID_TOOL_BATCH",
-          `Tool definition batch must not be sparse at index ${index}`,
-        );
-      }
-      definition = Reflect.get(definitions, index);
     } catch (cause) {
-      if (isOwnedToolContractError(cause)) throw cause;
       throw createToolContractError(
         "INVALID_TOOL_BATCH",
         `Tool definition at index ${index} could not be inspected`,
+        { cause },
+      );
+    }
+    if (!hasEntry) {
+      throw createToolContractError(
+        "INVALID_TOOL_BATCH",
+        `Tool definition batch must not be sparse at index ${index}`,
+      );
+    }
+    try {
+      definition = Reflect.get(definitions, index);
+    } catch (cause) {
+      throw createToolContractError(
+        "INVALID_TOOL_BATCH",
+        `Tool definition at index ${index} could not be read`,
         { cause },
       );
     }
@@ -376,19 +399,28 @@ function readOwnToolField(
   definition: object,
   key: "name" | "description" | "validate" | "execute",
 ): unknown {
+  let hasField: boolean;
   try {
-    if (!Object.hasOwn(definition, key)) {
-      throw createToolContractError(
-        "INVALID_TOOL_DEFINITION",
-        `Tool definition must have an own ${key} field`,
-      );
-    }
-    return Reflect.get(definition, key);
+    hasField = Object.hasOwn(definition, key);
   } catch (cause) {
-    if (isOwnedToolContractError(cause)) throw cause;
     throw createToolContractError(
       "INVALID_TOOL_DEFINITION",
       `Tool definition ${key} could not be inspected`,
+      { cause },
+    );
+  }
+  if (!hasField) {
+    throw createToolContractError(
+      "INVALID_TOOL_DEFINITION",
+      `Tool definition must have an own ${key} field`,
+    );
+  }
+  try {
+    return Reflect.get(definition, key);
+  } catch (cause) {
+    throw createToolContractError(
+      "INVALID_TOOL_DEFINITION",
+      `Tool definition ${key} could not be read`,
       { cause },
     );
   }
@@ -398,9 +430,6 @@ function snapshotToolCall(value: unknown): CourseToolCall {
   try {
     return inspectToolCall(value);
   } catch (cause) {
-    if (isOwnedToolContractError(cause) && cause.code === "INVALID_TOOL_CALL") {
-      throw cause;
-    }
     throw createToolContractError(
       "INVALID_TOOL_CALL",
       "Tool call could not be inspected safely",
@@ -503,6 +532,7 @@ function observeUnexpectedAsyncValidation(
   value: unknown,
 ): UnexpectedAsyncObservation {
   if (!isObjectLike(value)) return { detected: false };
+  if (observeNativePromise(value)) return { detected: true };
 
   let then: unknown;
   try {
@@ -513,7 +543,7 @@ function observeUnexpectedAsyncValidation(
   if (typeof then !== "function") return { detected: false };
 
   try {
-    const returned = Reflect.apply(then, value, [
+    const returned = reflectApply(then, value, [
       ignoreSettlement,
       ignoreSettlement,
     ]);
@@ -526,16 +556,7 @@ function observeUnexpectedAsyncValidation(
 
 function observeReturnedThenable(value: unknown): void {
   if (!isObjectLike(value)) return;
-
-  try {
-    Reflect.apply(Promise.prototype.then, value, [
-      ignoreSettlement,
-      ignoreSettlement,
-    ]);
-    return;
-  } catch {
-    // A non-Promise thenable needs one best-effort observation below.
-  }
+  if (observeNativePromise(value)) return;
 
   let then: unknown;
   try {
@@ -545,23 +566,34 @@ function observeReturnedThenable(value: unknown): void {
   }
   if (typeof then !== "function") return;
   try {
-    const returned = Reflect.apply(then, value, [
+    const returned = reflectApply(then, value, [
       ignoreSettlement,
       ignoreSettlement,
     ]);
     if (returned !== value && isObjectLike(returned)) {
-      try {
-        Reflect.apply(Promise.prototype.then, returned, [
-          ignoreSettlement,
-          ignoreSettlement,
-        ]);
-      } catch {
-        // Hostile secondary thenables are already isolated from this boundary.
-      }
+      observeNativePromise(returned);
     }
   } catch {
     // The validator is invalid either way; observation must never escape.
   }
+}
+
+function observeNativePromise(value: object): boolean {
+  try {
+    reflectApply(nativePromiseThen, value, [
+      ignoreSettlement,
+      ignoreSettlement,
+    ]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function resolveWithCapturedPromise(value: unknown): Promise<unknown> {
+  return reflectApply(nativePromiseResolve, nativePromiseConstructor, [
+    value,
+  ]) as Promise<unknown>;
 }
 
 function ignoreSettlement(): void {
@@ -689,6 +721,13 @@ function writeSerializedValue(
     return;
   }
   if (typeof value === "bigint") {
+    if (
+      value >= maximumSerializableBigIntMagnitude ||
+      value <= -maximumSerializableBigIntMagnitude
+    ) {
+      state.writer.truncate();
+      return;
+    }
     writeQuotedString(`${value}n`, state, true);
     return;
   }
@@ -717,10 +756,10 @@ function writeSerializedValue(
   const isArray = Array.isArray(value);
   const prototype = Object.getPrototypeOf(value);
   if (isArray) {
-    if (prototype !== Array.prototype && prototype !== null) {
+    if (!isSupportedArrayPrototype(prototype)) {
       throw new TypeError("Tool output arrays must use a plain prototype");
     }
-  } else if (prototype !== Object.prototype && prototype !== null) {
+  } else if (!isSupportedObjectPrototype(prototype)) {
     throw new TypeError(
       "Tool output objects must be plain or have a null prototype",
     );
@@ -736,6 +775,65 @@ function writeSerializedValue(
   } finally {
     state.ancestors.delete(value);
   }
+}
+
+function isSupportedObjectPrototype(prototype: object | null): boolean {
+  if (prototype === null || prototype === Object.prototype) return true;
+  if (Object.getPrototypeOf(prototype) !== null) return false;
+  return (
+    hasStandardConstructor(prototype, "Object") &&
+    hasOwnDataFunction(prototype, "hasOwnProperty") &&
+    hasOwnDataFunction(prototype, "propertyIsEnumerable") &&
+    hasOwnDataFunction(prototype, "toString") &&
+    hasOwnDataFunction(prototype, "valueOf")
+  );
+}
+
+function isSupportedArrayPrototype(prototype: object | null): boolean {
+  if (prototype === null || prototype === Array.prototype) return true;
+  const parent = Object.getPrototypeOf(prototype);
+  return (
+    isSupportedObjectPrototype(parent) &&
+    hasStandardConstructor(prototype, "Array") &&
+    hasOwnDataFunction(prototype, "push") &&
+    hasOwnDataFunction(prototype, Symbol.iterator)
+  );
+}
+
+function hasStandardConstructor(
+  prototype: object,
+  expectedName: "Object" | "Array",
+): boolean {
+  const descriptor = Object.getOwnPropertyDescriptor(prototype, "constructor");
+  if (
+    descriptor === undefined ||
+    !("value" in descriptor) ||
+    typeof descriptor.value !== "function"
+  ) {
+    return false;
+  }
+  const name = Object.getOwnPropertyDescriptor(descriptor.value, "name");
+  const constructorPrototype = Object.getOwnPropertyDescriptor(
+    descriptor.value,
+    "prototype",
+  );
+  return (
+    name !== undefined &&
+    "value" in name &&
+    name.value === expectedName &&
+    constructorPrototype !== undefined &&
+    "value" in constructorPrototype &&
+    constructorPrototype.value === prototype
+  );
+}
+
+function hasOwnDataFunction(value: object, key: PropertyKey): boolean {
+  const descriptor = Object.getOwnPropertyDescriptor(value, key);
+  return (
+    descriptor !== undefined &&
+    "value" in descriptor &&
+    typeof descriptor.value === "function"
+  );
 }
 
 function writeSerializedArray(
@@ -773,26 +871,19 @@ function writeSerializedObject(
   state: SerializationState,
 ): void {
   if (!state.writer.append("{")) return;
-  const ownKeys = Reflect.ownKeys(value);
-  const remainingVisits =
-    COURSE_TOOL_SERIALIZATION_MAX_COLLECTION_ENTRIES -
-    state.collectionEntriesVisited;
-  if (ownKeys.length > remainingVisits) {
-    state.writer.truncate();
-    return;
-  }
-
+  // JSON object semantics: enumerable own string keys only. Symbols and
+  // non-enumerable properties are ignored, and accessors are never invoked.
   const fields: Array<
     Readonly<{ key: string; descriptor: PropertyDescriptor }>
   > = [];
-  for (let index = 0; index < ownKeys.length; index += 1) {
+  for (const key in value) {
+    if (!Object.hasOwn(value, key)) continue;
     if (!visitCollectionEntry(state)) return;
-    const key = ownKeys[index];
     const descriptor = Object.getOwnPropertyDescriptor(value, key);
     if (descriptor === undefined) {
       throw new TypeError("Tool output property disappeared during inspection");
     }
-    if (typeof key === "string" && descriptor.enumerable === true) {
+    if (descriptor.enumerable === true && "value" in descriptor) {
       fields.push({ key, descriptor });
     }
   }
@@ -805,11 +896,7 @@ function writeSerializedObject(
     const field = fields[index];
     writeQuotedString(field.key, state, true);
     if (!state.writer.append(":")) return;
-    if ("value" in field.descriptor) {
-      writeSerializedValue(field.descriptor.value, depth + 1, state);
-    } else {
-      writeQuotedString("[Accessor omitted]", state, false);
-    }
+    writeSerializedValue(field.descriptor.value, depth + 1, state);
     if (state.writer.truncated) return;
   }
   state.writer.append("}");
@@ -903,7 +990,12 @@ function propagateExceptionalFailure(
 function isNonRecoverableToolError(
   value: unknown,
 ): value is NonRecoverableToolError {
-  return isObjectLike(value) && ownedNonRecoverableToolErrors.has(value);
+  return (
+    isObjectLike(value) &&
+    (reflectApply(weakSetHas, sharedNonRecoverableToolErrors, [
+      value,
+    ]) as boolean)
+  );
 }
 
 function createToolContractError(
@@ -916,8 +1008,61 @@ function createToolContractError(
   return error;
 }
 
-function isOwnedToolContractError(value: unknown): value is ToolContractError {
-  return isObjectLike(value) && ownedToolContractErrors.has(value);
+function loadNonRecoverableToolErrorRegistry(): WeakSet<object> {
+  const existing = Object.getOwnPropertyDescriptor(
+    globalThis,
+    nonRecoverableRegistryKey,
+  );
+  if (existing === undefined) {
+    const errors = new WeakSet<object>();
+    const registry = Object.freeze({
+      version: 1 as const,
+      errors,
+    });
+    Object.defineProperty(globalThis, nonRecoverableRegistryKey, {
+      configurable: false,
+      enumerable: false,
+      value: registry,
+      writable: false,
+    });
+    return errors;
+  }
+
+  if (
+    existing.configurable !== false ||
+    existing.writable !== false ||
+    !isObjectLike(existing.value) ||
+    !Object.isFrozen(existing.value)
+  ) {
+    throw new TypeError(
+      "Shared NonRecoverableToolError registry has an invalid shape",
+    );
+  }
+  const version = Object.getOwnPropertyDescriptor(existing.value, "version");
+  const errors = Object.getOwnPropertyDescriptor(existing.value, "errors");
+  if (
+    version === undefined ||
+    !("value" in version) ||
+    version.value !== 1 ||
+    errors === undefined ||
+    !("value" in errors) ||
+    !isWeakSet(errors.value)
+  ) {
+    throw new TypeError(
+      "Shared NonRecoverableToolError registry has incompatible data",
+    );
+  }
+  return errors.value;
+}
+
+function isWeakSet(value: unknown): value is WeakSet<object> {
+  if (!isObjectLike(value)) return false;
+  try {
+    reflectApply(weakSetHas, value, [{}]);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function failureMessage(error: unknown, fallback: string): string {
@@ -1006,8 +1151,8 @@ function waitForAbort<Value>(
       settle("reject", reason);
     };
 
-    const observation = pending.then(
-      (value) => {
+    const observation = reflectApply(nativePromiseThen, pending, [
+      (value: Value) => {
         try {
           if (readSignalAborted(signal)) {
             onAbort();
@@ -1029,8 +1174,8 @@ function waitForAbort<Value>(
           settle("reject", signalError);
         }
       },
-    );
-    void observation.then(undefined, ignoreSettlement);
+    ]) as Promise<void>;
+    reflectApply(nativePromiseThen, observation, [undefined, ignoreSettlement]);
 
     try {
       if (readSignalAborted(signal)) {
