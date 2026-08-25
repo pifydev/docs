@@ -11,7 +11,7 @@
     "postinstall": "fumadocs-mdx",
     "typecheck": "next typegen && tsc --noEmit",
     "lint:app": "eslint .",
-    "test:unit": "vitest run",
+    "test:unit": "vitest run tests",
     "test:course": "vitest run course/test",
     "test:course:checkpoint": "vitest run",
     "test:editorial": "node --test scripts/editorial-lint.test.mjs",

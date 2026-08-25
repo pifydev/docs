@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { access, readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
+import { resolveConfig } from "vitest/node";
 import { parse } from "yaml";
 
 const repositoryRoot = new URL("../", import.meta.url);
@@ -41,6 +43,7 @@ test("content workflow validates the Fumadocs source tree", async () => {
   assertReadOnlyNode22(workflow, "quality");
   assertWorkflowPath(workflow, "content/**");
   assertWorkflowPath(workflow, "course/**");
+  assertWorkflowPath(workflow, "vitest.config.ts");
   assert.deepEqual(workflowCommands(workflow, "quality"), [
     "npm ci",
     "npm run quality:content",
@@ -53,6 +56,7 @@ test("content workflow validates the Fumadocs source tree", async () => {
     .map((command) => command.trim());
   assert.equal(packageJSON.scripts["test:course"], "vitest run course/test");
   assert.equal(packageJSON.scripts["test:course:checkpoint"], "vitest run");
+  assert.equal(packageJSON.scripts["test:unit"], "vitest run tests");
   assert.equal(
     contentQualityCommands.filter(
       (command) => command === "npm run test:course",
@@ -95,16 +99,14 @@ test("duplicate PR sync workflow is absent", async () => {
   );
 });
 
-test("Vitest discovers application and course unit tests", async () => {
-  const config = await readFile(
-    new URL("vitest.config.ts", repositoryRoot),
-    "utf8",
-  );
+test("resolved Vitest config discovers application and course tests", async () => {
+  const { vitestConfig } = await resolveConfig({
+    root: fileURLToPath(repositoryRoot),
+    config: fileURLToPath(new URL("vitest.config.ts", repositoryRoot)),
+  });
 
-  assert.match(
-    config,
-    /include:\s*\[\s*"tests\/\*\*\/\*\.test\.ts",\s*"course\/test\/\*\*\/\*\.test\.ts",?\s*\]/,
-  );
+  assert.ok(vitestConfig.include.includes("tests/**/*.test.ts"));
+  assert.ok(vitestConfig.include.includes("course/test/**/*.test.ts"));
 });
 
 test("Mermaid validation supplies the documented Chromium CI sandbox override", async () => {
