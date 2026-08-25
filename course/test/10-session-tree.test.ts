@@ -1,5 +1,6 @@
 import {
   access,
+  lstat,
   mkdir,
   mkdtemp,
   open,
@@ -131,7 +132,7 @@ test("branches from an earlier entry while retaining inactive descendants", asyn
   const root = await tree.append(user("message-001", "root"));
   const oldLeaf = await tree.append(user("message-002", "old branch"));
 
-  tree.moveTo(root.id);
+  await tree.moveTo(root.id);
   const newLeaf = await tree.append(user("message-003", "new branch"));
 
   expect(newLeaf.parentId).toBe(root.id);
@@ -155,12 +156,12 @@ test("moving the active leaf is in-memory only and controls the next parent", as
   await tree.append(user("message-002", "child"));
   const beforeMove = await readFile(sessionPath, "utf8");
 
-  tree.moveTo(root.id);
+  await tree.moveTo(root.id);
   expect(await readFile(sessionPath, "utf8")).toBe(beforeMove);
   const branched = await tree.append(user("message-003", "branch"));
   expect(branched.parentId).toBe(root.id);
 
-  tree.moveTo(null);
+  await tree.moveTo(null);
   expect(tree.activeEntries).toEqual([]);
   const secondRoot = await tree.append(user("message-004", "second root"));
   expect(secondRoot.parentId).toBeNull();
@@ -212,6 +213,33 @@ test("ignores only an incomplete final JSONL record", async () => {
   const store = await SessionStore.load(sessionPath, deterministicOptions());
   expect(store.entries.map((entry) => entry.id)).toEqual(["entry-001"]);
   expect(await readFile(sessionPath, "utf8")).toContain('"id":"cut');
+
+  const options = deterministicOptions();
+  options.idFactory = () => "entry-002";
+  const recovered = await SessionStore.load(sessionPath, options);
+  await recovered.append("entry-001", user("message-002", "after recovery"));
+  const canonical = await readFile(sessionPath, "utf8");
+  expect(canonical).not.toContain('"id":"cut');
+  await expect(
+    SessionStore.load(sessionPath, deterministicOptions()),
+  ).resolves.toMatchObject({
+    entries: [{ id: "entry-001" }, { id: "entry-002" }],
+  });
+});
+
+test("rejects arbitrary or syntactically complete corruption in an unterminated tail", async () => {
+  for (const tail of [
+    "not-json",
+    `${entryLine()}TRAIL`,
+    '{"type":"entry",,"id":"broken"',
+    '{"type":"entry","id":truX',
+  ]) {
+    await writeFile(sessionPath, `${headerLine()}\n${tail}`, "utf8");
+    await expectSessionError(
+      SessionStore.load(sessionPath, deterministicOptions()),
+      "SESSION_INVALID_JSON",
+    );
+  }
 });
 
 test("fails closed for malformed complete middle and final records", async () => {
@@ -228,15 +256,16 @@ test("fails closed for malformed complete middle and final records", async () =>
   }
 });
 
-test("fails closed for invalid UTF-8 except an incomplete final byte sequence", async () => {
+test("fails closed for invalid UTF-8 including an unterminated final byte sequence", async () => {
   const valid = Buffer.from(`${headerLine()}\n${entryLine()}\n`, "utf8");
   await writeFile(
     sessionPath,
     Buffer.concat([valid, Buffer.from([0x7b, 0xc3])]),
   );
-  await expect(
+  await expectSessionError(
     SessionStore.load(sessionPath, deterministicOptions()),
-  ).resolves.toMatchObject({ entries: [{ id: "entry-001" }] });
+    "SESSION_INVALID_UTF8",
+  );
 
   await writeFile(
     sessionPath,
@@ -299,6 +328,39 @@ test("validates loaded headers, records, messages, and branch-local Tool linkage
     await expectSessionError(
       SessionStore.load(sessionPath, deterministicOptions()),
       fixture.code,
+    );
+  }
+});
+
+test("reports hostile non-primitive header and entry versions without coercion", async () => {
+  const hostileVersion = { toString: null, valueOf: null };
+  const hostileHeader = JSON.stringify({
+    type: "session",
+    version: hostileVersion,
+    id: "session-001",
+    createdAt: "2026-08-26T00:00:01.000Z",
+  });
+  const hostileEntry = JSON.stringify({
+    type: "entry",
+    version: hostileVersion,
+    id: "entry-001",
+    parentId: null,
+    timestamp: "2026-08-26T00:00:02.000Z",
+    message: user("message-001", "hello"),
+  });
+
+  for (const raw of [
+    `${hostileHeader}\n`,
+    `${headerLine()}\n${hostileEntry}\n`,
+  ]) {
+    await writeFile(sessionPath, raw, "utf8");
+    await expect(
+      SessionStore.load(sessionPath, deterministicOptions()),
+    ).rejects.toEqual(
+      expect.objectContaining({
+        name: "SessionStoreError",
+        code: "SESSION_UNSUPPORTED_VERSION",
+      }),
     );
   }
 });
@@ -404,6 +466,66 @@ test("serializes concurrent appends and flushes without losing records", async (
   ).toEqual([]);
 });
 
+test("serializes independent stores for one file and rejects the stale generation", async () => {
+  const firstOptions = deterministicOptions();
+  firstOptions.idFactory = () => "entry-first";
+  const firstStore = await SessionStore.create(sessionPath, firstOptions);
+  const secondOptions = deterministicOptions();
+  secondOptions.idFactory = () => "entry-second";
+  const secondStore = await SessionStore.load(sessionPath, secondOptions);
+  const originalIdentity = await lstat(sessionPath, { bigint: true });
+  const probe = await open(sessionPath, "r");
+  const fileHandlePrototype = Object.getPrototypeOf(probe) as {
+    stat: (options: { bigint: true }) => Promise<{
+      dev: bigint;
+      ino: bigint;
+    }>;
+  };
+  const originalStat = fileHandlePrototype.stat;
+  await probe.close();
+  let destinationHandles = 0;
+  let releaseDestinationHandles: (() => void) | undefined;
+  const bothDestinationHandles = new Promise<void>((resolve) => {
+    releaseDestinationHandles = resolve;
+  });
+  fileHandlePrototype.stat = async function (options) {
+    const stats = await originalStat.call(this, options);
+    if (
+      stats.dev === originalIdentity.dev &&
+      stats.ino === originalIdentity.ino
+    ) {
+      destinationHandles += 1;
+      if (destinationHandles === 2) releaseDestinationHandles?.();
+      await bothDestinationHandles;
+    }
+    return stats;
+  };
+
+  let outcomes: PromiseSettledResult<SessionEntry>[];
+  try {
+    outcomes = await Promise.allSettled([
+      firstStore.append(null, user("message-first", "aaaaa")),
+      secondStore.append(null, user("message-second", "bbbbb")),
+    ]);
+  } finally {
+    fileHandlePrototype.stat = originalStat;
+  }
+
+  expect(
+    outcomes.filter((outcome) => outcome.status === "fulfilled"),
+  ).toHaveLength(1);
+  const rejected = outcomes.find((outcome) => outcome.status === "rejected");
+  expect(rejected).toMatchObject({
+    status: "rejected",
+    reason: { code: "SESSION_FILE_CHANGED" },
+  });
+  const winner = outcomes.find((outcome) => outcome.status === "fulfilled");
+  if (winner?.status !== "fulfilled") throw new Error("Missing winning append");
+  const reloaded = await SessionStore.load(sessionPath, deterministicOptions());
+  expect(reloaded.entries).toHaveLength(1);
+  expect(reloaded.entries[0]).toEqual(winner.value);
+});
+
 test("atomically flushes a reloadable snapshot and leaves no temporary siblings", async () => {
   const store = await SessionStore.create(sessionPath, deterministicOptions());
   await store.append(null, user("message-001", "persisted"));
@@ -449,6 +571,187 @@ test("preserves the existing file and removes its exact temporary after flush I/
       name.includes(".pify-session-"),
     ),
   ).toEqual([]);
+});
+
+test("rolls back an append after a partial temporary write and permits retry", async () => {
+  const store = await SessionStore.create(sessionPath, deterministicOptions());
+  const before = await readFile(sessionPath, "utf8");
+  const probe = await open(sessionPath, "r");
+  const fileHandlePrototype = Object.getPrototypeOf(probe) as {
+    write: (
+      buffer: Uint8Array,
+      offset?: number,
+      length?: number,
+      position?: number | null,
+    ) => Promise<{ bytesWritten: number; buffer: Uint8Array }>;
+  };
+  const originalWrite = fileHandlePrototype.write;
+  await probe.close();
+  let writeCalls = 0;
+  fileHandlePrototype.write = async function (
+    buffer,
+    offset = 0,
+    length = buffer.byteLength - offset,
+    position = null,
+  ) {
+    writeCalls += 1;
+    if (writeCalls > 1) throw new Error("injected write failure");
+    const partialLength = Math.max(1, Math.floor(length / 2));
+    return originalWrite.call(this, buffer, offset, partialLength, position);
+  };
+
+  try {
+    await expect(
+      store.append(null, user("message-001", "first attempt")),
+    ).rejects.toThrow();
+  } finally {
+    fileHandlePrototype.write = originalWrite;
+  }
+
+  expect(writeCalls).toBe(2);
+  expect(await readFile(sessionPath, "utf8")).toBe(before);
+  expect(store.entries).toEqual([]);
+  expect(
+    (await readdir(workspace)).filter((name) =>
+      name.includes(".pify-session-"),
+    ),
+  ).toEqual([]);
+  await expect(
+    store.append(null, user("message-002", "retry")),
+  ).resolves.toMatchObject({ id: "entry-002" });
+});
+
+test("rolls back an append after temporary fsync failure and permits retry", async () => {
+  const store = await SessionStore.create(sessionPath, deterministicOptions());
+  const before = await readFile(sessionPath, "utf8");
+  const probe = await open(sessionPath, "r");
+  const fileHandlePrototype = Object.getPrototypeOf(probe) as {
+    sync: () => Promise<void>;
+  };
+  const originalSync = fileHandlePrototype.sync;
+  await probe.close();
+  fileHandlePrototype.sync = async () => {
+    throw new Error("injected append sync failure");
+  };
+
+  try {
+    await expect(
+      store.append(null, user("message-001", "first attempt")),
+    ).rejects.toThrowError("injected append sync failure");
+  } finally {
+    fileHandlePrototype.sync = originalSync;
+  }
+
+  expect(await readFile(sessionPath, "utf8")).toBe(before);
+  expect(store.entries).toEqual([]);
+  expect(
+    (await readdir(workspace)).filter((name) =>
+      name.includes(".pify-session-"),
+    ),
+  ).toEqual([]);
+  await expect(
+    store.append(null, user("message-002", "retry")),
+  ).resolves.toMatchObject({ id: "entry-002" });
+});
+
+test("rolls back an installed append when directory fsync fails", async () => {
+  const store = await SessionStore.create(sessionPath, deterministicOptions());
+  const before = await readFile(sessionPath, "utf8");
+  const probe = await open(sessionPath, "r");
+  const fileHandlePrototype = Object.getPrototypeOf(probe) as {
+    stat: (options: {
+      bigint: true;
+    }) => Promise<{ isDirectory: () => boolean }>;
+    sync: () => Promise<void>;
+  };
+  const originalStat = fileHandlePrototype.stat;
+  const originalSync = fileHandlePrototype.sync;
+  await probe.close();
+  fileHandlePrototype.sync = async function () {
+    const stats = await originalStat.call(this, { bigint: true });
+    if (stats.isDirectory()) throw new Error("injected directory sync failure");
+    await originalSync.call(this);
+  };
+
+  try {
+    await expect(
+      store.append(null, user("message-001", "first attempt")),
+    ).rejects.toThrowError("injected directory sync failure");
+  } finally {
+    fileHandlePrototype.sync = originalSync;
+  }
+
+  expect(await readFile(sessionPath, "utf8")).toBe(before);
+  expect(store.entries).toEqual([]);
+  expect(
+    (await readdir(workspace)).filter((name) =>
+      name.includes(".pify-session-"),
+    ),
+  ).toEqual([]);
+  await expect(
+    store.append(null, user("message-002", "retry")),
+  ).resolves.toMatchObject({ id: "entry-002" });
+});
+
+test("linearizes concurrent tree appends into an invocation-ordered chain", async () => {
+  const store = await SessionStore.create(sessionPath, deterministicOptions());
+  const tree = new SessionTree(store);
+
+  const first = tree.append(user("message-001", "first"));
+  const second = tree.append(user("message-002", "second"));
+  const [firstEntry, secondEntry] = await Promise.all([first, second]);
+
+  expect(firstEntry.parentId).toBeNull();
+  expect(secondEntry.parentId).toBe(firstEntry.id);
+  expect(tree.activeLeafId).toBe(secondEntry.id);
+  expect(tree.activeMessages.map((message) => message.content)).toEqual([
+    "first",
+    "second",
+  ]);
+});
+
+test("linearizes moveTo after pending appends and does not overwrite the move", async () => {
+  const store = await SessionStore.create(sessionPath, deterministicOptions());
+  const tree = new SessionTree(store);
+
+  const appended = tree.append(user("message-001", "first"));
+  const movedToNewEntry = Promise.resolve().then(() =>
+    tree.moveTo("entry-001"),
+  );
+  const movedToRoot = Promise.resolve().then(() => tree.moveTo(null));
+  const outcomes = await Promise.allSettled([
+    appended,
+    movedToNewEntry,
+    movedToRoot,
+  ]);
+
+  expect(outcomes.every((outcome) => outcome.status === "fulfilled")).toBe(
+    true,
+  );
+  expect(tree.activeLeafId).toBeNull();
+  expect(tree.activeEntries).toEqual([]);
+  expect(tree.entries.map((entry) => entry.id)).toEqual(["entry-001"]);
+});
+
+test("continues queued tree operations after an append failure", async () => {
+  const options = deterministicOptions();
+  const generatedIds = ["entry-001", "entry-001", "entry-002"];
+  options.idFactory = () => generatedIds.shift() ?? "entry-unexpected";
+  const store = await SessionStore.create(sessionPath, options);
+  const tree = new SessionTree(store);
+  await tree.append(user("message-001", "existing"));
+
+  const failed = tree.append(user("message-002", "duplicate"));
+  const recovered = tree.append(user("message-003", "recovered"));
+
+  await expect(failed).rejects.toMatchObject({
+    code: "SESSION_DUPLICATE_ENTRY_ID",
+  });
+  await expect(recovered).resolves.toMatchObject({
+    id: "entry-002",
+    parentId: "entry-001",
+  });
+  expect(tree.activeLeafId).toBe("entry-002");
 });
 
 test("detects root replacement and preserves both disk and memory on failure", async () => {
@@ -530,8 +833,10 @@ test("enforces documented file, line, and record bounds", async () => {
 test("uses a stable typed error surface for invalid active leaves", async () => {
   const store = await SessionStore.create(sessionPath, deterministicOptions());
   const tree = new SessionTree(store);
-  expect(() => tree.moveTo("entry-missing")).toThrowError(SessionStoreError);
-  expect(() => tree.moveTo("entry-missing")).toThrowError(
-    expect.objectContaining({ code: "SESSION_ENTRY_NOT_FOUND" }),
-  );
+  await expect(
+    Promise.resolve().then(() => tree.moveTo("entry-missing")),
+  ).rejects.toBeInstanceOf(SessionStoreError);
+  await expect(
+    Promise.resolve().then(() => tree.moveTo("entry-missing")),
+  ).rejects.toMatchObject({ code: "SESSION_ENTRY_NOT_FOUND" });
 });

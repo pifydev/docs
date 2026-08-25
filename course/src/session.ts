@@ -1,6 +1,7 @@
-import { lstat, open, realpath, rename, rm } from "node:fs/promises";
+import { link, lstat, open, realpath, rename, rm } from "node:fs/promises";
+import type { FileHandle } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
-import { dirname, resolve } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 
 import { validateTranscript } from "./messages";
 import type {
@@ -81,13 +82,14 @@ type RootIdentity = Readonly<{
 type ParsedSession = Readonly<{
   header: SessionHeader;
   entries: readonly SessionEntry[];
-  recovered: boolean;
 }>;
 
 const textDecoder = new TextDecoder("utf-8", { fatal: true });
+const sessionPathLocks = new Map<string, Promise<void>>();
 
 export class SessionStore {
   readonly #path: string;
+  readonly #lockKey: string;
   readonly #root: RootIdentity;
   readonly #clock: () => string;
   readonly #idFactory: () => string;
@@ -96,7 +98,6 @@ export class SessionStore {
   readonly #entryById: Map<string, SessionEntry>;
   #fileIdentity: FileIdentity;
   #fileSize: number;
-  #needsRecovery: boolean;
   #queue: Promise<void> = Promise.resolve();
 
   private constructor(input: {
@@ -106,11 +107,11 @@ export class SessionStore {
     fileSize: number;
     header: SessionHeader;
     entries: readonly SessionEntry[];
-    recovered: boolean;
     clock: () => string;
     idFactory: () => string;
   }) {
     this.#path = input.path;
+    this.#lockKey = canonicalSessionKey(input.path, input.root);
     this.#root = input.root;
     this.#fileIdentity = input.fileIdentity;
     this.#fileSize = input.fileSize;
@@ -119,7 +120,6 @@ export class SessionStore {
     this.#entryById = new Map(
       input.entries.map((entry) => [entry.id, entry] as const),
     );
-    this.#needsRecovery = input.recovered;
     this.#clock = input.clock;
     this.#idFactory = input.idFactory;
   }
@@ -157,10 +157,7 @@ export class SessionStore {
     let handle;
     try {
       handle = await open(absolutePath, "wx", 0o600);
-      const written = await handle.write(bytes, 0, bytes.byteLength, 0);
-      if (written.bytesWritten !== bytes.byteLength) {
-        throw new Error("Session header write was incomplete");
-      }
+      await writeAll(handle, bytes);
       await handle.sync();
       const stats = await handle.stat({ bigint: true });
       if (!stats.isFile()) {
@@ -179,7 +176,6 @@ export class SessionStore {
         fileSize: bytes.byteLength,
         header,
         entries: [],
-        recovered: false,
         clock,
         idFactory,
       });
@@ -250,7 +246,6 @@ export class SessionStore {
       fileSize: bytes.byteLength,
       header: parsed.header,
       entries: parsed.entries,
-      recovered: parsed.recovered,
       clock,
       idFactory,
     });
@@ -288,6 +283,7 @@ export class SessionStore {
     parentId: string | null,
     message: CourseMessage,
   ): Promise<SessionEntry> {
+    await this.#assertStorageIdentity();
     if (this.#entries.length >= MAX_SESSION_RECORDS) {
       throw new SessionStoreError(
         "SESSION_RECORD_LIMIT",
@@ -323,62 +319,24 @@ export class SessionStore {
       message,
     });
     assertToolLinkage(entry, this.#entryById);
-    const bytes = serializeLine(entry);
-    if (this.#needsRecovery) await this.#atomicRewrite();
-    await this.#assertStorageIdentity();
-    if (this.#fileSize + bytes.byteLength > MAX_SESSION_FILE_BYTES) {
-      throw new SessionStoreError(
-        "SESSION_FILE_TOO_LARGE",
-        "Appending the record would exceed the session file limit",
-      );
-    }
-
-    const handle = await open(this.#path, "r+");
-    try {
-      const opened = await handle.stat({ bigint: true });
-      if (!sameIdentity(identityFromStats(opened), this.#fileIdentity)) {
-        throw new SessionStoreError(
-          "SESSION_FILE_CHANGED",
-          "Session file changed before append",
-        );
-      }
-      if (opened.size !== BigInt(this.#fileSize)) {
-        throw new SessionStoreError(
-          "SESSION_FILE_CHANGED",
-          "Session file size changed before append",
-        );
-      }
-      const written = await handle.write(
-        bytes,
-        0,
-        bytes.byteLength,
-        this.#fileSize,
-      );
-      if (written.bytesWritten !== bytes.byteLength) {
-        await handle.sync();
-        throw new Error("Session append was incomplete");
-      }
-      await handle.sync();
-    } finally {
-      await handle.close();
-    }
-    await assertRoot(this.#root);
-    await assertPathIdentity(
-      this.#path,
-      this.#fileIdentity,
-      this.#fileSize + bytes.byteLength,
-    );
-    this.#fileSize += bytes.byteLength;
+    const prospectiveEntries = Object.freeze([...this.#entries, entry]);
+    await this.#atomicCommit(prospectiveEntries);
     this.#entries.push(entry);
     this.#entryById.set(entry.id, entry);
     return entry;
   }
 
   async #atomicRewrite(): Promise<void> {
+    await this.#atomicCommit(this.#entries);
+  }
+
+  async #atomicCommit(entries: readonly SessionEntry[]): Promise<void> {
     await this.#assertStorageIdentity();
-    const bytes = serializeSession(this.#header, this.#entries);
+    const bytes = serializeSession(this.#header, entries);
     const temporaryPath = `${this.#path}.pify-session-${process.pid}-${randomUUID()}`;
+    const backupPath = `${this.#path}.pify-session-backup-${process.pid}-${randomUUID()}`;
     let temporaryIdentity: FileIdentity | undefined;
+    let backupIdentity: FileIdentity | undefined;
     let handle;
     try {
       handle = await open(temporaryPath, "wx", 0o600);
@@ -387,10 +345,7 @@ export class SessionStore {
         throw new Error("Session temporary is not a regular file");
       }
       temporaryIdentity = identityFromStats(stats);
-      const written = await handle.write(bytes, 0, bytes.byteLength, 0);
-      if (written.bytesWritten !== bytes.byteLength) {
-        throw new Error("Session flush write was incomplete");
-      }
+      await writeAll(handle, bytes);
       await handle.sync();
       await handle.close();
       handle = undefined;
@@ -400,23 +355,56 @@ export class SessionStore {
         temporaryIdentity,
         bytes.byteLength,
       );
-      await rename(temporaryPath, this.#path);
-      const installed = await lstat(this.#path, { bigint: true });
-      const installedIdentity = identityFromStats(installed);
-      if (!sameIdentity(installedIdentity, temporaryIdentity)) {
+      await link(this.#path, backupPath);
+      const backupStats = await lstat(backupPath, { bigint: true });
+      backupIdentity = identityFromStats(backupStats);
+      if (!sameIdentity(backupIdentity, this.#fileIdentity)) {
         throw new SessionStoreError(
           "SESSION_FILE_CHANGED",
-          "Installed session file identity is unexpected",
+          "Session rollback link has an unexpected identity",
         );
+      }
+      await assertPathIdentity(backupPath, backupIdentity, this.#fileSize);
+      await this.#assertStorageIdentity();
+      await rename(temporaryPath, this.#path);
+      let installedIdentity: FileIdentity;
+      try {
+        const installed = await lstat(this.#path, { bigint: true });
+        installedIdentity = identityFromStats(installed);
+        if (!sameIdentity(installedIdentity, temporaryIdentity)) {
+          throw new SessionStoreError(
+            "SESSION_FILE_CHANGED",
+            "Installed session file identity is unexpected",
+          );
+        }
+        await syncDirectory(this.#root.path);
+      } catch (cause) {
+        await rename(backupPath, this.#path);
+        backupIdentity = undefined;
+        await syncDirectory(this.#root.path).catch(() => undefined);
+        throw cause;
       }
       this.#fileIdentity = installedIdentity;
       this.#fileSize = bytes.byteLength;
-      this.#needsRecovery = false;
-      await syncDirectory(this.#root.path);
+      try {
+        await removeExactTemporary(backupPath, backupIdentity);
+        backupIdentity = undefined;
+      } catch {
+        // The committed destination is already durable. The finally block
+        // retries cleanup without turning a successful commit into failure.
+      }
+      await syncDirectory(this.#root.path).catch(() => undefined);
     } finally {
       await handle?.close().catch(() => undefined);
       if (temporaryIdentity !== undefined) {
-        await removeExactTemporary(temporaryPath, temporaryIdentity);
+        await removeExactTemporary(temporaryPath, temporaryIdentity).catch(
+          () => undefined,
+        );
+      }
+      if (backupIdentity !== undefined) {
+        await removeExactTemporary(backupPath, backupIdentity).catch(
+          () => undefined,
+        );
       }
     }
   }
@@ -427,7 +415,9 @@ export class SessionStore {
   }
 
   #enqueue<Result>(task: () => Promise<Result>): Promise<Result> {
-    const result = this.#queue.then(task);
+    const result = this.#queue.then(() =>
+      withSessionPathLock(this.#lockKey, task),
+    );
     this.#queue = result.then(
       () => undefined,
       () => undefined,
@@ -439,6 +429,7 @@ export class SessionStore {
 export class SessionTree {
   readonly #store: SessionStore;
   #activeLeafId: string | null;
+  #queue: Promise<void> = Promise.resolve();
 
   public constructor(store: SessionStore) {
     this.#store = store;
@@ -477,24 +468,45 @@ export class SessionTree {
     return Object.freeze(this.activeEntries.map((entry) => entry.message));
   }
 
-  public moveTo(entryId: string | null): void {
-    if (
-      entryId !== null &&
-      !this.#store.entries.some((entry) => entry.id === entryId)
-    ) {
-      throw new SessionStoreError(
-        "SESSION_ENTRY_NOT_FOUND",
-        `Session entry "${entryId}" does not exist`,
-      );
-    }
-    this.#activeLeafId = entryId;
+  public moveTo(entryId: string | null): Promise<void> {
+    return this.#enqueue(async () => {
+      if (
+        entryId !== null &&
+        !this.#store.entries.some((entry) => entry.id === entryId)
+      ) {
+        throw new SessionStoreError(
+          "SESSION_ENTRY_NOT_FOUND",
+          `Session entry "${entryId}" does not exist`,
+        );
+      }
+      this.#activeLeafId = entryId;
+    });
   }
 
-  public async append(message: CourseMessage): Promise<SessionEntry> {
-    const parentId = this.#activeLeafId;
-    const entry = await this.#store.append(parentId, message);
-    this.#activeLeafId = entry.id;
-    return entry;
+  public append(message: CourseMessage): Promise<SessionEntry> {
+    let messageSnapshot: CourseMessage;
+    try {
+      messageSnapshot = snapshotMessage(message);
+    } catch (cause) {
+      return Promise.reject(cause);
+    }
+    return this.#enqueue(async () => {
+      const entry = await this.#store.append(
+        this.#activeLeafId,
+        messageSnapshot,
+      );
+      this.#activeLeafId = entry.id;
+      return entry;
+    });
+  }
+
+  #enqueue<Result>(operation: () => Promise<Result>): Promise<Result> {
+    const result = this.#queue.then(operation);
+    this.#queue = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
   }
 }
 
@@ -516,7 +528,6 @@ function parseSession(bytes: Buffer): ParsedSession {
   }
 
   const values: unknown[] = [];
-  let recovered = false;
   for (let index = 0; index < rawLines.length; index += 1) {
     let line = rawLines[index];
     if (line.at(-1) === 0x0d) line = line.subarray(0, line.byteLength - 1);
@@ -532,10 +543,6 @@ function parseSession(bytes: Buffer): ParsedSession {
     try {
       text = textDecoder.decode(line);
     } catch (cause) {
-      if (isIncompleteFinal) {
-        recovered = true;
-        break;
-      }
       throw new SessionStoreError(
         "SESSION_INVALID_UTF8",
         `Session line ${index + 1} is not valid UTF-8`,
@@ -545,8 +552,7 @@ function parseSession(bytes: Buffer): ParsedSession {
     try {
       values.push(JSON.parse(text) as unknown);
     } catch (cause) {
-      if (isIncompleteFinal) {
-        recovered = true;
+      if (isIncompleteFinal && isIncompleteJsonObjectPrefix(text)) {
         break;
       }
       throw new SessionStoreError(
@@ -592,8 +598,215 @@ function parseSession(bytes: Buffer): ParsedSession {
   return Object.freeze({
     header,
     entries: Object.freeze(entries),
-    recovered: recovered || !hasTrailingNewline,
   });
+}
+
+type JsonPrefixStatus = "complete" | "incomplete" | "invalid";
+
+function isIncompleteJsonObjectPrefix(text: string): boolean {
+  const parser = new JsonPrefixParser(text);
+  parser.skipWhitespace();
+  if (parser.peek() !== "{") return false;
+  const status = parser.parseObject();
+  if (status !== "complete") return status === "incomplete";
+  parser.skipWhitespace();
+  return false;
+}
+
+class JsonPrefixParser {
+  #index = 0;
+
+  public constructor(private readonly text: string) {}
+
+  public peek(): string | undefined {
+    return this.text[this.#index];
+  }
+
+  public skipWhitespace(): void {
+    while (isJsonWhitespace(this.peek())) this.#index += 1;
+  }
+
+  public parseObject(): JsonPrefixStatus {
+    if (this.peek() !== "{") return "invalid";
+    this.#index += 1;
+    this.skipWhitespace();
+    if (this.peek() === undefined) return "incomplete";
+    if (this.peek() === "}") {
+      this.#index += 1;
+      return "complete";
+    }
+
+    while (true) {
+      const key = this.#parseString();
+      if (key !== "complete") return key;
+      this.skipWhitespace();
+      if (this.peek() === undefined) return "incomplete";
+      if (this.peek() !== ":") return "invalid";
+      this.#index += 1;
+      this.skipWhitespace();
+      const value = this.#parseValue();
+      if (value !== "complete") return value;
+      this.skipWhitespace();
+      const delimiter = this.peek();
+      if (delimiter === undefined) return "incomplete";
+      if (delimiter === "}") {
+        this.#index += 1;
+        return "complete";
+      }
+      if (delimiter !== ",") return "invalid";
+      this.#index += 1;
+      this.skipWhitespace();
+      if (this.peek() === undefined) return "incomplete";
+      if (this.peek() === "}") return "invalid";
+    }
+  }
+
+  #parseValue(): JsonPrefixStatus {
+    const next = this.peek();
+    if (next === undefined) return "incomplete";
+    if (next === "{") return this.parseObject();
+    if (next === "[") return this.#parseArray();
+    if (next === '"') return this.#parseString();
+    if (next === "t") return this.#parseLiteral("true");
+    if (next === "f") return this.#parseLiteral("false");
+    if (next === "n") return this.#parseLiteral("null");
+    if (next === "-" || isAsciiDigit(next)) return this.#parseNumber();
+    return "invalid";
+  }
+
+  #parseArray(): JsonPrefixStatus {
+    this.#index += 1;
+    this.skipWhitespace();
+    if (this.peek() === undefined) return "incomplete";
+    if (this.peek() === "]") {
+      this.#index += 1;
+      return "complete";
+    }
+
+    while (true) {
+      const value = this.#parseValue();
+      if (value !== "complete") return value;
+      this.skipWhitespace();
+      const delimiter = this.peek();
+      if (delimiter === undefined) return "incomplete";
+      if (delimiter === "]") {
+        this.#index += 1;
+        return "complete";
+      }
+      if (delimiter !== ",") return "invalid";
+      this.#index += 1;
+      this.skipWhitespace();
+      if (this.peek() === undefined) return "incomplete";
+      if (this.peek() === "]") return "invalid";
+    }
+  }
+
+  #parseString(): JsonPrefixStatus {
+    if (this.peek() !== '"') return "invalid";
+    this.#index += 1;
+    while (true) {
+      const character = this.peek();
+      if (character === undefined) return "incomplete";
+      this.#index += 1;
+      if (character === '"') return "complete";
+      if (character.charCodeAt(0) <= 0x1f) return "invalid";
+      if (character !== "\\") continue;
+      const escape = this.peek();
+      if (escape === undefined) return "incomplete";
+      this.#index += 1;
+      if ('"\\/bfnrt'.includes(escape)) continue;
+      if (escape !== "u") return "invalid";
+      for (let digit = 0; digit < 4; digit += 1) {
+        const hex = this.peek();
+        if (hex === undefined) return "incomplete";
+        if (!isHexDigit(hex)) return "invalid";
+        this.#index += 1;
+      }
+    }
+  }
+
+  #parseLiteral(expected: "true" | "false" | "null"): JsonPrefixStatus {
+    for (let offset = 0; offset < expected.length; offset += 1) {
+      const character = this.peek();
+      if (character === undefined) return "incomplete";
+      if (character !== expected[offset]) return "invalid";
+      this.#index += 1;
+    }
+    return "complete";
+  }
+
+  #parseNumber(): JsonPrefixStatus {
+    if (this.peek() === "-") {
+      this.#index += 1;
+      if (this.peek() === undefined) return "incomplete";
+    }
+    if (this.peek() === "0") {
+      this.#index += 1;
+      if (isAsciiDigit(this.peek())) return "invalid";
+    } else if (isNonZeroAsciiDigit(this.peek())) {
+      while (isAsciiDigit(this.peek())) this.#index += 1;
+    } else {
+      return "invalid";
+    }
+
+    if (this.peek() === ".") {
+      this.#index += 1;
+      if (this.peek() === undefined) return "incomplete";
+      if (!isAsciiDigit(this.peek())) return "invalid";
+      while (isAsciiDigit(this.peek())) this.#index += 1;
+    }
+    if (this.peek() === "e" || this.peek() === "E") {
+      this.#index += 1;
+      if (this.peek() === "+" || this.peek() === "-") this.#index += 1;
+      if (this.peek() === undefined) return "incomplete";
+      if (!isAsciiDigit(this.peek())) return "invalid";
+      while (isAsciiDigit(this.peek())) this.#index += 1;
+    }
+    return "complete";
+  }
+}
+
+function isJsonWhitespace(value: string | undefined): boolean {
+  return value === " " || value === "\t" || value === "\r" || value === "\n";
+}
+
+function isAsciiDigit(value: string | undefined): boolean {
+  return value !== undefined && value >= "0" && value <= "9";
+}
+
+function isNonZeroAsciiDigit(value: string | undefined): boolean {
+  return value !== undefined && value >= "1" && value <= "9";
+}
+
+function isHexDigit(value: string): boolean {
+  return (
+    (value >= "0" && value <= "9") ||
+    (value >= "a" && value <= "f") ||
+    (value >= "A" && value <= "F")
+  );
+}
+
+function describeUnknownPrimitive(value: unknown): string {
+  if (value === null) return "null";
+  switch (typeof value) {
+    case "undefined":
+      return "undefined";
+    case "boolean":
+      return value ? "true" : "false";
+    case "number":
+      return Number.isFinite(value) ? `number(${value})` : "non-finite number";
+    case "string":
+      return `string(${JSON.stringify(value)})`;
+    case "bigint":
+      return "bigint";
+    case "symbol":
+      return "symbol";
+    case "function":
+    case "object":
+      return "non-primitive";
+    default:
+      return "unknown";
+  }
 }
 
 function parseHeader(value: unknown): SessionHeader {
@@ -604,10 +817,13 @@ function parseHeader(value: unknown): SessionHeader {
       "First session record must be a header",
     );
   }
-  if (record.version !== SESSION_FORMAT_VERSION) {
+  if (
+    typeof record.version !== "number" ||
+    record.version !== SESSION_FORMAT_VERSION
+  ) {
     throw new SessionStoreError(
       "SESSION_UNSUPPORTED_VERSION",
-      `Unsupported session version ${String(record.version)}`,
+      `Unsupported session version ${describeUnknownPrimitive(record.version)}`,
     );
   }
   assertNonEmptyString(record.id, "Session ID", "SESSION_INVALID_HEADER");
@@ -639,10 +855,13 @@ function parseEntry(value: unknown): SessionEntry {
       "Session entry has an invalid shape",
     );
   }
-  if (record.version !== SESSION_FORMAT_VERSION) {
+  if (
+    typeof record.version !== "number" ||
+    record.version !== SESSION_FORMAT_VERSION
+  ) {
     throw new SessionStoreError(
       "SESSION_UNSUPPORTED_VERSION",
-      `Unsupported entry version ${String(record.version)}`,
+      `Unsupported entry version ${describeUnknownPrimitive(record.version)}`,
     );
   }
   assertNonEmptyString(record.id, "Entry ID", "SESSION_INVALID_RECORD");
@@ -999,6 +1218,51 @@ function snapshotOptionalString(
     );
   }
   return descriptor.value;
+}
+
+async function writeAll(handle: FileHandle, bytes: Buffer): Promise<void> {
+  let offset = 0;
+  while (offset < bytes.byteLength) {
+    const result = await handle.write(
+      bytes,
+      offset,
+      bytes.byteLength - offset,
+      offset,
+    );
+    if (
+      !Number.isSafeInteger(result.bytesWritten) ||
+      result.bytesWritten <= 0 ||
+      result.bytesWritten > bytes.byteLength - offset
+    ) {
+      throw new Error("Session write made invalid progress");
+    }
+    offset += result.bytesWritten;
+  }
+}
+
+async function withSessionPathLock<Result>(
+  key: string,
+  operation: () => Promise<Result>,
+): Promise<Result> {
+  const predecessor = sessionPathLocks.get(key) ?? Promise.resolve();
+  let release: (() => void) | undefined;
+  const gate = new Promise<void>((resolveGate) => {
+    release = resolveGate;
+  });
+  const tail = predecessor.then(() => gate);
+  sessionPathLocks.set(key, tail);
+  await predecessor;
+  try {
+    return await operation();
+  } finally {
+    release?.();
+    if (sessionPathLocks.get(key) === tail) sessionPathLocks.delete(key);
+  }
+}
+
+function canonicalSessionKey(path: string, root: RootIdentity): string {
+  const key = resolve(root.realPath, basename(path));
+  return process.platform === "win32" ? key.toLocaleLowerCase("en-US") : key;
 }
 
 async function captureRoot(path: string): Promise<RootIdentity> {
