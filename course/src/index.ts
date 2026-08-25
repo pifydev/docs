@@ -8,6 +8,7 @@ export * from "./messages";
 export * from "./provider-adapter";
 export * from "./protocol";
 export * from "./resources";
+export * from "./runtime";
 export * from "./scripted-model";
 export * from "./session";
 export * from "./tool";

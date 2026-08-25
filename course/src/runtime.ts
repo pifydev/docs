@@ -1,0 +1,1494 @@
+import { AsyncLocalStorage } from "node:async_hooks";
+import { realpath, stat } from "node:fs/promises";
+import { isAbsolute, relative, resolve } from "node:path";
+import { types as nodeUtilTypes } from "node:util";
+
+import { Agent, type AgentOptions } from "./agent";
+import type { CourseModel } from "./agent-loop";
+import {
+  createNodeProcessTool,
+  createReadTool,
+  createWriteTool,
+} from "./coding-tools";
+import type { CourseMessage, AgentEvent } from "./protocol";
+import {
+  ExtensionHost,
+  ResourceLoader,
+  type ExtensionDefinition,
+  type ExtensionHostOptions,
+  type ResourceRootDefinition,
+} from "./resources";
+import { SessionStore, SessionTree, type SessionStoreOptions } from "./session";
+import { ToolRegistry } from "./tool";
+
+const NativeAggregateError = AggregateError;
+const NativePromise = Promise;
+const nativePromiseResolve = Promise.resolve;
+const nativePromiseThen = Promise.prototype.then;
+const reflectApply = Reflect.apply;
+const asyncLocalStorageGetStore = AsyncLocalStorage.prototype.getStore;
+const asyncLocalStorageRun = AsyncLocalStorage.prototype.run;
+const nodeIsProxy = nodeUtilTypes.isProxy;
+const toolRegistryGet = ToolRegistry.prototype.get;
+const toolRegistryRegisterMany = ToolRegistry.prototype.registerMany;
+const toolRegistrySnapshot = ToolRegistry.prototype.snapshot;
+const sessionStoreFlush = SessionStore.prototype.flush;
+const sessionTreeAppend = SessionTree.prototype.append;
+const agentCancel = Agent.prototype.cancel;
+const agentSubscribe = Agent.prototype.subscribe;
+const extensionHostDispose = ExtensionHost.prototype.dispose;
+const extensionHostEmit = ExtensionHost.prototype.emit;
+
+export type CourseRuntimeErrorCode =
+  | "RUNTIME_INVALID_OPTIONS"
+  | "RUNTIME_CONSTRUCTION_FAILED"
+  | "RUNTIME_ROOT_CHANGED"
+  | "RUNTIME_EVENT_FAILED"
+  | "RUNTIME_SESSION_CHANGED"
+  | "RUNTIME_REENTRANT_OPERATION"
+  | "RUNTIME_DISPOSED"
+  | "RUNTIME_DISPOSAL_FAILED"
+  | "RUNTIME_REPLACEMENT_CLEANUP_FAILED";
+
+export class CourseRuntimeError extends Error {
+  public readonly code: CourseRuntimeErrorCode;
+
+  public constructor(
+    code: CourseRuntimeErrorCode,
+    message: string,
+    options?: ErrorOptions,
+  ) {
+    super(message, options);
+    this.name = "CourseRuntimeError";
+    this.code = code;
+    Object.freeze(this);
+  }
+}
+
+export type CourseRuntimeSessionMode = "create" | "resume";
+
+export type CourseRuntimeSessionOptions = Readonly<{
+  /** Relative paths are resolved below the effective workspace root. */
+  path: string;
+  mode: CourseRuntimeSessionMode;
+  options?: SessionStoreOptions;
+}>;
+
+export type CourseRuntimeWorkspaceOptions = Readonly<{
+  cwd: string;
+  session: CourseRuntimeSessionOptions;
+}>;
+
+export type CourseRuntimeWorkspace = Readonly<{
+  root: string;
+  sessionPath: string;
+  sessionMode: CourseRuntimeSessionMode;
+}>;
+
+type WorkspaceIdentity = Readonly<{
+  configuredRoot: string;
+  canonicalRoot: string;
+  device: number | bigint;
+  inode: number | bigint;
+  birthtimeMs: number | bigint;
+  publicValue: CourseRuntimeWorkspace;
+}>;
+
+export type CourseRuntimeToolsFactoryInput = Readonly<{
+  workspace: CourseRuntimeWorkspace;
+  baseTools: ToolRegistry;
+}>;
+
+export type CourseRuntimeResourcesFactoryInput = Readonly<{
+  workspace: CourseRuntimeWorkspace;
+  roots: readonly ResourceRootDefinition[];
+}>;
+
+export type CourseRuntimeSessionFactoryInput = Readonly<{
+  workspace: CourseRuntimeWorkspace;
+  options: SessionStoreOptions;
+}>;
+
+export type CourseRuntimeExtensionsFactoryInput = Readonly<{
+  workspace: CourseRuntimeWorkspace;
+  resources: ResourceLoader;
+  tools: ToolRegistry;
+  definitions: readonly ExtensionDefinition[];
+}>;
+
+export type CourseRuntimeAgentFactoryInput = Readonly<{
+  workspace: CourseRuntimeWorkspace;
+  model: CourseModel;
+  tools: ToolRegistry;
+  messages: readonly CourseMessage[];
+  maxSteps?: number;
+}>;
+
+type RuntimeFallback<Input, Output> = (input: Input) => Promise<Output>;
+type RuntimeFactory<Input, Output> = (
+  input: Input,
+  fallback: RuntimeFallback<Input, Output>,
+) => Output | PromiseLike<Output>;
+
+/**
+ * Optional composition seams for deterministic hosts and tests. Each fallback
+ * is memoized: calling it more than once returns the same selected operation.
+ */
+export type CourseRuntimeFactoryOverrides = Readonly<{
+  createTools?: RuntimeFactory<CourseRuntimeToolsFactoryInput, ToolRegistry>;
+  createResources?: RuntimeFactory<
+    CourseRuntimeResourcesFactoryInput,
+    ResourceLoader
+  >;
+  createSession?: RuntimeFactory<
+    CourseRuntimeSessionFactoryInput,
+    SessionStore
+  >;
+  createExtensions?: RuntimeFactory<
+    CourseRuntimeExtensionsFactoryInput,
+    ExtensionHost
+  >;
+  createAgent?: RuntimeFactory<CourseRuntimeAgentFactoryInput, Agent>;
+}>;
+
+export type CourseRuntimeOptions = CourseRuntimeWorkspaceOptions &
+  Readonly<{
+    model: CourseModel;
+    maxSteps?: number;
+    tools?: readonly unknown[];
+    resourceRoots?: readonly ResourceRootDefinition[];
+    extensions?: readonly ExtensionDefinition[];
+    factories?: CourseRuntimeFactoryOverrides;
+  }>;
+
+export type CourseRuntimeState = "open" | "failed" | "disposing" | "disposed";
+
+export type CourseRuntime = Readonly<{
+  workspace: CourseRuntimeWorkspace;
+  agent: Agent;
+  session: SessionTree;
+  tools: ToolRegistry;
+  extensions: ExtensionHost;
+  readonly state: CourseRuntimeState;
+  flush: () => Promise<void>;
+  dispose: () => Promise<void>;
+}>;
+
+export type CourseRuntimeManagerState = "open" | "disposing" | "disposed";
+
+type CapturedWorkspaceOptions = Readonly<{
+  cwd: string;
+  sessionPath: string;
+  sessionMode: CourseRuntimeSessionMode;
+  sessionOptions: SessionStoreOptions;
+}>;
+
+type CapturedSharedOptions = Readonly<{
+  model: CourseModel;
+  maxSteps?: number;
+  baseTools: ToolRegistry;
+  resourceRoots: readonly ResourceRootDefinition[];
+  extensions: readonly ExtensionDefinition[];
+  factories: CourseRuntimeFactoryOverrides;
+}>;
+
+type CapturedRuntimeOptions = Readonly<{
+  workspace: CapturedWorkspaceOptions;
+  shared: CapturedSharedOptions;
+}>;
+
+type RunGate = Readonly<{
+  promise: Promise<void>;
+  resolve: () => void;
+}>;
+
+type RuntimeOperationContext = {
+  readonly token: symbol;
+  active: boolean;
+};
+
+/** Build one independently owned runtime for one canonical workspace root. */
+export function createCourseRuntime(
+  options: CourseRuntimeOptions,
+): Promise<CourseRuntime> {
+  let captured: CapturedRuntimeOptions;
+  try {
+    captured = captureRuntimeOptions(options);
+  } catch (error) {
+    return rejected(
+      runtimeFailure(
+        "RUNTIME_INVALID_OPTIONS",
+        "Course runtime options are invalid",
+        error,
+      ),
+    );
+  }
+  return buildCourseRuntime(captured.workspace, captured.shared);
+}
+
+/**
+ * Owns one public runtime reference and serializes workspace replacement.
+ * Shared model/config/factory dependencies are captured once at creation.
+ */
+export class CourseRuntimeManager {
+  readonly #shared: CapturedSharedOptions;
+  #current: CourseRuntime;
+  #state: CourseRuntimeManagerState = "open";
+  #tail: Promise<void> = NativePromise.resolve();
+  #disposePromise: Promise<void> | undefined;
+  readonly #operationContext = new AsyncLocalStorage<RuntimeOperationContext>();
+  readonly #operationToken = Symbol("CourseRuntimeManager operation");
+
+  private constructor(shared: CapturedSharedOptions, current: CourseRuntime) {
+    this.#shared = shared;
+    this.#current = current;
+  }
+
+  public static async create(
+    options: CourseRuntimeOptions,
+  ): Promise<CourseRuntimeManager> {
+    let captured: CapturedRuntimeOptions;
+    try {
+      captured = captureRuntimeOptions(options);
+    } catch (error) {
+      throw runtimeFailure(
+        "RUNTIME_INVALID_OPTIONS",
+        "Course runtime manager options are invalid",
+        error,
+      );
+    }
+    const current = await buildCourseRuntime(
+      captured.workspace,
+      captured.shared,
+    );
+    return new CourseRuntimeManager(captured.shared, current);
+  }
+
+  public get state(): CourseRuntimeManagerState {
+    return this.#state;
+  }
+
+  public get current(): CourseRuntime {
+    if (this.#state !== "open") throw disposedFailure();
+    return this.#current;
+  }
+
+  public replace(
+    workspace: CourseRuntimeWorkspaceOptions,
+  ): Promise<CourseRuntime> {
+    let captured: CapturedWorkspaceOptions;
+    try {
+      this.#assertNotReentrant("replace");
+      this.#assertOpen();
+      captured = captureWorkspaceOptions(workspace);
+    } catch (error) {
+      return rejected(normalizeManagerBoundaryError(error));
+    }
+
+    return this.#enqueue(async () => {
+      this.#assertOpen();
+      const candidate = await buildCourseRuntime(captured, this.#shared);
+      if (this.#state !== "open") {
+        const cleanupFailures = await collectCleanupFailure(() =>
+          candidate.dispose(),
+        );
+        if (cleanupFailures.length > 0) {
+          throw runtimeFailure(
+            "RUNTIME_DISPOSAL_FAILED",
+            "Replacement was cancelled and candidate cleanup failed",
+            frozenAggregate(
+              [disposedFailure(), ...cleanupFailures],
+              "Replacement cancellation and candidate cleanup failed",
+            ),
+          );
+        }
+        throw disposedFailure();
+      }
+
+      const previous = this.#current;
+      this.#current = candidate;
+      try {
+        await previous.dispose();
+      } catch (error) {
+        throw runtimeFailure(
+          "RUNTIME_REPLACEMENT_CLEANUP_FAILED",
+          "The new runtime is live, but the previous runtime failed to dispose",
+          error,
+        );
+      }
+      return candidate;
+    });
+  }
+
+  public flush(): Promise<void> {
+    try {
+      this.#assertNotReentrant("flush");
+      this.#assertOpen();
+    } catch (error) {
+      return rejected(normalizeManagerBoundaryError(error));
+    }
+    return this.#enqueue(async () => {
+      this.#assertOpen();
+      await this.#current.flush();
+    });
+  }
+
+  public dispose(): Promise<void> {
+    if (this.#isReentrant()) {
+      return rejected(reentrantFailure("manager.dispose"));
+    }
+    if (this.#disposePromise !== undefined) return this.#disposePromise;
+    this.#state = "disposing";
+    const disposal = this.#enqueue(async () => {
+      try {
+        await this.#current.dispose();
+      } finally {
+        this.#state = "disposed";
+      }
+    });
+    this.#disposePromise = disposal;
+    return disposal;
+  }
+
+  #assertOpen(): void {
+    if (this.#state !== "open") throw disposedFailure();
+  }
+
+  #assertNotReentrant(operation: string): void {
+    if (this.#isReentrant()) throw reentrantFailure(`manager.${operation}`);
+  }
+
+  #isReentrant(): boolean {
+    const context = reflectApply(
+      asyncLocalStorageGetStore,
+      this.#operationContext,
+      [],
+    ) as RuntimeOperationContext | undefined;
+    return context?.token === this.#operationToken && context.active;
+  }
+
+  #enqueue<Value>(operation: () => Promise<Value>): Promise<Value> {
+    const result = reflectApply(nativePromiseThen, this.#tail, [
+      () => {
+        const context: RuntimeOperationContext = {
+          token: this.#operationToken,
+          active: true,
+        };
+        return reflectApply(asyncLocalStorageRun, this.#operationContext, [
+          context,
+          async () => {
+            try {
+              return await operation();
+            } finally {
+              context.active = false;
+            }
+          },
+        ]) as Promise<Value>;
+      },
+    ]) as Promise<Value>;
+    this.#tail = reflectApply(nativePromiseThen, result, [
+      () => undefined,
+      () => undefined,
+    ]) as Promise<void>;
+    return result;
+  }
+}
+
+export function createCourseRuntimeManager(
+  options: CourseRuntimeOptions,
+): Promise<CourseRuntimeManager> {
+  return CourseRuntimeManager.create(options);
+}
+
+class OwnedCourseRuntime implements CourseRuntime {
+  public readonly workspace: CourseRuntimeWorkspace;
+  public readonly agent: Agent;
+  public readonly session: SessionTree;
+  public readonly tools: ToolRegistry;
+  public readonly extensions: ExtensionHost;
+
+  readonly #identity: WorkspaceIdentity;
+  readonly #store: SessionStore;
+  readonly #persistedMessages: CourseMessage[];
+  #state: CourseRuntimeState = "open";
+  #eventTail: Promise<void> = NativePromise.resolve();
+  #eventFailure: CourseRuntimeError | undefined;
+  #unsubscribe: (() => void) | undefined;
+  #runGate: RunGate | undefined;
+  #disposePromise: Promise<void> | undefined;
+  readonly #operationContext = new AsyncLocalStorage<RuntimeOperationContext>();
+  readonly #operationToken = Symbol("CourseRuntime operation");
+
+  public constructor(input: {
+    identity: WorkspaceIdentity;
+    agent: Agent;
+    session: SessionTree;
+    store: SessionStore;
+    tools: ToolRegistry;
+    extensions: ExtensionHost;
+  }) {
+    this.#identity = input.identity;
+    this.workspace = input.identity.publicValue;
+    this.agent = input.agent;
+    this.session = input.session;
+    this.#store = input.store;
+    this.tools = input.tools;
+    this.extensions = input.extensions;
+    this.#persistedMessages = [...input.session.activeMessages];
+
+    const listener = (event: AgentEvent) => this.#acceptEvent(event);
+    this.#unsubscribe = reflectApply(agentSubscribe, this.agent, [
+      listener,
+    ]) as () => void;
+    Object.freeze(this);
+  }
+
+  public get state(): CourseRuntimeState {
+    return this.#state;
+  }
+
+  public flush(): Promise<void> {
+    if (this.#isReentrant()) return rejected(reentrantFailure("runtime.flush"));
+    if (this.#state === "disposing" || this.#state === "disposed") {
+      return rejected(disposedFailure());
+    }
+    if (this.#eventFailure !== undefined) {
+      return rejected(this.#eventFailure);
+    }
+    return this.#enqueueEvent(async () => {
+      await assertWorkspaceIdentity(this.#identity);
+      await reflectApply(sessionStoreFlush, this.#store, []);
+      await assertWorkspaceIdentity(this.#identity);
+    });
+  }
+
+  public dispose(): Promise<void> {
+    if (this.#isReentrant()) {
+      return rejected(reentrantFailure("runtime.dispose"));
+    }
+    if (this.#disposePromise !== undefined) return this.#disposePromise;
+    this.#state = "disposing";
+    const disposal = this.#performDispose();
+    this.#disposePromise = disposal;
+    return disposal;
+  }
+
+  #acceptEvent(event: AgentEvent): Promise<void> {
+    if (this.#state === "disposed") return rejected(disposedFailure());
+    const transcript =
+      event.type === "message.accepted"
+        ? this.agent.messages
+        : event.type === "run.finished"
+          ? event.payload.result.messages
+          : undefined;
+
+    if (event.type !== "run.finished" && this.#runGate === undefined) {
+      this.#runGate = createRunGate();
+    }
+
+    const operation = this.#enqueueEvent(async () => {
+      await assertWorkspaceIdentity(this.#identity);
+      if (transcript !== undefined) await this.#reconcileTranscript(transcript);
+      const hookFailures = await this.#emitExtensions(event);
+      if (hookFailures.length > 0) {
+        throw runtimeFailure(
+          "RUNTIME_EVENT_FAILED",
+          `${hookFailures.length} Extension event hook(s) failed`,
+          frozenAggregate(
+            hookFailures.map(
+              (failure) =>
+                new Error(
+                  `${failure.extensionId}[${failure.hookIndex}]: ${failure.message}`,
+                ),
+            ),
+            `${hookFailures.length} Extension event hook(s) failed`,
+          ),
+        );
+      }
+      await assertWorkspaceIdentity(this.#identity);
+    });
+
+    if (event.type === "run.finished") {
+      const gate = this.#runGate;
+      this.#runGate = undefined;
+      if (gate !== undefined) {
+        void reflectApply(nativePromiseThen, operation, [
+          gate.resolve,
+          gate.resolve,
+        ]);
+      }
+    }
+    return operation;
+  }
+
+  #enqueueEvent(operation: () => Promise<void>): Promise<void> {
+    const result = reflectApply(nativePromiseThen, this.#eventTail, [
+      async () => {
+        if (this.#eventFailure !== undefined) throw this.#eventFailure;
+        try {
+          await operation();
+        } catch (error) {
+          const failure = normalizeEventFailure(error);
+          this.#eventFailure = failure;
+          if (this.#state === "open") this.#state = "failed";
+          throw failure;
+        }
+      },
+    ]) as Promise<void>;
+    this.#eventTail = reflectApply(nativePromiseThen, result, [
+      () => undefined,
+      () => undefined,
+    ]) as Promise<void>;
+    return result;
+  }
+
+  #emitExtensions(event: AgentEvent): Promise<
+    readonly Readonly<{
+      extensionId: string;
+      hookIndex: number;
+      message: string;
+    }>[]
+  > {
+    return this.#runOwnedCallback(() =>
+      reflectApply(extensionHostEmit, this.extensions, [event]),
+    );
+  }
+
+  #runOwnedCallback<Value>(
+    operation: () => Value | PromiseLike<Value>,
+  ): Promise<Value> {
+    const context: RuntimeOperationContext = {
+      token: this.#operationToken,
+      active: true,
+    };
+    return reflectApply(asyncLocalStorageRun, this.#operationContext, [
+      context,
+      async () => {
+        try {
+          return await adoptAsync(operation());
+        } finally {
+          context.active = false;
+        }
+      },
+    ]) as Promise<Value>;
+  }
+
+  #isReentrant(): boolean {
+    const context = reflectApply(
+      asyncLocalStorageGetStore,
+      this.#operationContext,
+      [],
+    ) as RuntimeOperationContext | undefined;
+    return context?.token === this.#operationToken && context.active;
+  }
+
+  async #reconcileTranscript(
+    transcript: readonly CourseMessage[],
+  ): Promise<void> {
+    const active = this.session.activeMessages;
+    if (!messageArraysEqual(active, this.#persistedMessages)) {
+      throw runtimeFailure(
+        "RUNTIME_SESSION_CHANGED",
+        "The runtime-owned Session branch changed outside the composition root",
+      );
+    }
+    if (transcript.length < this.#persistedMessages.length) {
+      throw runtimeFailure(
+        "RUNTIME_SESSION_CHANGED",
+        "Agent transcript moved behind the persisted Session branch",
+      );
+    }
+    for (let index = 0; index < this.#persistedMessages.length; index += 1) {
+      if (!messagesEqual(this.#persistedMessages[index], transcript[index])) {
+        throw runtimeFailure(
+          "RUNTIME_SESSION_CHANGED",
+          `Agent and Session transcripts diverged at message ${index}`,
+        );
+      }
+    }
+    for (
+      let index = this.#persistedMessages.length;
+      index < transcript.length;
+      index += 1
+    ) {
+      const message = transcript[index];
+      await reflectApply(sessionTreeAppend, this.session, [message]);
+      this.#persistedMessages.push(message);
+    }
+  }
+
+  async #performDispose(): Promise<void> {
+    const failures: unknown[] = [];
+    try {
+      if (this.agent.isRunning) {
+        try {
+          reflectApply(agentCancel, this.agent, ["Course runtime disposed"]);
+        } catch (error) {
+          failures.push(error);
+        }
+        const gate = this.#runGate;
+        if (gate !== undefined) await gate.promise;
+      }
+
+      try {
+        await this.#eventTail;
+      } catch (error) {
+        failures.push(error);
+      }
+      if (
+        this.#eventFailure !== undefined &&
+        !failures.includes(this.#eventFailure)
+      ) {
+        failures.push(this.#eventFailure);
+      }
+
+      this.#unsubscribe?.();
+      this.#unsubscribe = undefined;
+
+      // Persistence is attempted before any Extension-owned resource cleanup.
+      try {
+        await reflectApply(sessionStoreFlush, this.#store, []);
+      } catch (error) {
+        failures.push(error);
+      }
+      try {
+        await this.#runOwnedCallback(() =>
+          reflectApply(extensionHostDispose, this.extensions, []),
+        );
+      } catch (error) {
+        failures.push(error);
+      }
+    } finally {
+      this.#state = "disposed";
+    }
+
+    if (failures.length > 0) {
+      throw runtimeFailure(
+        "RUNTIME_DISPOSAL_FAILED",
+        `${failures.length} runtime cleanup operation(s) failed`,
+        frozenAggregate(failures, "Course runtime disposal failed"),
+      );
+    }
+  }
+}
+
+async function buildCourseRuntime(
+  capturedWorkspace: CapturedWorkspaceOptions,
+  shared: CapturedSharedOptions,
+): Promise<CourseRuntime> {
+  let identity: WorkspaceIdentity;
+  try {
+    identity = await captureWorkspace(capturedWorkspace);
+  } catch (error) {
+    if (error instanceof CourseRuntimeError) throw error;
+    throw runtimeFailure(
+      "RUNTIME_INVALID_OPTIONS",
+      "Cannot capture the Course runtime workspace",
+      error,
+    );
+  }
+
+  let extensions: ExtensionHost | undefined;
+  try {
+    const toolsInput = Object.freeze({
+      workspace: identity.publicValue,
+      baseTools: snapshotRegistry(shared.baseTools),
+    });
+    const baseTools = await invokeFactory(
+      "Tools",
+      shared.factories.createTools,
+      toolsInput,
+      defaultCreateTools,
+      identity,
+    );
+    assertFactoryProduct(baseTools, isToolRegistry, "Tools");
+
+    const roots = Object.freeze([
+      Object.freeze({ id: "workspace", directory: identity.canonicalRoot }),
+      ...shared.resourceRoots,
+    ]);
+    const resourcesInput = Object.freeze({
+      workspace: identity.publicValue,
+      roots,
+    });
+    const resources = await invokeFactory(
+      "Resources",
+      shared.factories.createResources,
+      resourcesInput,
+      defaultCreateResources,
+      identity,
+    );
+    assertFactoryProduct(resources, isResourceLoader, "Resources");
+
+    const sessionInput = Object.freeze({
+      workspace: identity.publicValue,
+      options: capturedWorkspace.sessionOptions,
+    });
+    const store = await invokeFactory(
+      "Session",
+      shared.factories.createSession,
+      sessionInput,
+      defaultCreateSession,
+      identity,
+    );
+    assertFactoryProduct(store, isSessionStore, "Session");
+    const session = new SessionTree(store);
+
+    const extensionsInput = Object.freeze({
+      workspace: identity.publicValue,
+      resources,
+      tools: baseTools,
+      definitions: shared.extensions,
+    });
+    extensions = await invokeFactory(
+      "Extensions",
+      shared.factories.createExtensions,
+      extensionsInput,
+      defaultCreateExtensions,
+      identity,
+    );
+    assertFactoryProduct(extensions, isExtensionHost, "Extensions");
+    const tools = extensions.tools;
+
+    const agentInput = Object.freeze({
+      workspace: identity.publicValue,
+      model: shared.model,
+      tools,
+      messages: session.activeMessages,
+      ...(shared.maxSteps === undefined ? {} : { maxSteps: shared.maxSteps }),
+    });
+    const agent = await invokeFactory(
+      "Agent",
+      shared.factories.createAgent,
+      agentInput,
+      defaultCreateAgent,
+      identity,
+    );
+    assertFactoryProduct(agent, isAgent, "Agent");
+    await assertWorkspaceIdentity(identity);
+
+    return new OwnedCourseRuntime({
+      identity,
+      agent,
+      session,
+      store,
+      tools,
+      extensions,
+    });
+  } catch (error) {
+    const cleanupFailures =
+      extensions === undefined
+        ? []
+        : await collectCleanupFailure(() =>
+            reflectApply(extensionHostDispose, extensions as ExtensionHost, []),
+          );
+    if (error instanceof CourseRuntimeError && cleanupFailures.length === 0) {
+      throw error;
+    }
+    const cause =
+      cleanupFailures.length === 0
+        ? error
+        : frozenAggregate(
+            [error, ...cleanupFailures],
+            "Runtime construction and rollback failed",
+          );
+    throw runtimeFailure(
+      "RUNTIME_CONSTRUCTION_FAILED",
+      cleanupFailures.length === 0
+        ? "Course runtime construction failed"
+        : "Course runtime construction and rollback failed",
+      cause,
+    );
+  }
+}
+
+async function invokeFactory<Input, Output>(
+  label: string,
+  override: RuntimeFactory<Input, Output> | undefined,
+  input: Input,
+  defaultFactory: (input: Input) => Output | PromiseLike<Output>,
+  identity: WorkspaceIdentity,
+): Promise<Output> {
+  let fallbackPromise: Promise<Output> | undefined;
+  const fallback: RuntimeFallback<Input, Output> = () => {
+    if (fallbackPromise !== undefined) return fallbackPromise;
+    fallbackPromise = (async () => {
+      await assertWorkspaceIdentity(identity);
+      const output = await adoptAsync(defaultFactory(input));
+      await assertWorkspaceIdentity(identity);
+      return output;
+    })();
+    return fallbackPromise;
+  };
+  Object.freeze(fallback);
+
+  await assertWorkspaceIdentity(identity);
+  let selected: Output | PromiseLike<Output>;
+  try {
+    selected =
+      override === undefined
+        ? fallback(input)
+        : reflectApply(override, undefined, [input, fallback]);
+  } catch (error) {
+    throw new Error(`${label} factory threw`, { cause: error });
+  }
+  const output = await adoptAsync(selected);
+  await assertWorkspaceIdentity(identity);
+  return output;
+}
+
+function defaultCreateTools(
+  input: CourseRuntimeToolsFactoryInput,
+): ToolRegistry {
+  const registry = new ToolRegistry([
+    createReadTool(input.workspace.root),
+    createWriteTool(input.workspace.root),
+    createNodeProcessTool(input.workspace.root),
+  ]);
+  const definitions = toolsFromRegistry(input.baseTools);
+  reflectApply(toolRegistryRegisterMany, registry, [definitions]);
+  return registry;
+}
+
+function defaultCreateResources(
+  input: CourseRuntimeResourcesFactoryInput,
+): Promise<ResourceLoader> {
+  return ResourceLoader.create(input.roots);
+}
+
+function defaultCreateSession(
+  input: CourseRuntimeSessionFactoryInput,
+): Promise<SessionStore> {
+  return input.workspace.sessionMode === "resume"
+    ? SessionStore.load(input.workspace.sessionPath, input.options)
+    : SessionStore.create(input.workspace.sessionPath, input.options);
+}
+
+async function defaultCreateExtensions(
+  input: CourseRuntimeExtensionsFactoryInput,
+): Promise<ExtensionHost> {
+  const options: ExtensionHostOptions = {
+    resources: input.resources,
+    tools: input.tools,
+  };
+  const host = new ExtensionHost(options);
+  try {
+    host.discover(input.definitions);
+    for (let index = 0; index < input.definitions.length; index += 1) {
+      await host.activate(input.definitions[index].id);
+    }
+    return host;
+  } catch (error) {
+    const cleanupFailures = await collectCleanupFailure(() => host.dispose());
+    if (cleanupFailures.length === 0) throw error;
+    throw frozenAggregate(
+      [error, ...cleanupFailures],
+      "Extension construction and rollback failed",
+    );
+  }
+}
+
+function defaultCreateAgent(input: CourseRuntimeAgentFactoryInput): Agent {
+  const options: AgentOptions = {
+    model: input.model,
+    tools: input.tools,
+    messages: input.messages,
+    ...(input.maxSteps === undefined ? {} : { maxSteps: input.maxSteps }),
+  };
+  return new Agent(options);
+}
+
+function captureRuntimeOptions(value: unknown): CapturedRuntimeOptions {
+  const record = exactDataRecord(value, [
+    "cwd",
+    "model",
+    "session",
+    "maxSteps",
+    "tools",
+    "resourceRoots",
+    "extensions",
+    "factories",
+  ]);
+  const workspace = captureWorkspaceOptions({
+    cwd: requireString(record.cwd, "cwd"),
+    session: captureSessionInput(record.session),
+  });
+  const model = snapshotModel(record.model);
+  const maxSteps = optionalPositiveInteger(record.maxSteps, "maxSteps");
+  const baseDefinitions = snapshotDenseArray(record.tools ?? [], "tools");
+  const baseTools = new ToolRegistry(baseDefinitions);
+  const resourceRoots = snapshotResourceRoots(record.resourceRoots ?? []);
+  const extensions = snapshotExtensionDefinitions(record.extensions ?? []);
+  const factories = snapshotFactories(record.factories);
+  return Object.freeze({
+    workspace,
+    shared: Object.freeze({
+      model,
+      ...(maxSteps === undefined ? {} : { maxSteps }),
+      baseTools,
+      resourceRoots,
+      extensions,
+      factories,
+    }),
+  });
+}
+
+function captureWorkspaceOptions(value: unknown): CapturedWorkspaceOptions {
+  const record = exactDataRecord(value, ["cwd", "session"]);
+  const cwd = requireString(record.cwd, "cwd");
+  const session = captureSessionInput(record.session);
+  return Object.freeze({
+    cwd,
+    sessionPath: session.path,
+    sessionMode: session.mode,
+    sessionOptions: snapshotSessionStoreOptions(session.options),
+  });
+}
+
+function captureSessionInput(value: unknown): CourseRuntimeSessionOptions {
+  const record = exactDataRecord(value, ["path", "mode", "options"]);
+  const path = requireString(record.path, "session.path");
+  const mode = record.mode;
+  if (mode !== "create" && mode !== "resume") {
+    throw new TypeError('session.mode must be "create" or "resume"');
+  }
+  return Object.freeze({
+    path,
+    mode,
+    ...(record.options === undefined
+      ? {}
+      : { options: record.options as never }),
+  });
+}
+
+function snapshotSessionStoreOptions(value: unknown): SessionStoreOptions {
+  if (value === undefined) return Object.freeze({});
+  const record = exactDataRecord(value, [
+    "sessionId",
+    "clock",
+    "idFactory",
+    "fileSystem",
+  ]);
+  return Object.freeze({
+    ...(record.sessionId === undefined
+      ? {}
+      : {
+          sessionId: requireString(
+            record.sessionId,
+            "session.options.sessionId",
+          ),
+        }),
+    ...(record.clock === undefined
+      ? {}
+      : {
+          clock: requireFunction<readonly [], string>(
+            record.clock,
+            "session.options.clock",
+          ),
+        }),
+    ...(record.idFactory === undefined
+      ? {}
+      : {
+          idFactory: requireFunction<readonly [], string>(
+            record.idFactory,
+            "session.options.idFactory",
+          ),
+        }),
+    ...(record.fileSystem === undefined
+      ? {}
+      : { fileSystem: record.fileSystem as SessionStoreOptions["fileSystem"] }),
+  });
+}
+
+function snapshotFactories(value: unknown): CourseRuntimeFactoryOverrides {
+  if (value === undefined) return Object.freeze({});
+  const record = exactDataRecord(value, [
+    "createTools",
+    "createResources",
+    "createSession",
+    "createExtensions",
+    "createAgent",
+  ]);
+  return Object.freeze({
+    ...optionalFactory(record, "createTools"),
+    ...optionalFactory(record, "createResources"),
+    ...optionalFactory(record, "createSession"),
+    ...optionalFactory(record, "createExtensions"),
+    ...optionalFactory(record, "createAgent"),
+  }) as CourseRuntimeFactoryOverrides;
+}
+
+function optionalFactory(
+  record: Record<string, unknown>,
+  key: keyof CourseRuntimeFactoryOverrides,
+): Record<string, unknown> {
+  const value = record[key];
+  if (value === undefined) return {};
+  return { [key]: requireFunction(value, `factories.${key}`) };
+}
+
+function snapshotResourceRoots(
+  value: unknown,
+): readonly ResourceRootDefinition[] {
+  const values = snapshotDenseArray(value, "resourceRoots");
+  const roots: ResourceRootDefinition[] = [];
+  const ids = new Set<string>(["workspace"]);
+  for (let index = 0; index < values.length; index += 1) {
+    const record = exactDataRecord(values[index], ["id", "directory"]);
+    const id = requireString(record.id, `resourceRoots[${index}].id`);
+    if (ids.has(id))
+      throw new TypeError(`Resource root ID "${id}" is duplicated`);
+    ids.add(id);
+    roots.push(
+      Object.freeze({
+        id,
+        directory: requireString(
+          record.directory,
+          `resourceRoots[${index}].directory`,
+        ),
+      }),
+    );
+  }
+  return Object.freeze(roots);
+}
+
+function snapshotExtensionDefinitions(
+  value: unknown,
+): readonly ExtensionDefinition[] {
+  const values = snapshotDenseArray(value, "extensions");
+  const definitions: ExtensionDefinition[] = [];
+  const ids = new Set<string>();
+  for (let index = 0; index < values.length; index += 1) {
+    const record = exactDataRecord(values[index], ["id", "create"]);
+    const id = requireString(record.id, `extensions[${index}].id`);
+    if (ids.has(id)) throw new TypeError(`Extension ID "${id}" is duplicated`);
+    ids.add(id);
+    definitions.push(
+      Object.freeze({
+        id,
+        create: requireFunction<
+          readonly [],
+          ReturnType<ExtensionDefinition["create"]>
+        >(record.create, `extensions[${index}].create`),
+      }),
+    );
+  }
+  return Object.freeze(definitions);
+}
+
+async function captureWorkspace(
+  input: CapturedWorkspaceOptions,
+): Promise<WorkspaceIdentity> {
+  const configuredRoot = resolve(input.cwd);
+  let canonicalRoot: string;
+  let metadata: Awaited<ReturnType<typeof stat>>;
+  try {
+    canonicalRoot = await realpath(configuredRoot);
+    metadata = await stat(canonicalRoot);
+  } catch (error) {
+    throw runtimeFailure(
+      "RUNTIME_INVALID_OPTIONS",
+      "Workspace root cannot be inspected",
+      error,
+    );
+  }
+  if (!metadata.isDirectory()) {
+    throw runtimeFailure(
+      "RUNTIME_INVALID_OPTIONS",
+      "Workspace root must be a directory",
+    );
+  }
+  const sessionPath = isAbsolute(input.sessionPath)
+    ? resolve(input.sessionPath)
+    : resolve(canonicalRoot, input.sessionPath);
+  if (!isWithin(canonicalRoot, sessionPath) || sessionPath === canonicalRoot) {
+    throw runtimeFailure(
+      "RUNTIME_INVALID_OPTIONS",
+      "Session path must name a file inside the workspace root",
+    );
+  }
+  const publicValue = Object.freeze({
+    root: canonicalRoot,
+    sessionPath,
+    sessionMode: input.sessionMode,
+  });
+  return Object.freeze({
+    configuredRoot,
+    canonicalRoot,
+    device: metadata.dev,
+    inode: metadata.ino,
+    birthtimeMs: metadata.birthtimeMs,
+    publicValue,
+  });
+}
+
+async function assertWorkspaceIdentity(
+  identity: WorkspaceIdentity,
+): Promise<void> {
+  try {
+    const canonical = await realpath(identity.configuredRoot);
+    const metadata = await stat(canonical);
+    if (
+      canonical !== identity.canonicalRoot ||
+      !metadata.isDirectory() ||
+      metadata.dev !== identity.device ||
+      metadata.ino !== identity.inode ||
+      metadata.birthtimeMs !== identity.birthtimeMs
+    ) {
+      throw new Error("Workspace identity changed");
+    }
+  } catch (error) {
+    if (
+      error instanceof CourseRuntimeError &&
+      error.code === "RUNTIME_ROOT_CHANGED"
+    ) {
+      throw error;
+    }
+    throw runtimeFailure(
+      "RUNTIME_ROOT_CHANGED",
+      "Workspace root changed after runtime construction began",
+      error,
+    );
+  }
+}
+
+function assertFactoryProduct<Output extends object>(
+  value: unknown,
+  guard: (candidate: object) => candidate is Output,
+  label: string,
+): asserts value is Output {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    nodeIsProxy(value) ||
+    !guard(value)
+  ) {
+    throw new TypeError(`${label} factory returned an invalid product`);
+  }
+}
+
+function isToolRegistry(value: object): value is ToolRegistry {
+  return value instanceof ToolRegistry;
+}
+
+function isResourceLoader(value: object): value is ResourceLoader {
+  return value instanceof ResourceLoader;
+}
+
+function isSessionStore(value: object): value is SessionStore {
+  return value instanceof SessionStore;
+}
+
+function isExtensionHost(value: object): value is ExtensionHost {
+  return value instanceof ExtensionHost;
+}
+
+function isAgent(value: object): value is Agent {
+  return value instanceof Agent;
+}
+
+function toolsFromRegistry(registry: ToolRegistry): readonly unknown[] {
+  const definitions: unknown[] = [];
+  const names = registry.names;
+  for (let index = 0; index < names.length; index += 1) {
+    const tool = reflectApply(toolRegistryGet, registry, [names[index]]);
+    if (tool !== undefined) definitions.push(tool);
+  }
+  return Object.freeze(definitions);
+}
+
+function snapshotRegistry(registry: ToolRegistry): ToolRegistry {
+  return reflectApply(toolRegistrySnapshot, registry, []) as ToolRegistry;
+}
+
+function createRunGate(): RunGate {
+  let resolveGate!: () => void;
+  const promise = new NativePromise<void>((resolveValue) => {
+    resolveGate = resolveValue;
+  });
+  let selected = false;
+  return Object.freeze({
+    promise,
+    resolve: () => {
+      if (selected) return;
+      selected = true;
+      resolveGate();
+    },
+  });
+}
+
+function messageArraysEqual(
+  left: readonly CourseMessage[],
+  right: readonly CourseMessage[],
+): boolean {
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    if (!messagesEqual(left[index], right[index])) return false;
+  }
+  return true;
+}
+
+function messagesEqual(left: CourseMessage, right: CourseMessage): boolean {
+  if (left.role !== right.role || left.id !== right.id) return false;
+  if (left.role === "user" && right.role === "user") {
+    return left.content === right.content;
+  }
+  if (left.role === "toolResult" && right.role === "toolResult") {
+    return (
+      left.toolCallId === right.toolCallId &&
+      left.toolName === right.toolName &&
+      left.content === right.content &&
+      left.isError === right.isError
+    );
+  }
+  if (left.role !== "assistant" || right.role !== "assistant") return false;
+  if (left.content.length !== right.content.length) return false;
+  for (let index = 0; index < left.content.length; index += 1) {
+    const leftBlock = left.content[index];
+    const rightBlock = right.content[index];
+    if (leftBlock.type !== rightBlock.type) return false;
+    if (leftBlock.type === "text" && rightBlock.type === "text") {
+      if (leftBlock.text !== rightBlock.text) return false;
+      continue;
+    }
+    if (leftBlock.type !== "toolCall" || rightBlock.type !== "toolCall") {
+      return false;
+    }
+    if (
+      leftBlock.id !== rightBlock.id ||
+      leftBlock.name !== rightBlock.name ||
+      !jsonEqual(leftBlock.arguments, rightBlock.arguments)
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function jsonEqual(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true;
+  if (Array.isArray(left) && Array.isArray(right)) {
+    if (left.length !== right.length) return false;
+    for (let index = 0; index < left.length; index += 1) {
+      if (!jsonEqual(left[index], right[index])) return false;
+    }
+    return true;
+  }
+  if (!isRecord(left) || !isRecord(right)) return false;
+  const leftKeys = Object.keys(left).sort();
+  const rightKeys = Object.keys(right).sort();
+  if (leftKeys.length !== rightKeys.length) return false;
+  for (let index = 0; index < leftKeys.length; index += 1) {
+    if (
+      leftKeys[index] !== rightKeys[index] ||
+      !jsonEqual(left[leftKeys[index]], right[rightKeys[index]])
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function exactDataRecord(
+  value: unknown,
+  allowedKeys: readonly string[],
+): Record<string, unknown> {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    nodeIsProxy(value) ||
+    (Object.getPrototypeOf(value) !== Object.prototype &&
+      Object.getPrototypeOf(value) !== null)
+  ) {
+    throw new TypeError("Expected an ordinary options object");
+  }
+  const allowed = new Set(allowedKeys);
+  const result: Record<string, unknown> = Object.create(null) as Record<
+    string,
+    unknown
+  >;
+  const keys = Reflect.ownKeys(value);
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index];
+    if (typeof key !== "string" || !allowed.has(key)) {
+      throw new TypeError(`Unexpected option ${String(key)}`);
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (descriptor === undefined || !("value" in descriptor)) {
+      throw new TypeError(`Option ${key} must be a data property`);
+    }
+    result[key] = descriptor.value;
+  }
+  return result;
+}
+
+function snapshotDenseArray(value: unknown, label: string): readonly unknown[] {
+  if (!Array.isArray(value) || nodeIsProxy(value)) {
+    throw new TypeError(`${label} must be an Array`);
+  }
+  const descriptor = Object.getOwnPropertyDescriptor(value, "length");
+  if (
+    descriptor === undefined ||
+    !("value" in descriptor) ||
+    !Number.isSafeInteger(descriptor.value) ||
+    descriptor.value < 0
+  ) {
+    throw new TypeError(`${label}.length is invalid`);
+  }
+  const output: unknown[] = [];
+  for (let index = 0; index < descriptor.value; index += 1) {
+    const item = Object.getOwnPropertyDescriptor(value, String(index));
+    if (item === undefined || !("value" in item)) {
+      throw new TypeError(`${label}[${index}] must be a data property`);
+    }
+    output.push(item.value);
+  }
+  return Object.freeze(output);
+}
+
+function requireString(value: unknown, label: string): string {
+  if (typeof value !== "string" || value.length === 0 || value.includes("\0")) {
+    throw new TypeError(`${label} must be a non-empty string`);
+  }
+  return value;
+}
+
+function requireFunction<Arguments extends readonly unknown[], Result>(
+  value: unknown,
+  label: string,
+): (...argumentsValue: Arguments) => Result {
+  if (typeof value !== "function" || nodeIsProxy(value)) {
+    throw new TypeError(`${label} must be a non-Proxy function`);
+  }
+  return value as (...argumentsValue: Arguments) => Result;
+}
+
+function snapshotModel(value: unknown): CourseModel {
+  if (
+    (typeof value !== "object" && typeof value !== "function") ||
+    value === null ||
+    nodeIsProxy(value)
+  ) {
+    throw new TypeError("model must implement CourseModel");
+  }
+  let stream: unknown;
+  try {
+    stream = Reflect.get(value, "stream");
+  } catch (error) {
+    throw new TypeError("model.stream could not be captured", { cause: error });
+  }
+  if (typeof stream !== "function" || nodeIsProxy(stream)) {
+    throw new TypeError("model.stream must be a non-Proxy function");
+  }
+  return Object.freeze({
+    stream: (request, signal) => reflectApply(stream, value, [request, signal]),
+  });
+}
+
+function optionalPositiveInteger(
+  value: unknown,
+  label: string,
+): number | undefined {
+  if (value === undefined) return undefined;
+  if (!Number.isSafeInteger(value) || (value as number) <= 0) {
+    throw new TypeError(`${label} must be a positive safe integer`);
+  }
+  return value as number;
+}
+
+function isWithin(root: string, target: string): boolean {
+  const path = relative(root, target);
+  return (
+    path !== ".." &&
+    !path.startsWith("../") &&
+    !path.startsWith("..\\") &&
+    !isAbsolute(path)
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function normalizeEventFailure(error: unknown): CourseRuntimeError {
+  if (error instanceof CourseRuntimeError) return error;
+  return runtimeFailure(
+    "RUNTIME_EVENT_FAILED",
+    "Agent event persistence failed",
+    error,
+  );
+}
+
+function normalizeManagerBoundaryError(error: unknown): CourseRuntimeError {
+  if (error instanceof CourseRuntimeError) return error;
+  return runtimeFailure(
+    "RUNTIME_INVALID_OPTIONS",
+    "Runtime replacement options are invalid",
+    error,
+  );
+}
+
+function disposedFailure(): CourseRuntimeError {
+  return runtimeFailure(
+    "RUNTIME_DISPOSED",
+    "Course runtime is disposing or disposed",
+  );
+}
+
+function reentrantFailure(operation: string): CourseRuntimeError {
+  return runtimeFailure(
+    "RUNTIME_REENTRANT_OPERATION",
+    `${operation} cannot run from its own serialized callback`,
+  );
+}
+
+function runtimeFailure(
+  code: CourseRuntimeErrorCode,
+  message: string,
+  cause?: unknown,
+): CourseRuntimeError {
+  return new CourseRuntimeError(
+    code,
+    message,
+    cause === undefined ? undefined : { cause },
+  );
+}
+
+async function collectCleanupFailure(
+  cleanup: () => unknown | PromiseLike<unknown>,
+): Promise<unknown[]> {
+  try {
+    await adoptAsync(cleanup());
+    return [];
+  } catch (error) {
+    return [error];
+  }
+}
+
+function frozenAggregate(
+  errors: readonly unknown[],
+  message: string,
+): AggregateError {
+  const values = Object.freeze(errors.slice());
+  const aggregate = new NativeAggregateError(values, message, {
+    cause: values[0],
+  });
+  Object.freeze(aggregate);
+  return aggregate;
+}
+
+function adoptAsync<Value>(value: Value | PromiseLike<Value>): Promise<Value> {
+  return reflectApply(nativePromiseResolve, NativePromise, [
+    value,
+  ]) as Promise<Value>;
+}
+
+function rejected<Value = never>(error: unknown): Promise<Value> {
+  const promise = new NativePromise<Value>((_resolveValue, rejectValue) => {
+    rejectValue(error);
+  });
+  // The caller-facing Promise remains rejectable, while this detached branch
+  // ensures a fire-and-forget misuse cannot become an internal rejection.
+  void reflectApply(nativePromiseThen, promise, [undefined, () => undefined]);
+  return promise;
+}
