@@ -21,9 +21,9 @@ npm run test:course:checkpoint -- course/test/04-deterministic-model.test.ts
 must always receive one explicit `course/test/*.test.ts` path so it selects only
 that checkpoint.
 
-During Task 1, `_scaffold.test.ts` is a temporary infrastructure smoke test.
-Task 2 adds Checkpoint 00 and must remove `_scaffold.test.ts` so the completed
-workshop still has exactly the planned 15 focused checkpoint test files.
+Checkpoint 00 is the first focused workshop test. Each later checkpoint adds
+one test file, so the completed workshop has exactly the planned 15 focused
+checkpoint test files.
 
 ## Workshop contract
 
