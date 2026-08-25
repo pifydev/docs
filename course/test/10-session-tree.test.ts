@@ -834,6 +834,118 @@ test("preserves a deterministic recovery backup when rollback cannot restore", a
   expect(await readFile(recoveryPath, "utf8")).toBe(before);
 });
 
+test("rolls back instead of adopting memory when recovery marker removal is denied", async () => {
+  let denyRecoveryRemoval = true;
+  let recoveryRemoveAttempts = 0;
+  const options = {
+    ...deterministicOptions(),
+    fileSystem: {
+      async remove(path: string) {
+        if (denyRecoveryRemoval && path.endsWith(".pify-session-recovery")) {
+          recoveryRemoveAttempts += 1;
+          throw Object.assign(new Error("injected recovery remove failure"), {
+            code: "EACCES",
+          });
+        }
+        await rm(path, { force: true });
+      },
+    },
+  };
+  const store = await SessionStore.create(sessionPath, options);
+  const before = await readFile(sessionPath, "utf8");
+
+  await expect(
+    store.append(null, user("message-001", "must roll back")),
+  ).rejects.toMatchObject({ code: "SESSION_ROLLBACK_FAILED" });
+
+  const recoveryPath = `${sessionPath}.pify-session-recovery`;
+  expect(recoveryRemoveAttempts).toBeGreaterThanOrEqual(3);
+  expect(await readFile(sessionPath, "utf8")).toBe(before);
+  expect(store.entries).toEqual([]);
+  await expect(access(recoveryPath)).rejects.toMatchObject({ code: "ENOENT" });
+
+  denyRecoveryRemoval = false;
+  await expect(
+    store.append(null, user("message-002", "retry")),
+  ).resolves.toMatchObject({ id: "entry-002" });
+});
+
+test("retains the old marker and poisons the store when cleanup and rollback both fail", async () => {
+  let installedNewGeneration = false;
+  let rollbackRenameAttempts = 0;
+  const options = {
+    ...deterministicOptions(),
+    fileSystem: {
+      async rename(source: string, destination: string) {
+        if (!installedNewGeneration && source.includes(".pify-session-")) {
+          await rename(source, destination);
+          installedNewGeneration = true;
+          return;
+        }
+        rollbackRenameAttempts += 1;
+        throw Object.assign(new Error("injected persistent rollback failure"), {
+          code: "EBUSY",
+        });
+      },
+      async remove(path: string) {
+        if (path.endsWith(".pify-session-recovery")) {
+          throw Object.assign(new Error("injected persistent remove failure"), {
+            code: "EACCES",
+          });
+        }
+        await rm(path, { force: true });
+      },
+    },
+  };
+  const store = await SessionStore.create(sessionPath, options);
+  const before = await readFile(sessionPath, "utf8");
+
+  await expect(
+    store.append(null, user("message-001", "must stay recoverable")),
+  ).rejects.toMatchObject({ code: "SESSION_ROLLBACK_FAILED" });
+
+  const recoveryPath = `${sessionPath}.pify-session-recovery`;
+  expect(rollbackRenameAttempts).toBeGreaterThanOrEqual(3);
+  expect(await readFile(recoveryPath, "utf8")).toBe(before);
+  expect(store.entries).toEqual([]);
+  await expect(store.flush()).rejects.toMatchObject({
+    code: "SESSION_ROLLBACK_FAILED",
+  });
+  await expect(
+    SessionStore.load(sessionPath, deterministicOptions()),
+  ).rejects.toMatchObject({ code: "SESSION_ROLLBACK_FAILED" });
+  expect(await readFile(recoveryPath, "utf8")).toBe(before);
+});
+
+test("normalizes a preexisting recovery-marker collision without deleting it", async () => {
+  const removed: string[] = [];
+  const options = {
+    ...deterministicOptions(),
+    fileSystem: {
+      async remove(path: string) {
+        removed.push(path);
+        await rm(path, { force: true });
+      },
+    },
+  };
+  const store = await SessionStore.create(sessionPath, options);
+  const before = await readFile(sessionPath, "utf8");
+  const recoveryPath = `${sessionPath}.pify-session-recovery`;
+  await createLink(sessionPath, recoveryPath);
+
+  await expect(
+    store.append(null, user("message-001", "blocked by marker")),
+  ).rejects.toMatchObject({ code: "SESSION_ROLLBACK_FAILED" });
+
+  expect(await readFile(sessionPath, "utf8")).toBe(before);
+  expect(await readFile(recoveryPath, "utf8")).toBe(before);
+  expect(removed).not.toContain(recoveryPath);
+  expect(store.entries).toEqual([]);
+  await expect(store.flush()).rejects.toMatchObject({
+    code: "SESSION_ROLLBACK_FAILED",
+  });
+});
+
 test("linearizes concurrent tree appends into an invocation-ordered chain", async () => {
   const store = await SessionStore.create(sessionPath, deterministicOptions());
   const tree = new SessionTree(store);

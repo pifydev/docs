@@ -384,7 +384,20 @@ export class SessionStore {
         temporaryIdentity,
         bytes.byteLength,
       );
-      await this.#fileSystem.link(this.#path, backupPath);
+      try {
+        await this.#fileSystem.link(this.#path, backupPath);
+      } catch (cause) {
+        if ((cause as NodeJS.ErrnoException).code === "EEXIST") {
+          const collisionError = new SessionStoreError(
+            "SESSION_ROLLBACK_FAILED",
+            "A session recovery marker already exists",
+            { cause },
+          );
+          this.#unusableError = collisionError;
+          throw collisionError;
+        }
+        throw cause;
+      }
       backupOwned = true;
       const backupStats = await this.#fileSystem.lstat(backupPath);
       if (
@@ -442,14 +455,64 @@ export class SessionStore {
         await syncDirectory(this.#root.path).catch(() => undefined);
         throw primaryCause;
       }
-      this.#fileIdentity = installedIdentity;
-      this.#fileSize = bytes.byteLength;
-      backupOwned = !(await cleanupOwnedPath(
+      const markerRemoved = await cleanupOwnedPath(
         backupPath,
         originalIdentity,
         originalSize,
         this.#fileSystem,
-      ));
+      );
+      backupOwned = !markerRemoved;
+      if (!markerRemoved) {
+        const cleanupCause = new Error(
+          "Session recovery marker cleanup failed",
+        );
+        try {
+          const restoration = await this.#restoreOldGeneration(
+            backupPath,
+            originalIdentity,
+            originalSize,
+          );
+          backupOwned = restoration.backupOwned;
+          this.#fileIdentity = restoration.identity;
+          this.#fileSize = originalSize;
+          if (backupOwned) {
+            const removedAfterRestore = await cleanupOwnedPath(
+              backupPath,
+              originalIdentity,
+              originalSize,
+              this.#fileSystem,
+            );
+            backupOwned = !removedAfterRestore;
+            if (!removedAfterRestore) {
+              throw new Error(
+                "Recovery marker remained after the old generation was restored",
+              );
+            }
+          }
+        } catch (rollbackCause) {
+          preserveBackup = backupOwned;
+          const rollbackError = new SessionStoreError(
+            "SESSION_ROLLBACK_FAILED",
+            "Session finalization and rollback failed; recovery is required",
+            {
+              cause: new AggregateError(
+                [cleanupCause, rollbackCause],
+                "Session marker cleanup and rollback both failed",
+              ),
+            },
+          );
+          this.#unusableError = rollbackError;
+          throw rollbackError;
+        }
+        await syncDirectory(this.#root.path).catch(() => undefined);
+        throw new SessionStoreError(
+          "SESSION_ROLLBACK_FAILED",
+          "Session commit was rolled back because its recovery marker could not be removed",
+          { cause: cleanupCause },
+        );
+      }
+      this.#fileIdentity = installedIdentity;
+      this.#fileSize = bytes.byteLength;
       await syncDirectory(this.#root.path).catch(() => undefined);
     } finally {
       await handle?.close().catch(() => undefined);
@@ -478,6 +541,16 @@ export class SessionStore {
     originalSize: number,
   ): Promise<Readonly<{ identity: FileIdentity; backupOwned: boolean }>> {
     const rollbackFailures: unknown[] = [];
+    if (
+      !(await pathMatchesIdentity(
+        backupPath,
+        originalIdentity,
+        originalSize,
+        this.#fileSystem,
+      ))
+    ) {
+      throw new Error("Session recovery marker identity changed");
+    }
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
         await this.#fileSystem.rename(backupPath, this.#path);
