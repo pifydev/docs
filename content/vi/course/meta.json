@@ -1,0 +1,21 @@
+{
+  "title": "Tự xây Pi-style Agent",
+  "pages": [
+    "index",
+    "00-complete-agent-trace",
+    "01-typescript-protocols",
+    "02-event-stream",
+    "03-message-ir",
+    "04-deterministic-model",
+    "05-provider-adapter",
+    "06-tool-contract",
+    "07-agent-loop",
+    "08-coding-tools",
+    "09-stateful-agent",
+    "10-session-tree",
+    "11-context-compaction",
+    "12-resources-extensions",
+    "13-runtime-composition",
+    "14-agent-evaluation"
+  ]
+}

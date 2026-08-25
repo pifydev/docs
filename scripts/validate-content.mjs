@@ -6,6 +6,37 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import matter from "gray-matter";
 
 const locales = ["en", "vi"];
+const courseSlugs = [
+  "00-complete-agent-trace",
+  "01-typescript-protocols",
+  "02-event-stream",
+  "03-message-ir",
+  "04-deterministic-model",
+  "05-provider-adapter",
+  "06-tool-contract",
+  "07-agent-loop",
+  "08-coding-tools",
+  "09-stateful-agent",
+  "10-session-tree",
+  "11-context-compaction",
+  "12-resources-extensions",
+  "13-runtime-composition",
+  "14-agent-evaluation",
+];
+const courseTranslationPages = [
+  {
+    key: "course-overview",
+    group: "course",
+    en: "course/index.mdx",
+    vi: "course/index.mdx",
+  },
+  ...courseSlugs.map((slug) => ({
+    key: `course-${slug}`,
+    group: "course",
+    en: `course/${slug}.md`,
+    vi: `course/${slug}.md`,
+  })),
+];
 
 const navigation = {
   en: {
@@ -29,6 +60,8 @@ const navigation = {
       "ch09-compaction",
       "ch10-session",
       "ch11-testing-evaluation",
+      "---Build Your Own Pi-style Agent---",
+      "course",
       "---Help---",
       "help",
       "changelog",
@@ -44,6 +77,7 @@ const navigation = {
       "host-session-runtime",
     ],
     reference: ["api", "configuration", "environment-variables"],
+    course: ["index", ...courseSlugs],
     help: ["faq"],
   },
   vi: {
@@ -67,6 +101,8 @@ const navigation = {
       "ch09-compaction",
       "ch10-session",
       "ch11-testing-evaluation",
+      "---Tự xây Pi-style Agent---",
+      "course",
       "---Hỗ trợ---",
       "help",
       "changelog",
@@ -82,6 +118,7 @@ const navigation = {
       "host-session-runtime",
     ],
     reference: ["api", "configuration", "environment-variables"],
+    course: ["index", ...courseSlugs],
     help: ["faq"],
   },
 };
@@ -220,11 +257,20 @@ export async function validateRepository(rootURL, options = {}) {
   if (!manifest) return errors;
   if (manifest.version !== 1)
     errors.push("translation-manifest.json: version must be 1");
-  if (!Array.isArray(manifest.pages) || manifest.pages.length !== 27) {
+  if (!Array.isArray(manifest.pages) || manifest.pages.length !== 43) {
     errors.push(
-      "translation-manifest.json: exactly 27 page pairs are required",
+      "translation-manifest.json: exactly 43 page pairs are required",
     );
     return errors;
+  }
+
+  const declaredCoursePages = manifest.pages.filter(
+    (page) => page.group === "course",
+  );
+  if (!sameArray(declaredCoursePages, courseTranslationPages)) {
+    errors.push(
+      "translation-manifest.json: course translation keys and paths do not match the approved order",
+    );
   }
 
   const keys = new Set();
@@ -322,7 +368,7 @@ export async function validateRepository(rootURL, options = {}) {
       }
     }
 
-    for (const directory of ["root", "how-to", "reference", "help"]) {
+    for (const directory of ["root", "how-to", "reference", "course", "help"]) {
       const relative =
         directory === "root" ? "meta.json" : `${directory}/meta.json`;
       const meta = await readJSON(
@@ -353,5 +399,5 @@ if (invokedPath === import.meta.url) {
     for (const error of errors) console.error(`- ${error}`);
     process.exit(1);
   }
-  console.log("Fumadocs content validation passed: 27 EN/VI page pairs.");
+  console.log("Fumadocs content validation passed: 43 EN/VI page pairs.");
 }

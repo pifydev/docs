@@ -35,6 +35,8 @@ const rootPages = {
     "ch09-compaction",
     "ch10-session",
     "ch11-testing-evaluation",
+    "---Build Your Own Pi-style Agent---",
+    "course",
     "---Help---",
     "help",
     "changelog",
@@ -59,6 +61,8 @@ const rootPages = {
     "ch09-compaction",
     "ch10-session",
     "ch11-testing-evaluation",
+    "---Tự xây Pi-style Agent---",
+    "course",
     "---Hỗ trợ---",
     "help",
     "changelog",
@@ -77,7 +81,30 @@ const nestedPages = {
     "host-session-runtime",
   ],
   reference: ["api", "configuration", "environment-variables"],
+  course: [
+    "index",
+    "00-complete-agent-trace",
+    "01-typescript-protocols",
+    "02-event-stream",
+    "03-message-ir",
+    "04-deterministic-model",
+    "05-provider-adapter",
+    "06-tool-contract",
+    "07-agent-loop",
+    "08-coding-tools",
+    "09-stateful-agent",
+    "10-session-tree",
+    "11-context-compaction",
+    "12-resources-extensions",
+    "13-runtime-composition",
+    "14-agent-evaluation",
+  ],
   help: ["faq"],
+};
+
+const courseTitles = {
+  en: "Build Your Own Pi-style Agent",
+  vi: "Tự xây Pi-style Agent",
 };
 
 async function exists(relativePath) {
@@ -131,13 +158,13 @@ function glossaryDefinitionErrors(markdown, requiredTerms) {
   return errors;
 }
 
-test("translation manifest contains 27 unique EN/VI pairs", async () => {
+test("translation manifest contains 43 unique EN/VI pairs", async () => {
   const manifest = JSON.parse(await readFile(manifestURL, "utf8"));
   assert.equal(manifest.version, 1);
-  assert.equal(manifest.pages.length, 27);
-  assert.equal(new Set(manifest.pages.map((page) => page.key)).size, 27);
-  assert.equal(new Set(manifest.pages.map((page) => page.en)).size, 27);
-  assert.equal(new Set(manifest.pages.map((page) => page.vi)).size, 27);
+  assert.equal(manifest.pages.length, 43);
+  assert.equal(new Set(manifest.pages.map((page) => page.key)).size, 43);
+  assert.equal(new Set(manifest.pages.map((page) => page.en)).size, 43);
+  assert.equal(new Set(manifest.pages.map((page) => page.vi)).size, 43);
   assert.deepEqual(manifest.pages[0], {
     key: "home",
     group: "start",
@@ -178,6 +205,34 @@ test("translation manifest contains 27 unique EN/VI pairs", async () => {
       en: "how-to/host-session-runtime.md",
       vi: "how-to/host-session-runtime.md",
     },
+    {
+      key: "course-overview",
+      group: "course",
+      en: "course/index.mdx",
+      vi: "course/index.mdx",
+    },
+    ...[
+      "00-complete-agent-trace",
+      "01-typescript-protocols",
+      "02-event-stream",
+      "03-message-ir",
+      "04-deterministic-model",
+      "05-provider-adapter",
+      "06-tool-contract",
+      "07-agent-loop",
+      "08-coding-tools",
+      "09-stateful-agent",
+      "10-session-tree",
+      "11-context-compaction",
+      "12-resources-extensions",
+      "13-runtime-composition",
+      "14-agent-evaluation",
+    ].map((slug) => ({
+      key: `course-${slug}`,
+      group: "course",
+      en: `course/${slug}.md`,
+      vi: `course/${slug}.md`,
+    })),
   ];
 
   for (const expectedPage of expectedPages) {
@@ -226,6 +281,9 @@ test("Fumadocs navigation contains every public page in stable localized order",
         ),
       );
       assert.deepEqual(meta.pages, pages);
+      if (directory === "course") {
+        assert.equal(meta.title, courseTitles[locale]);
+      }
     }
   }
 });

@@ -24,7 +24,7 @@ test("content exposes only directory-based English and Vietnamese locales", asyn
   const manifest = JSON.parse(
     await readFile(new URL("content/translation-manifest.json", root), "utf8"),
   );
-  assert.equal(manifest.pages.length, 27);
+  assert.equal(manifest.pages.length, 43);
   assert.equal(manifest.pages[0].en, "index.mdx");
   assert.equal(manifest.pages[0].vi, "index.mdx");
   for (const locale of ["en", "vi"]) {

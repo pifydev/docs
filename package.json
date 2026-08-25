@@ -23,7 +23,7 @@
     "lint:mermaid": "node scripts/validate-mermaid.mjs",
     "lint:content": "node scripts/validate-content.mjs --require-reviewed",
     "lint:editorial": "node scripts/editorial-lint.mjs",
-    "test:content": "node --test scripts/ci-config.test.mjs scripts/content.test.mjs scripts/fumadocs-migration.test.mjs scripts/sync-check.test.mjs scripts/validate-frontmatter.test.mjs",
+    "test:content": "node --test scripts/ci-config.test.mjs scripts/content.test.mjs scripts/course-content.test.mjs scripts/fumadocs-migration.test.mjs scripts/sync-check.test.mjs scripts/validate-frontmatter.test.mjs",
     "test:e2e": "playwright test",
     "format:check": "prettier --check .",
     "lint": "npm run lint:sync && npm run lint:frontmatter && npm run lint:content && npm run lint:editorial && npm run lint:mermaid && npm run lint:app",
