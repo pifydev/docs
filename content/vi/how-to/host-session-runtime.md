@@ -79,6 +79,19 @@ import {
   createAgentSessionServices,
 } from "@earendil-works/pi-coding-agent";
 
+export function throwSessionBindingFailure(
+  primary: unknown,
+  cleanupFailures: readonly unknown[],
+  phase: string,
+): never {
+  if (cleanupFailures.length === 0) throw primary;
+  throw new AggregateError(
+    [primary, ...cleanupFailures],
+    `${phase} failed and cleanup also failed`,
+    { cause: primary },
+  );
+}
+
 export async function createSerializedSessionRuntimeHost(
   processInputs: Pick<
     CreateAgentSessionServicesOptions,
@@ -157,6 +170,13 @@ export async function createSerializedSessionRuntimeHost(
   let unusable = false;
   let disposed = false;
 
+  class CapturedSessionBindingFailure {
+    constructor(
+      readonly primary: unknown,
+      readonly cleanupFailures: unknown[],
+    ) {}
+  }
+
   const clearSubscription = () => {
     const release = unsubscribe;
     unsubscribe = undefined;
@@ -169,18 +189,6 @@ export async function createSerializedSessionRuntimeHost(
       cleanupFailures.push(error);
     }
   };
-  const throwBindingFailure = (
-    error: unknown,
-    cleanupFailures: unknown[],
-    phase: string,
-  ): never => {
-    if (cleanupFailures.length === 0) throw error;
-    throw new AggregateError(
-      [error, ...cleanupFailures],
-      `${phase} failed and cleanup also failed`,
-      { cause: error },
-    );
-  };
   const bindSession = async (session: AgentSession) => {
     clearSubscription();
     try {
@@ -190,15 +198,19 @@ export async function createSerializedSessionRuntimeHost(
     } catch (error) {
       const cleanupFailures: unknown[] = [];
       clearSubscriptionAfterFailure(cleanupFailures);
-      return throwBindingFailure(error, cleanupFailures, "session binding");
+      throw new CapturedSessionBindingFailure(error, cleanupFailures);
     }
   };
   const disposeBindingFailure = async (
     error: unknown,
     phase: "initial" | "replacement",
   ): Promise<never> => {
+    const captured =
+      error instanceof CapturedSessionBindingFailure
+        ? error
+        : new CapturedSessionBindingFailure(error, []);
     unusable = true;
-    const cleanupFailures: unknown[] = [];
+    const cleanupFailures = [...captured.cleanupFailures];
     try {
       clearSubscriptionAfterFailure(cleanupFailures);
       try {
@@ -211,8 +223,8 @@ export async function createSerializedSessionRuntimeHost(
       unusable = true;
       clearSubscriptionAfterFailure(cleanupFailures);
     }
-    return throwBindingFailure(
-      error,
+    return throwSessionBindingFailure(
+      captured.primary,
       cleanupFailures,
       `${phase} session binding`,
     );
@@ -313,7 +325,7 @@ Không resolve project settings hoặc relative Extension path trước khi bi�
 
 Helper bất đồng bộ `bindSession()` dùng chung áp đặt đúng thứ tự cho cả hai path: clear host subscription cũ, await Extension binding, cài host subscription rồi report diagnostic. Nếu Extension binding, bước cài subscription hoặc report diagnostic throw, catch path sẽ gỡ mọi unsubscribe handle đã được trả về. Adapter `subscribe(...)` phải tự bảo đảm tính atomic: nếu nó throw trước khi trả cleanup function, chính adapter phải rollback mọi listener đã cài một phần. Không cache `runtime.session` trong service khác; hãy chuyển event phát sinh từ session qua binding adapter.
 
-Nếu initial Extension hoặc host binding thất bại, ví dụ clear mọi subscription đã trả về, đánh dấu host unavailable, dispose runtime vừa tạo rồi reject startup. Lỗi binding gốc được rethrow khi cleanup thành công. Nếu subscription cleanup hoặc runtime disposal cũng thất bại, một `AggregateError` giữ lỗi gốc làm cause và phần tử đầu thay vì che mất nó. Đây là fail-closed: host thiếu lifecycle, observation hoặc persistence boundary hoàn chỉnh sẽ không bắt đầu phục vụ request.
+Nếu initial Extension hoặc host binding thất bại, ví dụ clear mọi subscription đã trả về, đánh dấu host unavailable, dispose runtime vừa tạo rồi reject startup. `CapturedSessionBindingFailure` mang lỗi binding gốc và mọi lỗi unsubscribe dưới dạng dữ liệu trong khi disposal chạy; nó không được công khai như lỗi cuối cùng. Lỗi binding gốc được rethrow khi mọi bước cleanup đều thành công. Đây là fail-closed: host thiếu lifecycle, observation hoặc persistence boundary hoàn chỉnh sẽ không bắt đầu phục vụ request.
 
 ## 6. Tuần tự hóa new, resume, fork, clone và import
 
@@ -394,7 +406,7 @@ Replacement trong Pi `0.84.3` không phải rollback transaction. `AgentSessionR
 
 Wrapper phát hiện đúng boundary này vì `setBeforeSessionInvalidate()` đã đặt `replacementInFlight`, còn `setRebindSession()` thành công chỉ xóa flag sau khi cả Extension binding lẫn host binding hoàn tất. Factory rejection xảy ra trước apply nên không có replacement cần dispose. Rejection từ `bindExtensions(...)`, host subscription hoặc diagnostic reporting xảy ra sau apply, vì vậy rebind catch clear subscription đã trả về và dispose applied replacement trước khi propagate. Finally path giữ wrapper unusable ngay cả khi disposal thất bại. Subscription cũ đã được gỡ, không có raw session nào được public, và operation hay state getter sau đó đều reject. Đây là policy no-half-replacement, fail-closed bắt buộc.
 
-Cleanup failure không bao giờ thay thế bằng chứng chính. `throwBindingFailure()` rethrow lỗi binding gốc khi cleanup thành công; nếu không, nó throw `AggregateError` có phần tử đầu và `cause` là lỗi gốc, theo sau bởi lỗi unsubscribe hoặc disposal. Hãy log cấu trúc aggregate nhưng không serialize session content, đồng thời xem từng phần tử là một operational incident.
+Cleanup failure không bao giờ thay thế hoặc lồng bằng chứng chính. `disposeBindingFailure()` bắt đầu bằng các lỗi unsubscribe đã capture, nối thêm lỗi disposal và final cleanup theo thứ tự xảy ra, rồi chỉ gọi `throwSessionBindingFailure()` đúng một lần. Khi không có cleanup failure, helper rethrow lỗi binding gốc. Nếu có, nó throw một `AggregateError` duy nhất với `.errors` là `[primary, ...cleanupFailures]` và `.cause` là `primary`. Hãy log cấu trúc aggregate phẳng đó nhưng không serialize session content, đồng thời xem từng phần tử là một operational incident.
 
 Không catch lỗi rồi tiếp tục phục vụ qua một session đã cache. Hãy ghi operation, target path hoặc cwd và error nhưng không log transcript content hay secret. Sau đó kết thúc worker đang sở hữu runtime, hoặc dựng host mới từ một safe startup target tường minh. Chỉ retry tự động khi host vẫn unavailable và mỗi attempt dựng một runtime mới hoàn chỉnh.
 
@@ -414,7 +426,7 @@ Xác minh các invariant sau:
 - [ ] Subscription cũ được gỡ trước disposal; mỗi replacement await `bindExtensions(...)` trước khi cài host subscription và trước khi host available.
 - [ ] Cancellation hoặc pre-validation failure vẫn giữ binding cũ dùng được.
 - [ ] Factory rejection sau invalidation không công khai session nào; binding failure sau apply cũng clear subscription và dispose applied replacement. Cả hai vĩnh viễn reject operation sau đó trên wrapper này.
-- [ ] Nếu unsubscribe hoặc replacement disposal thất bại, `AggregateError` được propagate vẫn giữ lỗi binding gốc ở đầu và report cleanup failure riêng.
+- [ ] Nếu unsubscribe hoặc replacement disposal thất bại, `AggregateError` duy nhất được propagate có `.errors` phẳng theo thứ tự lỗi binding gốc, lỗi unsubscribe rồi lỗi disposal, còn `.cause` là lỗi gốc.
 - [ ] Final disposal abort response đang hoạt động, flush host persistence, phát shutdown qua runtime, unbind và reject access sau đó.
 - [ ] Diagnostic output redact secret và định danh operation cùng target cwd hoặc session path.
 

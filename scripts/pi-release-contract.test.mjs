@@ -18,6 +18,7 @@ const compileFixturePackages = [
 const chapter11ExampleFunction = "verifyDeterministicAgentRoundTrip";
 const deterministicGuideFunction = "verifyDeterministicAgentTestingGuide";
 const runtimeGuideFunction = "createSerializedSessionRuntimeHost";
+const runtimeBindingFailureFunction = "throwSessionBindingFailure";
 
 function chapter11ExampleFence(markdown) {
   const matches = [
@@ -85,7 +86,8 @@ function parsedExampleContract(
       }
       if (
         ts.isFunctionDeclaration(statement) &&
-        statement.name?.text === functionName
+        (statement.name?.text === functionName ||
+          strictTopLevel.allowedFunctions?.includes(statement.name?.text))
       ) {
         continue;
       }
@@ -252,16 +254,27 @@ function runtimeGuideExampleFence(markdown, context) {
 }
 
 function assertRuntimeGuideExampleParity(markdown, compileFixture, context) {
+  const displayedSource = runtimeGuideExampleFence(markdown, context);
   const displayed = parsedExampleContract(
-    runtimeGuideExampleFence(markdown, context),
+    displayedSource,
     `${context} displayed example`,
     runtimeGuideFunction,
-    {},
+    { allowedFunctions: [runtimeBindingFailureFunction] },
   );
   const compiled = parsedExampleContract(
     compileFixture.replaceAll("\r\n", "\n"),
     "Pi 0.84.3 compile fixture",
     runtimeGuideFunction,
+  );
+  const displayedFailureHelper = parsedExampleContract(
+    displayedSource,
+    `${context} displayed binding failure helper`,
+    runtimeBindingFailureFunction,
+  );
+  const compiledFailureHelper = parsedExampleContract(
+    compileFixture.replaceAll("\r\n", "\n"),
+    "Pi 0.84.3 compile fixture binding failure helper",
+    runtimeBindingFailureFunction,
   );
 
   assert.deepEqual(
@@ -279,6 +292,27 @@ function assertRuntimeGuideExampleParity(markdown, compileFixture, context) {
     compiled.requiredImports,
     `${context} required imports must match the compile fixture`,
   );
+  assert.equal(
+    displayedFailureHelper.functionSource,
+    compiledFailureHelper.functionSource,
+    `${context} binding failure helper must match the compile fixture`,
+  );
+}
+
+async function importCompileFixtureFunction(source, functionName) {
+  const contract = parsedExampleContract(
+    source.replaceAll("\r\n", "\n"),
+    "executable Pi 0.84.3 compile fixture helper",
+    functionName,
+  );
+  const compiled = ts.transpileModule(contract.functionSource, {
+    compilerOptions: {
+      module: ts.ModuleKind.ESNext,
+      target: ts.ScriptTarget.ES2022,
+    },
+  });
+  const moduleURL = `data:text/javascript;base64,${Buffer.from(compiled.outputText).toString("base64")}`;
+  return (await import(moduleURL))[functionName];
 }
 
 function assertRuntimeGuideExtensionBindingOrder(markdown, context) {
@@ -341,6 +375,11 @@ function assertRuntimeGuideBindingFailureCleanup(markdown, context) {
     /clearSubscriptionAfterFailure\(cleanupFailures\);/,
     `${context} bindSession must clear a newly installed subscription on failure`,
   );
+  assert.match(
+    bindSession.slice(catchStart),
+    /throw new CapturedSessionBindingFailure\(error, cleanupFailures\);/,
+    `${context} bindSession must preserve its primary and cleanup failures as flat captured data`,
+  );
 
   const disposeStart = bindEnd + 1;
   const disposeEnd = source.indexOf("\n  const assertAvailable", disposeStart);
@@ -353,6 +392,11 @@ function assertRuntimeGuideBindingFailureCleanup(markdown, context) {
     disposeFailure,
     /unusable = true;[\s\S]*?await runtime\.dispose\(\);[\s\S]*?finally \{[\s\S]*?replacementInFlight = true;[\s\S]*?unusable = true;/,
     `${context} failed binding must dispose the applied runtime and remain unavailable in finally`,
+  );
+  assert.match(
+    disposeFailure,
+    /error instanceof CapturedSessionBindingFailure[\s\S]*?cleanupFailures = \[\.\.\.captured\.cleanupFailures\][\s\S]*?throwSessionBindingFailure\(\s*captured\.primary,\s*cleanupFailures,/,
+    `${context} disposal must append cleanup failures before one final throw with the original primary`,
   );
   assert.match(
     source,
@@ -909,6 +953,44 @@ test("replaceable runtime cleanup guard rejects missing subscription cleanup and
         "synthetic missing failed-runtime disposal",
       ),
     /must dispose the applied runtime and remain unavailable in finally/,
+  );
+});
+
+test("binding failure finalizer preserves one flat primary and staged cleanup order", async () => {
+  const compileFixture = await readFile(
+    new URL("tests/fixtures/pi-sdk-0843.contract.ts", repositoryRoot),
+    "utf8",
+  );
+  const throwSessionBindingFailure = await importCompileFixtureFunction(
+    compileFixture,
+    runtimeBindingFailureFunction,
+  );
+  assert.equal(typeof throwSessionBindingFailure, "function");
+
+  const primary = new Error("primary binding failure");
+  const unsubscribeFailure = new Error("unsubscribe failure");
+  const disposeFailure = new Error("dispose failure");
+  assert.throws(
+    () =>
+      throwSessionBindingFailure(
+        primary,
+        [unsubscribeFailure, disposeFailure],
+        "replacement session binding",
+      ),
+    (error) => {
+      assert.ok(error instanceof AggregateError);
+      assert.deepEqual(error.errors, [
+        primary,
+        unsubscribeFailure,
+        disposeFailure,
+      ]);
+      assert.equal(error.cause, primary);
+      return true;
+    },
+  );
+  assert.throws(
+    () => throwSessionBindingFailure(primary, [], "initial session binding"),
+    (error) => error === primary,
   );
 });
 

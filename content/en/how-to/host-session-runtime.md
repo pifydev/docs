@@ -79,6 +79,19 @@ import {
   createAgentSessionServices,
 } from "@earendil-works/pi-coding-agent";
 
+export function throwSessionBindingFailure(
+  primary: unknown,
+  cleanupFailures: readonly unknown[],
+  phase: string,
+): never {
+  if (cleanupFailures.length === 0) throw primary;
+  throw new AggregateError(
+    [primary, ...cleanupFailures],
+    `${phase} failed and cleanup also failed`,
+    { cause: primary },
+  );
+}
+
 export async function createSerializedSessionRuntimeHost(
   processInputs: Pick<
     CreateAgentSessionServicesOptions,
@@ -157,6 +170,13 @@ export async function createSerializedSessionRuntimeHost(
   let unusable = false;
   let disposed = false;
 
+  class CapturedSessionBindingFailure {
+    constructor(
+      readonly primary: unknown,
+      readonly cleanupFailures: unknown[],
+    ) {}
+  }
+
   const clearSubscription = () => {
     const release = unsubscribe;
     unsubscribe = undefined;
@@ -169,18 +189,6 @@ export async function createSerializedSessionRuntimeHost(
       cleanupFailures.push(error);
     }
   };
-  const throwBindingFailure = (
-    error: unknown,
-    cleanupFailures: unknown[],
-    phase: string,
-  ): never => {
-    if (cleanupFailures.length === 0) throw error;
-    throw new AggregateError(
-      [error, ...cleanupFailures],
-      `${phase} failed and cleanup also failed`,
-      { cause: error },
-    );
-  };
   const bindSession = async (session: AgentSession) => {
     clearSubscription();
     try {
@@ -190,15 +198,19 @@ export async function createSerializedSessionRuntimeHost(
     } catch (error) {
       const cleanupFailures: unknown[] = [];
       clearSubscriptionAfterFailure(cleanupFailures);
-      return throwBindingFailure(error, cleanupFailures, "session binding");
+      throw new CapturedSessionBindingFailure(error, cleanupFailures);
     }
   };
   const disposeBindingFailure = async (
     error: unknown,
     phase: "initial" | "replacement",
   ): Promise<never> => {
+    const captured =
+      error instanceof CapturedSessionBindingFailure
+        ? error
+        : new CapturedSessionBindingFailure(error, []);
     unusable = true;
-    const cleanupFailures: unknown[] = [];
+    const cleanupFailures = [...captured.cleanupFailures];
     try {
       clearSubscriptionAfterFailure(cleanupFailures);
       try {
@@ -211,8 +223,8 @@ export async function createSerializedSessionRuntimeHost(
       unusable = true;
       clearSubscriptionAfterFailure(cleanupFailures);
     }
-    return throwBindingFailure(
-      error,
+    return throwSessionBindingFailure(
+      captured.primary,
       cleanupFailures,
       `${phase} session binding`,
     );
@@ -313,7 +325,7 @@ Do not resolve project settings or relative Extension paths before the effective
 
 The shared asynchronous `bindSession()` helper enforces this order for both paths: clear any stale host subscription, await Extension binding, install the host subscription, and report diagnostics. If Extension binding, subscription installation, or diagnostic reporting throws, its catch path removes any unsubscribe handle already returned. A `subscribe(...)` adapter must itself be atomic: if it throws before returning a cleanup function, it must roll back any partial listener installation internally. Avoid caching `runtime.session` in another service; pass session-derived events through the binding adapter instead.
 
-If initial Extension or host binding fails, the example clears any returned subscription, marks the host unavailable, disposes the just-created runtime, and rejects startup. The original binding error is rethrown when cleanup succeeds. If subscription cleanup or runtime disposal also fails, an `AggregateError` retains the original error as its cause and first member instead of masking it. This is fail-closed: a host without its complete lifecycle, observation, and persistence boundaries never begins serving requests.
+If initial Extension or host binding fails, the example clears any returned subscription, marks the host unavailable, disposes the just-created runtime, and rejects startup. `CapturedSessionBindingFailure` carries the original binding error and any unsubscribe failure as data while disposal runs; it is not exposed as the final error. The original binding error is rethrown when every cleanup succeeds. This is fail-closed: a host without its complete lifecycle, observation, and persistence boundaries never begins serving requests.
 
 ## 6. Serialize new, resume, fork, clone, and import
 
@@ -394,7 +406,7 @@ Replacement in Pi `0.84.3` is not rollback-transactional. `AgentSessionRuntime` 
 
 The wrapper detects this exact boundary because `setBeforeSessionInvalidate()` set `replacementInFlight`, while a successful `setRebindSession()` would have cleared it only after Extension and host binding both completed. A factory rejection occurs before apply and leaves no replacement to dispose. A `bindExtensions(...)`, host-subscription, or diagnostic-reporting rejection occurs after apply, so the rebind catch clears the returned subscription and disposes that applied replacement before propagating. Its `finally` path keeps the wrapper unusable even if disposal fails. Old subscriptions have already been detached, no raw session is public, and later operations or state getters reject. This is the required no-half-replacement, fail-closed policy.
 
-Cleanup failure never replaces the primary evidence. `throwBindingFailure()` rethrows the original binding error when cleanup succeeds; otherwise it throws an `AggregateError` whose first element and `cause` are that original error, followed by unsubscribe or disposal errors. Log the aggregate structure without serializing session content, and treat every member as an operational incident.
+Cleanup failure never replaces or nests the primary evidence. `disposeBindingFailure()` starts with the captured unsubscribe failures, appends disposal and final-cleanup failures in occurrence order, and calls `throwSessionBindingFailure()` exactly once. With no cleanup failures, the helper rethrows the original binding error. Otherwise, it throws one `AggregateError` whose `.errors` are `[primary, ...cleanupFailures]` and whose `.cause` is `primary`. Log that flat aggregate structure without serializing session content, and treat every member as an operational incident.
 
 Do not catch that error and continue serving through a cached session. Record the operation, target path or cwd, and error without logging transcript content or secrets. Then terminate the owning worker, or build a new host from an explicit safe startup target. Automatic retry is acceptable only if the host remains unavailable and each attempt builds a complete new runtime.
 
@@ -414,7 +426,7 @@ Verify these invariants:
 - [ ] Old subscriptions are removed before disposal; each replacement awaits `bindExtensions(...)` before its host subscription is installed and before the host becomes available.
 - [ ] A cancelled or pre-validation failure keeps the old binding usable.
 - [ ] A factory rejection after invalidation exposes no session; a binding failure after apply also clears subscriptions and disposes the applied replacement. Both permanently reject later operations on that wrapper.
-- [ ] If unsubscribe or replacement disposal fails, the propagated `AggregateError` retains the original binding failure first and reports cleanup failures separately.
+- [ ] If unsubscribe or replacement disposal fails, the single propagated `AggregateError` has flat `.errors` ordered as the original binding failure, unsubscribe failure, then disposal failure, and `.cause` is the original failure.
 - [ ] Final disposal aborts the active response, flushes host persistence, emits shutdown through the runtime, unbinds, and rejects later access.
 - [ ] Diagnostic output redacts secrets and identifies the operation plus target cwd or session path.
 

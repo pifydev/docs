@@ -423,6 +423,19 @@ export async function verifyDeterministicAgentTestingGuide(): Promise<void> {
   }
 }
 
+export function throwSessionBindingFailure(
+  primary: unknown,
+  cleanupFailures: readonly unknown[],
+  phase: string,
+): never {
+  if (cleanupFailures.length === 0) throw primary;
+  throw new AggregateError(
+    [primary, ...cleanupFailures],
+    `${phase} failed and cleanup also failed`,
+    { cause: primary },
+  );
+}
+
 export async function createSerializedSessionRuntimeHost(
   processInputs: Pick<
     CreateAgentSessionServicesOptions,
@@ -501,6 +514,13 @@ export async function createSerializedSessionRuntimeHost(
   let unusable = false;
   let disposed = false;
 
+  class CapturedSessionBindingFailure {
+    constructor(
+      readonly primary: unknown,
+      readonly cleanupFailures: unknown[],
+    ) {}
+  }
+
   const clearSubscription = () => {
     const release = unsubscribe;
     unsubscribe = undefined;
@@ -513,18 +533,6 @@ export async function createSerializedSessionRuntimeHost(
       cleanupFailures.push(error);
     }
   };
-  const throwBindingFailure = (
-    error: unknown,
-    cleanupFailures: unknown[],
-    phase: string,
-  ): never => {
-    if (cleanupFailures.length === 0) throw error;
-    throw new AggregateError(
-      [error, ...cleanupFailures],
-      `${phase} failed and cleanup also failed`,
-      { cause: error },
-    );
-  };
   const bindSession = async (session: AgentSession) => {
     clearSubscription();
     try {
@@ -534,15 +542,19 @@ export async function createSerializedSessionRuntimeHost(
     } catch (error) {
       const cleanupFailures: unknown[] = [];
       clearSubscriptionAfterFailure(cleanupFailures);
-      return throwBindingFailure(error, cleanupFailures, "session binding");
+      throw new CapturedSessionBindingFailure(error, cleanupFailures);
     }
   };
   const disposeBindingFailure = async (
     error: unknown,
     phase: "initial" | "replacement",
   ): Promise<never> => {
+    const captured =
+      error instanceof CapturedSessionBindingFailure
+        ? error
+        : new CapturedSessionBindingFailure(error, []);
     unusable = true;
-    const cleanupFailures: unknown[] = [];
+    const cleanupFailures = [...captured.cleanupFailures];
     try {
       clearSubscriptionAfterFailure(cleanupFailures);
       try {
@@ -555,8 +567,8 @@ export async function createSerializedSessionRuntimeHost(
       unusable = true;
       clearSubscriptionAfterFailure(cleanupFailures);
     }
-    return throwBindingFailure(
-      error,
+    return throwSessionBindingFailure(
+      captured.primary,
       cleanupFailures,
       `${phase} session binding`,
     );
