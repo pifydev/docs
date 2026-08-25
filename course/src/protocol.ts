@@ -3,6 +3,16 @@ export type CourseModelRequestId = string;
 export type CourseModelResponseId = string;
 export type CourseToolCallId = string;
 
+// Protocol aliases are recursively readonly at compile time. Later parser and
+// snapshot layers remain responsible for validating and cloning runtime input.
+export type CourseJsonPrimitive = string | number | boolean | null;
+export type CourseJsonValue =
+  CourseJsonPrimitive | CourseJsonObject | CourseJsonArray;
+export type CourseJsonObject = {
+  readonly [key: string]: CourseJsonValue;
+};
+export type CourseJsonArray = readonly CourseJsonValue[];
+
 export type CourseTextBlock = Readonly<{
   type: "text";
   text: string;
@@ -12,7 +22,7 @@ export type CourseToolCall = Readonly<{
   type: "toolCall";
   id: CourseToolCallId;
   name: string;
-  arguments: Readonly<Record<string, unknown>>;
+  arguments: CourseJsonObject;
 }>;
 
 export type CourseAssistantBlock = CourseTextBlock | CourseToolCall;
@@ -81,12 +91,15 @@ export type CourseToolExecutionContext = Readonly<{
   toolCallId: CourseToolCallId;
 }>;
 
-export type CourseTool<Input = unknown, Output = unknown> = Readonly<{
-  name: string;
-  description: string;
-  validate(input: unknown): CourseToolValidation<Input>;
-  execute(input: Input, context: CourseToolExecutionContext): Promise<Output>;
-}>;
+export type CourseTool<Input = unknown, Output = unknown> = {
+  readonly name: string;
+  readonly description: string;
+  readonly validate: (input: unknown) => CourseToolValidation<Input>;
+  readonly execute: (
+    input: Input,
+    context: CourseToolExecutionContext,
+  ) => Promise<Output>;
+};
 
 export type CompletedRunResult = Readonly<{
   status: "completed";

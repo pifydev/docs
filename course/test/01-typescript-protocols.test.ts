@@ -4,11 +4,15 @@ import {
   assertNever,
   type AgentEvent,
   type CourseAssistantBlock,
+  type CourseJsonArray,
+  type CourseJsonObject,
   type CourseMessage,
   type CourseModelChunk,
   type CourseModelRequest,
   type CourseModelResponse,
   type CourseTool,
+  type CourseToolCall,
+  type FailedRunResult,
   type RunResult,
 } from "../src/index";
 
@@ -293,9 +297,79 @@ function compileTimeChecks(): void {
   // @ts-expect-error Course messages expose immutable identities.
   userMessage.id = "message-user-002";
 
-  // @ts-expect-error Unknown message roles are rejected.
-  const invalidMessage: CourseMessage = { id: "message-002", role: "system" };
-  void invalidMessage;
+  // @ts-expect-error CourseMessage roles form a closed discriminated union.
+  const invalidRole: CourseMessage["role"] = "system";
+  void invalidRole;
+
+  if (assistantMessage.role === "assistant") {
+    // @ts-expect-error Assistant content is a readonly array.
+    assistantMessage.content.push({ type: "text", text: "late mutation" });
+    // @ts-expect-error Assistant content cannot be reassigned.
+    assistantMessage.content = [];
+  }
+
+  // @ts-expect-error A model request exposes an immutable message snapshot.
+  request.messages.push(userMessage);
+
+  const acceptedEvent: AgentEvent = {
+    type: "message.accepted",
+    sequence: 0,
+    payload: { message: userMessage },
+  };
+  // @ts-expect-error Event payload fields cannot be replaced.
+  acceptedEvent.payload.message = toolResultMessage;
+
+  const failedRun: FailedRunResult = {
+    status: "failed",
+    messages: [userMessage],
+    error: { code: "MODEL_FAILED", message: "model unavailable" },
+  };
+  // @ts-expect-error Nested terminal error data is readonly.
+  failedRun.error.code = "MUTATED";
+
+  const immutableToolCall: CourseToolCall = {
+    type: "toolCall",
+    id: "call-readonly-001",
+    name: "inspect",
+    arguments: {
+      path: "README.md",
+      options: { lineNumbers: true },
+      ranges: [1, 4, { label: "tail" }],
+    },
+  };
+  // @ts-expect-error Tool-call argument objects are readonly at the top level.
+  immutableToolCall.arguments.path = "LICENSE";
+
+  const nestedOptions = immutableToolCall.arguments.options as CourseJsonObject;
+  // @ts-expect-error Nested Tool-call argument objects remain readonly.
+  nestedOptions.lineNumbers = false;
+
+  const nestedRanges = immutableToolCall.arguments.ranges as CourseJsonArray;
+  // @ts-expect-error Nested Tool-call argument arrays remain readonly.
+  nestedRanges.push(8);
+
+  const narrowValidationTool: CourseTool<Readonly<{ value: number }>> = {
+    name: "narrow-validation",
+    description: "Invalid validator parameter variance.",
+    // @ts-expect-error Validation must accept unknown input before narrowing it.
+    validate: (input: Readonly<{ value: number }>) => ({
+      ok: true,
+      value: input,
+    }),
+    execute: async () => undefined,
+  };
+  void narrowValidationTool;
+
+  type DirectionInput =
+    Readonly<{ direction: "left" }> | Readonly<{ direction: "right" }>;
+  const narrowExecutionTool: CourseTool<DirectionInput> = {
+    name: "narrow-execution",
+    description: "Invalid execution parameter variance.",
+    validate: () => ({ ok: false, error: "not relevant" }),
+    // @ts-expect-error Execution must accept every member of its declared Input.
+    execute: async (input: Readonly<{ direction: "left" }>) => input.direction,
+  };
+  void narrowExecutionTool;
 
   const synchronousTool: CourseTool = {
     name: "sync",
