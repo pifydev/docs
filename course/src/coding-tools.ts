@@ -5,9 +5,9 @@ import {
   open,
   realpath,
   rename,
-  rm,
   rmdir,
   stat,
+  unlink,
 } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { spawn, type ChildProcessByStdio } from "node:child_process";
@@ -431,6 +431,7 @@ async function writeAtomically(
     `.${filename}.pify-tmp-${process.pid}-${randomUUID()}`,
   );
   let handle: Awaited<ReturnType<typeof open>> | undefined;
+  let primaryFailed = false;
   try {
     await assertCanonicalWorkspace(workspace);
     await assertDirectoryInsideWorkspace(parent, workspace);
@@ -491,10 +492,19 @@ async function writeAtomically(
       throw codingError("WRITE_TEMP_IDENTITY_CHANGED");
     }
     temporaryPath = undefined;
+  } catch (error) {
+    primaryFailed = true;
+    throw error;
   } finally {
     await handle?.close().catch(() => undefined);
     if (temporaryPath !== undefined) {
-      await removeTemporaryFile(temporaryPath, "WRITE_TEMP_CLEANUP_FAILED");
+      try {
+        await removeTemporaryFile(temporaryPath, "WRITE_TEMP_CLEANUP_FAILED");
+      } catch (cleanupError) {
+        if (!primaryFailed) throw cleanupError;
+        // The primary operation/identity failure remains authoritative. The
+        // cleanup rejection is observed here and cannot become unhandled.
+      }
     }
   }
 }
@@ -521,9 +531,12 @@ async function removePathIfIdentity(
     return;
   }
   if (!sameFileIdentity(identityFromStat(current), expected)) return;
-  if (!current.isFile() && !current.isSymbolicLink()) return;
   try {
-    await rm(path, { force: true });
+    if (current.isDirectory() && !current.isSymbolicLink()) {
+      await rmdir(path);
+    } else {
+      await unlink(path);
+    }
   } catch (error) {
     if (
       current.isSymbolicLink() &&
@@ -540,11 +553,12 @@ async function removeTemporaryFile(
 ): Promise<void> {
   try {
     const metadata = await lstat(path);
-    if (!metadata.isFile() && !metadata.isSymbolicLink()) {
-      throw codingError(failureCode);
-    }
     try {
-      await rm(path, { force: true });
+      if (metadata.isDirectory() && !metadata.isSymbolicLink()) {
+        await rmdir(path);
+      } else {
+        await unlink(path);
+      }
     } catch (error) {
       if (
         metadata.isSymbolicLink() &&
@@ -672,8 +686,8 @@ function normalizeRelativePath(value: string): NormalizedPath | undefined {
   const segments: string[] = [];
   for (let index = 0; index < rawSegments.length; index += 1) {
     const segment = rawSegments[index];
-    if (segment === ".." || !isPortablePathSegment(segment)) return undefined;
     if (segment === "" || segment === ".") continue;
+    if (segment === ".." || !isPortablePathSegment(segment)) return undefined;
     segments.push(segment);
   }
   if (segments.length === 0) return undefined;

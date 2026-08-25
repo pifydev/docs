@@ -185,6 +185,83 @@ test("reads and atomically writes relative UTF-8 files through the Tool layer", 
   expect(generatedEntries).toEqual(["result.txt"]);
 });
 
+test("normalizes benign dot segments for read and write paths", async () => {
+  await mkdir(join(workspace, "nested"));
+  await writeFile(join(workspace, "source.txt"), "normalized", "utf8");
+  const registry = new ToolRegistry([
+    createReadTool(workspace),
+    createWriteTool(workspace),
+  ]);
+
+  for (const [index, path] of [
+    "./source.txt",
+    "././source.txt",
+    "nested/../source.txt",
+  ].entries()) {
+    const result = await executeToolCall(
+      registry,
+      call("read_file", { path }, `call-dot-read-${index}`),
+      new AbortController().signal,
+    );
+    if (path.includes("..")) {
+      expect(parseToolContent(result.content)).toMatchObject({
+        error: {
+          code: "TOOL_ARGUMENTS_INVALID",
+          message: "INVALID_RELATIVE_PATH",
+        },
+      });
+    } else {
+      expect(parseToolContent(result.content)).toEqual({
+        bytes: 10,
+        content: "normalized",
+        path: "source.txt",
+      });
+    }
+  }
+
+  for (const [index, path] of [
+    "./nested/first.txt",
+    "nested/./second.txt",
+    "./nested/././third.txt",
+  ].entries()) {
+    const result = await executeToolCall(
+      registry,
+      call(
+        "write_file",
+        { path, content: `value-${index}` },
+        `call-dot-write-${index}`,
+      ),
+      new AbortController().signal,
+    );
+    expect(result.isError).toBe(false);
+    expect(parseToolContent(result.content)).toMatchObject({
+      path: `nested/${["first", "second", "third"][index]}.txt`,
+    });
+  }
+  expect(await readFile(join(workspace, "nested", "third.txt"), "utf8")).toBe(
+    "value-2",
+  );
+
+  for (const [index, path] of [".", "./", "././", "nested/.."].entries()) {
+    for (const [name, argumentsValue] of [
+      ["read_file", { path }],
+      ["write_file", { path, content: "blocked" }],
+    ] as const) {
+      const result = await executeToolCall(
+        registry,
+        call(name, argumentsValue, `call-root-only-${name}-${index}`),
+        new AbortController().signal,
+      );
+      expect(parseToolContent(result.content)).toMatchObject({
+        error: {
+          code: "TOOL_ARGUMENTS_INVALID",
+          message: "INVALID_RELATIVE_PATH",
+        },
+      });
+    }
+  }
+});
+
 test("rejects traversal and absolute paths across POSIX, Windows, mixed, UNC, and device forms", async () => {
   const registry = new ToolRegistry([createReadTool(workspace)]);
   const invalidPaths = [
@@ -443,13 +520,20 @@ test("rejects a substituted temporary file instead of committing attacker conten
     }),
     executionContext(),
   );
+  const observed = pending.then(
+    (value) => ({ status: "fulfilled" as const, value }),
+    (error: unknown) => ({ status: "rejected" as const, error }),
+  );
 
   try {
     await replacement;
-    await expect(pending).rejects.toThrowError("WRITE_TEMP_IDENTITY_CHANGED");
+    await expect(observed).resolves.toMatchObject({
+      status: "rejected",
+      error: { message: "WRITE_TEMP_IDENTITY_CHANGED" },
+    });
   } finally {
     watcherController.abort();
-    await pending.catch(() => undefined);
+    await observed;
   }
   await expect(access(join(workspace, "identity.txt"))).rejects.toMatchObject({
     code: "ENOENT",
@@ -485,6 +569,15 @@ test("rejects symlink and junction substitutions at the temporary pathname", asy
         return async (path) => symlink(source, path, "junction");
       },
     },
+    {
+      name: "directory",
+      async prepare() {
+        return async (path) => {
+          await mkdir(path);
+          await writeFile(join(path, "keep.txt"), "do not recurse", "utf8");
+        };
+      },
+    },
   ];
 
   for (const variant of variants) {
@@ -510,27 +603,36 @@ test("rejects symlink and junction substitutions at the temporary pathname", asy
       }),
       executionContext(),
     );
+    const observed = pending.then(
+      (value) => ({ status: "fulfilled" as const, value }),
+      (error: unknown) => ({ status: "rejected" as const, error }),
+    );
+    let replacedPath: string | undefined;
     try {
-      await replacement;
-      const failure = await pending.then(
-        () => new Error("write unexpectedly succeeded"),
-        (error: unknown) => error,
-      );
-      expect(failure, variant.name).toMatchObject({
-        message: "WRITE_TEMP_IDENTITY_CHANGED",
+      replacedPath = await replacement;
+      await expect(observed, variant.name).resolves.toMatchObject({
+        status: "rejected",
+        error: { message: "WRITE_TEMP_IDENTITY_CHANGED" },
       });
     } finally {
       watcherController.abort();
-      await pending.catch(() => undefined);
+      await observed;
     }
     await expect(access(join(workspace, target))).rejects.toMatchObject({
       code: "ENOENT",
     });
-    expect(
-      (await readdir(workspace)).filter((entry) =>
-        entry.includes(".pify-tmp-"),
-      ),
-    ).toEqual([]);
+    const leftovers = (await readdir(workspace)).filter((entry) =>
+      entry.includes(".pify-tmp-"),
+    );
+    if (variant.name === "directory") {
+      expect(leftovers).toHaveLength(1);
+      expect(replacedPath).toBeDefined();
+      expect(
+        await readFile(join(replacedPath as string, "keep.txt"), "utf8"),
+      ).toBe("do not recurse");
+    } else {
+      expect(leftovers).toEqual([]);
+    }
   }
 });
 
