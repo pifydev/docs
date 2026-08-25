@@ -17,6 +17,24 @@ function errorCodes(
   return validateTranscript(transcript).map(({ code }) => code);
 }
 
+function changingProperty(
+  target: object,
+  key: PropertyKey,
+  firstValue: unknown,
+  laterValue: unknown,
+): () => number {
+  let reads = 0;
+  Object.defineProperty(target, key, {
+    configurable: true,
+    enumerable: true,
+    get(): unknown {
+      reads += 1;
+      return reads === 1 ? firstValue : laterValue;
+    },
+  });
+  return () => reads;
+}
+
 test("constructs a valid Tool round-trip and extracts only assistant text", () => {
   const transcript = [
     userMessage({ id: "message-user-001", content: "Read package.json." }),
@@ -110,6 +128,218 @@ test("snapshots and deeply freezes caller-owned assistant input", () => {
   expect(Object.isFrozen(toolCall.arguments.ranges)).toBe(true);
 });
 
+test("uses trusted indexed traversal instead of caller-controlled array methods", () => {
+  const transcript = [
+    { id: "message-user-indexed", role: "user", content: "Hello." },
+  ];
+  Object.defineProperty(transcript, "entries", {
+    value(): never {
+      throw new Error("caller-controlled entries");
+    },
+  });
+  expect(validateTranscript(transcript)).toEqual([]);
+
+  const content = [{ type: "text", text: "Indexed content." }];
+  Object.defineProperty(content, Symbol.iterator, {
+    value(): never {
+      throw new Error("caller-controlled iterator");
+    },
+  });
+  expect(
+    validateTranscript([
+      { id: "message-assistant-indexed", role: "assistant", content },
+    ]),
+  ).toEqual([]);
+
+  const nested = ["first", "second"];
+  Object.defineProperty(nested, "map", { value: undefined });
+  const message = assistantMessage({
+    id: "message-assistant-nested-indexed",
+    content: [
+      {
+        type: "toolCall",
+        id: "call-nested-indexed",
+        name: "inspect",
+        arguments: { nested },
+      },
+    ],
+  });
+  expect(message.content[0]).toMatchObject({
+    type: "toolCall",
+    arguments: { nested: ["first", "second"] },
+  });
+});
+
+test("rejects sparse assistant content and nested JSON arrays", () => {
+  const sparseContent = new Array<CourseAssistantBlock>(1);
+  expect(() =>
+    assistantMessage({
+      id: "message-assistant-sparse-content",
+      content: sparseContent,
+    }),
+  ).toThrow("assistantMessage: content[0] must not be sparse");
+  expect(
+    errorCodes([
+      {
+        id: "message-assistant-sparse-content",
+        role: "assistant",
+        content: sparseContent,
+      },
+    ]),
+  ).toEqual(["INVALID_MESSAGE"]);
+
+  const sparseNested = new Array<unknown>(1);
+  expect(() =>
+    assistantMessage({
+      id: "message-assistant-sparse-arguments",
+      content: [
+        {
+          type: "toolCall",
+          id: "call-sparse-arguments",
+          name: "inspect",
+          arguments: { values: sparseNested },
+        } as CourseAssistantBlock,
+      ],
+    }),
+  ).toThrow(
+    "assistantMessage: content[0].arguments.values[0] must not be sparse",
+  );
+  expect(
+    errorCodes([
+      {
+        id: "message-assistant-sparse-arguments",
+        role: "assistant",
+        content: [
+          {
+            type: "toolCall",
+            id: "call-sparse-arguments",
+            name: "inspect",
+            arguments: { values: sparseNested },
+          },
+        ],
+      },
+    ]),
+  ).toEqual(["INVALID_TOOL_ARGUMENTS"]);
+});
+
+test("constructors snapshot every caller property with exactly one read", () => {
+  const rawUser = {};
+  const userIdReads = changingProperty(rawUser, "id", "message-user-once", " ");
+  const userContentReads = changingProperty(
+    rawUser,
+    "content",
+    "Read once.",
+    42,
+  );
+  expect(
+    userMessage(rawUser as Parameters<typeof userMessage>[0]),
+  ).toMatchObject({ id: "message-user-once", content: "Read once." });
+  expect([userIdReads(), userContentReads()]).toEqual([1, 1]);
+
+  const argumentsInput = {};
+  const argumentPathReads = changingProperty(
+    argumentsInput,
+    "path",
+    "README.md",
+    "LICENSE",
+  );
+  const rawBlock = {};
+  const blockTypeReads = changingProperty(rawBlock, "type", "toolCall", "text");
+  const callIdReads = changingProperty(rawBlock, "id", "call-once", " ");
+  const callNameReads = changingProperty(rawBlock, "name", "read", " ");
+  const callArgumentsReads = changingProperty(
+    rawBlock,
+    "arguments",
+    argumentsInput,
+    null,
+  );
+  const assistantContent = [rawBlock as CourseAssistantBlock];
+  const rawAssistant = {};
+  const assistantIdReads = changingProperty(
+    rawAssistant,
+    "id",
+    "message-assistant-once",
+    " ",
+  );
+  const assistantContentReads = changingProperty(
+    rawAssistant,
+    "content",
+    assistantContent,
+    null,
+  );
+  const assistant = assistantMessage(
+    rawAssistant as Parameters<typeof assistantMessage>[0],
+  );
+  expect(assistant.content[0]).toMatchObject({
+    type: "toolCall",
+    id: "call-once",
+    name: "read",
+    arguments: { path: "README.md" },
+  });
+  expect([
+    assistantIdReads(),
+    assistantContentReads(),
+    blockTypeReads(),
+    callIdReads(),
+    callNameReads(),
+    callArgumentsReads(),
+    argumentPathReads(),
+  ]).toEqual([1, 1, 1, 1, 1, 1, 1]);
+
+  const rawResult = {};
+  const resultReadCounts = [
+    changingProperty(rawResult, "id", "message-result-once", " "),
+    changingProperty(rawResult, "toolCallId", "call-once", " "),
+    changingProperty(rawResult, "toolName", "read", " "),
+    changingProperty(rawResult, "content", "contents", 42),
+    changingProperty(rawResult, "isError", false, "bad"),
+  ];
+  expect(
+    toolResultMessage(rawResult as Parameters<typeof toolResultMessage>[0]),
+  ).toMatchObject({
+    id: "message-result-once",
+    toolCallId: "call-once",
+    toolName: "read",
+    content: "contents",
+    isError: false,
+  });
+  expect(resultReadCounts.map((readCount) => readCount())).toEqual([
+    1, 1, 1, 1, 1,
+  ]);
+});
+
+test("validator snapshots changing message, block, and result properties once", () => {
+  const rawCall = {};
+  const callReadCounts = [
+    changingProperty(rawCall, "type", "toolCall", "text"),
+    changingProperty(rawCall, "id", "call-validator-once", " "),
+    changingProperty(rawCall, "name", "read", " "),
+    changingProperty(rawCall, "arguments", { path: "README.md" }, null),
+  ];
+  const rawAssistant = {};
+  const assistantReadCounts = [
+    changingProperty(rawAssistant, "id", "message-assistant-validator", " "),
+    changingProperty(rawAssistant, "role", "assistant", "bogus"),
+    changingProperty(rawAssistant, "content", [rawCall], null),
+  ];
+  const rawResult = {};
+  const resultReadCounts = [
+    changingProperty(rawResult, "id", "message-result-validator", " "),
+    changingProperty(rawResult, "role", "toolResult", "bogus"),
+    changingProperty(rawResult, "toolCallId", "call-validator-once", " "),
+    changingProperty(rawResult, "toolName", "read", " "),
+    changingProperty(rawResult, "content", "contents", 42),
+    changingProperty(rawResult, "isError", false, "bad"),
+  ];
+
+  expect(validateTranscript([rawAssistant, rawResult])).toEqual([]);
+  expect(
+    [...assistantReadCounts, ...callReadCounts, ...resultReadCounts].map(
+      (readCount) => readCount(),
+    ),
+  ).toEqual([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]);
+});
+
 test("reports duplicate Tool call IDs with a stable code and message index", () => {
   const transcript = [
     assistantMessage({
@@ -142,6 +372,109 @@ test("reports duplicate Tool call IDs with a stable code and message index", () 
     messageIndex: 0,
     message: 'Tool call ID "call-duplicate" is not unique',
   });
+});
+
+test("enforces one Tool result per call with deterministic duplicate diagnostics", () => {
+  const call = {
+    id: "message-assistant-duplicate-result",
+    role: "assistant",
+    content: [
+      {
+        type: "toolCall",
+        id: "call-duplicate-result",
+        name: "read",
+        arguments: { path: "README.md" },
+      },
+    ],
+  };
+  const firstResult = {
+    id: "message-tool-result-first",
+    role: "toolResult",
+    toolCallId: "call-duplicate-result",
+    toolName: "read",
+    content: "first",
+    isError: false,
+  };
+  const secondResult = {
+    ...firstResult,
+    id: "message-tool-result-second",
+    content: "second",
+  };
+
+  expect(validateTranscript([call, firstResult, secondResult])).toContainEqual({
+    code: "DUPLICATE_TOOL_RESULT",
+    messageIndex: 2,
+    message: 'Tool call "call-duplicate-result" has more than one result',
+  });
+
+  const beforeCallErrors = validateTranscript([
+    firstResult,
+    secondResult,
+    call,
+  ]);
+  expect(beforeCallErrors).toContainEqual({
+    code: "DUPLICATE_TOOL_RESULT",
+    messageIndex: 1,
+    message: 'Tool call "call-duplicate-result" has more than one result',
+  });
+  expect(
+    beforeCallErrors.filter(({ code }) => code === "TOOL_RESULT_BEFORE_CALL"),
+  ).toHaveLength(2);
+  expect(errorCodes([firstResult, secondResult, call])).toContain(
+    "MISSING_TOOL_RESULT",
+  );
+});
+
+test("suppresses ambiguous linkage diagnostics when Tool call IDs are duplicated", () => {
+  const duplicateCalls = [
+    {
+      id: "message-assistant-call-first",
+      role: "assistant",
+      content: [
+        {
+          type: "toolCall",
+          id: "call-ambiguous",
+          name: "read",
+          arguments: { path: "README.md" },
+        },
+      ],
+    },
+    {
+      id: "message-assistant-call-second",
+      role: "assistant",
+      content: [
+        {
+          type: "toolCall",
+          id: "call-ambiguous",
+          name: "write",
+          arguments: { path: "README.md", content: "changed" },
+        },
+      ],
+    },
+  ];
+  const duplicateResults = [
+    {
+      id: "message-tool-ambiguous-first",
+      role: "toolResult",
+      toolCallId: "call-ambiguous",
+      toolName: "bogus",
+      content: "first",
+      isError: false,
+    },
+    {
+      id: "message-tool-ambiguous-second",
+      role: "toolResult",
+      toolCallId: "call-ambiguous",
+      toolName: "bogus",
+      content: "second",
+      isError: false,
+    },
+  ];
+
+  expect(errorCodes([...duplicateCalls, ...duplicateResults])).toEqual([
+    "DUPLICATE_TOOL_CALL_ID",
+    "DUPLICATE_TOOL_RESULT",
+  ]);
 });
 
 test("reports orphan results, result-before-call order, and missing results", () => {
@@ -292,9 +625,9 @@ test("inspection never throws and reports empty names and invalid arguments", ()
   const adversarialErrors = validateTranscript([adversarialEntry]);
   expect(adversarialErrors).toEqual([
     {
-      code: "INVALID_TRANSCRIPT",
-      messageIndex: -1,
-      message: "Transcript could not be inspected safely",
+      code: "INVALID_MESSAGE",
+      messageIndex: 0,
+      message: "Transcript entry could not be inspected safely",
     },
   ]);
   expect(Object.isFrozen(adversarialErrors)).toBe(true);
@@ -449,6 +782,53 @@ test("does not cascade malformed calls or results into linkage errors", () => {
     "INVALID_TOOL_ARGUMENTS",
   ]);
   expect(errorCodes(validCallWithMalformedResult)).toEqual(["INVALID_MESSAGE"]);
+});
+
+test("isolates hostile entries and blocks while preserving earlier diagnostics", () => {
+  const hostileEntry = Object.defineProperty({}, "role", {
+    get(): never {
+      throw new Error("hostile message role");
+    },
+  });
+  const entryErrors = validateTranscript([
+    { id: "message-user-malformed", role: "user", content: 42 },
+    hostileEntry,
+  ]);
+  expect(
+    entryErrors.map(({ code, messageIndex }) => ({ code, messageIndex })),
+  ).toEqual([
+    { code: "INVALID_MESSAGE", messageIndex: 0 },
+    { code: "INVALID_MESSAGE", messageIndex: 1 },
+  ]);
+  expect(
+    errorCodes([
+      { id: "message-user-malformed", role: "user", content: 42 },
+      hostileEntry,
+    ]),
+  ).not.toContain("INVALID_TRANSCRIPT");
+
+  const hostileBlock = Object.defineProperty({}, "type", {
+    get(): never {
+      throw new Error("hostile block type");
+    },
+  });
+  const blockErrors = validateTranscript([
+    {
+      id: "message-assistant-hostile-block",
+      role: "assistant",
+      content: [{ type: "text" }, hostileBlock],
+    },
+  ]);
+  expect(
+    blockErrors.map(({ code, messageIndex }) => ({ code, messageIndex })),
+  ).toEqual([
+    { code: "INVALID_MESSAGE", messageIndex: 0 },
+    { code: "INVALID_MESSAGE", messageIndex: 0 },
+  ]);
+  expect(Object.isFrozen(blockErrors)).toBe(true);
+  expect(
+    blockErrors.every((validationError) => Object.isFrozen(validationError)),
+  ).toBe(true);
 });
 
 test("constructors reject malformed direct input with precise errors", () => {
