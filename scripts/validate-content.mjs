@@ -28,6 +28,7 @@ const navigation = {
       "ch08-context-engineering",
       "ch09-compaction",
       "ch10-session",
+      "ch11-testing-evaluation",
       "---Help---",
       "help",
       "changelog",
@@ -38,6 +39,9 @@ const navigation = {
       "stream-output",
       "persist-sessions",
       "customize-system-prompt",
+      "test-agent-deterministically",
+      "run-pi-evals",
+      "host-session-runtime",
     ],
     reference: ["api", "configuration", "environment-variables"],
     help: ["faq"],
@@ -62,6 +66,7 @@ const navigation = {
       "ch08-context-engineering",
       "ch09-compaction",
       "ch10-session",
+      "ch11-testing-evaluation",
       "---Hỗ trợ---",
       "help",
       "changelog",
@@ -72,6 +77,9 @@ const navigation = {
       "stream-output",
       "persist-sessions",
       "customize-system-prompt",
+      "test-agent-deterministically",
+      "run-pi-evals",
+      "host-session-runtime",
     ],
     reference: ["api", "configuration", "environment-variables"],
     help: ["faq"],
@@ -212,9 +220,9 @@ export async function validateRepository(rootURL, options = {}) {
   if (!manifest) return errors;
   if (manifest.version !== 1)
     errors.push("translation-manifest.json: version must be 1");
-  if (!Array.isArray(manifest.pages) || manifest.pages.length !== 23) {
+  if (!Array.isArray(manifest.pages) || manifest.pages.length !== 27) {
     errors.push(
-      "translation-manifest.json: exactly 23 page pairs are required",
+      "translation-manifest.json: exactly 27 page pairs are required",
     );
     return errors;
   }
@@ -345,5 +353,5 @@ if (invokedPath === import.meta.url) {
     for (const error of errors) console.error(`- ${error}`);
     process.exit(1);
   }
-  console.log("Fumadocs content validation passed: 23 EN/VI page pairs.");
+  console.log("Fumadocs content validation passed: 27 EN/VI page pairs.");
 }

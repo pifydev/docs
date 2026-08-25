@@ -5,6 +5,9 @@
     "plug-new-model",
     "stream-output",
     "persist-sessions",
-    "customize-system-prompt"
+    "customize-system-prompt",
+    "test-agent-deterministically",
+    "run-pi-evals",
+    "host-session-runtime"
   ]
 }

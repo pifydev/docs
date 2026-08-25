@@ -34,6 +34,7 @@ const rootPages = {
     "ch08-context-engineering",
     "ch09-compaction",
     "ch10-session",
+    "ch11-testing-evaluation",
     "---Help---",
     "help",
     "changelog",
@@ -57,6 +58,7 @@ const rootPages = {
     "ch08-context-engineering",
     "ch09-compaction",
     "ch10-session",
+    "ch11-testing-evaluation",
     "---Hỗ trợ---",
     "help",
     "changelog",
@@ -70,6 +72,9 @@ const nestedPages = {
     "stream-output",
     "persist-sessions",
     "customize-system-prompt",
+    "test-agent-deterministically",
+    "run-pi-evals",
+    "host-session-runtime",
   ],
   reference: ["api", "configuration", "environment-variables"],
   help: ["faq"],
@@ -126,13 +131,13 @@ function glossaryDefinitionErrors(markdown, requiredTerms) {
   return errors;
 }
 
-test("translation manifest contains 23 unique EN/VI pairs", async () => {
+test("translation manifest contains 27 unique EN/VI pairs", async () => {
   const manifest = JSON.parse(await readFile(manifestURL, "utf8"));
   assert.equal(manifest.version, 1);
-  assert.equal(manifest.pages.length, 23);
-  assert.equal(new Set(manifest.pages.map((page) => page.key)).size, 23);
-  assert.equal(new Set(manifest.pages.map((page) => page.en)).size, 23);
-  assert.equal(new Set(manifest.pages.map((page) => page.vi)).size, 23);
+  assert.equal(manifest.pages.length, 27);
+  assert.equal(new Set(manifest.pages.map((page) => page.key)).size, 27);
+  assert.equal(new Set(manifest.pages.map((page) => page.en)).size, 27);
+  assert.equal(new Set(manifest.pages.map((page) => page.vi)).size, 27);
   assert.deepEqual(manifest.pages[0], {
     key: "home",
     group: "start",
@@ -146,6 +151,40 @@ test("translation manifest contains 23 unique EN/VI pairs", async () => {
     assert.match(page.en, /\.(?:md|mdx)$/);
     assert.match(page.vi, /\.(?:md|mdx)$/);
     assert.equal(page.en, page.vi);
+  }
+
+  const expectedPages = [
+    {
+      key: "ch11-testing-evaluation",
+      group: "chapters",
+      en: "ch11-testing-evaluation.md",
+      vi: "ch11-testing-evaluation.md",
+    },
+    {
+      key: "how-to-test-agent-deterministically",
+      group: "how-to",
+      en: "how-to/test-agent-deterministically.md",
+      vi: "how-to/test-agent-deterministically.md",
+    },
+    {
+      key: "how-to-run-pi-evals",
+      group: "how-to",
+      en: "how-to/run-pi-evals.md",
+      vi: "how-to/run-pi-evals.md",
+    },
+    {
+      key: "how-to-host-session-runtime",
+      group: "how-to",
+      en: "how-to/host-session-runtime.md",
+      vi: "how-to/host-session-runtime.md",
+    },
+  ];
+
+  for (const expectedPage of expectedPages) {
+    assert.deepEqual(
+      manifest.pages.find((page) => page.key === expectedPage.key),
+      expectedPage,
+    );
   }
 });
 

@@ -9,6 +9,9 @@
     { "key": "how-to-stream-output", "group": "how-to", "en": "how-to/stream-output.md", "vi": "how-to/stream-output.md" },
     { "key": "how-to-persist-sessions", "group": "how-to", "en": "how-to/persist-sessions.md", "vi": "how-to/persist-sessions.md" },
     { "key": "how-to-customize-system-prompt", "group": "how-to", "en": "how-to/customize-system-prompt.md", "vi": "how-to/customize-system-prompt.md" },
+    { "key": "how-to-test-agent-deterministically", "group": "how-to", "en": "how-to/test-agent-deterministically.md", "vi": "how-to/test-agent-deterministically.md" },
+    { "key": "how-to-run-pi-evals", "group": "how-to", "en": "how-to/run-pi-evals.md", "vi": "how-to/run-pi-evals.md" },
+    { "key": "how-to-host-session-runtime", "group": "how-to", "en": "how-to/host-session-runtime.md", "vi": "how-to/host-session-runtime.md" },
     { "key": "reference-api", "group": "reference", "en": "reference/api.md", "vi": "reference/api.md" },
     { "key": "reference-configuration", "group": "reference", "en": "reference/configuration.md", "vi": "reference/configuration.md" },
     { "key": "reference-environment-variables", "group": "reference", "en": "reference/environment-variables.md", "vi": "reference/environment-variables.md" },
@@ -22,6 +25,7 @@
     { "key": "ch08-context-engineering", "group": "chapters", "en": "ch08-context-engineering.md", "vi": "ch08-context-engineering.md", "zh": "ch08-context-engineering.md" },
     { "key": "ch09-compaction", "group": "chapters", "en": "ch09-compaction.md", "vi": "ch09-compaction.md", "zh": "ch09-compaction.md" },
     { "key": "ch10-session", "group": "chapters", "en": "ch10-session.md", "vi": "ch10-session.md", "zh": "ch10-session.md" },
+    { "key": "ch11-testing-evaluation", "group": "chapters", "en": "ch11-testing-evaluation.md", "vi": "ch11-testing-evaluation.md" },
     { "key": "faq", "group": "help", "en": "help/faq.md", "vi": "help/faq.md" },
     { "key": "changelog", "group": "help", "en": "changelog.md", "vi": "changelog.md" }
   ]
