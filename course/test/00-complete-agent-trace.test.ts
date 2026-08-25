@@ -36,3 +36,38 @@ test("follows one complete Agent trace in exact event order", () => {
     finalText: "The sum is 42.",
   });
 });
+
+test("returns a deeply immutable Agent trace", () => {
+  const run = runPrologue();
+  const toolCall = run.events[2];
+
+  expect(Object.isFrozen(run)).toBe(true);
+  expect(Object.isFrozen(run.events)).toBe(true);
+  expect(run.events.every((event) => Object.isFrozen(event))).toBe(true);
+  expect(Object.isFrozen(toolCall.arguments)).toBe(true);
+  expect(Object.isFrozen(run.result)).toBe(true);
+
+  const mutableEvents = run.events as unknown as Array<
+    (typeof run.events)[number]
+  >;
+  const mutableArguments = toolCall.arguments as {
+    left: number;
+    right: number;
+  };
+  const mutableResult = run.result as {
+    status: "completed";
+    finalText: string;
+  };
+
+  expect(() => mutableEvents.pop()).toThrow(TypeError);
+  expect(() => {
+    mutableArguments.left = 0;
+  }).toThrow(TypeError);
+  expect(() => {
+    mutableResult.finalText = "mutated";
+  }).toThrow(TypeError);
+
+  expect(run.events).toHaveLength(8);
+  expect(toolCall.arguments).toEqual({ left: 20, right: 22 });
+  expect(run.result.finalText).toBe("The sum is 42.");
+});

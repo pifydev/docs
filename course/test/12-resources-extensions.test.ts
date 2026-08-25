@@ -1,4 +1,4 @@
-import { mkdir, rename, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -70,11 +70,7 @@ async function settleWithin<Value>(promise: Promise<Value>): Promise<Value> {
 }
 
 async function temporaryDirectory(name: string): Promise<string> {
-  const directory = join(
-    tmpdir(),
-    `pify-course-${name}-${process.pid}-${crypto.randomUUID()}`,
-  );
-  await mkdir(directory, { recursive: false });
+  const directory = await mkdtemp(join(tmpdir(), `pify-course-${name}-`));
   temporaryDirectories.push(directory);
   return directory;
 }
@@ -184,12 +180,12 @@ test("rejects absolute, traversal, and symlink escapes from trusted roots", asyn
 
 test("fails closed when a trusted root is replaced after identity capture", async () => {
   const parent = await temporaryDirectory("root-replacement");
-  const root = join(parent, "root");
-  await mkdir(root);
+  const root = await mkdtemp(join(parent, "root-"));
   await writeFile(join(root, "value.txt"), "original", "utf8");
   const loader = await ResourceLoader.create([{ id: "root", directory: root }]);
   await rename(root, join(parent, "old-root"));
-  await mkdir(root);
+  const replacement = await mkdtemp(join(parent, "replacement-"));
+  await rename(replacement, root);
   await writeFile(join(root, "value.txt"), "replacement", "utf8");
 
   await expect(loader.loadText("value.txt")).rejects.toMatchObject({
