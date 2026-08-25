@@ -932,7 +932,61 @@ export const virtualRead = createReadToolDefinition(projectRoot, {
 
 Backend SSH hoặc container có thể triển khai cùng interface, nhưng phải giữ ràng buộc: đường dẫn tuyệt đối, từ chối truy cập đích không đọc được, byte thô từ `readFile`, cơ chế hủy trong transport riêng nếu được hỗ trợ, thời gian thực thi có giới hạn và cách xử lý thông tin xác thực an toàn. Chỉ riêng interface không tạo ra sandbox.
 
-### Bảy Tool dựng sẵn chỉ khai báo thao tác mà chúng dùng
+### Bash và PowerShell là các phiên shell-tool riêng biệt
+
+Pi `0.84.3` đã publish cung cấp `powershell` như một built-in tùy chọn cho command Windows native. Đây là Tool riêng với `bash`: `bash` resolve shell tương thích Bash và dùng prompt `bash`, còn `powershell` ưu tiên resolve `pwsh.exe`, sau đó đến `powershell.exe`, khởi động bằng các flag non-interactive và dùng prompt `PS>`. Chọn Tool này không viết lại command cho Tool kia và cũng không đổi shell đã khởi chạy Pi.
+
+Hai Tool chia sẻ metadata của Pi session hiện tại, chứ không chia sẻ một child-shell process persistent. Mỗi Tool call khởi động một child mới qua operations backend, nhận các giá trị mới nhất của `PI_SESSION_ID`, `PI_SESSION_FILE`, `PI_PROVIDER`, `PI_MODEL` và `PI_REASONING_LEVEL`, rồi trả một Tool result riêng. Thay đổi trên filesystem tồn tại qua nhiều call; shell-local variable, function và thay đổi working directory thì không, trừ khi chính command persist chúng ở nơi khác.
+
+`powershell` có thể được chọn qua `defaultTools`, lựa chọn tool của CLI/SDK hoặc public factory. Nó **không** thuộc tập `defaultTools` mặc định trong Pi `0.84.3`: bỏ setting này chỉ bật `read`, `bash`, `edit` và `write`. Vì vậy cấu hình Windows phải chọn `powershell` tường minh khi model cần dùng PowerShell native thay cho, hoặc cùng với, Bash.
+
+`createPowerShellTool()` nhận một object `PowerShellToolOptions` tùy chọn. Các option công khai là `operations`, `exposeSessionEnvironment` và `spawnHook`; `commandPrefix` cùng `shellPath` chỉ dành cho Bash, không phải PowerShell option. Factory và type `PowerShellOperations` được export từ package root:
+
+```typescript
+import {
+  createPowerShellTool,
+  type PowerShellOperations,
+} from "@earendil-works/pi-coding-agent";
+
+const operations: PowerShellOperations = {
+  async exec(command, cwd, { onData, signal, timeout, env }) {
+    void [cwd, timeout, env];
+    if (signal?.aborted) return { exitCode: null };
+    onData(Buffer.from(`[compile-only] ${command}`));
+    return { exitCode: 0 };
+  },
+};
+
+export const powerShellTool = createPowerShellTool("C:\\workspace", {
+  operations,
+  exposeSessionEnvironment: false,
+  spawnHook: (context) => ({
+    ...context,
+    env: { ...context.env, CI: "1" },
+  }),
+});
+```
+
+Ví dụ này là backend không tạo process nhưng vẫn được kiểm tra type: nó minh họa customization mà không giả làm executor production. Ràng buộc operations chính xác được chia sẻ với Bash vì `PowerShellOperations` là public alias của `BashOperations`:
+
+```typescript
+interface PowerShellOperations {
+  exec: (
+    command: string,
+    cwd: string,
+    options: {
+      onData: (data: Buffer) => void;
+      signal?: AbortSignal;
+      timeout?: number;
+      env?: NodeJS.ProcessEnv;
+    },
+  ) => Promise<{ exitCode: number | null }>;
+}
+```
+
+Shell Tool wrapper tích lũy byte được stream, giới hạn output mà model nhìn thấy theo `DEFAULT_MAX_LINES` hoặc `DEFAULT_MAX_BYTES`, đồng thời lưu toàn bộ output đã bị cắt vào file tạm. Custom operations backend vẫn phải tuân theo `signal` và `timeout`, dừng toàn bộ remote hoặc local process tree, ngừng gọi `onData` sau khi settle, đồng thời giải phóng child handle, transport, timer và abort listener trong `finally`. Giá trị `{ exitCode: null }` biểu diễn command đã bị kill; exit code khác 0 trở thành command failure mà model nhìn thấy. Cơ chế truncation của wrapper bảo vệ context, không thay cho resource limit hay cleanup trong backend.
+
+### Tám Tool dựng sẵn chỉ khai báo thao tác mà chúng dùng
 
 Các interface công khai hiện tại vẫn tách theo từng Tool thay vì tạo một hệ điều hành ảo lớn:
 
@@ -942,6 +996,7 @@ Các interface công khai hiện tại vẫn tách theo từng Tool thay vì t�
 | Write | `WriteOperations`    | `writeFile(absolutePath, content)` và `mkdir(dir)` bất đồng bộ                                                                   |
 | Edit  | `EditOperations`     | `readFile(): Buffer`, `writeFile(absolutePath, content)` và `access()` bất đồng bộ                                                |
 | Bash  | `BashOperations`     | `exec(command, cwd, { onData, signal, timeout, env }): Promise<{ exitCode: number \| null }>`                                     |
+| PowerShell | `PowerShellOperations` | Cùng ràng buộc `exec` dạng stream với `BashOperations`; backend mặc định resolve PowerShell native trên Windows           |
 | Grep  | `GrepOperations`     | `isDirectory(absolutePath)` và `readFile(absolutePath): string`, đồng bộ hoặc bất đồng bộ                                        |
 | Find  | `FindOperations`     | `exists(absolutePath)` và `glob(pattern, cwd, { ignore, limit }): string[]`, đồng bộ hoặc bất đồng bộ                            |
 | Ls    | `LsOperations`       | `exists`, `stat` có `isDirectory()`, và `readdir(): string[]`, đồng bộ hoặc bất đồng bộ                                          |

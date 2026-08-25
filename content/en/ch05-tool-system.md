@@ -932,7 +932,61 @@ export const virtualRead = createReadToolDefinition(projectRoot, {
 
 An SSH or container backend can implement the same interface, but it must preserve the contract: absolute paths, rejected access for unreadable targets, raw bytes from `readFile`, cancellation inside its own transport if supported, bounded execution, and safe credential handling. The interface alone does not add a sandbox.
 
-### The seven built-ins declare only the operations they consume
+### Bash and PowerShell are separate shell-tool sessions
+
+Published Pi `0.84.3` exposes `powershell` as an optional built-in for native Windows commands. It is a separate Tool from `bash`: `bash` resolves a Bash-compatible shell and uses the `bash` prompt, while `powershell` resolves `pwsh.exe` first and then `powershell.exe`, starts it with non-interactive flags, and uses the `PS>` prompt. Selecting one does not rewrite commands for the other or change the shell that launched Pi.
+
+The two Tools share the current Pi session metadata, not a persistent child-shell process. Each Tool call starts a fresh child through its operations backend, receives the then-current `PI_SESSION_ID`, `PI_SESSION_FILE`, `PI_PROVIDER`, `PI_MODEL`, and `PI_REASONING_LEVEL` values, and returns a separate Tool result. Filesystem changes survive across calls; shell-local variables, functions, and working-directory changes do not unless the command itself persists them elsewhere.
+
+`powershell` is selectable through `defaultTools`, CLI/SDK tool selection, or its public factory. It is **not** in the default `defaultTools` set in Pi `0.84.3`: omitting that setting enables only `read`, `bash`, `edit`, and `write`. A Windows configuration must therefore select `powershell` explicitly when the model should use native PowerShell rather than, or alongside, Bash.
+
+`createPowerShellTool()` accepts an optional `PowerShellToolOptions` object. Its public options are `operations`, `exposeSessionEnvironment`, and `spawnHook`; Bash-only `commandPrefix` and `shellPath` are not PowerShell options. The factory and `PowerShellOperations` type are exported from the package root:
+
+```typescript
+import {
+  createPowerShellTool,
+  type PowerShellOperations,
+} from "@earendil-works/pi-coding-agent";
+
+const operations: PowerShellOperations = {
+  async exec(command, cwd, { onData, signal, timeout, env }) {
+    void [cwd, timeout, env];
+    if (signal?.aborted) return { exitCode: null };
+    onData(Buffer.from(`[compile-only] ${command}`));
+    return { exitCode: 0 };
+  },
+};
+
+export const powerShellTool = createPowerShellTool("C:\\workspace", {
+  operations,
+  exposeSessionEnvironment: false,
+  spawnHook: (context) => ({
+    ...context,
+    env: { ...context.env, CI: "1" },
+  }),
+});
+```
+
+The example is a typed, non-process backend: it demonstrates customization without claiming to be a production executor. The exact operations contract is shared with Bash because `PowerShellOperations` is a public alias of `BashOperations`:
+
+```typescript
+interface PowerShellOperations {
+  exec: (
+    command: string,
+    cwd: string,
+    options: {
+      onData: (data: Buffer) => void;
+      signal?: AbortSignal;
+      timeout?: number;
+      env?: NodeJS.ProcessEnv;
+    },
+  ) => Promise<{ exitCode: number | null }>;
+}
+```
+
+The shell Tool wrapper accumulates streamed bytes, bounds model-visible output to `DEFAULT_MAX_LINES` or `DEFAULT_MAX_BYTES`, and saves full truncated output to a temporary file. A custom operations backend must still honor `signal` and `timeout`, terminate the complete remote or local process tree, stop calling `onData` after settlement, and release child handles, transports, timers, and abort listeners in `finally`. Returning `{ exitCode: null }` represents a killed command; nonzero exit codes become model-visible command failures. The wrapper's truncation is context protection, not a substitute for resource limits or cleanup in the backend.
+
+### The eight built-ins declare only the operations they consume
 
 Current public interfaces remain per-Tool rather than forming one large virtual operating system:
 
@@ -942,6 +996,7 @@ Current public interfaces remain per-Tool rather than forming one large virtual 
 | Write | `WriteOperations`    | async `writeFile(absolutePath, content)` and `mkdir(dir)`                                                                    |
 | Edit  | `EditOperations`     | async `readFile(): Buffer`, `writeFile(absolutePath, content)`, and `access()`                                                |
 | Bash  | `BashOperations`     | `exec(command, cwd, { onData, signal, timeout, env }): Promise<{ exitCode: number \| null }>`                                 |
+| PowerShell | `PowerShellOperations` | Same streamed `exec` contract as `BashOperations`; the default backend resolves native PowerShell on Windows          |
 | Grep  | `GrepOperations`     | sync or async `isDirectory(absolutePath)` and `readFile(absolutePath): string`                                                |
 | Find  | `FindOperations`     | sync or async `exists(absolutePath)` and `glob(pattern, cwd, { ignore, limit }): string[]`                                   |
 | Ls    | `LsOperations`       | sync or async `exists`, `stat` with `isDirectory()`, and `readdir(): string[]`                                                |

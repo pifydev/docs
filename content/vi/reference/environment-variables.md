@@ -141,7 +141,9 @@ Command do các LLM-callable tool `bash` và `powershell` của Pi chạy nhận
 | `PI_MODEL` | Pi model ID đang chọn |
 | `PI_REASONING_LEVEL` | Level thực tế: `off`, `minimal`, `low`, `medium`, `high`, `xhigh` hoặc `max` |
 
-Giá trị được resolve trước mỗi shell-tool command, sau khi đổi model hoặc reasoning. Chúng không được inject vào command `!` hoặc `!!` do người dùng nhập. Custom shell tool được tạo bằng `createBashTool()` hoặc `createPowerShellTool()` expose các giá trị này trước `spawnHook`, vì vậy hãy giữ environment nhận được khi thêm field:
+Giá trị được resolve trước mỗi shell-tool command, sau khi đổi model hoặc reasoning. Bash call và PowerShell call dùng child process cùng command syntax riêng, nhưng cả hai đều nhận cùng snapshot của Pi session này ở nơi Tool được hỗ trợ. Tool `powershell` native chỉ có trên Windows. Các variable này không được inject vào command `!` hoặc `!!` do người dùng nhập.
+
+Custom shell tool được tạo bằng `createBashTool()` hoặc `createPowerShellTool()` expose metadata trước `spawnHook`, vì vậy hãy giữ process environment nhận được khi thêm field. Dạng Bash hiện có vẫn là:
 
 ```ts title="Giữ Pi metadata trong custom bash tool"
 import { createBashTool } from "@earendil-works/pi-coding-agent";
@@ -154,7 +156,20 @@ export const bashTool = createBashTool(process.cwd(), {
 });
 ```
 
-Hãy tắt exposure một cách tường minh khi command vượt qua trust boundary. Pi xóa session field kế thừa trước, ngăn metadata cũ của parent rò vào command hoặc hook:
+Customization PowerShell dùng cùng hook contract và nhận cùng session field:
+
+```ts title="Giữ Pi metadata trong custom PowerShell tool"
+import { createPowerShellTool } from "@earendil-works/pi-coding-agent";
+
+export const powerShellTool = createPowerShellTool(process.cwd(), {
+  spawnHook: (context) => ({
+    ...context,
+    env: { ...context.env, CI: "1" },
+  }),
+});
+```
+
+Hãy tắt exposure một cách tường minh trên một trong hai factory khi command vượt qua trust boundary. Pi xóa session field kế thừa trước, ngăn metadata cũ của parent rò vào command hoặc hook. Ví dụ Bash này vẫn hợp lệ; thay factory bằng `createPowerShellTool()` để có policy PowerShell tương đương:
 
 ```ts title="Tắt bash session metadata"
 import { createBashTool } from "@earendil-works/pi-coding-agent";

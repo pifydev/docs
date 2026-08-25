@@ -97,7 +97,7 @@ console.log({
 
 ### Chọn tool
 
-`defaultTools` chọn built-in tool lúc khởi động. Khi bỏ qua setting này, `read`, `bash`, `edit` và `write` là các mặc định được bật; `grep`, `find` và `ls` cũng là built-in và có thể được chọn, tương tự native tool `powershell` tùy chọn trên Windows. Array rỗng bỏ các built-in mặc định nhưng vẫn để extension tool và SDK custom tool hoạt động.
+`defaultTools` chọn built-in tool lúc khởi động. Khi bỏ qua setting này, chính xác `read`, `bash`, `edit` và `write` là các mặc định được bật. Các built-in khác có thể chọn là `powershell`, `grep`, `find` và `ls`; `powershell` là shell Tool Windows native tùy chọn và không tự động được thêm vào tập mặc định. Array rỗng bỏ các built-in mặc định nhưng vẫn để extension tool và SDK custom tool hoạt động.
 
 `--tools` là allowlist nghiêm ngặt cho built-in, extension và custom tool. `--no-tools` tắt toàn bộ tool, `--no-builtin-tools` chỉ bỏ built-in, còn `--exclude-tools` lọc kết quả. Array ở project thay thế toàn bộ array global.
 
@@ -106,6 +106,16 @@ console.log({
   "defaultTools": ["read", "bash", "edit", "write"]
 }
 ```
+
+Trên Windows, hãy chọn PowerShell tường minh, thay cho Bash hoặc cùng với Bash:
+
+```json title="tool-settings-windows.json"
+{
+  "defaultTools": ["read", "powershell", "edit", "write"]
+}
+```
+
+Chọn một Tool không thay đổi host shell đã khởi chạy Pi. Việc này chọn tên LLM-callable Tool nào đang active: `bash` gửi command đến backend tương thích Bash của Pi, còn `powershell` gửi command đến backend PowerShell native. Allowlist `tools` của CLI/SDK giữ cùng sự phân biệt này.
 
 ## Project trust
 
@@ -153,7 +163,7 @@ Không có setting tích hợp `sessions.retention` hoặc `sessions.redactSecre
 
 `terminal.showImages` (`true`) điều khiển inline display, `imageWidthCells` (`60`) đặt chiều rộng ưu tiên, `clearOnShrink` (`false`) xóa hàng không còn dùng, còn `showTerminalProgress` (`false`) phát progress indicator khi terminal hỗ trợ. `images.autoResize` (`true`) resize image gửi tới model về tối đa 2000 × 2000; `images.blockImages` (`false`) chặn mọi image gửi đến provider. Ẩn image trong terminal không chặn upload.
 
-`shellPath` chọn shell, `shellCommandPrefix` thêm prefix vào mọi bash command, còn `npmCommand` là argv array cho package operation. Path Windows trong JSON cần dùng dấu gạch chéo xuôi hoặc escape dấu gạch chéo ngược.
+`shellPath` chọn executable cho Tool `bash`, `shellCommandPrefix` thêm prefix vào mọi command `bash`, còn `npmCommand` là argv array cho package operation. Các setting dành cho Bash này không activate, cấu hình hay thay thế Tool `powershell`; hãy chọn PowerShell trong `defaultTools`, `--tools` hoặc option `tools` của SDK. Path Windows trong JSON cần dùng dấu gạch chéo xuôi hoặc escape dấu gạch chéo ngược.
 
 ```json title="terminal-and-shell-settings.json"
 {

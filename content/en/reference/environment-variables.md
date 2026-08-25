@@ -141,7 +141,9 @@ Commands run by Pi's LLM-callable `bash` and `powershell` tools receive fresh se
 | `PI_MODEL` | Selected Pi model ID |
 | `PI_REASONING_LEVEL` | Effective level: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max` |
 
-The values are resolved before every shell-tool command, after model or reasoning changes. They are not injected into user-entered `!` or `!!` commands. A custom shell tool created with `createBashTool()` or `createPowerShellTool()` exposes them before `spawnHook`, so preserve the received environment when adding fields:
+The values are resolved before every shell-tool command, after model or reasoning changes. Bash and PowerShell calls use separate child processes and command syntax, but both receive this same Pi session snapshot where the Tool is supported. The native `powershell` Tool is Windows-only. These variables are not injected into user-entered `!` or `!!` commands.
+
+A custom shell tool created with `createBashTool()` or `createPowerShellTool()` exposes the metadata before `spawnHook`, so preserve the received process environment when adding fields. The existing Bash form remains:
 
 ```ts title="Preserve Pi metadata in a custom bash tool"
 import { createBashTool } from "@earendil-works/pi-coding-agent";
@@ -154,7 +156,20 @@ export const bashTool = createBashTool(process.cwd(), {
 });
 ```
 
-Disable exposure explicitly when commands cross a trust boundary. Pi removes inherited session fields first, preventing stale parent metadata from leaking into the command or hook:
+PowerShell customization uses the same hook contract and receives the same session fields:
+
+```ts title="Preserve Pi metadata in a custom PowerShell tool"
+import { createPowerShellTool } from "@earendil-works/pi-coding-agent";
+
+export const powerShellTool = createPowerShellTool(process.cwd(), {
+  spawnHook: (context) => ({
+    ...context,
+    env: { ...context.env, CI: "1" },
+  }),
+});
+```
+
+Disable exposure explicitly on either factory when commands cross a trust boundary. Pi removes inherited session fields first, preventing stale parent metadata from leaking into the command or hook. This Bash example remains valid; replace the factory with `createPowerShellTool()` for the equivalent PowerShell policy:
 
 ```ts title="Disable bash session metadata"
 import { createBashTool } from "@earendil-works/pi-coding-agent";

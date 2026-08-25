@@ -49,6 +49,24 @@ async function readActiveSources() {
   );
 }
 
+async function readLocalizedContent(relativePath) {
+  return Promise.all(
+    ["en", "vi"].map(async (locale) => ({
+      locale,
+      source: await readFile(
+        new URL(`content/${locale}/${relativePath}`, repositoryRoot),
+        "utf8",
+      ),
+    })),
+  );
+}
+
+function assertContainsAll(source, patterns, context) {
+  for (const pattern of patterns) {
+    assert.match(source, pattern, `${context} must cover ${pattern}`);
+  }
+}
+
 function releaseSourceRef(link) {
   const match = new URL(link).pathname.match(
     /^\/(?:earendil-works\/pi|badlogic\/pi-mono)\/(?:blob|tree|commit)\/([^/]+)(?:\/|$)/,
@@ -102,6 +120,98 @@ test("compile fixture packages are exactly pinned to the published release", asy
 
   for (const packageName of compileFixturePackages) {
     assert.equal(packageJSON.devDependencies[packageName], "0.84.3");
+  }
+});
+
+test("both Chapter 5 locales explain the optional PowerShell tool contract", async () => {
+  const chapters = await readLocalizedContent("ch05-tool-system.md");
+
+  for (const { locale, source } of chapters) {
+    assertContainsAll(
+      source,
+      [
+        /`powershell`/,
+        /`createPowerShellTool\(\)`/,
+        /`PowerShellOperations`/,
+        /`defaultTools`/,
+        /onData: \(data: Buffer\) => void/,
+        /signal\?: AbortSignal/,
+        /exitCode: number \| null/,
+        /DEFAULT_MAX_LINES/,
+        /DEFAULT_MAX_BYTES/,
+      ],
+      `${locale} Chapter 5 PowerShell guidance`,
+    );
+  }
+});
+
+test("both API locales document the public PowerShell factory and operations signature", async () => {
+  const references = await readLocalizedContent("reference/api.md");
+
+  for (const { locale, source } of references) {
+    assertContainsAll(
+      source,
+      [
+        /createPowerShellTool,\s+type PowerShellOperations,\s+type PowerShellToolOptions,/,
+        /from "@earendil-works\/pi-coding-agent"/,
+        /createPowerShellTool\(cwd: string, options\?: PowerShellToolOptions\)/,
+        /operations\?: PowerShellOperations/,
+        /exposeSessionEnvironment\?: boolean/,
+        /spawnHook\?: PowerShellSpawnHook/,
+        /onData: \(data: Buffer\) => void/,
+        /Promise<\{ exitCode: number \| null \}>/,
+      ],
+      `${locale} API PowerShell guidance`,
+    );
+  }
+});
+
+test("both configuration locales distinguish tool selection from shell selection", async () => {
+  const references = await readLocalizedContent("reference/configuration.md");
+  const selectionStatement = {
+    en: /Selecting a Tool does not change the host shell/,
+    vi: /Chọn một Tool không thay đổi host shell/,
+  };
+
+  for (const { locale, source } of references) {
+    assertContainsAll(
+      source,
+      [
+        /`defaultTools`/,
+        /"defaultTools": \["read", "bash", "edit", "write"\]/,
+        /"defaultTools": \["read", "powershell", "edit", "write"\]/,
+        /`powershell`/,
+        /`shellPath`/,
+        /`shellCommandPrefix`/,
+      ],
+      `${locale} configuration PowerShell guidance`,
+    );
+    assert.match(source, selectionStatement[locale]);
+  }
+});
+
+test("both environment locales preserve Bash guidance and add concrete PowerShell customization", async () => {
+  const references = await readLocalizedContent(
+    "reference/environment-variables.md",
+  );
+
+  for (const { locale, source } of references) {
+    assertContainsAll(
+      source,
+      [
+        /createBashTool\(process\.cwd\(\), \{/,
+        /createPowerShellTool\(process\.cwd\(\), \{/,
+        /`bash` and `powershell`|`bash` và `powershell`/,
+        /PI_SESSION_ID/,
+        /PI_SESSION_FILE/,
+        /PI_PROVIDER/,
+        /PI_MODEL/,
+        /PI_REASONING_LEVEL/,
+        /exposeSessionEnvironment: false/,
+        /spawnHook: \(context\) =>/,
+      ],
+      `${locale} environment PowerShell guidance`,
+    );
   }
 });
 

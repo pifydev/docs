@@ -393,10 +393,65 @@ export default extension;
 | Managed tool | Availability |
 |---|---|
 | `read`, `bash`, `edit`, `write` | Được tích hợp và active mặc định, trừ khi setting hoặc SDK option thay đổi lựa chọn |
+| `powershell` | Built-in tùy chọn trên Windows; chọn tường minh hoặc dùng factory đã export |
 | `grep`, `find`, `ls` | Được tích hợp; active qua `tools` hoặc dùng factory đã export |
 | Entry từ extension hoặc `customTools` | Do host đăng ký; vẫn được lọc bởi `tools`, `excludeTools` và `noTools` |
 
 Quyền truy cập tool là policy của ứng dụng. SDK hiện tại không cung cấp switch `--yolo` trong baseline.
+
+### Factory và operations của PowerShell Tool
+
+Package root export công khai factory và type PowerShell; không cần deep import vào `dist/` hoặc `src/`:
+
+```ts
+import {
+  createPowerShellTool,
+  type PowerShellOperations,
+  type PowerShellToolOptions,
+} from "@earendil-works/pi-coding-agent";
+```
+
+Khai báo đã publish là:
+
+```ts
+declare function createPowerShellTool(
+  cwd: string,
+  options?: PowerShellToolOptions,
+): ReturnType<typeof createBashTool>;
+```
+
+Ở dạng signature ngắn gọn, đây là `createPowerShellTool(cwd: string, options?: PowerShellToolOptions)`. `AgentTool` trả về nhận `{ command: string, timeout?: number }`, stream partial result qua Tool update callback thông thường và resolve về shell-tool detail shape dùng chung. Việc tạo Tool không chạy command; execution chỉ bắt đầu khi host gọi method `execute` của nó.
+
+`PowerShellToolOptions` được khai báo bằng `Pick` từ shell option dùng chung. Public shape tương đương là:
+
+```ts
+interface PowerShellToolOptions {
+  operations?: PowerShellOperations;
+  exposeSessionEnvironment?: boolean;
+  spawnHook?: PowerShellSpawnHook;
+}
+```
+
+`PowerShellSpawnHook` nhận và trả `{ command: string; cwd: string; env: NodeJS.ProcessEnv }`. `exposeSessionEnvironment` mặc định là `true`; hook chạy sau khi Pi dựng command environment. Khác với `BashToolOptions`, type này không expose `commandPrefix` hay `shellPath`.
+
+`PowerShellOperations` là public alias của `BashOperations`, không phải process class PowerShell riêng tư. Custom backend triển khai đúng một method dạng stream:
+
+```ts
+interface PowerShellOperations {
+  exec: (
+    command: string,
+    cwd: string,
+    options: {
+      onData: (data: Buffer) => void;
+      signal?: AbortSignal;
+      timeout?: number;
+      env?: NodeJS.ProcessEnv;
+    },
+  ) => Promise<{ exitCode: number | null }>;
+}
+```
+
+Tool wrapper sở hữu argument validation, định dạng progress/result và giới hạn output. Operations backend sở hữu execution thực: nó phải stream byte stdout/stderr qua `onData`, tuân theo cancellation cùng timeout, trả `null` khi bị kill, đồng thời cleanup process tree, transport, timer và listener. `createLocalPowerShellOperations()` cũng là API công khai và cung cấp backend Windows native của Pi, nhưng executable discovery cùng process lifecycle là hành vi triển khai chứ không phải API cho private process handle.
 
 ### Tích hợp runtime và CLI
 

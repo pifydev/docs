@@ -393,10 +393,65 @@ export default extension;
 | Managed tool | Availability |
 |---|---|
 | `read`, `bash`, `edit`, `write` | Built in and active by default unless settings or SDK options change the selection |
+| `powershell` | Optional Windows built-in; select it explicitly or use its exported factory |
 | `grep`, `find`, `ls` | Built in; activate through `tools` or use their exported factories |
 | Extension or `customTools` entries | Registered by the host; still filtered by `tools`, `excludeTools`, and `noTools` |
 
 Tool access is an application policy. The current SDK does not expose the baseline `--yolo` switch.
+
+### PowerShell Tool factory and operations
+
+The package root publicly exports the PowerShell factory and types; no deep import into `dist/` or `src/` is required:
+
+```ts
+import {
+  createPowerShellTool,
+  type PowerShellOperations,
+  type PowerShellToolOptions,
+} from "@earendil-works/pi-coding-agent";
+```
+
+The published declaration is:
+
+```ts
+declare function createPowerShellTool(
+  cwd: string,
+  options?: PowerShellToolOptions,
+): ReturnType<typeof createBashTool>;
+```
+
+In compact signature form, this is `createPowerShellTool(cwd: string, options?: PowerShellToolOptions)`. The returned `AgentTool` accepts `{ command: string, timeout?: number }`, streams partial results through the normal Tool update callback, and resolves to the shared shell-tool detail shape. Creating the Tool does not execute a command; execution begins only when its `execute` method is invoked by the host.
+
+`PowerShellToolOptions` is declared as a `Pick` of the shared shell options. Its effective public shape is:
+
+```ts
+interface PowerShellToolOptions {
+  operations?: PowerShellOperations;
+  exposeSessionEnvironment?: boolean;
+  spawnHook?: PowerShellSpawnHook;
+}
+```
+
+`PowerShellSpawnHook` receives and returns `{ command: string; cwd: string; env: NodeJS.ProcessEnv }`. The default `exposeSessionEnvironment` is `true`; the hook runs after Pi builds the command environment. Unlike `BashToolOptions`, this type does not expose `commandPrefix` or `shellPath`.
+
+`PowerShellOperations` is a public alias of `BashOperations`, not a private PowerShell process class. A custom backend implements exactly one streamed method:
+
+```ts
+interface PowerShellOperations {
+  exec: (
+    command: string,
+    cwd: string,
+    options: {
+      onData: (data: Buffer) => void;
+      signal?: AbortSignal;
+      timeout?: number;
+      env?: NodeJS.ProcessEnv;
+    },
+  ) => Promise<{ exitCode: number | null }>;
+}
+```
+
+The Tool wrapper owns argument validation, progress/result formatting, and bounded output. The operations backend owns actual execution: it must stream stdout/stderr bytes through `onData`, honor cancellation and timeout, return `null` when killed, and clean up process trees, transports, timers, and listeners. `createLocalPowerShellOperations()` is also public and supplies Pi's native Windows backend, but its executable discovery and process lifecycle are implementation behavior rather than an API for private process handles.
 
 ### Runtime and CLI integration
 

@@ -97,7 +97,7 @@ console.log({
 
 ### Tool selection
 
-`defaultTools` selects built-in tools at startup. When omitted, `read`, `bash`, `edit`, and `write` are active defaults; `grep`, `find`, and `ls` are also built in and can be selected, as can the optional native `powershell` tool on Windows. An empty array removes the built-in defaults but leaves extension and SDK custom tools available.
+`defaultTools` selects built-in tools at startup. When omitted, exactly `read`, `bash`, `edit`, and `write` are active defaults. The other selectable built-ins are `powershell`, `grep`, `find`, and `ls`; `powershell` is the optional native Windows shell Tool and is not added to the default set automatically. An empty array removes the built-in defaults but leaves extension and SDK custom tools available.
 
 `--tools` is a strict allowlist across built-in, extension, and custom tools. `--no-tools` disables all tools, `--no-builtin-tools` removes built-ins only, and `--exclude-tools` filters the result. A project array replaces the global array.
 
@@ -106,6 +106,16 @@ console.log({
   "defaultTools": ["read", "bash", "edit", "write"]
 }
 ```
+
+Select PowerShell explicitly on Windows, either instead of Bash or alongside it:
+
+```json title="tool-settings-windows.json"
+{
+  "defaultTools": ["read", "powershell", "edit", "write"]
+}
+```
+
+Selecting a Tool does not change the host shell that launched Pi. It chooses which LLM-callable Tool names are active: `bash` sends commands to Pi's Bash-compatible backend, while `powershell` sends commands to the native PowerShell backend. The CLI/SDK `tools` allowlist follows the same distinction.
 
 ## Project trust
 
@@ -153,7 +163,7 @@ There are no built-in `sessions.retention` or `sessions.redactSecrets` settings.
 
 `terminal.showImages` (`true`) controls inline display, `imageWidthCells` (`60`) sets preferred width, `clearOnShrink` (`false`) clears vacated rows, and `showTerminalProgress` (`false`) emits supported terminal progress indicators. `images.autoResize` (`true`) resizes model-bound images to at most 2000 × 2000; `images.blockImages` (`false`) blocks all images from reaching providers. Hiding terminal images does not block upload.
 
-`shellPath` selects a shell, `shellCommandPrefix` prefixes every bash command, and `npmCommand` is an argv array for package operations. Windows JSON paths need forward slashes or escaped backslashes.
+`shellPath` selects the executable for the `bash` Tool, `shellCommandPrefix` prefixes every `bash` command, and `npmCommand` is an argv array for package operations. These Bash settings do not activate, configure, or replace the `powershell` Tool; PowerShell selection belongs in `defaultTools`, `--tools`, or the SDK `tools` option. Windows JSON paths need forward slashes or escaped backslashes.
 
 ```json title="terminal-and-shell-settings.json"
 {
