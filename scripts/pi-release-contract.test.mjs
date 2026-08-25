@@ -382,6 +382,8 @@ function createRuntimePortHarness(events, options = {}) {
       events.push("replacement:before-invalidate-returned");
       events.push("old:disposed");
       events.push("factory:called");
+      options.onFactoryCalled?.();
+      if (options.factoryGate) await options.factoryGate;
       if (options.factoryFailure) throw options.factoryFailure;
       replacementIndex += 1;
       const replacement = createSession(`replacement-${replacementIndex}`);
@@ -404,6 +406,7 @@ function createRuntimePortHarness(events, options = {}) {
     },
     async dispose() {
       events.push("runtime:dispose");
+      beforeSessionInvalidate?.();
       if (options.disposeFailure) throw options.disposeFailure;
     },
   };
@@ -1219,8 +1222,8 @@ test("final persistence failure still disposes and unsubscribes after terminal s
     assert.ok(error instanceof AggregateError);
     assert.deepEqual(error.errors, [
       flushFailure,
-      runtimeDisposeFailure,
       unsubscribeFailure,
+      runtimeDisposeFailure,
     ]);
     assert.equal(error.cause, flushFailure);
     return true;
@@ -1234,6 +1237,94 @@ test("final persistence failure still disposes and unsubscribes after terminal s
   assert.throws(() => host.diagnostics, /disposed/);
   await assert.rejects(host.newSession(), /disposed/);
   assert.equal(runtime.newSessionCalls, 0);
+});
+
+test("final runtime invalidation callback failure is drained and rejects disposal", async () => {
+  const { bindSerializedSessionRuntimeHost } = await loadRuntimeHostAdapter();
+  const events = [];
+  const unsubscribeFailure = new Error("final callback unsubscribe failure");
+  const runtime = createRuntimePortHarness(events);
+  const host = await bindSerializedSessionRuntimeHost(runtime, {
+    extensionBindings: () => ({}),
+    subscribe(session) {
+      events.push(`${session.label}:subscribe`);
+      return () => {
+        events.push(`${session.label}:unsubscribe`);
+        throw unsubscribeFailure;
+      };
+    },
+    reportDiagnostics() {},
+    async flushPersistence() {
+      events.push("persistence:flush");
+    },
+  });
+
+  await assert.rejects(host.dispose(), (error) => error === unsubscribeFailure);
+  assert.ok(
+    events.indexOf("runtime:dispose") < events.indexOf("old:unsubscribe"),
+  );
+  assert.throws(() => host.cwd, /disposed/);
+  await assert.rejects(host.newSession(), /disposed/);
+});
+
+test("dispose requested during replacement becomes terminal immediately and queues cleanup", async () => {
+  const { bindSerializedSessionRuntimeHost } = await loadRuntimeHostAdapter();
+  const events = [];
+  let releaseFactory;
+  let reportFactoryCalled;
+  const factoryGate = new Promise((resolve) => {
+    releaseFactory = resolve;
+  });
+  const factoryCalled = new Promise((resolve) => {
+    reportFactoryCalled = resolve;
+  });
+  const runtime = createRuntimePortHarness(events, {
+    factoryGate,
+    onFactoryCalled: reportFactoryCalled,
+  });
+  const host = await bindSerializedSessionRuntimeHost(runtime, {
+    extensionBindings: () => ({}),
+    subscribe(session) {
+      events.push(`${session.label}:subscribe`);
+      return () => events.push(`${session.label}:unsubscribe`);
+    },
+    reportDiagnostics() {},
+    async flushPersistence() {
+      events.push("persistence:flush");
+    },
+  });
+
+  const replacing = host.newSession();
+  await factoryCalled;
+  const disposing = host.dispose();
+  let disposalSettled = false;
+  void disposing.then(
+    () => {
+      disposalSettled = true;
+    },
+    () => {
+      disposalSettled = true;
+    },
+  );
+  await Promise.resolve();
+  assert.equal(disposalSettled, false);
+  assert.throws(() => host.cwd, /disposed/);
+  const laterOperation = host.newSession();
+
+  releaseFactory();
+  await replacing;
+  await disposing;
+  await assert.rejects(laterOperation, /disposed/);
+  await assert.rejects(host.dispose(), /disposed/);
+  assert.equal(runtime.newSessionCalls, 1);
+  assert.ok(
+    events.indexOf("replacement-1:rebound") <
+      events.indexOf("replacement-1:abort"),
+  );
+  assert.ok(
+    events.indexOf("replacement-1:abort") < events.indexOf("runtime:dispose"),
+  );
+  assert.throws(() => host.diagnostics, /disposed/);
 });
 
 test("both replaceable session runtime guides preserve the ten-step lifecycle and diagram actors", async () => {

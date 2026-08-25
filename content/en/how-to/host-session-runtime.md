@@ -270,14 +270,11 @@ export async function bindSerializedSessionRuntimeHost(
   }
 
   const dispose = (): Promise<void> => {
-    try {
-      assertAvailable();
-    } catch (error) {
-      return Promise.reject(error);
+    if (disposed) {
+      return Promise.reject(new Error("session runtime host is disposed"));
     }
     disposed = true;
     unusable = true;
-    replacementInFlight = true;
     return enqueue(async () => {
       const failures: unknown[] = [];
       try {
@@ -290,11 +287,16 @@ export async function bindSerializedSessionRuntimeHost(
       } catch (error) {
         failures.push(error);
       }
+      let runtimeDisposeFailure: unknown;
+      let runtimeDisposeFailed = false;
       try {
         await runtime.dispose();
       } catch (error) {
-        failures.push(error);
+        runtimeDisposeFailed = true;
+        runtimeDisposeFailure = error;
       }
+      failures.push(...takeInvalidationCleanupFailures());
+      if (runtimeDisposeFailed) failures.push(runtimeDisposeFailure);
       clearSubscriptionAfterFailure(failures);
       if (failures.length > 0) {
         const [primary, ...cleanupFailures] = failures;
@@ -461,6 +463,10 @@ sequenceDiagram
     participant Rebind as Subscription rebind
     participant Persist as Host persistence
     Caller->>Lock: enqueue new/resume/fork/clone/import
+    opt final dispose requested while replacement owns the lock
+        Caller->>Lock: mark terminal and enqueue final cleanup
+        Note over Caller,Lock: disposal waits behind the current tail
+    end
     Lock->>Dispose: begin runtime teardown
     Dispose->>Old: abort active response
     Dispose->>Old: session_shutdown
@@ -506,6 +512,16 @@ sequenceDiagram
         Lock->>Lock: combine captured cleanup and mark unusable
         Lock--xCaller: factory primary and no exposed session
     end
+    opt final disposal was queued
+        Lock->>Next: abort current session after prior work settles
+        Lock->>Persist: flush host persistence
+        Lock->>Dispose: runtime.dispose()
+        Dispose->>Rebind: synchronous invalidation callback
+        Rebind-->>Lock: capture unsubscribe failure
+        Dispose-->>Lock: resolve or reject after callback
+        Lock->>Lock: drain callback failure before disposal error
+        Lock-->>Caller: final result or flat failure
+    end
 ```
 
 ## 8. Dispose old resources and flush persistence
@@ -514,7 +530,9 @@ For a replacement, Pi's internal teardown first awaits `oldSession.abort()`. Thi
 
 `SessionManager` appends Pi's JSONL records through its own session operations; there is no public asynchronous `flush()` method on `AgentSessionRuntime`. The example's `flushPersistence()` is explicitly for host-owned persistence, event projection, or durable queues. It runs after each successful rebind. If that flush rejects, the installed replacement is not safe to publish: the adapter becomes terminal, clears its subscription, attempts `runtime.dispose()`, and rejects the operation.
 
-Final shutdown is also serialized, but terminal state is set synchronously when `host.dispose()` is called, before queued cleanup starts. Cleanup attempts `runtime.session.abort()`, host persistence flush, `runtime.dispose()`, and unsubscribe independently, so one failure cannot skip the later steps. The first failure remains primary; later failures are appended to one flat `AggregateError`. Stop accepting new commands, await the result, and then close process-global resources such as database pools or telemetry exporters. Getters and operations reject from the moment disposal starts, including after cleanup fails.
+Final shutdown is also serialized, but it is requestable while a healthy replacement already owns the host lock. The first `host.dispose()` call does not run `assertAvailable()` or reject merely because `replacementInFlight` is set. It atomically sets `disposed` and `unusable`, then enqueues cleanup behind the current `tail`. The in-flight operation settles first; already queued or later operations reach the terminal guard without invoking another runtime method. Getters reject immediately. A repeated `dispose()` call rejects with the defined disposed-state error and never schedules duplicate cleanup.
+
+Final cleanup attempts `runtime.session.abort()`, host persistence flush, `runtime.dispose()`, and an explicit unsubscribe fallback independently, so one failure cannot skip later steps. Pi's `runtime.dispose()` itself invokes `setBeforeSessionInvalidate()` synchronously. The adapter therefore drains `invalidationCleanupFailures` after `runtime.dispose()` on both resolve and reject. A callback unsubscribe failure is recorded before a later runtime-disposal rejection, matching their actual occurrence; neither can be lost. The first failure remains primary and later failures are appended to one flat `AggregateError`. Await the result before closing process-global resources such as database pools or telemetry exporters. Access remains terminal even when cleanup fails.
 
 ## 9. Handle factory failure without a half-replaced session
 
@@ -522,7 +540,7 @@ Replacement in Pi `0.84.3` is not rollback-transactional. `AgentSessionRuntime` 
 
 The wrapper detects this exact boundary because `setBeforeSessionInvalidate()` set `replacementInFlight`, while a successful `setRebindSession()` clears it only after Extension and host binding complete. The synchronous callback never throws: unsubscribe failure is retained for the awaited boundary. A factory rejection occurs before apply and leaves no replacement to dispose, so it is propagated as primary with that retained cleanup failure appended. An invalidation-cleanup, `bindExtensions(...)`, host-subscription, diagnostic-reporting, or post-rebind persistence rejection after apply disposes the installed replacement before propagating. `finally` keeps the wrapper unusable even if disposal fails. No raw session is public, and later operations or state getters reject. This is the required no-half-replacement, fail-closed policy.
 
-Cleanup failure never replaces or nests the primary evidence. `disposeRuntimeFailure()` starts with the captured cleanup failures, appends disposal and final-cleanup failures in occurrence order, and calls `throwSessionBindingFailure()` exactly once. Final disposal similarly records each attempted stage before finalizing. With no cleanup failures, the helper rethrows the original primary. Otherwise, it throws one `AggregateError` whose `.errors` are `[primary, ...cleanupFailures]` and whose `.cause` is `primary`. Log that flat aggregate structure without serializing session content, and treat every member as an operational incident.
+Cleanup failure never replaces or nests the primary evidence. `disposeRuntimeFailure()` starts with captured cleanup failures, appends later failures in occurrence order, and calls `throwSessionBindingFailure()` exactly once. Final disposal keeps a runtime-disposal rejection aside until it has drained failures captured inside that call's synchronous invalidation callback; it then appends the later rejection. With no additional failures, the helper rethrows the original primary. Otherwise, it throws one `AggregateError` whose `.errors` are `[primary, ...cleanupFailures]` and whose `.cause` is `primary`. Log that flat aggregate structure without serializing session content, and treat every member as an operational incident.
 
 Do not catch that error and continue serving through a cached session. Record the operation, target path or cwd, and error without logging transcript content or secrets. Then terminate the owning worker, or build a new host from an explicit safe startup target. Automatic retry is acceptable only if the host remains unavailable and each attempt builds a complete new runtime.
 
@@ -545,7 +563,8 @@ Verify these invariants:
 - [ ] A factory rejection after invalidation exposes no session; a binding failure after apply also clears subscriptions and disposes the applied replacement. Both permanently reject later operations on that wrapper.
 - [ ] Post-rebind persistence failure marks the adapter terminal, clears the installed subscription, disposes the replacement, and rejects all later access.
 - [ ] If unsubscribe or replacement disposal fails, the single propagated `AggregateError` has flat `.errors` ordered as primary then cleanup failures in occurrence order, and `.cause` is the primary failure.
-- [ ] Final disposal becomes terminal before cleanup; abort, persistence flush, runtime disposal, and unsubscribe are all attempted, and later access rejects even when cleanup fails.
+- [ ] Final disposal can be requested during a healthy in-flight replacement: it becomes terminal immediately, waits behind the current tail, cleans the resulting current session, and rejects duplicate disposal requests.
+- [ ] Final cleanup attempts abort, persistence flush, runtime disposal, and unsubscribe; invalidation-callback failures are drained on runtime-disposal resolve or reject and ordered before any later disposal error.
 - [ ] Diagnostic output redacts secrets and identifies the operation plus target cwd or session path.
 
 For a real acceptance run, create sessions in two temporary cwd directories, switch between them, and assert that project-local settings and resources come from the selected cwd. Use an in-memory or faux provider so lifecycle evidence does not depend on network access or credentials.

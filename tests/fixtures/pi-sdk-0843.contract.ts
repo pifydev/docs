@@ -614,14 +614,11 @@ export async function bindSerializedSessionRuntimeHost(
   }
 
   const dispose = (): Promise<void> => {
-    try {
-      assertAvailable();
-    } catch (error) {
-      return Promise.reject(error);
+    if (disposed) {
+      return Promise.reject(new Error("session runtime host is disposed"));
     }
     disposed = true;
     unusable = true;
-    replacementInFlight = true;
     return enqueue(async () => {
       const failures: unknown[] = [];
       try {
@@ -634,11 +631,16 @@ export async function bindSerializedSessionRuntimeHost(
       } catch (error) {
         failures.push(error);
       }
+      let runtimeDisposeFailure: unknown;
+      let runtimeDisposeFailed = false;
       try {
         await runtime.dispose();
       } catch (error) {
-        failures.push(error);
+        runtimeDisposeFailed = true;
+        runtimeDisposeFailure = error;
       }
+      failures.push(...takeInvalidationCleanupFailures());
+      if (runtimeDisposeFailed) failures.push(runtimeDisposeFailure);
       clearSubscriptionAfterFailure(failures);
       if (failures.length > 0) {
         const [primary, ...cleanupFailures] = failures;

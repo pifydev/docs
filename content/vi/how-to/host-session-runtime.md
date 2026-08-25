@@ -270,14 +270,11 @@ export async function bindSerializedSessionRuntimeHost(
   }
 
   const dispose = (): Promise<void> => {
-    try {
-      assertAvailable();
-    } catch (error) {
-      return Promise.reject(error);
+    if (disposed) {
+      return Promise.reject(new Error("session runtime host is disposed"));
     }
     disposed = true;
     unusable = true;
-    replacementInFlight = true;
     return enqueue(async () => {
       const failures: unknown[] = [];
       try {
@@ -290,11 +287,16 @@ export async function bindSerializedSessionRuntimeHost(
       } catch (error) {
         failures.push(error);
       }
+      let runtimeDisposeFailure: unknown;
+      let runtimeDisposeFailed = false;
       try {
         await runtime.dispose();
       } catch (error) {
-        failures.push(error);
+        runtimeDisposeFailed = true;
+        runtimeDisposeFailure = error;
       }
+      failures.push(...takeInvalidationCleanupFailures());
+      if (runtimeDisposeFailed) failures.push(runtimeDisposeFailure);
       clearSubscriptionAfterFailure(failures);
       if (failures.length > 0) {
         const [primary, ...cleanupFailures] = failures;
@@ -461,6 +463,10 @@ sequenceDiagram
     participant Rebind as Subscription rebind
     participant Persist as Host persistence
     Caller->>Lock: enqueue new/resume/fork/clone/import
+    opt final dispose requested while replacement owns the lock
+        Caller->>Lock: mark terminal and enqueue final cleanup
+        Note over Caller,Lock: disposal waits behind the current tail
+    end
     Lock->>Dispose: begin runtime teardown
     Dispose->>Old: abort active response
     Dispose->>Old: session_shutdown
@@ -506,6 +512,16 @@ sequenceDiagram
         Lock->>Lock: combine captured cleanup and mark unusable
         Lock--xCaller: factory primary and no exposed session
     end
+    opt final disposal was queued
+        Lock->>Next: abort current session after prior work settles
+        Lock->>Persist: flush host persistence
+        Lock->>Dispose: runtime.dispose()
+        Dispose->>Rebind: synchronous invalidation callback
+        Rebind-->>Lock: capture unsubscribe failure
+        Dispose-->>Lock: resolve or reject after callback
+        Lock->>Lock: drain callback failure before disposal error
+        Lock-->>Caller: final result or flat failure
+    end
 ```
 
 ## 8. Dispose resource cũ và flush persistence
@@ -514,7 +530,9 @@ Khi replacement, teardown nội bộ của Pi trước hết await `oldSession.a
 
 `SessionManager` append record JSONL của Pi qua chính session operation; `AgentSessionRuntime` không có public method `flush()` bất đồng bộ. `flushPersistence()` trong ví dụ chỉ dành cho persistence, event projection hoặc durable queue do host sở hữu. Nó chạy sau mỗi rebind thành công. Nếu flush reject, installed replacement không còn an toàn để công khai: adapter chuyển sang terminal, clear subscription, thử `runtime.dispose()` rồi reject operation.
 
-Final shutdown cũng được tuần tự hóa, nhưng terminal state được set đồng bộ ngay khi gọi `host.dispose()`, trước khi queued cleanup bắt đầu. Cleanup thử độc lập `runtime.session.abort()`, flush host persistence, `runtime.dispose()` và unsubscribe, nên failure ở một bước không được bỏ qua các bước sau. Failure đầu tiên giữ vai trò primary; các failure sau được nối vào một `AggregateError` phẳng. Hãy ngừng nhận command mới, await kết quả, rồi mới đóng resource dùng chung cho process như database pool hoặc telemetry exporter. Getter và operation reject ngay từ lúc disposal bắt đầu, kể cả khi cleanup thất bại.
+Final shutdown cũng được tuần tự hóa, nhưng có thể được yêu cầu khi một healthy replacement đang giữ host lock. Lần gọi `host.dispose()` đầu tiên không chạy `assertAvailable()` và không reject chỉ vì `replacementInFlight` đang set. Nó atomically set `disposed` cùng `unusable`, rồi enqueue cleanup sau `tail` hiện tại. In-flight operation settle trước; operation đã queue hoặc đến sau sẽ chạm terminal guard mà không gọi thêm runtime method. Getter reject ngay lập tức. Lần gọi `dispose()` lặp lại reject bằng disposed-state error đã định nghĩa và không schedule cleanup trùng.
+
+Final cleanup thử độc lập `runtime.session.abort()`, flush host persistence, `runtime.dispose()` và explicit unsubscribe fallback, nên failure ở một bước không được bỏ qua bước sau. Chính `runtime.dispose()` của Pi gọi `setBeforeSessionInvalidate()` đồng bộ. Vì vậy adapter drain `invalidationCleanupFailures` sau `runtime.dispose()` trên cả path resolve lẫn reject. Callback unsubscribe failure được ghi trước runtime-disposal rejection xảy ra sau nó, đúng thứ tự thực tế; không lỗi nào bị mất. Failure đầu tiên giữ vai trò primary, các failure sau được nối vào một `AggregateError` phẳng. Hãy await kết quả trước khi đóng resource dùng chung cho process như database pool hoặc telemetry exporter. Access vẫn terminal kể cả khi cleanup thất bại.
 
 ## 9. Xử lý factory failure mà không để lộ half-replaced session
 
@@ -522,7 +540,7 @@ Replacement trong Pi `0.84.3` không phải rollback transaction. `AgentSessionR
 
 Wrapper phát hiện đúng boundary này vì `setBeforeSessionInvalidate()` đã đặt `replacementInFlight`, còn `setRebindSession()` thành công chỉ xóa flag sau khi Extension binding và host binding hoàn tất. Callback đồng bộ không bao giờ throw: unsubscribe failure được giữ lại cho awaited boundary. Factory rejection xảy ra trước apply nên không có replacement cần dispose; wrapper propagate nó làm primary và nối cleanup failure đã giữ lại. Invalidation-cleanup rejection, `bindExtensions(...)`, host subscription, diagnostic reporting hoặc post-rebind persistence rejection sau apply đều dispose installed replacement trước khi propagate. `finally` giữ wrapper unusable kể cả khi disposal thất bại. Không có raw session nào được public, còn operation và state getter sau đó đều reject. Đây là policy no-half-replacement, fail-closed bắt buộc.
 
-Cleanup failure không bao giờ thay thế hoặc lồng bằng chứng chính. `disposeRuntimeFailure()` bắt đầu bằng các cleanup failure đã capture, nối thêm disposal và final-cleanup failure theo thứ tự xảy ra, rồi chỉ gọi `throwSessionBindingFailure()` đúng một lần. Final disposal cũng ghi từng stage đã thử trước khi finalize. Khi không có cleanup failure, helper rethrow primary ban đầu. Nếu có, nó throw một `AggregateError` duy nhất với `.errors` là `[primary, ...cleanupFailures]` và `.cause` là `primary`. Hãy log cấu trúc aggregate phẳng đó nhưng không serialize session content, đồng thời xem từng phần tử là một operational incident.
+Cleanup failure không bao giờ thay thế hoặc lồng bằng chứng chính. `disposeRuntimeFailure()` bắt đầu bằng cleanup failure đã capture, nối thêm failure về sau theo thứ tự xảy ra, rồi chỉ gọi `throwSessionBindingFailure()` đúng một lần. Final disposal giữ riêng runtime-disposal rejection cho đến khi drain xong failure được capture trong synchronous invalidation callback của chính call đó; sau đó mới nối rejection xảy ra muộn hơn. Khi không có failure bổ sung, helper rethrow primary ban đầu. Nếu có, nó throw một `AggregateError` duy nhất với `.errors` là `[primary, ...cleanupFailures]` và `.cause` là `primary`. Hãy log cấu trúc aggregate phẳng đó nhưng không serialize session content, đồng thời xem từng phần tử là một operational incident.
 
 Không catch lỗi rồi tiếp tục phục vụ qua một session đã cache. Hãy ghi operation, target path hoặc cwd và error nhưng không log transcript content hay secret. Sau đó kết thúc worker đang sở hữu runtime, hoặc dựng host mới từ một safe startup target tường minh. Chỉ retry tự động khi host vẫn unavailable và mỗi attempt dựng một runtime mới hoàn chỉnh.
 
@@ -545,7 +563,8 @@ Xác minh các invariant sau:
 - [ ] Factory rejection sau invalidation không công khai session nào; binding failure sau apply cũng clear subscription và dispose applied replacement. Cả hai vĩnh viễn reject operation sau đó trên wrapper này.
 - [ ] Post-rebind persistence failure đưa adapter về terminal, clear installed subscription, dispose replacement và reject mọi access về sau.
 - [ ] Nếu unsubscribe hoặc replacement disposal thất bại, `AggregateError` duy nhất được propagate có `.errors` phẳng theo thứ tự primary rồi các cleanup failure theo lúc xảy ra, còn `.cause` là primary failure.
-- [ ] Final disposal chuyển terminal trước cleanup; abort, persistence flush, runtime disposal và unsubscribe đều được thử, còn access sau đó reject ngay cả khi cleanup thất bại.
+- [ ] Có thể yêu cầu final disposal trong lúc healthy replacement đang chạy: host chuyển terminal ngay, chờ sau current tail, cleanup session hiện tại sau replacement và reject disposal request trùng.
+- [ ] Final cleanup thử abort, persistence flush, runtime disposal và unsubscribe; failure từ invalidation callback được drain dù runtime disposal resolve hay reject và được xếp trước disposal error xảy ra sau.
 - [ ] Diagnostic output redact secret và định danh operation cùng target cwd hoặc session path.
 
 Với acceptance run thật, tạo session trong hai thư mục cwd tạm, switch qua lại và assert project-local settings cùng resource đến từ cwd đã chọn. Dùng in-memory hoặc faux provider để lifecycle evidence không phụ thuộc network hay credential.
