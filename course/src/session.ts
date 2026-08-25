@@ -1,5 +1,6 @@
 import { link, lstat, open, realpath, rename, rm } from "node:fs/promises";
 import type { FileHandle } from "node:fs/promises";
+import type { BigIntStats } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { basename, dirname, resolve } from "node:path";
 
@@ -47,6 +48,7 @@ export type SessionStoreErrorCode =
   | "SESSION_LINE_TOO_LARGE"
   | "SESSION_PARENT_NOT_FOUND"
   | "SESSION_RECORD_LIMIT"
+  | "SESSION_ROLLBACK_FAILED"
   | "SESSION_ROOT_CHANGED"
   | "SESSION_UNSUPPORTED_VERSION";
 
@@ -65,6 +67,14 @@ export type SessionStoreOptions = Readonly<{
   sessionId?: string;
   clock?: () => string;
   idFactory?: () => string;
+  fileSystem?: Partial<SessionStoreFileSystem>;
+}>;
+
+export type SessionStoreFileSystem = Readonly<{
+  lstat: (path: string) => Promise<BigIntStats>;
+  link: (source: string, destination: string) => Promise<void>;
+  rename: (source: string, destination: string) => Promise<void>;
+  remove: (path: string) => Promise<void>;
 }>;
 
 type FileIdentity = Readonly<{
@@ -86,6 +96,12 @@ type ParsedSession = Readonly<{
 
 const textDecoder = new TextDecoder("utf-8", { fatal: true });
 const sessionPathLocks = new Map<string, Promise<void>>();
+const defaultSessionStoreFileSystem: SessionStoreFileSystem = Object.freeze({
+  lstat: (path: string) => lstat(path, { bigint: true }),
+  link,
+  rename,
+  remove: async (path: string) => rm(path, { force: true }),
+});
 
 export class SessionStore {
   readonly #path: string;
@@ -93,11 +109,13 @@ export class SessionStore {
   readonly #root: RootIdentity;
   readonly #clock: () => string;
   readonly #idFactory: () => string;
+  readonly #fileSystem: SessionStoreFileSystem;
   readonly #header: SessionHeader;
   readonly #entries: SessionEntry[];
   readonly #entryById: Map<string, SessionEntry>;
   #fileIdentity: FileIdentity;
   #fileSize: number;
+  #unusableError: SessionStoreError | undefined;
   #queue: Promise<void> = Promise.resolve();
 
   private constructor(input: {
@@ -109,6 +127,7 @@ export class SessionStore {
     entries: readonly SessionEntry[];
     clock: () => string;
     idFactory: () => string;
+    fileSystem: SessionStoreFileSystem;
   }) {
     this.#path = input.path;
     this.#lockKey = canonicalSessionKey(input.path, input.root);
@@ -122,6 +141,7 @@ export class SessionStore {
     );
     this.#clock = input.clock;
     this.#idFactory = input.idFactory;
+    this.#fileSystem = input.fileSystem;
   }
 
   public static async create(
@@ -140,6 +160,8 @@ export class SessionStore {
       new Date().toISOString(),
     );
     const idFactory = snapshotFunction(options, "idFactory", randomUUID);
+    const fileSystem = snapshotSessionStoreFileSystem(options);
+    await assertNoRecoveryMarker(absolutePath, fileSystem);
     assertNonEmptyString(sessionId, "Session ID", "SESSION_INVALID_HEADER");
     const createdAt = clock();
     assertNonEmptyString(
@@ -178,6 +200,7 @@ export class SessionStore {
         entries: [],
         clock,
         idFactory,
+        fileSystem,
       });
     } catch (cause) {
       await handle?.close().catch(() => undefined);
@@ -197,6 +220,8 @@ export class SessionStore {
     options: SessionStoreOptions = {},
   ): Promise<SessionStore> {
     const absolutePath = assertSessionPath(path);
+    const fileSystem = snapshotSessionStoreFileSystem(options);
+    await assertNoRecoveryMarker(absolutePath, fileSystem);
     const root = await captureRoot(dirname(absolutePath));
     const before = await lstat(absolutePath, { bigint: true });
     if (!before.isFile()) {
@@ -248,6 +273,7 @@ export class SessionStore {
       entries: parsed.entries,
       clock,
       idFactory,
+      fileSystem,
     });
   }
 
@@ -334,9 +360,12 @@ export class SessionStore {
     await this.#assertStorageIdentity();
     const bytes = serializeSession(this.#header, entries);
     const temporaryPath = `${this.#path}.pify-session-${process.pid}-${randomUUID()}`;
-    const backupPath = `${this.#path}.pify-session-backup-${process.pid}-${randomUUID()}`;
+    const backupPath = `${this.#path}.pify-session-recovery`;
+    const originalIdentity = this.#fileIdentity;
+    const originalSize = this.#fileSize;
     let temporaryIdentity: FileIdentity | undefined;
-    let backupIdentity: FileIdentity | undefined;
+    let backupOwned = false;
+    let preserveBackup = false;
     let handle;
     try {
       handle = await open(temporaryPath, "wx", 0o600);
@@ -355,61 +384,188 @@ export class SessionStore {
         temporaryIdentity,
         bytes.byteLength,
       );
-      await link(this.#path, backupPath);
-      const backupStats = await lstat(backupPath, { bigint: true });
-      backupIdentity = identityFromStats(backupStats);
-      if (!sameIdentity(backupIdentity, this.#fileIdentity)) {
+      await this.#fileSystem.link(this.#path, backupPath);
+      backupOwned = true;
+      const backupStats = await this.#fileSystem.lstat(backupPath);
+      if (
+        !backupStats.isFile() ||
+        !sameIdentity(identityFromStats(backupStats), originalIdentity) ||
+        backupStats.size !== BigInt(originalSize)
+      ) {
         throw new SessionStoreError(
           "SESSION_FILE_CHANGED",
           "Session rollback link has an unexpected identity",
         );
       }
-      await assertPathIdentity(backupPath, backupIdentity, this.#fileSize);
       await this.#assertStorageIdentity();
-      await rename(temporaryPath, this.#path);
+      await this.#fileSystem.rename(temporaryPath, this.#path);
       let installedIdentity: FileIdentity;
       try {
-        const installed = await lstat(this.#path, { bigint: true });
+        const installed = await this.#fileSystem.lstat(this.#path);
         installedIdentity = identityFromStats(installed);
-        if (!sameIdentity(installedIdentity, temporaryIdentity)) {
+        if (
+          !installed.isFile() ||
+          !sameIdentity(installedIdentity, temporaryIdentity) ||
+          installed.size !== BigInt(bytes.byteLength)
+        ) {
           throw new SessionStoreError(
             "SESSION_FILE_CHANGED",
             "Installed session file identity is unexpected",
           );
         }
         await syncDirectory(this.#root.path);
-      } catch (cause) {
-        await rename(backupPath, this.#path);
-        backupIdentity = undefined;
+      } catch (primaryCause) {
+        try {
+          const restoration = await this.#restoreOldGeneration(
+            backupPath,
+            originalIdentity,
+            originalSize,
+          );
+          backupOwned = restoration.backupOwned;
+          this.#fileIdentity = restoration.identity;
+          this.#fileSize = originalSize;
+        } catch (rollbackCause) {
+          preserveBackup = true;
+          const rollbackError = new SessionStoreError(
+            "SESSION_ROLLBACK_FAILED",
+            "Session rollback failed; the recovery backup was retained",
+            {
+              cause: new AggregateError(
+                [primaryCause, rollbackCause],
+                "Session commit and rollback both failed",
+              ),
+            },
+          );
+          this.#unusableError = rollbackError;
+          throw rollbackError;
+        }
         await syncDirectory(this.#root.path).catch(() => undefined);
-        throw cause;
+        throw primaryCause;
       }
       this.#fileIdentity = installedIdentity;
       this.#fileSize = bytes.byteLength;
-      try {
-        await removeExactTemporary(backupPath, backupIdentity);
-        backupIdentity = undefined;
-      } catch {
-        // The committed destination is already durable. The finally block
-        // retries cleanup without turning a successful commit into failure.
-      }
+      backupOwned = !(await cleanupOwnedPath(
+        backupPath,
+        originalIdentity,
+        originalSize,
+        this.#fileSystem,
+      ));
       await syncDirectory(this.#root.path).catch(() => undefined);
     } finally {
       await handle?.close().catch(() => undefined);
       if (temporaryIdentity !== undefined) {
-        await removeExactTemporary(temporaryPath, temporaryIdentity).catch(
-          () => undefined,
-        );
+        await cleanupOwnedPath(
+          temporaryPath,
+          temporaryIdentity,
+          undefined,
+          this.#fileSystem,
+        ).catch(() => false);
       }
-      if (backupIdentity !== undefined) {
-        await removeExactTemporary(backupPath, backupIdentity).catch(
-          () => undefined,
-        );
+      if (backupOwned && !preserveBackup) {
+        await cleanupOwnedPath(
+          backupPath,
+          originalIdentity,
+          originalSize,
+          this.#fileSystem,
+        ).catch(() => false);
+      }
+    }
+  }
+
+  async #restoreOldGeneration(
+    backupPath: string,
+    originalIdentity: FileIdentity,
+    originalSize: number,
+  ): Promise<Readonly<{ identity: FileIdentity; backupOwned: boolean }>> {
+    const rollbackFailures: unknown[] = [];
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        await this.#fileSystem.rename(backupPath, this.#path);
+        return Object.freeze({
+          identity: originalIdentity,
+          backupOwned: false,
+        });
+      } catch (cause) {
+        rollbackFailures.push(cause);
+        if (
+          await pathMatchesIdentity(
+            this.#path,
+            originalIdentity,
+            originalSize,
+            this.#fileSystem,
+          )
+        ) {
+          return Object.freeze({
+            identity: originalIdentity,
+            backupOwned: false,
+          });
+        }
+      }
+    }
+
+    const restorePath = `${this.#path}.pify-session-restore-${process.pid}-${randomUUID()}`;
+    let restoreIdentity: FileIdentity | undefined;
+    let restoreOwned = false;
+    try {
+      const reader = await open(backupPath, "r");
+      let originalBytes: Buffer;
+      try {
+        const sourceStats = await reader.stat({ bigint: true });
+        if (
+          !sourceStats.isFile() ||
+          !sameIdentity(identityFromStats(sourceStats), originalIdentity) ||
+          sourceStats.size !== BigInt(originalSize)
+        ) {
+          throw new Error("Recovery backup identity changed");
+        }
+        originalBytes = await reader.readFile();
+      } finally {
+        await reader.close();
+      }
+
+      const writer = await open(restorePath, "wx", 0o600);
+      restoreOwned = true;
+      try {
+        const restoreStats = await writer.stat({ bigint: true });
+        if (!restoreStats.isFile()) {
+          throw new Error("Recovery temporary is not a regular file");
+        }
+        restoreIdentity = identityFromStats(restoreStats);
+        await writeAll(writer, originalBytes);
+        await writer.sync();
+      } finally {
+        await writer.close();
+      }
+      await this.#fileSystem.rename(restorePath, this.#path);
+      restoreOwned = false;
+      await syncDirectory(this.#root.path).catch(() => undefined);
+      if (restoreIdentity === undefined) {
+        throw new Error("Recovery temporary identity is unavailable");
+      }
+      return Object.freeze({
+        identity: restoreIdentity,
+        backupOwned: true,
+      });
+    } catch (cause) {
+      rollbackFailures.push(cause);
+      throw new AggregateError(
+        rollbackFailures,
+        "All bounded session rollback strategies failed",
+      );
+    } finally {
+      if (restoreOwned && restoreIdentity !== undefined) {
+        await cleanupOwnedPath(
+          restorePath,
+          restoreIdentity,
+          undefined,
+          this.#fileSystem,
+        ).catch(() => false);
       }
     }
   }
 
   async #assertStorageIdentity(): Promise<void> {
+    if (this.#unusableError !== undefined) throw this.#unusableError;
     await assertRoot(this.#root);
     await assertPathIdentity(this.#path, this.#fileIdentity, this.#fileSize);
   }
@@ -1220,6 +1376,69 @@ function snapshotOptionalString(
   return descriptor.value;
 }
 
+function snapshotSessionStoreFileSystem(
+  options: SessionStoreOptions,
+): SessionStoreFileSystem {
+  const optionDescriptor = Object.getOwnPropertyDescriptor(
+    options,
+    "fileSystem",
+  );
+  if (optionDescriptor === undefined) return defaultSessionStoreFileSystem;
+  if (!("value" in optionDescriptor)) {
+    throw new TypeError("Session option fileSystem must be a data property");
+  }
+  if (optionDescriptor.value === undefined) {
+    return defaultSessionStoreFileSystem;
+  }
+  const descriptors = ownDataRecord(optionDescriptor.value);
+  if (descriptors === undefined) {
+    throw new TypeError("Session option fileSystem must be a plain object");
+  }
+  const supported = ["lstat", "link", "rename", "remove"] as const;
+  const unsupported = Object.keys(descriptors).filter(
+    (key) => descriptors[key].enumerable && !supported.includes(key as never),
+  );
+  if (unsupported.length > 0) {
+    throw new TypeError("Session option fileSystem has unsupported operations");
+  }
+  return Object.freeze({
+    lstat: snapshotFileSystemOperation(descriptors, "lstat"),
+    link: snapshotFileSystemOperation(descriptors, "link"),
+    rename: snapshotFileSystemOperation(descriptors, "rename"),
+    remove: snapshotFileSystemOperation(descriptors, "remove"),
+  });
+}
+
+function snapshotFileSystemOperation<Key extends keyof SessionStoreFileSystem>(
+  descriptors: Record<string, PropertyDescriptor>,
+  key: Key,
+): SessionStoreFileSystem[Key] {
+  const descriptor = descriptors[key];
+  if (descriptor === undefined) return defaultSessionStoreFileSystem[key];
+  if (!("value" in descriptor) || typeof descriptor.value !== "function") {
+    throw new TypeError(
+      `Session fileSystem operation ${key} must be a function-valued property`,
+    );
+  }
+  return descriptor.value as SessionStoreFileSystem[Key];
+}
+
+async function assertNoRecoveryMarker(
+  sessionPath: string,
+  fileSystem: SessionStoreFileSystem,
+): Promise<void> {
+  try {
+    await fileSystem.lstat(`${sessionPath}.pify-session-recovery`);
+  } catch (cause) {
+    if ((cause as NodeJS.ErrnoException).code === "ENOENT") return;
+    throw cause;
+  }
+  throw new SessionStoreError(
+    "SESSION_ROLLBACK_FAILED",
+    "Session recovery is required before this file can be opened",
+  );
+}
+
 async function writeAll(handle: FileHandle, bytes: Buffer): Promise<void> {
   let offset = 0;
   while (offset < bytes.byteLength) {
@@ -1345,17 +1564,46 @@ function sameIdentity(left: FileIdentity, right: FileIdentity): boolean {
   );
 }
 
-async function removeExactTemporary(
+async function cleanupOwnedPath(
   path: string,
   expected: FileIdentity,
-): Promise<void> {
-  try {
-    const stats = await lstat(path, { bigint: true });
-    if (stats.isFile() && sameIdentity(identityFromStats(stats), expected)) {
-      await rm(path, { force: true });
+  expectedSize: number | undefined,
+  fileSystem: SessionStoreFileSystem,
+): Promise<boolean> {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const stats = await fileSystem.lstat(path);
+      if (
+        !stats.isFile() ||
+        !sameIdentity(identityFromStats(stats), expected) ||
+        (expectedSize !== undefined && stats.size !== BigInt(expectedSize))
+      ) {
+        return false;
+      }
+      await fileSystem.remove(path);
+      return true;
+    } catch (cause) {
+      if ((cause as NodeJS.ErrnoException).code === "ENOENT") return true;
     }
-  } catch (cause) {
-    if ((cause as NodeJS.ErrnoException).code !== "ENOENT") throw cause;
+  }
+  return false;
+}
+
+async function pathMatchesIdentity(
+  path: string,
+  expected: FileIdentity,
+  expectedSize: number,
+  fileSystem: SessionStoreFileSystem,
+): Promise<boolean> {
+  try {
+    const stats = await fileSystem.lstat(path);
+    return (
+      stats.isFile() &&
+      sameIdentity(identityFromStats(stats), expected) &&
+      stats.size === BigInt(expectedSize)
+    );
+  } catch {
+    return false;
   }
 }
 

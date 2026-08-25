@@ -1,5 +1,6 @@
 import {
   access,
+  link as createLink,
   lstat,
   mkdir,
   mkdtemp,
@@ -654,8 +655,80 @@ test("rolls back an append after temporary fsync failure and permits retry", asy
   ).resolves.toMatchObject({ id: "entry-002" });
 });
 
-test("rolls back an installed append when directory fsync fails", async () => {
-  const store = await SessionStore.create(sessionPath, deterministicOptions());
+test("cleans an exclusively linked backup when its first lstat fails", async () => {
+  let backupLinked = false;
+  let failBackupLstat = true;
+  const removed: string[] = [];
+  const options = {
+    ...deterministicOptions(),
+    fileSystem: {
+      async link(source: string, destination: string) {
+        await createLink(source, destination);
+        backupLinked = true;
+      },
+      async lstat(path: string) {
+        if (
+          backupLinked &&
+          failBackupLstat &&
+          path.endsWith(".pify-session-recovery")
+        ) {
+          failBackupLstat = false;
+          throw Object.assign(new Error("injected backup lstat failure"), {
+            code: "EIO",
+          });
+        }
+        return lstat(path, { bigint: true });
+      },
+      async remove(path: string) {
+        removed.push(path);
+        await rm(path, { force: true });
+      },
+    },
+  };
+  const store = await SessionStore.create(sessionPath, options);
+  const before = await readFile(sessionPath, "utf8");
+
+  await expect(
+    store.append(null, user("message-001", "first attempt")),
+  ).rejects.toMatchObject({ code: "EIO" });
+
+  expect(await readFile(sessionPath, "utf8")).toBe(before);
+  expect(store.entries).toEqual([]);
+  expect(removed.some((path) => path.endsWith(".pify-session-recovery"))).toBe(
+    true,
+  );
+  expect(
+    (await readdir(workspace)).filter((name) =>
+      name.includes(".pify-session-"),
+    ),
+  ).toEqual([]);
+  await expect(
+    store.append(null, user("message-002", "retry")),
+  ).resolves.toMatchObject({ id: "entry-002" });
+});
+
+test("retries a transient rollback rename and restores the old generation", async () => {
+  let rollbackRenameAttempts = 0;
+  const options = {
+    ...deterministicOptions(),
+    fileSystem: {
+      async rename(source: string, destination: string) {
+        if (source.endsWith(".pify-session-recovery")) {
+          rollbackRenameAttempts += 1;
+          if (rollbackRenameAttempts === 1) {
+            throw Object.assign(
+              new Error("injected transient rename failure"),
+              {
+                code: "EBUSY",
+              },
+            );
+          }
+        }
+        await rename(source, destination);
+      },
+    },
+  };
+  const store = await SessionStore.create(sessionPath, options);
   const before = await readFile(sessionPath, "utf8");
   const probe = await open(sessionPath, "r");
   const fileHandlePrototype = Object.getPrototypeOf(probe) as {
@@ -682,6 +755,7 @@ test("rolls back an installed append when directory fsync fails", async () => {
   }
 
   expect(await readFile(sessionPath, "utf8")).toBe(before);
+  expect(rollbackRenameAttempts).toBe(2);
   expect(store.entries).toEqual([]);
   expect(
     (await readdir(workspace)).filter((name) =>
@@ -691,6 +765,73 @@ test("rolls back an installed append when directory fsync fails", async () => {
   await expect(
     store.append(null, user("message-002", "retry")),
   ).resolves.toMatchObject({ id: "entry-002" });
+});
+
+test("preserves a deterministic recovery backup when rollback cannot restore", async () => {
+  let installedNewGeneration = false;
+  let rollbackRenameAttempts = 0;
+  const removed: string[] = [];
+  const options = {
+    ...deterministicOptions(),
+    fileSystem: {
+      async rename(source: string, destination: string) {
+        if (!installedNewGeneration && source.includes(".pify-session-")) {
+          await rename(source, destination);
+          installedNewGeneration = true;
+          return;
+        }
+        rollbackRenameAttempts += 1;
+        throw Object.assign(new Error("injected persistent rename failure"), {
+          code: "EBUSY",
+        });
+      },
+      async remove(path: string) {
+        removed.push(path);
+        await rm(path, { force: true });
+      },
+    },
+  };
+  const store = await SessionStore.create(sessionPath, options);
+  const before = await readFile(sessionPath, "utf8");
+  const probe = await open(sessionPath, "r");
+  const fileHandlePrototype = Object.getPrototypeOf(probe) as {
+    stat: (options: {
+      bigint: true;
+    }) => Promise<{ isDirectory: () => boolean }>;
+    sync: () => Promise<void>;
+  };
+  const originalStat = fileHandlePrototype.stat;
+  const originalSync = fileHandlePrototype.sync;
+  await probe.close();
+  fileHandlePrototype.sync = async function () {
+    const stats = await originalStat.call(this, { bigint: true });
+    if (stats.isDirectory()) throw new Error("injected directory sync failure");
+    await originalSync.call(this);
+  };
+
+  try {
+    await expect(
+      store.append(null, user("message-001", "must not adopt")),
+    ).rejects.toMatchObject({
+      name: "SessionStoreError",
+      code: "SESSION_ROLLBACK_FAILED",
+    });
+  } finally {
+    fileHandlePrototype.sync = originalSync;
+  }
+
+  const recoveryPath = `${sessionPath}.pify-session-recovery`;
+  expect(await readFile(recoveryPath, "utf8")).toBe(before);
+  expect(store.entries).toEqual([]);
+  expect(rollbackRenameAttempts).toBeGreaterThanOrEqual(3);
+  expect(removed).not.toContain(recoveryPath);
+  await expect(store.flush()).rejects.toMatchObject({
+    code: "SESSION_ROLLBACK_FAILED",
+  });
+  await expect(
+    SessionStore.load(sessionPath, deterministicOptions()),
+  ).rejects.toMatchObject({ code: "SESSION_ROLLBACK_FAILED" });
+  expect(await readFile(recoveryPath, "utf8")).toBe(before);
 });
 
 test("linearizes concurrent tree appends into an invocation-ordered chain", async () => {
