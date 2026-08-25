@@ -236,6 +236,12 @@ test("both Chapter 5 locales explain the optional PowerShell tool contract", asy
         /default local Bash and PowerShell operations start a separate child process for each Tool call/,
       cancellation: /honor `signal` and `timeout`/,
       cleanup: /release child handles, transports, timers, and abort listeners in `finally`/,
+      exposureDefault:
+        /`exposeSessionEnvironment` defaults to `true`, but Pi injects the `PI_\*` fields only when the Tool is executed with an Agent\/Extension context/,
+      exposureDisabled:
+        /`exposeSessionEnvironment: false` suppresses them even when that context exists/,
+      exposureWithoutContext:
+        /A standalone or custom invocation without that context does not receive them automatically/,
     },
     vi: {
       heading: "### Bash và PowerShell là các phiên shell-tool riêng biệt",
@@ -245,6 +251,12 @@ test("both Chapter 5 locales explain the optional PowerShell tool contract", asy
         /operations Bash và PowerShell cục bộ mặc định khởi động một child process riêng cho mỗi Tool call/,
       cancellation: /tuân theo `signal` và `timeout`/,
       cleanup: /giải phóng child handle, transport, timer và abort listener trong `finally`/,
+      exposureDefault:
+        /`exposeSessionEnvironment` mặc định là `true`, nhưng Pi chỉ inject các field `PI_\*` khi Tool được execute với Agent\/Extension context/,
+      exposureDisabled:
+        /`exposeSessionEnvironment: false` chặn các field này ngay cả khi context đó tồn tại/,
+      exposureWithoutContext:
+        /Standalone hoặc custom invocation không có context đó sẽ không tự động nhận các field này/,
     },
   };
   const structures = [];
@@ -268,6 +280,9 @@ test("both Chapter 5 locales explain the optional PowerShell tool contract", asy
         contract.localBackend,
         contract.cancellation,
         contract.cleanup,
+        contract.exposureDefault,
+        contract.exposureDisabled,
+        contract.exposureWithoutContext,
       ],
       `${locale} Chapter 5 PowerShell guidance`,
       {
@@ -358,6 +373,12 @@ test("both environment locales preserve Bash guidance and add concrete PowerShel
         /Default local Bash and PowerShell operations launch a separate child process for each Tool call/,
       customBackend:
         /Custom operations instead delegate to their configured backend/,
+      exposureDefault:
+        /`exposeSessionEnvironment` defaults to `true`, but injection requires an Agent\/Extension execution context/,
+      exposureDisabled:
+        /`exposeSessionEnvironment: false` suppresses all five session fields/,
+      exposureWithoutContext:
+        /A standalone or custom invocation without that context does not receive them automatically/,
     },
     vi: {
       heading: "## Process marker và shell-tool metadata",
@@ -365,6 +386,12 @@ test("both environment locales preserve Bash guidance and add concrete PowerShel
         /Operations Bash và PowerShell cục bộ mặc định khởi chạy một child process riêng cho mỗi Tool call/,
       customBackend:
         /Custom operations thay vào đó ủy quyền cho backend đã cấu hình/,
+      exposureDefault:
+        /`exposeSessionEnvironment` mặc định là `true`, nhưng việc inject cần Agent\/Extension execution context/,
+      exposureDisabled:
+        /`exposeSessionEnvironment: false` chặn cả năm session field/,
+      exposureWithoutContext:
+        /Standalone hoặc custom invocation không có context đó sẽ không tự động nhận chúng/,
     },
   };
   const structures = [];
@@ -386,6 +413,9 @@ test("both environment locales preserve Bash guidance and add concrete PowerShel
         /spawnHook: \(context\) =>/,
         contract.localBackend,
         contract.customBackend,
+        contract.exposureDefault,
+        contract.exposureDisabled,
+        contract.exposureWithoutContext,
       ],
       `${locale} environment PowerShell guidance`,
       {

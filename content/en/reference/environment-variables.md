@@ -131,7 +131,7 @@ The old `ANTHROPIC_BASE_URL` variable is also not a current built-in override. C
 
 CLI and RPC entry points set `AI_AGENT=pi` and `PI_CODING_AGENT=true`. Child processes inherit them, but they are not session identifiers and an SDK embedding does not set them automatically. Published 0.84.3 does not emit the old `PI_PARENT_SESSION` marker.
 
-Commands run by Pi's LLM-callable `bash` and `powershell` tools receive fresh session context:
+Pi can expose the following current session context to commands run by the LLM-callable `bash` and `powershell` tools:
 
 | Variable | Value |
 |---|---|
@@ -141,9 +141,9 @@ Commands run by Pi's LLM-callable `bash` and `powershell` tools receive fresh se
 | `PI_MODEL` | Selected Pi model ID |
 | `PI_REASONING_LEVEL` | Effective level: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max` |
 
-The values are resolved before every shell-tool command, after model or reasoning changes. Default local Bash and PowerShell operations launch a separate child process for each Tool call and use their respective command syntax. Custom operations instead delegate to their configured backend; that backend owns cancellation, cleanup, and whether any execution state persists. Both paths receive the same Pi session snapshot through the operations environment where the Tool is supported. The native `powershell` Tool is Windows-only. These variables are not injected into user-entered `!` or `!!` commands.
+Default local Bash and PowerShell operations launch a separate child process for each Tool call and use their respective command syntax. Custom operations instead delegate to their configured backend; that backend owns cancellation, cleanup, and whether any execution state persists. The wrapper first removes inherited values for all five session variables. `exposeSessionEnvironment` defaults to `true`, but injection requires an Agent/Extension execution context. `exposeSessionEnvironment: false` suppresses all five session fields even when that context exists. A standalone or custom invocation without that context does not receive them automatically. When injection occurs, the values are resolved before that shell-tool command, so model or reasoning changes affect the next command. The native `powershell` Tool is Windows-only. These variables are not injected into user-entered `!` or `!!` commands.
 
-A custom shell tool created with `createBashTool()` or `createPowerShellTool()` exposes the metadata before `spawnHook`, so preserve the received process environment when adding fields. The existing Bash form remains:
+When those conditions are met, a custom shell tool created with `createBashTool()` or `createPowerShellTool()` exposes the metadata before `spawnHook`, so preserve the received process environment when adding fields. Without the context, or with exposure disabled, the hook receives an environment with these session fields removed. The existing Bash form remains:
 
 ```ts title="Preserve Pi metadata in a custom bash tool"
 import { createBashTool } from "@earendil-works/pi-coding-agent";
@@ -156,7 +156,7 @@ export const bashTool = createBashTool(process.cwd(), {
 });
 ```
 
-PowerShell customization uses the same hook contract and receives the same session fields:
+PowerShell customization uses the same hook contract. When registered and executed through Pi with Agent context and default exposure, it receives the same session fields:
 
 ```ts title="Preserve Pi metadata in a custom PowerShell tool"
 import { createPowerShellTool } from "@earendil-works/pi-coding-agent";

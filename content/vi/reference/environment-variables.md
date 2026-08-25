@@ -131,7 +131,7 @@ Variable cũ `ANTHROPIC_BASE_URL` cũng không phải built-in override hiện t
 
 CLI và RPC entry point đặt `AI_AGENT=pi` cùng `PI_CODING_AGENT=true`. Child process kế thừa chúng, nhưng đây không phải session identifier và bản nhúng SDK không tự động đặt chúng. Bản publish 0.84.3 không phát marker cũ `PI_PARENT_SESSION`.
 
-Command do các LLM-callable tool `bash` và `powershell` của Pi chạy nhận session context mới:
+Pi có thể expose session context hiện tại sau cho command do các LLM-callable tool `bash` và `powershell` chạy:
 
 | Variable | Giá trị |
 |---|---|
@@ -141,9 +141,9 @@ Command do các LLM-callable tool `bash` và `powershell` của Pi chạy nhận
 | `PI_MODEL` | Pi model ID đang chọn |
 | `PI_REASONING_LEVEL` | Level thực tế: `off`, `minimal`, `low`, `medium`, `high`, `xhigh` hoặc `max` |
 
-Giá trị được resolve trước mỗi shell-tool command, sau khi đổi model hoặc reasoning. Operations Bash và PowerShell cục bộ mặc định khởi chạy một child process riêng cho mỗi Tool call và dùng command syntax tương ứng. Custom operations thay vào đó ủy quyền cho backend đã cấu hình; backend đó sở hữu cancellation, cleanup và quyết định execution state có persist hay không. Cả hai đường đều nhận cùng snapshot của Pi session qua operations environment ở nơi Tool được hỗ trợ. Tool `powershell` native chỉ có trên Windows. Các variable này không được inject vào command `!` hoặc `!!` do người dùng nhập.
+Operations Bash và PowerShell cục bộ mặc định khởi chạy một child process riêng cho mỗi Tool call và dùng command syntax tương ứng. Custom operations thay vào đó ủy quyền cho backend đã cấu hình; backend đó sở hữu cancellation, cleanup và quyết định execution state có persist hay không. Wrapper trước hết xóa giá trị kế thừa của cả năm session variable. `exposeSessionEnvironment` mặc định là `true`, nhưng việc inject cần Agent/Extension execution context. `exposeSessionEnvironment: false` chặn cả năm session field ngay cả khi context đó tồn tại. Standalone hoặc custom invocation không có context đó sẽ không tự động nhận chúng. Khi việc inject diễn ra, giá trị được resolve trước shell-tool command đó, nên thay đổi model hoặc reasoning tác động đến command kế tiếp. Tool `powershell` native chỉ có trên Windows. Các variable này không được inject vào command `!` hoặc `!!` do người dùng nhập.
 
-Custom shell tool được tạo bằng `createBashTool()` hoặc `createPowerShellTool()` expose metadata trước `spawnHook`, vì vậy hãy giữ process environment nhận được khi thêm field. Dạng Bash hiện có vẫn là:
+Khi các điều kiện trên được đáp ứng, custom shell tool tạo bằng `createBashTool()` hoặc `createPowerShellTool()` expose metadata trước `spawnHook`, vì vậy hãy giữ process environment nhận được khi thêm field. Nếu thiếu context hoặc exposure bị tắt, hook nhận environment đã xóa các session field này. Dạng Bash hiện có vẫn là:
 
 ```ts title="Giữ Pi metadata trong custom bash tool"
 import { createBashTool } from "@earendil-works/pi-coding-agent";
@@ -156,7 +156,7 @@ export const bashTool = createBashTool(process.cwd(), {
 });
 ```
 
-Customization PowerShell dùng cùng hook contract và nhận cùng session field:
+Customization PowerShell dùng cùng hook contract. Khi được đăng ký và execute qua Pi với Agent context cùng exposure mặc định, Tool nhận cùng session field:
 
 ```ts title="Giữ Pi metadata trong custom PowerShell tool"
 import { createPowerShellTool } from "@earendil-works/pi-coding-agent";
