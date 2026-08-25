@@ -162,11 +162,60 @@ export async function createSerializedSessionRuntimeHost(
     unsubscribe = undefined;
     release?.();
   };
+  const clearSubscriptionAfterFailure = (cleanupFailures: unknown[]) => {
+    try {
+      clearSubscription();
+    } catch (error) {
+      cleanupFailures.push(error);
+    }
+  };
+  const throwBindingFailure = (
+    error: unknown,
+    cleanupFailures: unknown[],
+    phase: string,
+  ): never => {
+    if (cleanupFailures.length === 0) throw error;
+    throw new AggregateError(
+      [error, ...cleanupFailures],
+      `${phase} failed and cleanup also failed`,
+      { cause: error },
+    );
+  };
   const bindSession = async (session: AgentSession) => {
     clearSubscription();
-    await session.bindExtensions(bindings.extensionBindings(session));
-    unsubscribe = bindings.subscribe(session);
-    bindings.reportDiagnostics(runtime.diagnostics);
+    try {
+      await session.bindExtensions(bindings.extensionBindings(session));
+      unsubscribe = bindings.subscribe(session);
+      bindings.reportDiagnostics(runtime.diagnostics);
+    } catch (error) {
+      const cleanupFailures: unknown[] = [];
+      clearSubscriptionAfterFailure(cleanupFailures);
+      return throwBindingFailure(error, cleanupFailures, "session binding");
+    }
+  };
+  const disposeBindingFailure = async (
+    error: unknown,
+    phase: "initial" | "replacement",
+  ): Promise<never> => {
+    unusable = true;
+    const cleanupFailures: unknown[] = [];
+    try {
+      clearSubscriptionAfterFailure(cleanupFailures);
+      try {
+        await runtime.dispose();
+      } catch (disposeError) {
+        cleanupFailures.push(disposeError);
+      }
+    } finally {
+      replacementInFlight = true;
+      unusable = true;
+      clearSubscriptionAfterFailure(cleanupFailures);
+    }
+    return throwBindingFailure(
+      error,
+      cleanupFailures,
+      `${phase} session binding`,
+    );
   };
   const assertAvailable = () => {
     if (disposed) throw new Error("session runtime host is disposed");
@@ -202,15 +251,18 @@ export async function createSerializedSessionRuntimeHost(
     clearSubscription();
   });
   runtime.setRebindSession(async (session) => {
-    await bindSession(session);
-    replacementInFlight = false;
+    try {
+      await bindSession(session);
+      replacementInFlight = false;
+    } catch (error) {
+      return disposeBindingFailure(error, "replacement");
+    }
   });
 
   try {
     await bindSession(runtime.session);
   } catch (error) {
-    await runtime.dispose();
-    throw error;
+    return disposeBindingFailure(error, "initial");
   }
 
   return {
@@ -259,9 +311,9 @@ Không resolve project settings hoặc relative Extension path trước khi bi�
 
 `await session.bindExtensions(...)` apply các binding đó, phát event `session_start` của chính session và cho Extension mở rộng resource đã load. Bước này phải hoàn tất cho initial session và mọi replacement trước khi host công khai event từ session đó. Sau đó `bindings.subscribe(session)` mới là ownership boundary cho UI rendering, RPC notification, telemetry hoặc transcript projection. Nó phải trả về một unsubscribe function idempotent để gỡ mọi host listener đã cài cho session.
 
-Helper bất đồng bộ `bindSession()` dùng chung áp đặt đúng thứ tự cho cả hai path: clear host subscription cũ, await Extension binding, cài host subscription rồi report diagnostic. Không cache `runtime.session` trong service khác; hãy chuyển event phát sinh từ session qua binding adapter.
+Helper bất đồng bộ `bindSession()` dùng chung áp đặt đúng thứ tự cho cả hai path: clear host subscription cũ, await Extension binding, cài host subscription rồi report diagnostic. Nếu Extension binding, bước cài subscription hoặc report diagnostic throw, catch path sẽ gỡ mọi unsubscribe handle đã được trả về. Adapter `subscribe(...)` phải tự bảo đảm tính atomic: nếu nó throw trước khi trả cleanup function, chính adapter phải rollback mọi listener đã cài một phần. Không cache `runtime.session` trong service khác; hãy chuyển event phát sinh từ session qua binding adapter.
 
-Nếu initial Extension hoặc host binding thất bại, ví dụ dispose runtime vừa tạo rồi reject startup. Đây là fail-closed: host thiếu lifecycle, observation hoặc persistence boundary hoàn chỉnh sẽ không bắt đầu phục vụ request.
+Nếu initial Extension hoặc host binding thất bại, ví dụ clear mọi subscription đã trả về, đánh dấu host unavailable, dispose runtime vừa tạo rồi reject startup. Lỗi binding gốc được rethrow khi cleanup thành công. Nếu subscription cleanup hoặc runtime disposal cũng thất bại, một `AggregateError` giữ lỗi gốc làm cause và phần tử đầu thay vì che mất nó. Đây là fail-closed: host thiếu lifecycle, observation hoặc persistence boundary hoàn chỉnh sẽ không bắt đầu phục vụ request.
 
 ## 6. Tuần tự hóa new, resume, fork, clone và import
 
@@ -286,7 +338,7 @@ Release lifecycle cung cấp hai callback cho hai thời điểm khác nhau:
 - `setBeforeSessionInvalidate()` chạy đồng bộ sau khi handler `session_shutdown` hoàn tất nhưng trước khi session cũ bị dispose. Wrapper đánh dấu replacement đang diễn ra và gỡ listener cũ tại đây.
 - `setRebindSession()` được await sau khi kết quả factory đã apply. Wrapper gọi cùng helper `bindSession()`, await `session.bindExtensions(...)` trước khi cài host subscription và report diagnostic. Chỉ sau đó nó mới đánh dấu host available trở lại.
 
-Runtime cập nhật `session`, `services`, `diagnostics` và `modelFallbackMessage` cùng lúc trước callback rebind. Wrapper công khai cwd và diagnostic nhưng chủ động không công khai raw `AgentSessionRuntime`; nhờ vậy request code không thể đọc session cũ đã dispose hoặc replacement chưa bind xong.
+Runtime cập nhật `session`, `services`, `diagnostics` và `modelFallbackMessage` cùng lúc trước callback rebind. Nếu `bindSession()` sau đó thất bại, Pi đã apply replacement đó. Wrapper lập tức đánh dấu chính nó unusable, clear mọi subscription đã trả về, thử `runtime.dispose()` trên applied replacement và dùng `finally` để giữ cả `replacementInFlight` lẫn `unusable` trước khi propagate lỗi gốc hoặc lỗi aggregate. Wrapper công khai cwd và diagnostic nhưng chủ động không công khai raw `AgentSessionRuntime`; nhờ vậy request code không thể đọc session cũ đã dispose hoặc applied replacement bị lỗi.
 
 ```mermaid
 sequenceDiagram
@@ -310,9 +362,17 @@ sequenceDiagram
         Lock->>Next: apply coherent result
         Lock->>Extensions: bindExtensions(replacement options)
         Extensions->>Next: session_start and extend resources
-        Extensions-->>Lock: Extension lifecycle ready
-        Lock->>Rebind: subscribe to replacement session
-        Rebind-->>Caller: operation result
+        alt Extension and host binding succeed
+            Extensions-->>Lock: Extension lifecycle ready
+            Lock->>Rebind: subscribe to replacement session
+            Rebind-->>Caller: operation result
+        else Extension, subscribe, or diagnostics fail
+            Extensions--xLock: binding failure
+            Lock->>Rebind: clear returned subscription
+            Lock->>Next: dispose applied replacement
+            Lock->>Lock: keep host unusable in finally
+            Lock--xCaller: original or aggregate failure
+        end
     else factory rejects after disposal
         Factory--xLock: reject
         Lock->>Lock: mark host unusable
@@ -332,7 +392,9 @@ Final shutdown cũng được tuần tự hóa. Ngừng nhận command mới, aw
 
 Replacement trong Pi `0.84.3` không phải rollback transaction. `AgentSessionRuntime` dispose session cũ trước khi await factory mới. Nếu factory reject, runtime propagate error và không chạy bước apply hoặc rebind nội bộ; object cũ đã mất hiệu lực còn replacement dùng được chưa tồn tại.
 
-Wrapper phát hiện đúng boundary này vì `setBeforeSessionInvalidate()` đã đặt `replacementInFlight`, còn `setRebindSession()` thành công chỉ xóa flag sau khi cả Extension binding lẫn host binding hoàn tất. Factory rejection, `bindExtensions(...)` rejection hoặc host-subscription failure khi flag vẫn còn sẽ đánh dấu wrapper unusable. Subscription cũ đã được gỡ, không có raw session nào được public, và operation hay state getter sau đó đều reject. Đây là policy no-half-replacement, fail-closed bắt buộc.
+Wrapper phát hiện đúng boundary này vì `setBeforeSessionInvalidate()` đã đặt `replacementInFlight`, còn `setRebindSession()` thành công chỉ xóa flag sau khi cả Extension binding lẫn host binding hoàn tất. Factory rejection xảy ra trước apply nên không có replacement cần dispose. Rejection từ `bindExtensions(...)`, host subscription hoặc diagnostic reporting xảy ra sau apply, vì vậy rebind catch clear subscription đã trả về và dispose applied replacement trước khi propagate. Finally path giữ wrapper unusable ngay cả khi disposal thất bại. Subscription cũ đã được gỡ, không có raw session nào được public, và operation hay state getter sau đó đều reject. Đây là policy no-half-replacement, fail-closed bắt buộc.
+
+Cleanup failure không bao giờ thay thế bằng chứng chính. `throwBindingFailure()` rethrow lỗi binding gốc khi cleanup thành công; nếu không, nó throw `AggregateError` có phần tử đầu và `cause` là lỗi gốc, theo sau bởi lỗi unsubscribe hoặc disposal. Hãy log cấu trúc aggregate nhưng không serialize session content, đồng thời xem từng phần tử là một operational incident.
 
 Không catch lỗi rồi tiếp tục phục vụ qua một session đã cache. Hãy ghi operation, target path hoặc cwd và error nhưng không log transcript content hay secret. Sau đó kết thúc worker đang sở hữu runtime, hoặc dựng host mới từ một safe startup target tường minh. Chỉ retry tự động khi host vẫn unavailable và mỗi attempt dựng một runtime mới hoàn chỉnh.
 
@@ -351,7 +413,8 @@ Xác minh các invariant sau:
 - [ ] Clone gọi `fork(entryId, { position: "at" })`; fork giữ semantics mặc định `"before"`.
 - [ ] Subscription cũ được gỡ trước disposal; mỗi replacement await `bindExtensions(...)` trước khi cài host subscription và trước khi host available.
 - [ ] Cancellation hoặc pre-validation failure vẫn giữ binding cũ dùng được.
-- [ ] Factory rejection sau invalidation không công khai session nào và vĩnh viễn reject operation sau đó trên wrapper này.
+- [ ] Factory rejection sau invalidation không công khai session nào; binding failure sau apply cũng clear subscription và dispose applied replacement. Cả hai vĩnh viễn reject operation sau đó trên wrapper này.
+- [ ] Nếu unsubscribe hoặc replacement disposal thất bại, `AggregateError` được propagate vẫn giữ lỗi binding gốc ở đầu và report cleanup failure riêng.
 - [ ] Final disposal abort response đang hoạt động, flush host persistence, phát shutdown qua runtime, unbind và reject access sau đó.
 - [ ] Diagnostic output redact secret và định danh operation cùng target cwd hoặc session path.
 

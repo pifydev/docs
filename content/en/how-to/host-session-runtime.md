@@ -162,11 +162,60 @@ export async function createSerializedSessionRuntimeHost(
     unsubscribe = undefined;
     release?.();
   };
+  const clearSubscriptionAfterFailure = (cleanupFailures: unknown[]) => {
+    try {
+      clearSubscription();
+    } catch (error) {
+      cleanupFailures.push(error);
+    }
+  };
+  const throwBindingFailure = (
+    error: unknown,
+    cleanupFailures: unknown[],
+    phase: string,
+  ): never => {
+    if (cleanupFailures.length === 0) throw error;
+    throw new AggregateError(
+      [error, ...cleanupFailures],
+      `${phase} failed and cleanup also failed`,
+      { cause: error },
+    );
+  };
   const bindSession = async (session: AgentSession) => {
     clearSubscription();
-    await session.bindExtensions(bindings.extensionBindings(session));
-    unsubscribe = bindings.subscribe(session);
-    bindings.reportDiagnostics(runtime.diagnostics);
+    try {
+      await session.bindExtensions(bindings.extensionBindings(session));
+      unsubscribe = bindings.subscribe(session);
+      bindings.reportDiagnostics(runtime.diagnostics);
+    } catch (error) {
+      const cleanupFailures: unknown[] = [];
+      clearSubscriptionAfterFailure(cleanupFailures);
+      return throwBindingFailure(error, cleanupFailures, "session binding");
+    }
+  };
+  const disposeBindingFailure = async (
+    error: unknown,
+    phase: "initial" | "replacement",
+  ): Promise<never> => {
+    unusable = true;
+    const cleanupFailures: unknown[] = [];
+    try {
+      clearSubscriptionAfterFailure(cleanupFailures);
+      try {
+        await runtime.dispose();
+      } catch (disposeError) {
+        cleanupFailures.push(disposeError);
+      }
+    } finally {
+      replacementInFlight = true;
+      unusable = true;
+      clearSubscriptionAfterFailure(cleanupFailures);
+    }
+    return throwBindingFailure(
+      error,
+      cleanupFailures,
+      `${phase} session binding`,
+    );
   };
   const assertAvailable = () => {
     if (disposed) throw new Error("session runtime host is disposed");
@@ -202,15 +251,18 @@ export async function createSerializedSessionRuntimeHost(
     clearSubscription();
   });
   runtime.setRebindSession(async (session) => {
-    await bindSession(session);
-    replacementInFlight = false;
+    try {
+      await bindSession(session);
+      replacementInFlight = false;
+    } catch (error) {
+      return disposeBindingFailure(error, "replacement");
+    }
   });
 
   try {
     await bindSession(runtime.session);
   } catch (error) {
-    await runtime.dispose();
-    throw error;
+    return disposeBindingFailure(error, "initial");
   }
 
   return {
@@ -259,9 +311,9 @@ Do not resolve project settings or relative Extension paths before the effective
 
 `await session.bindExtensions(...)` applies those bindings, emits that session's `session_start` event, and lets Extensions extend the loaded resources. It must complete for the initial session and every replacement before the host publishes events from that session. `bindings.subscribe(session)` then becomes the ownership boundary for UI rendering, RPC notifications, telemetry, or transcript projection. It must return one idempotent unsubscribe function that removes every host listener installed for that session.
 
-The shared asynchronous `bindSession()` helper enforces this order for both paths: clear any stale host subscription, await Extension binding, install the host subscription, and report diagnostics. Avoid caching `runtime.session` in another service; pass session-derived events through the binding adapter instead.
+The shared asynchronous `bindSession()` helper enforces this order for both paths: clear any stale host subscription, await Extension binding, install the host subscription, and report diagnostics. If Extension binding, subscription installation, or diagnostic reporting throws, its catch path removes any unsubscribe handle already returned. A `subscribe(...)` adapter must itself be atomic: if it throws before returning a cleanup function, it must roll back any partial listener installation internally. Avoid caching `runtime.session` in another service; pass session-derived events through the binding adapter instead.
 
-If initial Extension or host binding fails, the example disposes the just-created runtime and rejects startup. This is fail-closed: a host without its complete lifecycle, observation, and persistence boundaries never begins serving requests.
+If initial Extension or host binding fails, the example clears any returned subscription, marks the host unavailable, disposes the just-created runtime, and rejects startup. The original binding error is rethrown when cleanup succeeds. If subscription cleanup or runtime disposal also fails, an `AggregateError` retains the original error as its cause and first member instead of masking it. This is fail-closed: a host without its complete lifecycle, observation, and persistence boundaries never begins serving requests.
 
 ## 6. Serialize new, resume, fork, clone, and import
 
@@ -286,7 +338,7 @@ The release lifecycle exposes two different callbacks for two different moments:
 - `setBeforeSessionInvalidate()` runs synchronously after `session_shutdown` handlers finish but before the old session is disposed. The wrapper marks replacement as in flight and removes old listeners here.
 - `setRebindSession()` is awaited after the factory result has been applied. The wrapper calls the same `bindSession()` helper, which awaits `session.bindExtensions(...)` before installing the host subscription and reporting diagnostics. Only then does it mark the host available again.
 
-The runtime updates `session`, `services`, `diagnostics`, and `modelFallbackMessage` together before the rebind callback. The wrapper exposes cwd and diagnostics but deliberately does not expose its raw `AgentSessionRuntime`; this prevents request code from reading a disposed old session or a replacement that has not completed binding.
+The runtime updates `session`, `services`, `diagnostics`, and `modelFallbackMessage` together before the rebind callback. If `bindSession()` then fails, Pi has already applied that replacement. The wrapper immediately marks itself unusable, clears any returned subscription, attempts `runtime.dispose()` on the applied replacement, and uses `finally` to keep both `replacementInFlight` and `unusable` set before propagating the original or aggregate failure. The wrapper exposes cwd and diagnostics but deliberately does not expose its raw `AgentSessionRuntime`; request code therefore cannot read either a disposed old session or a failed applied replacement.
 
 ```mermaid
 sequenceDiagram
@@ -310,9 +362,17 @@ sequenceDiagram
         Lock->>Next: apply coherent result
         Lock->>Extensions: bindExtensions(replacement options)
         Extensions->>Next: session_start and extend resources
-        Extensions-->>Lock: Extension lifecycle ready
-        Lock->>Rebind: subscribe to replacement session
-        Rebind-->>Caller: operation result
+        alt Extension and host binding succeed
+            Extensions-->>Lock: Extension lifecycle ready
+            Lock->>Rebind: subscribe to replacement session
+            Rebind-->>Caller: operation result
+        else Extension, subscribe, or diagnostics fail
+            Extensions--xLock: binding failure
+            Lock->>Rebind: clear returned subscription
+            Lock->>Next: dispose applied replacement
+            Lock->>Lock: keep host unusable in finally
+            Lock--xCaller: original or aggregate failure
+        end
     else factory rejects after disposal
         Factory--xLock: reject
         Lock->>Lock: mark host unusable
@@ -332,7 +392,9 @@ Final shutdown is also serialized. Stop accepting new commands, await `host.disp
 
 Replacement in Pi `0.84.3` is not rollback-transactional. `AgentSessionRuntime` disposes the old session before awaiting the new factory. If that factory rejects, it propagates the error and does not call its internal apply or rebind steps; the old object is already invalid and there is no usable replacement.
 
-The wrapper detects this exact boundary because `setBeforeSessionInvalidate()` set `replacementInFlight`, while a successful `setRebindSession()` would have cleared it only after Extension and host binding both completed. A factory rejection, `bindExtensions(...)` rejection, or host-subscription failure while that flag remains set marks the wrapper unusable. Old subscriptions have already been detached, no raw session is public, and later operations or state getters reject. This is the required no-half-replacement, fail-closed policy.
+The wrapper detects this exact boundary because `setBeforeSessionInvalidate()` set `replacementInFlight`, while a successful `setRebindSession()` would have cleared it only after Extension and host binding both completed. A factory rejection occurs before apply and leaves no replacement to dispose. A `bindExtensions(...)`, host-subscription, or diagnostic-reporting rejection occurs after apply, so the rebind catch clears the returned subscription and disposes that applied replacement before propagating. Its `finally` path keeps the wrapper unusable even if disposal fails. Old subscriptions have already been detached, no raw session is public, and later operations or state getters reject. This is the required no-half-replacement, fail-closed policy.
+
+Cleanup failure never replaces the primary evidence. `throwBindingFailure()` rethrows the original binding error when cleanup succeeds; otherwise it throws an `AggregateError` whose first element and `cause` are that original error, followed by unsubscribe or disposal errors. Log the aggregate structure without serializing session content, and treat every member as an operational incident.
 
 Do not catch that error and continue serving through a cached session. Record the operation, target path or cwd, and error without logging transcript content or secrets. Then terminate the owning worker, or build a new host from an explicit safe startup target. Automatic retry is acceptable only if the host remains unavailable and each attempt builds a complete new runtime.
 
@@ -351,7 +413,8 @@ Verify these invariants:
 - [ ] Clone calls `fork(entryId, { position: "at" })`; fork keeps the default `"before"` semantics.
 - [ ] Old subscriptions are removed before disposal; each replacement awaits `bindExtensions(...)` before its host subscription is installed and before the host becomes available.
 - [ ] A cancelled or pre-validation failure keeps the old binding usable.
-- [ ] A factory rejection after invalidation exposes no session and permanently rejects later operations on that wrapper.
+- [ ] A factory rejection after invalidation exposes no session; a binding failure after apply also clears subscriptions and disposes the applied replacement. Both permanently reject later operations on that wrapper.
+- [ ] If unsubscribe or replacement disposal fails, the propagated `AggregateError` retains the original binding failure first and reports cleanup failures separately.
 - [ ] Final disposal aborts the active response, flushes host persistence, emits shutdown through the runtime, unbinds, and rejects later access.
 - [ ] Diagnostic output redacts secrets and identifies the operation plus target cwd or session path.
 

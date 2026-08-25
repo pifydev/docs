@@ -506,11 +506,60 @@ export async function createSerializedSessionRuntimeHost(
     unsubscribe = undefined;
     release?.();
   };
+  const clearSubscriptionAfterFailure = (cleanupFailures: unknown[]) => {
+    try {
+      clearSubscription();
+    } catch (error) {
+      cleanupFailures.push(error);
+    }
+  };
+  const throwBindingFailure = (
+    error: unknown,
+    cleanupFailures: unknown[],
+    phase: string,
+  ): never => {
+    if (cleanupFailures.length === 0) throw error;
+    throw new AggregateError(
+      [error, ...cleanupFailures],
+      `${phase} failed and cleanup also failed`,
+      { cause: error },
+    );
+  };
   const bindSession = async (session: AgentSession) => {
     clearSubscription();
-    await session.bindExtensions(bindings.extensionBindings(session));
-    unsubscribe = bindings.subscribe(session);
-    bindings.reportDiagnostics(runtime.diagnostics);
+    try {
+      await session.bindExtensions(bindings.extensionBindings(session));
+      unsubscribe = bindings.subscribe(session);
+      bindings.reportDiagnostics(runtime.diagnostics);
+    } catch (error) {
+      const cleanupFailures: unknown[] = [];
+      clearSubscriptionAfterFailure(cleanupFailures);
+      return throwBindingFailure(error, cleanupFailures, "session binding");
+    }
+  };
+  const disposeBindingFailure = async (
+    error: unknown,
+    phase: "initial" | "replacement",
+  ): Promise<never> => {
+    unusable = true;
+    const cleanupFailures: unknown[] = [];
+    try {
+      clearSubscriptionAfterFailure(cleanupFailures);
+      try {
+        await runtime.dispose();
+      } catch (disposeError) {
+        cleanupFailures.push(disposeError);
+      }
+    } finally {
+      replacementInFlight = true;
+      unusable = true;
+      clearSubscriptionAfterFailure(cleanupFailures);
+    }
+    return throwBindingFailure(
+      error,
+      cleanupFailures,
+      `${phase} session binding`,
+    );
   };
   const assertAvailable = () => {
     if (disposed) throw new Error("session runtime host is disposed");
@@ -546,15 +595,18 @@ export async function createSerializedSessionRuntimeHost(
     clearSubscription();
   });
   runtime.setRebindSession(async (session) => {
-    await bindSession(session);
-    replacementInFlight = false;
+    try {
+      await bindSession(session);
+      replacementInFlight = false;
+    } catch (error) {
+      return disposeBindingFailure(error, "replacement");
+    }
   });
 
   try {
     await bindSession(runtime.session);
   } catch (error) {
-    await runtime.dispose();
-    throw error;
+    return disposeBindingFailure(error, "initial");
   }
 
   return {

@@ -312,13 +312,57 @@ function assertRuntimeGuideExtensionBindingOrder(markdown, context) {
   );
   assert.match(
     source,
-    /runtime\.setRebindSession\(async \(session\) => \{\s+await bindSession\(session\);/,
+    /runtime\.setRebindSession\(async \(session\) => \{[\s\S]*?await bindSession\(session\);/,
     `${context} replacement sessions must use bindSession`,
   );
   assert.match(
     source,
     /try \{\s+await bindSession\(runtime\.session\);/,
     `${context} initial session must use bindSession`,
+  );
+}
+
+function assertRuntimeGuideBindingFailureCleanup(markdown, context) {
+  const source = runtimeGuideExampleFence(markdown, context);
+  const bindStart = source.indexOf(
+    "  const bindSession = async (session: AgentSession) => {",
+  );
+  const bindEnd = source.indexOf("\n  const disposeBindingFailure", bindStart);
+  assert.ok(bindStart >= 0, `${context} must define async bindSession`);
+  assert.ok(bindEnd > bindStart, `${context} must scope async bindSession`);
+  const bindSession = source.slice(bindStart, bindEnd);
+  const catchStart = bindSession.indexOf("  } catch (error) {");
+  assert.ok(
+    catchStart >= 0,
+    `${context} bindSession must catch binding failure`,
+  );
+  assert.match(
+    bindSession.slice(catchStart),
+    /clearSubscriptionAfterFailure\(cleanupFailures\);/,
+    `${context} bindSession must clear a newly installed subscription on failure`,
+  );
+
+  const disposeStart = bindEnd + 1;
+  const disposeEnd = source.indexOf("\n  const assertAvailable", disposeStart);
+  assert.ok(
+    disposeEnd > disposeStart,
+    `${context} must scope disposeBindingFailure`,
+  );
+  const disposeFailure = source.slice(disposeStart, disposeEnd);
+  assert.match(
+    disposeFailure,
+    /unusable = true;[\s\S]*?await runtime\.dispose\(\);[\s\S]*?finally \{[\s\S]*?replacementInFlight = true;[\s\S]*?unusable = true;/,
+    `${context} failed binding must dispose the applied runtime and remain unavailable in finally`,
+  );
+  assert.match(
+    source,
+    /runtime\.setRebindSession\(async \(session\) => \{[\s\S]*?catch \(error\) \{\s+return disposeBindingFailure\(error, "replacement"\);/,
+    `${context} replacement binding failure must use fail-closed disposal`,
+  );
+  assert.match(
+    source,
+    /try \{\s+await bindSession\(runtime\.session\);\s+\} catch \(error\) \{\s+return disposeBindingFailure\(error, "initial"\);/,
+    `${context} initial binding failure must use fail-closed disposal`,
   );
 }
 
@@ -778,8 +822,8 @@ test("replaceable runtime binding guard rejects missing and reordered Extension 
     "utf8",
   );
   const extensionBinding =
-    "    await session.bindExtensions(bindings.extensionBindings(session));\n";
-  const hostSubscription = "    unsubscribe = bindings.subscribe(session);\n";
+    "      await session.bindExtensions(bindings.extensionBindings(session));\n";
+  const hostSubscription = "      unsubscribe = bindings.subscribe(session);\n";
   const missing = markdown.replace(extensionBinding, "");
   const reordered = markdown.replace(
     `${extensionBinding}${hostSubscription}`,
@@ -803,6 +847,68 @@ test("replaceable runtime binding guard rejects missing and reordered Extension 
         "synthetic reordered Extension binding",
       ),
     /must bind Extensions before the host subscription/,
+  );
+});
+
+test("replaceable runtime guides clean up failed initial and replacement bindings", async () => {
+  const guides = await readLocalizedContent("how-to/host-session-runtime.md");
+
+  for (const { locale, source } of guides) {
+    assert.doesNotThrow(() =>
+      assertRuntimeGuideBindingFailureCleanup(
+        source,
+        `${locale} replaceable session runtime guide`,
+      ),
+    );
+  }
+});
+
+test("replaceable runtime cleanup guard rejects missing subscription cleanup and runtime disposal", async () => {
+  const markdown = await readFile(
+    new URL("content/en/how-to/host-session-runtime.md", repositoryRoot),
+    "utf8",
+  );
+  const bindStart = markdown.indexOf(
+    "  const bindSession = async (session: AgentSession) => {",
+  );
+  const bindEnd = markdown.indexOf(
+    "\n  const disposeBindingFailure",
+    bindStart,
+  );
+  assert.ok(bindStart >= 0);
+  assert.ok(bindEnd > bindStart);
+  const bindSession = markdown.slice(bindStart, bindEnd);
+  const missingSubscriptionCleanupBlock = bindSession.replace(
+    "    clearSubscriptionAfterFailure(cleanupFailures);\n",
+    "",
+  );
+  const missingSubscriptionCleanup = markdown.replace(
+    bindSession,
+    missingSubscriptionCleanupBlock,
+  );
+  const missingRuntimeDisposal = markdown.replace(
+    "      await runtime.dispose();\n",
+    "",
+  );
+  assert.notEqual(missingSubscriptionCleanupBlock, bindSession);
+  assert.notEqual(missingSubscriptionCleanup, markdown);
+  assert.notEqual(missingRuntimeDisposal, markdown);
+
+  assert.throws(
+    () =>
+      assertRuntimeGuideBindingFailureCleanup(
+        missingSubscriptionCleanup,
+        "synthetic missing failed-subscription cleanup",
+      ),
+    /must clear a newly installed subscription on failure/,
+  );
+  assert.throws(
+    () =>
+      assertRuntimeGuideBindingFailureCleanup(
+        missingRuntimeDisposal,
+        "synthetic missing failed-runtime disposal",
+      ),
+    /must dispose the applied runtime and remain unavailable in finally/,
   );
 });
 
