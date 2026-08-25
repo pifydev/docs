@@ -38,6 +38,7 @@ function parsedExampleContract(
   source,
   label,
   functionName = chapter11ExampleFunction,
+  strictTopLevel,
 ) {
   const sourceFile = ts.createSourceFile(
     label,
@@ -45,6 +46,11 @@ function parsedExampleContract(
     ts.ScriptTarget.Latest,
     true,
     ts.ScriptKind.TS,
+  );
+  assert.equal(
+    sourceFile.parseDiagnostics.length,
+    0,
+    `${label} must parse without syntax diagnostics`,
   );
   const functions = sourceFile.statements.filter(
     (statement) =>
@@ -56,6 +62,68 @@ function parsedExampleContract(
     1,
     `${label} must define exactly one ${functionName} function`,
   );
+
+  if (strictTopLevel) {
+    const runnerCalls = [];
+    for (const statement of sourceFile.statements) {
+      if (ts.isImportDeclaration(statement)) {
+        const clause = statement.importClause;
+        const hasNamedImports =
+          clause?.namedBindings &&
+          ts.isNamedImports(clause.namedBindings) &&
+          clause.namedBindings.elements.length > 0;
+        assert.ok(
+          clause &&
+            !(
+              clause.namedBindings && ts.isNamespaceImport(clause.namedBindings)
+            ) &&
+            (clause.name || hasNamedImports),
+          `${label} contains an unexpected top-level import`,
+        );
+        continue;
+      }
+      if (
+        ts.isFunctionDeclaration(statement) &&
+        statement.name?.text === functionName
+      ) {
+        continue;
+      }
+      if (
+        strictTopLevel.runnerTitle &&
+        ts.isExpressionStatement(statement) &&
+        ts.isCallExpression(statement.expression) &&
+        ts.isIdentifier(statement.expression.expression) &&
+        statement.expression.expression.text === "test"
+      ) {
+        runnerCalls.push(statement.expression);
+        continue;
+      }
+      assert.fail(
+        `${label} contains an unexpected top-level statement: ${ts.SyntaxKind[statement.kind]}`,
+      );
+    }
+
+    if (strictTopLevel.runnerTitle) {
+      assert.equal(
+        runnerCalls.length,
+        1,
+        `${label} must register the compile-checked function as a test`,
+      );
+      const [runnerCall] = runnerCalls;
+      assert.equal(
+        runnerCall.arguments.length,
+        2,
+        `${label} must register the compile-checked function as a test`,
+      );
+      assert.ok(
+        ts.isStringLiteral(runnerCall.arguments[0]) &&
+          runnerCall.arguments[0].text === strictTopLevel.runnerTitle &&
+          ts.isIdentifier(runnerCall.arguments[1]) &&
+          runnerCall.arguments[1].text === functionName,
+        `${label} must register the compile-checked function as a test`,
+      );
+    }
+  }
 
   const imports = new Map();
   for (const statement of sourceFile.statements) {
@@ -132,6 +200,9 @@ function assertDeterministicGuideExampleParity(
     source,
     `${context} displayed example`,
     deterministicGuideFunction,
+    {
+      runnerTitle: "runs a deterministic Agent without network access",
+    },
   );
   const compiled = parsedExampleContract(
     compileFixture.replaceAll("\r\n", "\n"),
@@ -153,11 +224,6 @@ function assertDeterministicGuideExampleParity(
     allowedImports,
     `${context} displayed example must use only its compile-checked imports and node:test`,
   );
-  assert.match(
-    source,
-    /test\(\s*"runs a deterministic Agent without network access",\s*verifyDeterministicAgentTestingGuide,?\s*\);/,
-    `${context} displayed example must register the compile-checked function as a test`,
-  );
   assert.equal(
     displayed.functionSource,
     compiled.functionSource,
@@ -174,6 +240,8 @@ function assertChapter11ExampleParity(markdown, compileFixture) {
   const displayed = parsedExampleContract(
     chapter11ExampleFence(markdown),
     "Chapter 11 displayed example",
+    chapter11ExampleFunction,
+    {},
   );
   const compiled = parsedExampleContract(
     compileFixture.replaceAll("\r\n", "\n"),
@@ -622,6 +690,115 @@ test("deterministic Agent guide parity rejects function, import, and runner drif
       ),
     /must register the compile-checked function as a test/,
   );
+});
+
+test("deterministic Agent guide parser rejects malformed and unrelated top-level code", async () => {
+  const [markdown, compileFixture] = await Promise.all([
+    readFile(
+      new URL(
+        "content/en/how-to/test-agent-deterministically.md",
+        repositoryRoot,
+      ),
+      "utf8",
+    ),
+    readFile(
+      new URL("tests/fixtures/pi-sdk-0843.contract.ts", repositoryRoot),
+      "utf8",
+    ),
+  ]);
+  const source = deterministicGuideExampleFence(
+    markdown,
+    "English deterministic Agent guide",
+  );
+  const malformed = markdown.replace(source, `${source}\nconst malformed = ;`);
+  const unrelated = markdown.replace(
+    source,
+    `${source}\nconst unrelated = true;`,
+  );
+  const sideEffectImport = markdown.replace(
+    source,
+    `import "unexpected-side-effect";\n${source}`,
+  );
+  assert.notEqual(malformed, markdown);
+  assert.notEqual(unrelated, markdown);
+  assert.notEqual(sideEffectImport, markdown);
+
+  assert.throws(
+    () =>
+      assertDeterministicGuideExampleParity(
+        malformed,
+        compileFixture,
+        "synthetic malformed deterministic Agent guide",
+      ),
+    /must parse without syntax diagnostics/,
+  );
+  assert.throws(
+    () =>
+      assertDeterministicGuideExampleParity(
+        unrelated,
+        compileFixture,
+        "synthetic unrelated deterministic Agent guide",
+      ),
+    /contains an unexpected top-level statement/,
+  );
+  assert.throws(
+    () =>
+      assertDeterministicGuideExampleParity(
+        sideEffectImport,
+        compileFixture,
+        "synthetic side-effect import deterministic Agent guide",
+      ),
+    /contains an unexpected top-level import/,
+  );
+});
+
+test("deterministic Agent guide guards event indexes and asynchronous waits", async () => {
+  const [guides, compileFixture] = await Promise.all([
+    readLocalizedContent("how-to/test-agent-deterministically.md"),
+    readFile(
+      new URL("tests/fixtures/pi-sdk-0843.contract.ts", repositoryRoot),
+      "utf8",
+    ),
+  ]);
+
+  for (const { context, source } of [
+    ...guides.map(({ locale, source }) => ({
+      context: `${locale} deterministic Agent guide`,
+      source,
+    })),
+    { context: "Pi 0.84.3 compile fixture", source: compileFixture },
+  ]) {
+    for (const pattern of [
+      /const toolStartIndex = eventTypes\.indexOf\("tool_execution_start"\);/,
+      /const toolEndIndex = eventTypes\.indexOf\("tool_execution_end"\);/,
+      /assert\.ok\(toolStartIndex >= 0, "Tool execution start event is required"\);/,
+      /assert\.ok\(toolEndIndex >= 0, "Tool execution end event is required"\);/,
+      /toolStartIndex < toolEndIndex/,
+      /awaitWithFailureWatchdog/,
+      /clearTimeout\(watchdog\)/,
+      /awaitWithFailureWatchdog\(\s*assistantStarted,/,
+      /awaitWithFailureWatchdog\(\s*exhaustedAgent\.prompt\(/,
+      /did not settle within \$\{WATCHDOG_MS\} ms/,
+    ]) {
+      assert.match(source, pattern, `${context} must cover ${pattern}`);
+    }
+  }
+});
+
+test("both deterministic Agent guides describe faux token chunk size accurately", async () => {
+  const guides = Object.fromEntries(
+    (await readLocalizedContent("how-to/test-agent-deterministically.md")).map(
+      ({ locale, source }) => [locale, source],
+    ),
+  );
+
+  assert.match(
+    guides.en,
+    /fixed two-token chunks[^.]*roughly eight characters/i,
+  );
+  assert.doesNotMatch(guides.en, /two-character chunks/i);
+  assert.match(guides.vi, /chunk[^.]*hai token[^.]*xấp xỉ tám ký tự/i);
+  assert.doesNotMatch(guides.vi, /chunk cố định hai ký tự/i);
 });
 
 test("Chapter 11 deterministic example stays synchronized with the compile fixture", async () => {

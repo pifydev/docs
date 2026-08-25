@@ -230,6 +230,33 @@ export async function verifyDeterministicAgentTestingGuide(): Promise<void> {
     return agent;
   };
 
+  const WATCHDOG_MS = 2_000;
+  const awaitWithFailureWatchdog = async <T>(
+    operation: Promise<T>,
+    label: string,
+    onTimeout: () => void,
+  ): Promise<T> => {
+    let watchdog: ReturnType<typeof setTimeout> | undefined;
+    const timeoutFailure = new Promise<never>((_, reject) => {
+      watchdog = setTimeout(() => {
+        const message = `${label} did not settle within ${WATCHDOG_MS} ms`;
+        try {
+          onTimeout();
+        } catch (cause) {
+          reject(new Error(`${message}; timeout cleanup failed`, { cause }));
+          return;
+        }
+        reject(new Error(message));
+      }, WATCHDOG_MS);
+    });
+
+    try {
+      return await Promise.race([operation, timeoutFailure]);
+    } finally {
+      if (watchdog !== undefined) clearTimeout(watchdog);
+    }
+  };
+
   let unsubscribe: (() => void) | undefined;
   try {
     const agent = createAgent();
@@ -261,7 +288,11 @@ export async function verifyDeterministicAgentTestingGuide(): Promise<void> {
       },
     ]);
 
-    await agent.prompt("What is 20 + 22?");
+    await awaitWithFailureWatchdog(
+      agent.prompt("What is 20 + 22?"),
+      "calculator Agent run",
+      () => agent.abort(),
+    );
 
     assert.equal(faux.state.callCount, 2);
     assert.equal(faux.getPendingResponseCount(), 0);
@@ -293,10 +324,11 @@ export async function verifyDeterministicAgentTestingGuide(): Promise<void> {
     }
     assert.equal(finalMessage.stopReason, "stop");
     assert.deepEqual(finalMessage.content, [fauxText("The total is 42.")]);
-    assert.ok(
-      eventTypes.indexOf("tool_execution_start") <
-        eventTypes.indexOf("tool_execution_end"),
-    );
+    const toolStartIndex = eventTypes.indexOf("tool_execution_start");
+    const toolEndIndex = eventTypes.indexOf("tool_execution_end");
+    assert.ok(toolStartIndex >= 0, "Tool execution start event is required");
+    assert.ok(toolEndIndex >= 0, "Tool execution end event is required");
+    assert.ok(toolStartIndex < toolEndIndex);
     assert.equal(eventTypes.at(0), "agent_start");
     assert.equal(eventTypes.at(-1), "agent_end");
 
@@ -324,9 +356,15 @@ export async function verifyDeterministicAgentTestingGuide(): Promise<void> {
     cancellation.signal.addEventListener("abort", abortAgent, { once: true });
     try {
       const cancelledRun = cancelledAgent.prompt("Count slowly to ten.");
-      await assistantStarted;
+      await awaitWithFailureWatchdog(
+        assistantStarted,
+        "assistant stream start",
+        () => cancelledAgent.abort(),
+      );
       cancellation.abort();
-      await cancelledRun;
+      await awaitWithFailureWatchdog(cancelledRun, "cancelled Agent run", () =>
+        cancelledAgent.abort(),
+      );
     } finally {
       unsubscribeCancelled();
       cancellation.signal.removeEventListener("abort", abortAgent);
@@ -341,7 +379,11 @@ export async function verifyDeterministicAgentTestingGuide(): Promise<void> {
 
     const exhaustedAgent = createAgent();
     faux.setResponses([]);
-    await exhaustedAgent.prompt("This request has no scripted response.");
+    await awaitWithFailureWatchdog(
+      exhaustedAgent.prompt("This request has no scripted response."),
+      "exhausted faux-response run",
+      () => exhaustedAgent.abort(),
+    );
     const exhaustedMessage = exhaustedAgent.state.messages.at(-1);
     assert.equal(exhaustedMessage?.role, "assistant");
     if (exhaustedMessage?.role !== "assistant") {
@@ -355,13 +397,22 @@ export async function verifyDeterministicAgentTestingGuide(): Promise<void> {
   } finally {
     unsubscribe?.();
     for (const agent of agents) agent.abort();
-    await Promise.all(agents.map((agent) => agent.waitForIdle()));
-    models.deleteProvider(faux.provider.id);
-    assert.equal(models.getProvider(faux.provider.id), undefined);
-    assert.equal(
-      models.getModel("deterministic-guide-faux", "calculator-model"),
-      undefined,
-    );
+    try {
+      await awaitWithFailureWatchdog(
+        Promise.all(agents.map((agent) => agent.waitForIdle())),
+        "Agent cleanup",
+        () => {
+          for (const agent of agents) agent.abort();
+        },
+      );
+    } finally {
+      models.deleteProvider(faux.provider.id);
+      assert.equal(models.getProvider(faux.provider.id), undefined);
+      assert.equal(
+        models.getModel("deterministic-guide-faux", "calculator-model"),
+        undefined,
+      );
+    }
   }
 }
 

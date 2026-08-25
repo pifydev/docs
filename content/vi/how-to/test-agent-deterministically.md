@@ -57,7 +57,7 @@ Các phiên bản package được khóa chính xác có chủ đích. Tên help
 
 Provider ID và model ID là identifier của fixture; chúng không cần tồn tại bên ngoài test. `fauxProvider()` tiêu thụ response trong memory theo thứ tự request bắt đầu. Nó không bao giờ đọc credential của provider và cũng không tự chuyển sang provider khác khi hàng đợi đã cạn.
 
-Các chunk cố định hai ký tự cùng `tokensPerSecond: 1_000` tạo một streaming window quan sát được cho case cancellation mà không làm test chậm. Assertion vẫn nhắm đến message đã reconstruct và lifecycle boundary, không nhắm đến số lượng chunk.
+Các chunk cố định hai token tương đương xấp xỉ tám ký tự trong faux implementation của Pi: `tokenSize` đếm đơn vị token và faux mở rộng mỗi đơn vị thành bốn ký tự. Cùng với `tokensPerSecond: 1_000`, cấu hình này tạo một streaming window quan sát được cho cancellation mà không làm test chậm. Assertion vẫn nhắm đến message đã reconstruct và lifecycle boundary, không nhắm đến số lượng chunk.
 
 ## 2. Định nghĩa calculator Tool deterministic
 
@@ -169,6 +169,33 @@ export async function verifyDeterministicAgentTestingGuide(): Promise<void> {
     return agent;
   };
 
+  const WATCHDOG_MS = 2_000;
+  const awaitWithFailureWatchdog = async <T>(
+    operation: Promise<T>,
+    label: string,
+    onTimeout: () => void,
+  ): Promise<T> => {
+    let watchdog: ReturnType<typeof setTimeout> | undefined;
+    const timeoutFailure = new Promise<never>((_, reject) => {
+      watchdog = setTimeout(() => {
+        const message = `${label} did not settle within ${WATCHDOG_MS} ms`;
+        try {
+          onTimeout();
+        } catch (cause) {
+          reject(new Error(`${message}; timeout cleanup failed`, { cause }));
+          return;
+        }
+        reject(new Error(message));
+      }, WATCHDOG_MS);
+    });
+
+    try {
+      return await Promise.race([operation, timeoutFailure]);
+    } finally {
+      if (watchdog !== undefined) clearTimeout(watchdog);
+    }
+  };
+
   let unsubscribe: (() => void) | undefined;
   try {
     const agent = createAgent();
@@ -200,7 +227,11 @@ export async function verifyDeterministicAgentTestingGuide(): Promise<void> {
       },
     ]);
 
-    await agent.prompt("What is 20 + 22?");
+    await awaitWithFailureWatchdog(
+      agent.prompt("What is 20 + 22?"),
+      "calculator Agent run",
+      () => agent.abort(),
+    );
 
     assert.equal(faux.state.callCount, 2);
     assert.equal(faux.getPendingResponseCount(), 0);
@@ -232,10 +263,11 @@ export async function verifyDeterministicAgentTestingGuide(): Promise<void> {
     }
     assert.equal(finalMessage.stopReason, "stop");
     assert.deepEqual(finalMessage.content, [fauxText("The total is 42.")]);
-    assert.ok(
-      eventTypes.indexOf("tool_execution_start") <
-        eventTypes.indexOf("tool_execution_end"),
-    );
+    const toolStartIndex = eventTypes.indexOf("tool_execution_start");
+    const toolEndIndex = eventTypes.indexOf("tool_execution_end");
+    assert.ok(toolStartIndex >= 0, "Tool execution start event is required");
+    assert.ok(toolEndIndex >= 0, "Tool execution end event is required");
+    assert.ok(toolStartIndex < toolEndIndex);
     assert.equal(eventTypes.at(0), "agent_start");
     assert.equal(eventTypes.at(-1), "agent_end");
 
@@ -263,9 +295,15 @@ export async function verifyDeterministicAgentTestingGuide(): Promise<void> {
     cancellation.signal.addEventListener("abort", abortAgent, { once: true });
     try {
       const cancelledRun = cancelledAgent.prompt("Count slowly to ten.");
-      await assistantStarted;
+      await awaitWithFailureWatchdog(
+        assistantStarted,
+        "assistant stream start",
+        () => cancelledAgent.abort(),
+      );
       cancellation.abort();
-      await cancelledRun;
+      await awaitWithFailureWatchdog(cancelledRun, "cancelled Agent run", () =>
+        cancelledAgent.abort(),
+      );
     } finally {
       unsubscribeCancelled();
       cancellation.signal.removeEventListener("abort", abortAgent);
@@ -280,7 +318,11 @@ export async function verifyDeterministicAgentTestingGuide(): Promise<void> {
 
     const exhaustedAgent = createAgent();
     faux.setResponses([]);
-    await exhaustedAgent.prompt("This request has no scripted response.");
+    await awaitWithFailureWatchdog(
+      exhaustedAgent.prompt("This request has no scripted response."),
+      "exhausted faux-response run",
+      () => exhaustedAgent.abort(),
+    );
     const exhaustedMessage = exhaustedAgent.state.messages.at(-1);
     assert.equal(exhaustedMessage?.role, "assistant");
     if (exhaustedMessage?.role !== "assistant") {
@@ -294,13 +336,22 @@ export async function verifyDeterministicAgentTestingGuide(): Promise<void> {
   } finally {
     unsubscribe?.();
     for (const agent of agents) agent.abort();
-    await Promise.all(agents.map((agent) => agent.waitForIdle()));
-    models.deleteProvider(faux.provider.id);
-    assert.equal(models.getProvider(faux.provider.id), undefined);
-    assert.equal(
-      models.getModel("deterministic-guide-faux", "calculator-model"),
-      undefined,
-    );
+    try {
+      await awaitWithFailureWatchdog(
+        Promise.all(agents.map((agent) => agent.waitForIdle())),
+        "Agent cleanup",
+        () => {
+          for (const agent of agents) agent.abort();
+        },
+      );
+    } finally {
+      models.deleteProvider(faux.provider.id);
+      assert.equal(models.getProvider(faux.provider.id), undefined);
+      assert.equal(
+        models.getModel("deterministic-guide-faux", "calculator-model"),
+        undefined,
+      );
+    }
   }
 }
 
@@ -312,19 +363,21 @@ test(
 
 ## 6. Hủy qua AbortController
 
-`Agent` sở hữu `AbortController` cho run đang hoạt động và công khai `agent.abort()`. Host thường sở hữu một signal khác, chẳng hạn lifetime của HTTP request, job hoặc UI. Ví dụ nối host signal đó với `agent.abort()` bằng listener one-shot, bắt đầu `prompt()`, chờ assistant `message_start`, abort provider stream đang hoạt động rồi vẫn await đến khi settled. Việc chờ event là deterministic; một timer tùy ý sẽ khiến test phụ thuộc tốc độ máy.
+`Agent` sở hữu `AbortController` cho run đang hoạt động và công khai `agent.abort()`. Host thường sở hữu một signal khác, chẳng hạn lifetime của HTTP request, job hoặc UI. Ví dụ nối host signal đó với `agent.abort()` bằng listener one-shot, bắt đầu `prompt()`, chờ assistant `message_start`, abort provider stream đang hoạt động rồi vẫn await đến khi settled. Việc chờ event là deterministic; một sequencing sleep tùy ý sẽ khiến test phụ thuộc tốc độ máy.
+
+`awaitWithFailureWatchdog()` không quyết định thời điểm abort. Nó chỉ là failure bound quanh từng asynchronous wait. Nếu event hoặc Agent settlement dự kiến không đến, watchdog abort Agent tương ứng và reject với label cùng giới hạn thời gian. Khối `finally` của helper luôn clear timer khi hoàn tất bình thường lẫn khi reject sớm.
 
 Không xem cancellation là một `prompt()` promise bị reject. Ở release boundary này, faux stream kết thúc bằng assistant message có `stopReason` là `"aborted"` và `errorMessage` là `Request was aborted`. Await run chứng minh Agent đã idle trước cleanup. Vẫn xóa bridge listener dù đã dùng `{ once: true }`, để ownership rule tiếp tục đúng nếu sau này test thay đổi và không phát abort.
 
 ## 7. Xem hàng đợi đã cạn là error result
 
-Sau `faux.setResponses([])`, provider call kế tiếp không có scripted step. Faux provider của Pi trả về assistant result với `stopReason: "error"` và `errorMessage: "No more faux responses queued"`. Agent append result đó rồi settled bình thường; vì thế test kiểm tra transcript thay vì chờ `prompt()` reject.
+Sau `faux.setResponses([])`, provider call kế tiếp không có scripted step. Faux provider của Pi trả về assistant result với `stopReason: "error"` và `errorMessage: "No more faux responses queued"`. Agent append result đó rồi settled bình thường; vì thế test kiểm tra transcript thay vì chờ `prompt()` reject. Cùng failure-only watchdog giới hạn `prompt()` này để regression không thể khiến `node:test` chờ mãi.
 
 Hành vi này là bằng chứng fail-closed hữu ích. Một fixture response bị thiếu không thể âm thầm gọi hosted provider hoặc tự tạo câu trả lời. Nếu lỗi xuất hiện ngoài dự kiến, hãy so `faux.state.callCount` với độ dài queue và kiểm tra xem Tool call có tạo thêm continuation request hay không.
 
 ## 8. Cleanup đăng ký provider và model
 
-Khối `finally` ngoài cùng unsubscribe mọi listener còn lại, abort các Agent đang hoạt động, await `waitForIdle()` rồi gọi `models.deleteProvider(faux.provider.id)`. Xóa provider cũng xóa các model của nó khỏi collection cô lập; hai assertion cuối chứng minh điều này.
+Khối `finally` ngoài cùng unsubscribe mọi listener còn lại và abort các Agent đang hoạt động. Sau đó, một cleanup wait có giới hạn gọi `waitForIdle()` cho từng Agent. Khối `finally` lồng bên trong vẫn gọi `models.deleteProvider(faux.provider.id)` nếu settlement chạm giới hạn watchdog. Xóa provider cũng xóa các model của nó khỏi collection cô lập; hai assertion cuối chứng minh điều này.
 
 Với suite lớn hơn, hãy tạo fixture mới cho mỗi test và đăng ký cleanup này trong `afterEach` của test runner. Không dùng lại một faux queue đã bị tiêu thụ một phần giữa các test. Nếu Tool của test sở hữu file tạm hoặc process, hãy giải phóng các resource đó trong cùng cleanup boundary trước khi xóa provider.
 
@@ -347,6 +400,7 @@ Với suite lớn hơn, hãy tạo fixture mới cho mỗi test và đăng ký c
 - [ ] Assertion bao phủ provider request, Tool argument, result linkage, thứ tự transcript, final text và final stop reason.
 - [ ] Nhánh `AbortController` tạo assistant message `"aborted"` đã settled.
 - [ ] Queue rỗng tạo assistant result `"error"` đúng tài liệu.
+- [ ] Failure-only watchdog giới hạn mọi Agent wait, abort khi timeout và clear timer.
 - [ ] Cleanup listener, Agent, provider và model chạy kể cả khi assertion thất bại.
 - [ ] `node --import tsx --test deterministic-agent.test.ts` hoàn tất mà không cần network access.
 

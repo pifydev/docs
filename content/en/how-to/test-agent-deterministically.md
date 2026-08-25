@@ -57,7 +57,7 @@ The package versions are deliberately exact. The helper names and behavior shown
 
 The provider ID and model ID are fixture identifiers; they do not need to exist outside the test. `fauxProvider()` consumes responses from memory in request-start order. It never reads provider credentials and never falls through to another provider when its queue is empty.
 
-The fixed two-character chunks and `tokensPerSecond: 1_000` create an observable streaming window for the cancellation case without making the test slow. Assertions still target reconstructed messages and lifecycle boundaries, not the number of chunks.
+The fixed two-token chunks are roughly eight characters each in Pi's faux implementation: `tokenSize` counts token units, and faux expands each unit to four characters. Together with `tokensPerSecond: 1_000`, they create an observable streaming window for cancellation without making the test slow. Assertions still target reconstructed messages and lifecycle boundaries, not the number of chunks.
 
 ## 2. Define a deterministic calculator Tool
 
@@ -169,6 +169,33 @@ export async function verifyDeterministicAgentTestingGuide(): Promise<void> {
     return agent;
   };
 
+  const WATCHDOG_MS = 2_000;
+  const awaitWithFailureWatchdog = async <T>(
+    operation: Promise<T>,
+    label: string,
+    onTimeout: () => void,
+  ): Promise<T> => {
+    let watchdog: ReturnType<typeof setTimeout> | undefined;
+    const timeoutFailure = new Promise<never>((_, reject) => {
+      watchdog = setTimeout(() => {
+        const message = `${label} did not settle within ${WATCHDOG_MS} ms`;
+        try {
+          onTimeout();
+        } catch (cause) {
+          reject(new Error(`${message}; timeout cleanup failed`, { cause }));
+          return;
+        }
+        reject(new Error(message));
+      }, WATCHDOG_MS);
+    });
+
+    try {
+      return await Promise.race([operation, timeoutFailure]);
+    } finally {
+      if (watchdog !== undefined) clearTimeout(watchdog);
+    }
+  };
+
   let unsubscribe: (() => void) | undefined;
   try {
     const agent = createAgent();
@@ -200,7 +227,11 @@ export async function verifyDeterministicAgentTestingGuide(): Promise<void> {
       },
     ]);
 
-    await agent.prompt("What is 20 + 22?");
+    await awaitWithFailureWatchdog(
+      agent.prompt("What is 20 + 22?"),
+      "calculator Agent run",
+      () => agent.abort(),
+    );
 
     assert.equal(faux.state.callCount, 2);
     assert.equal(faux.getPendingResponseCount(), 0);
@@ -232,10 +263,11 @@ export async function verifyDeterministicAgentTestingGuide(): Promise<void> {
     }
     assert.equal(finalMessage.stopReason, "stop");
     assert.deepEqual(finalMessage.content, [fauxText("The total is 42.")]);
-    assert.ok(
-      eventTypes.indexOf("tool_execution_start") <
-        eventTypes.indexOf("tool_execution_end"),
-    );
+    const toolStartIndex = eventTypes.indexOf("tool_execution_start");
+    const toolEndIndex = eventTypes.indexOf("tool_execution_end");
+    assert.ok(toolStartIndex >= 0, "Tool execution start event is required");
+    assert.ok(toolEndIndex >= 0, "Tool execution end event is required");
+    assert.ok(toolStartIndex < toolEndIndex);
     assert.equal(eventTypes.at(0), "agent_start");
     assert.equal(eventTypes.at(-1), "agent_end");
 
@@ -263,9 +295,15 @@ export async function verifyDeterministicAgentTestingGuide(): Promise<void> {
     cancellation.signal.addEventListener("abort", abortAgent, { once: true });
     try {
       const cancelledRun = cancelledAgent.prompt("Count slowly to ten.");
-      await assistantStarted;
+      await awaitWithFailureWatchdog(
+        assistantStarted,
+        "assistant stream start",
+        () => cancelledAgent.abort(),
+      );
       cancellation.abort();
-      await cancelledRun;
+      await awaitWithFailureWatchdog(cancelledRun, "cancelled Agent run", () =>
+        cancelledAgent.abort(),
+      );
     } finally {
       unsubscribeCancelled();
       cancellation.signal.removeEventListener("abort", abortAgent);
@@ -280,7 +318,11 @@ export async function verifyDeterministicAgentTestingGuide(): Promise<void> {
 
     const exhaustedAgent = createAgent();
     faux.setResponses([]);
-    await exhaustedAgent.prompt("This request has no scripted response.");
+    await awaitWithFailureWatchdog(
+      exhaustedAgent.prompt("This request has no scripted response."),
+      "exhausted faux-response run",
+      () => exhaustedAgent.abort(),
+    );
     const exhaustedMessage = exhaustedAgent.state.messages.at(-1);
     assert.equal(exhaustedMessage?.role, "assistant");
     if (exhaustedMessage?.role !== "assistant") {
@@ -294,13 +336,22 @@ export async function verifyDeterministicAgentTestingGuide(): Promise<void> {
   } finally {
     unsubscribe?.();
     for (const agent of agents) agent.abort();
-    await Promise.all(agents.map((agent) => agent.waitForIdle()));
-    models.deleteProvider(faux.provider.id);
-    assert.equal(models.getProvider(faux.provider.id), undefined);
-    assert.equal(
-      models.getModel("deterministic-guide-faux", "calculator-model"),
-      undefined,
-    );
+    try {
+      await awaitWithFailureWatchdog(
+        Promise.all(agents.map((agent) => agent.waitForIdle())),
+        "Agent cleanup",
+        () => {
+          for (const agent of agents) agent.abort();
+        },
+      );
+    } finally {
+      models.deleteProvider(faux.provider.id);
+      assert.equal(models.getProvider(faux.provider.id), undefined);
+      assert.equal(
+        models.getModel("deterministic-guide-faux", "calculator-model"),
+        undefined,
+      );
+    }
   }
 }
 
@@ -312,19 +363,21 @@ test(
 
 ## 6. Cancel through AbortController
 
-`Agent` owns the `AbortController` for its active run and exposes `agent.abort()`. A host often owns a different signal—for example, an HTTP request, job, or UI lifetime. The example bridges that host signal to `agent.abort()` with a one-shot listener, starts `prompt()`, waits for the assistant `message_start`, aborts the active provider stream, and still awaits settlement. Waiting on an event is deterministic; an arbitrary timer would make the test sensitive to machine speed.
+`Agent` owns the `AbortController` for its active run and exposes `agent.abort()`. A host often owns a different signal—for example, an HTTP request, job, or UI lifetime. The example bridges that host signal to `agent.abort()` with a one-shot listener, starts `prompt()`, waits for the assistant `message_start`, aborts the active provider stream, and still awaits settlement. Waiting on an event is deterministic; an arbitrary sequencing sleep would make the test sensitive to machine speed.
+
+`awaitWithFailureWatchdog()` does not decide when to abort. It is a failure-only bound around each asynchronous wait. If the expected event or Agent settlement never arrives, the watchdog aborts the affected Agent and rejects with a label and elapsed bound. Its `finally` always clears the timer, including normal completion and early rejection.
 
 Do not treat cancellation as a rejected `prompt()` promise. At this release boundary, the faux stream ends with an assistant message whose `stopReason` is `"aborted"` and whose `errorMessage` is `Request was aborted`. Awaiting the run proves it is idle before cleanup. Remove the bridge listener even though `{ once: true }` was used, so the ownership rule remains correct if the test changes before aborting.
 
 ## 7. Treat an exhausted queue as an error result
 
-After `faux.setResponses([])`, the next provider call has no scripted step. Pi's faux provider returns an assistant result with `stopReason: "error"` and `errorMessage: "No more faux responses queued"`. The Agent appends that result and settles normally; the test therefore inspects the transcript rather than expecting `prompt()` to reject.
+After `faux.setResponses([])`, the next provider call has no scripted step. Pi's faux provider returns an assistant result with `stopReason: "error"` and `errorMessage: "No more faux responses queued"`. The Agent appends that result and settles normally; the test therefore inspects the transcript rather than expecting `prompt()` to reject. The same failure-only watchdog bounds this `prompt()` so a regression cannot leave `node:test` waiting forever.
 
 This behavior is useful fail-closed evidence. A missing fixture response cannot silently call a hosted provider or invent an answer. If the error appears unexpectedly, compare `faux.state.callCount` with the queue length and check whether a Tool call triggered an additional continuation request.
 
 ## 8. Clean up provider and model registration
 
-The outer `finally` unsubscribes any listener, aborts all active Agents, awaits `waitForIdle()`, and calls `models.deleteProvider(faux.provider.id)`. Deleting the provider also removes its models from that isolated collection, which the final two assertions prove.
+The outer `finally` unsubscribes any listener and aborts all active Agents. A bounded cleanup wait then calls `waitForIdle()` for each Agent. Its nested `finally` still calls `models.deleteProvider(faux.provider.id)` if settlement reaches the watchdog bound. Deleting the provider also removes its models from that isolated collection, which the final two assertions prove.
 
 For a larger suite, create a fresh fixture per test and register this cleanup in your runner's `afterEach`. Never reuse a partly consumed faux queue across tests. If a test owns temporary files or processes through its Tools, release those resources in the same cleanup boundary before deleting the provider.
 
@@ -347,6 +400,7 @@ For a larger suite, create a fresh fixture per test and register this cleanup in
 - [ ] Assertions cover provider requests, Tool arguments, result linkage, transcript order, final text, and final stop reason.
 - [ ] An `AbortController` path produces a settled `"aborted"` assistant message.
 - [ ] An empty queue produces the documented `"error"` assistant result.
+- [ ] Failure-only watchdogs bound every Agent wait, abort on timeout, and clear their timers.
 - [ ] Listener, Agent, provider, and model cleanup runs even when an assertion fails.
 - [ ] `node --import tsx --test deterministic-agent.test.ts` completes without network access.
 
