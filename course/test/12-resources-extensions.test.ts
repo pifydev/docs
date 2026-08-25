@@ -238,6 +238,17 @@ test("applies one portable Resource path grammar on every host OS", async () => 
     "/absolute.txt",
     "..\\escape.txt",
     "folder\\..\\..\\escape.txt",
+    "CON",
+    "con.txt",
+    "folder/PRN.md",
+    "AUX.json",
+    "NUL.txt",
+    "COM1.log",
+    "com9",
+    "LPT1.txt",
+    "folder/lpt9.md",
+    "trailing-dot.",
+    "trailing-space ",
   ];
   for (let index = 0; index < rejected.length; index += 1) {
     await expect(loader.loadText(rejected[index])).rejects.toMatchObject({
@@ -575,6 +586,108 @@ test("rejects reentrant dispose from a disposer without deadlocking outer dispos
   expect(nestedCode).toBe("EXTENSION_REENTRANT_OPERATION");
 });
 
+test("deactivates callback context after settlement while rejecting calls during pending work", async () => {
+  const entered = deferred<void>();
+  const triggerNested = deferred<void>();
+  const releaseActivation = deferred<void>();
+  const detachedTimerEntered = deferred<void>();
+  const releaseDetachedTimer = deferred<void>();
+  const detachedFinished = deferred<void>();
+  let pendingCode: unknown;
+  let detachedError: unknown;
+  const host = new ExtensionHost({ resources: await emptyResources() });
+  host.discover([
+    {
+      id: "source",
+      create: () => ({
+        async activate() {
+          void (async () => {
+            await triggerNested.promise;
+            try {
+              await host.emit(finishedEvent(40));
+            } catch (error) {
+              pendingCode = (error as ExtensionError).code;
+            }
+          })();
+          setTimeout(() => {
+            void (async () => {
+              detachedTimerEntered.resolve();
+              await releaseDetachedTimer.promise;
+              await host.activate("detached-target");
+            })()
+              .catch((error: unknown) => {
+                detachedError = error;
+              })
+              .finally(() => detachedFinished.resolve());
+          }, 0);
+          entered.resolve();
+          await releaseActivation.promise;
+        },
+      }),
+    },
+    {
+      id: "detached-target",
+      create: () => ({
+        activate: (context) =>
+          context.registerTool(echoTool("detached-target")),
+      }),
+    },
+  ]);
+
+  const activation = host.activate("source");
+  await entered.promise;
+  await detachedTimerEntered.promise;
+  triggerNested.resolve();
+  await nextEventLoopTurn();
+  expect(pendingCode).toBe("EXTENSION_REENTRANT_OPERATION");
+  releaseActivation.resolve();
+  await activation;
+  releaseDetachedTimer.resolve();
+  await detachedFinished.promise;
+
+  expect(detachedError).toBeUndefined();
+  expect(host.tools.names).toEqual(["detached-target"]);
+  await host.dispose();
+});
+
+test("internally observes fire-and-forget reentrant rejection Promises", async () => {
+  const unhandled: unknown[] = [];
+  const stopListening = listenForUnhandledRejections((reason) =>
+    unhandled.push(reason),
+  );
+  const host = new ExtensionHost({ resources: await emptyResources() });
+  host.discover([
+    {
+      id: "fire-and-forget",
+      create: () => ({
+        activate(context) {
+          context.onAgentEvent(() => {
+            void host.emit(finishedEvent(80));
+            void host.activate("target");
+            void host.dispose();
+          });
+        },
+      }),
+    },
+    {
+      id: "target",
+      create: () => ({ activate: () => undefined }),
+    },
+  ]);
+
+  try {
+    await host.activate("fire-and-forget");
+    await host.emit(finishedEvent());
+    await nextEventLoopTurn();
+    await nextEventLoopTurn();
+    expect(unhandled).toEqual([]);
+    await host.activate("target");
+  } finally {
+    stopListening();
+    await host.dispose();
+  }
+});
+
 test("rolls back a partial activation in reverse order and can recover", async () => {
   const cleanup: string[] = [];
   const host = new ExtensionHost({
@@ -856,6 +969,21 @@ test("classifies cooperative abort rejection as cancellation and reads signal in
   await expect(activation).rejects.toMatchObject({
     code: "EXTENSION_CANCELLED",
   });
+  await host.dispose();
+});
+
+test("rejects a forged AbortSignal at the typed activation options boundary", async () => {
+  const factory = vi.fn(() => ({ activate: () => undefined }));
+  const host = new ExtensionHost({ resources: await emptyResources() });
+  host.discover([{ id: "forged-signal", create: factory }]);
+  const forged = Object.create(AbortSignal.prototype) as AbortSignal;
+
+  await expect(host.activate("forged-signal", forged)).rejects.toMatchObject({
+    name: "ExtensionError",
+    code: "EXTENSION_INVALID_OPTIONS",
+  });
+  expect(factory).not.toHaveBeenCalled();
+  await host.activate("forged-signal");
   await host.dispose();
 });
 

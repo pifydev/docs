@@ -386,10 +386,26 @@ type StagedContribution = {
   disposers: ExtensionDisposer[];
 };
 
+type CallbackExecutionContext = {
+  readonly hostToken: symbol;
+  active: boolean;
+};
+
+type CallbackInvocation = Readonly<{
+  value: unknown;
+  context: CallbackExecutionContext;
+}>;
+
 type CallbackInvoker = (
   callback: unknown,
   argumentsValue: readonly unknown[],
-) => unknown;
+) => CallbackInvocation;
+
+type CallbackObserver = (
+  invocation: CallbackInvocation,
+  label: string,
+  onSettled?: () => void,
+) => Promise<unknown>;
 
 /**
  * Metadata-only discovery and explicit, serialized Extension activation.
@@ -403,7 +419,7 @@ export class ExtensionHost {
   readonly #active = new Map<string, ActiveExtension>();
   readonly #activationOrder: string[] = [];
   readonly #baseTools: ToolRegistry;
-  readonly #callbackContext = new AsyncLocalStorage<symbol>();
+  readonly #callbackContext = new AsyncLocalStorage<CallbackExecutionContext>();
   readonly #callbackToken = Symbol("ExtensionHost callback context");
   #liveTools: ToolRegistry;
   #tail: Promise<unknown> = NativePromise.resolve();
@@ -530,7 +546,21 @@ export class ExtensionHost {
 
   public activate(id: string, signal?: AbortSignal): Promise<void> {
     if (this.#isReentrant()) {
-      return NativePromise.reject(reentrantOperationError("activate"));
+      return observedRejection(reentrantOperationError("activate"));
+    }
+    let selectedSignal: AbortSignal | undefined;
+    try {
+      selectedSignal = validateActivationSignal(signal);
+    } catch (error) {
+      return observedRejection(
+        error instanceof ExtensionError
+          ? error
+          : extensionFailure(
+              "EXTENSION_INVALID_OPTIONS",
+              "Extension activation signal is invalid",
+              error,
+            ),
+      );
     }
     if (this.#state !== "open") {
       return NativePromise.reject(hostDisposedError());
@@ -551,7 +581,7 @@ export class ExtensionHost {
           `Extension "${extensionId}" is already active`,
         );
       }
-      await this.#activateDefinition(definition, signal);
+      await this.#activateDefinition(definition, selectedSignal);
     });
   }
 
@@ -562,7 +592,7 @@ export class ExtensionHost {
    */
   public emit(event: AgentEvent): Promise<readonly ExtensionHookFailure[]> {
     if (this.#isReentrant()) {
-      return NativePromise.reject(reentrantOperationError("emit"));
+      return observedRejection(reentrantOperationError("emit"));
     }
     if (this.#state !== "open") {
       return NativePromise.reject(hostDisposedError());
@@ -586,9 +616,9 @@ export class ExtensionHost {
       for (let index = 0; index < hooks.length; index += 1) {
         const record = hooks[index];
         try {
-          const returned = this.#invokeCallback(record.hook, [eventSnapshot]);
+          const invocation = this.#invokeCallback(record.hook, [eventSnapshot]);
           await this.#observeCallbackResult(
-            returned,
+            invocation,
             `Extension hook ${record.extensionId}`,
           );
         } catch (error) {
@@ -611,7 +641,7 @@ export class ExtensionHost {
    */
   public dispose(): Promise<void> {
     if (this.#isReentrant()) {
-      return NativePromise.reject(reentrantOperationError("dispose"));
+      return observedRejection(reentrantOperationError("dispose"));
     }
     if (this.#disposePromise !== undefined) return this.#disposePromise;
     this.#state = "disposing";
@@ -638,6 +668,8 @@ export class ExtensionHost {
           active,
           (callback, argumentsValue) =>
             this.#invokeCallback(callback, argumentsValue),
+          (invocation, label, onSettled) =>
+            this.#observeCallbackResult(invocation, label, onSettled),
         );
         for (
           let failureIndex = 0;
@@ -754,6 +786,8 @@ export class ExtensionHost {
         instanceDispose,
         (callback, argumentsValue) =>
           this.#invokeCallback(callback, argumentsValue),
+        (invocation, label, onSettled) =>
+          this.#observeCallbackResult(invocation, label, onSettled),
       );
       this.#statuses.set(definition.id, "failed");
       if (cleanupFailures.length > 0) {
@@ -807,37 +841,58 @@ export class ExtensionHost {
   }
 
   #isReentrant(): boolean {
-    return (
-      reflectApply(asyncLocalStorageGetStore, this.#callbackContext, []) ===
-      this.#callbackToken
-    );
+    const context = reflectApply(
+      asyncLocalStorageGetStore,
+      this.#callbackContext,
+      [],
+    ) as CallbackExecutionContext | undefined;
+    return context?.hostToken === this.#callbackToken && context.active;
   }
 
   #invokeCallback(
     callback: unknown,
     argumentsValue: readonly unknown[],
-  ): unknown {
+  ): CallbackInvocation {
     if (typeof callback !== "function") {
       throw extensionFailure(
         "INVALID_EXTENSION_DEFINITION",
         "Extension callback must be a function",
       );
     }
-    return reflectApply(asyncLocalStorageRun, this.#callbackContext, [
-      this.#callbackToken,
-      () => reflectApply(callback, undefined, argumentsValue),
-    ]);
+    const context = Object.seal({
+      hostToken: this.#callbackToken,
+      active: true,
+    });
+    try {
+      const value = reflectApply(asyncLocalStorageRun, this.#callbackContext, [
+        context,
+        () => reflectApply(callback, undefined, argumentsValue),
+      ]);
+      return Object.freeze({ value, context });
+    } catch (error) {
+      context.active = false;
+      throw error;
+    }
   }
 
   #observeCallbackResult(
-    value: unknown,
+    invocation: CallbackInvocation,
     label: string,
     onSettled?: () => void,
   ): Promise<unknown> {
-    return this.#invokeCallback(
-      () => adoptAsync(value, label, onSettled),
-      [],
-    ) as Promise<unknown>;
+    try {
+      return reflectApply(asyncLocalStorageRun, this.#callbackContext, [
+        invocation.context,
+        () =>
+          adoptAsync(invocation.value, label, () => {
+            invocation.context.active = false;
+            onSettled?.();
+          }),
+      ]) as Promise<unknown>;
+    } catch (error) {
+      invocation.context.active = false;
+      throw error;
+    }
   }
 
   #enqueue<Value>(operation: () => Value | PromiseLike<Value>): Promise<Value> {
@@ -923,26 +978,21 @@ async function cleanupStaged(
   disposers: readonly ExtensionDisposer[],
   instanceDispose: ExtensionDisposer | undefined,
   invoke: CallbackInvoker,
+  observe: CallbackObserver,
 ): Promise<readonly unknown[]> {
   const failures: unknown[] = [];
   for (let index = disposers.length - 1; index >= 0; index -= 1) {
     try {
-      const returned = invoke(disposers[index], []);
-      await (invoke(
-        () => adoptAsync(returned, "Extension rollback disposer"),
-        [],
-      ) as Promise<unknown>);
+      const invocation = invoke(disposers[index], []);
+      await observe(invocation, "Extension rollback disposer");
     } catch (error) {
       failures.push(error);
     }
   }
   if (instanceDispose !== undefined) {
     try {
-      const returned = invoke(instanceDispose, []);
-      await (invoke(
-        () => adoptAsync(returned, "Extension instance disposer"),
-        [],
-      ) as Promise<unknown>);
+      const invocation = invoke(instanceDispose, []);
+      await observe(invocation, "Extension instance disposer");
     } catch (error) {
       failures.push(error);
     }
@@ -953,8 +1003,14 @@ async function cleanupStaged(
 function cleanupExtension(
   active: ActiveExtension,
   invoke: CallbackInvoker,
+  observe: CallbackObserver,
 ): Promise<readonly unknown[]> {
-  return cleanupStaged(active.disposers, active.instanceDispose, invoke);
+  return cleanupStaged(
+    active.disposers,
+    active.instanceDispose,
+    invoke,
+    observe,
+  );
 }
 
 function snapshotExtensionDefinition(
@@ -1136,6 +1192,18 @@ function normalizeResourcePath(value: string): string {
       normalized.pop();
       continue;
     }
+    if (segment.endsWith(".") || segment.endsWith(" ")) {
+      throw resourceFailure(
+        "RESOURCE_OUTSIDE_TRUSTED_ROOTS",
+        `Resource path segment "${segment}" has a non-portable trailing character`,
+      );
+    }
+    if (isWindowsReservedBasename(segment)) {
+      throw resourceFailure(
+        "RESOURCE_OUTSIDE_TRUSTED_ROOTS",
+        `Resource path segment "${segment}" is reserved on Windows`,
+      );
+    }
     normalized.push(segment);
   }
   if (normalized.length === 0) {
@@ -1145,6 +1213,12 @@ function normalizeResourcePath(value: string): string {
     );
   }
   return normalized.join(sep);
+}
+
+function isWindowsReservedBasename(segment: string): boolean {
+  const dot = segment.indexOf(".");
+  const basename = (dot === -1 ? segment : segment.slice(0, dot)).toUpperCase();
+  return /^(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/.test(basename);
 }
 
 function isWithin(root: string, target: string): boolean {
@@ -1362,6 +1436,28 @@ function requireExtensionId(value: string): string {
   return value;
 }
 
+function validateActivationSignal(
+  value: AbortSignal | undefined,
+): AbortSignal | undefined {
+  if (value === undefined) return undefined;
+  if (!(value instanceof AbortSignal) || nodeIsProxy(value)) {
+    throw extensionFailure(
+      "EXTENSION_INVALID_OPTIONS",
+      "Extension activation signal must be a non-Proxy AbortSignal",
+    );
+  }
+  try {
+    if (readSignalAborted(value)) readSignalReason(value);
+  } catch (error) {
+    throw extensionFailure(
+      "EXTENSION_INVALID_OPTIONS",
+      "Extension activation signal has no valid AbortSignal internal slot",
+      error,
+    );
+  }
+  return value;
+}
+
 function linkAbortSignal(
   external: AbortSignal | undefined,
   controller: AbortController,
@@ -1369,7 +1465,7 @@ function linkAbortSignal(
   if (external === undefined) return () => undefined;
   if (!(external instanceof AbortSignal) || nodeIsProxy(external)) {
     throw extensionFailure(
-      "EXTENSION_CANCELLED",
+      "EXTENSION_INVALID_OPTIONS",
       "Extension activation signal must be a non-Proxy AbortSignal",
     );
   }
@@ -1382,15 +1478,23 @@ function linkAbortSignal(
       reflectApply(abortControllerAbort, controller, []);
     }
   };
-  if (readSignalAborted(external)) {
-    abort();
-    return () => undefined;
+  try {
+    if (readSignalAborted(external)) {
+      abort();
+      return () => undefined;
+    }
+    reflectApply(eventTargetAddEventListener, external, [
+      "abort",
+      abort,
+      { once: true },
+    ]);
+  } catch (error) {
+    throw extensionFailure(
+      "EXTENSION_INVALID_OPTIONS",
+      "Extension activation signal became invalid",
+      error,
+    );
   }
-  reflectApply(eventTargetAddEventListener, external, [
-    "abort",
-    abort,
-    { once: true },
-  ]);
   return () => {
     try {
       reflectApply(eventTargetRemoveEventListener, external, ["abort", abort]);
@@ -1404,11 +1508,23 @@ function throwIfActivationCancelled(
   signal: AbortSignal,
   hostState: "open" | "disposing" | "disposed",
 ): void {
-  if (readSignalAborted(signal) || hostState !== "open") {
+  let aborted: boolean;
+  let reason: unknown;
+  try {
+    aborted = readSignalAborted(signal);
+    reason = aborted ? readSignalReason(signal) : undefined;
+  } catch (error) {
+    throw extensionFailure(
+      "EXTENSION_INVALID_OPTIONS",
+      "Extension activation signal became invalid",
+      error,
+    );
+  }
+  if (aborted || hostState !== "open") {
     throw extensionFailure(
       "EXTENSION_CANCELLED",
       "Extension activation was cancelled",
-      readSignalReason(signal),
+      reason,
     );
   }
 }
@@ -1695,7 +1811,17 @@ function normalizeActivationFailure(
   signal: AbortSignal,
   hostState: "open" | "disposing" | "disposed",
 ): ExtensionError {
-  if (hostState !== "open" || readSignalAborted(signal)) {
+  let cancelled = hostState !== "open";
+  try {
+    cancelled ||= readSignalAborted(signal);
+  } catch (signalError) {
+    return extensionFailure(
+      "EXTENSION_INVALID_OPTIONS",
+      `Extension "${extensionId}" activation signal became invalid`,
+      signalError,
+    );
+  }
+  if (cancelled) {
     if (
       error instanceof ExtensionError &&
       error.code === "EXTENSION_CANCELLED"
@@ -1748,6 +1874,17 @@ function reentrantOperationError(operation: string): ExtensionError {
     "EXTENSION_REENTRANT_OPERATION",
     `Extension callback cannot call ExtensionHost.${operation} reentrantly`,
   );
+}
+
+/** Return a rejected Promise whose source rejection already has an observer. */
+function observedRejection(error: unknown): Promise<never> {
+  const pending = new NativePromise<never>((_resolve, reject) => reject(error));
+  const observation = reflectApply(nativePromiseThen, pending, [
+    undefined,
+    () => undefined,
+  ]);
+  observeNativeContinuation(observation);
+  return pending;
 }
 
 function hostDisposedError(): ExtensionError {
