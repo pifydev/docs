@@ -25,6 +25,9 @@ test("content exposes only directory-based English and Vietnamese locales", asyn
     await readFile(new URL("content/translation-manifest.json", root), "utf8"),
   );
   assert.equal(manifest.pages.length, 43);
+  assert.equal(new Set(manifest.pages.map((page) => page.key)).size, 43);
+  assert.equal(new Set(manifest.pages.map((page) => page.en)).size, 43);
+  assert.equal(new Set(manifest.pages.map((page) => page.vi)).size, 43);
   assert.equal(manifest.pages[0].en, "index.mdx");
   assert.equal(manifest.pages[0].vi, "index.mdx");
   for (const locale of ["en", "vi"]) {
@@ -33,6 +36,13 @@ test("content exposes only directory-based English and Vietnamese locales", asyn
     assert.equal(await exists(`content/${locale}/README.md`), false);
     assert.equal(await exists(`content/${locale}/SUMMARY.md`), false);
     assert.equal(await exists(`content/${locale}/.gitbook.yaml`), false);
+    for (const page of manifest.pages) {
+      assert.equal(
+        await exists(`content/${locale}/${page[locale]}`),
+        true,
+        `content/${locale}/${page[locale]} must exist`,
+      );
+    }
   }
 });
 

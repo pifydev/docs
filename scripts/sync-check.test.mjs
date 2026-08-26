@@ -15,15 +15,13 @@ test("sync-check validates all manifest page pairs", async () => {
       "utf8",
     ),
   );
+  assert.equal(manifest.pages.length, 43);
   const { stdout } = await exec("node", ["scripts/sync-check.mjs"]);
-  assert.match(
-    stdout,
-    new RegExp(`Checked ${manifest.pages.length} EN/VI page pairs`),
-  );
+  assert.match(stdout, /Checked 43 EN\/VI page pairs/);
   assert.match(stdout, /All public translations are in sync/);
 
   const result = await checkSync(new URL("../", import.meta.url));
-  assert.equal(result.count, manifest.pages.length);
+  assert.equal(result.count, 43);
   assert.deepEqual(result.errors, []);
 });
 
