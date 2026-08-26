@@ -93,11 +93,11 @@ function assertNoVercelCredentials(value) {
     /^VERCEL_(?:(?:.*_)?(?:TOKEN|KEY|SECRET|PASSWORD|CREDENTIALS?)(?:_.*)?|ORG_ID|PROJECT_ID|TEAM_ID)$/i;
   const vercelCredentialReference =
     /\bVERCEL_(?:(?:.*_)?(?:TOKEN|KEY|SECRET|PASSWORD|CREDENTIALS?)(?:_.*)?|ORG_ID|PROJECT_ID|TEAM_ID)\b/i;
-  for (const [key, nestedValue] of nestedEntries(value)) {
+  for (const [key] of nestedEntries(value)) {
     assert.doesNotMatch(key, vercelCredentialName);
-    if (typeof nestedValue === "string") {
-      assert.doesNotMatch(nestedValue, vercelCredentialReference);
-    }
+  }
+  for (const nestedValue of nestedStrings(value)) {
+    assert.doesNotMatch(nestedValue, vercelCredentialReference);
   }
 }
 
@@ -107,15 +107,41 @@ function assertNoSecretContexts(value) {
   }
 }
 
+function assertNoVercelVariableContexts(value) {
+  for (const nestedValue of nestedStrings(value)) {
+    assert.doesNotMatch(
+      nestedValue,
+      /\bvars\s*(?:\.\s*VERCEL_[A-Z0-9_]+|\[\s*['"]VERCEL_[A-Z0-9_]+['"]\s*\])/i,
+    );
+  }
+}
+
+function containsVercelInvocation(command) {
+  const boundary = String.raw`(?:^|[\r\n;&|]|\$\()\s*`;
+  const option = String.raw`(?:-{1,2}\S*)`;
+  const executable = String.raw`vercel(?=$|[\s;&|)])`;
+  const launchers = [
+    String.raw`(?:npx|bunx)(?:\s+${option})*`,
+    String.raw`npm(?:\s+${option})*\s+exec(?:\s+${option})*`,
+    String.raw`(?:pnpm|yarn)(?:\s+${option})*\s+dlx(?:\s+${option})*`,
+  ];
+  const invocationPatterns = [
+    new RegExp(`${boundary}${executable}`, "i"),
+    ...launchers.map(
+      (launcher) =>
+        new RegExp(String.raw`${boundary}${launcher}\s+${executable}`, "i"),
+    ),
+  ];
+
+  return invocationPatterns.some((pattern) => pattern.test(command));
+}
+
 function assertNoDeploymentCommand(command) {
   assert.doesNotMatch(
     command,
     /\b(?:npm|pnpm|bun)\s+run\s+deploy\b|\byarn\s+(?:run\s+)?deploy\b|\bvercel\s+(?:deploy\b|--prod\b)|\b(?:wrangler\s+)?pages\s+deploy\b|\bwrangler\s+deploy\b|\b(?:firebase|netlify)\s+deploy\b/i,
   );
-  assert.doesNotMatch(
-    command,
-    /(?:^|[\r\n;&|]|\$\()\s*(?:(?:npx|bunx)\s+|npm\s+exec\s+(?:--\s+)?|(?:pnpm|yarn)\s+dlx\s+)?vercel(?=$|[\s;&|)])/i,
-  );
+  assert.equal(containsVercelInvocation(command), false);
 }
 
 function assertNoDeploymentCapabilities(workflow) {
@@ -138,7 +164,11 @@ function assertNoDeploymentCapabilities(workflow) {
       }
       assertNoVercelCredentials(step.env);
       assertNoVercelCredentials(step.with);
-      if (typeof step.run === "string") assertNoDeploymentCommand(step.run);
+      if (typeof step.run === "string") {
+        assertNoVercelCredentials(step.run);
+        assertNoVercelVariableContexts(step.run);
+        assertNoDeploymentCommand(step.run);
+      }
       for (const input of nestedStrings(step.with)) {
         assertNoDeploymentCommand(input);
       }
@@ -535,10 +565,39 @@ test("deployment guard rejects secret contexts and deploy steps", () => {
     { jobs: { audit: { steps: [{ run: "npm run deploy" }] } } },
     { jobs: { audit: { steps: [{ run: "vercel" }] } } },
     { jobs: { audit: { steps: [{ run: "npx vercel --yes" }] } } },
+    { jobs: { audit: { steps: [{ run: "npx --yes vercel" }] } } },
+    { jobs: { audit: { steps: [{ run: "npx -y vercel" }] } } },
     { jobs: { audit: { steps: [{ run: "npm exec vercel -- --yes" }] } } },
+    { jobs: { audit: { steps: [{ run: "npm exec --yes vercel" }] } } },
+    {
+      jobs: { audit: { steps: [{ run: "npm --silent exec --yes vercel" }] } },
+    },
     { jobs: { audit: { steps: [{ run: "pnpm dlx vercel" }] } } },
+    { jobs: { audit: { steps: [{ run: "pnpm dlx --silent vercel" }] } } },
+    {
+      jobs: {
+        audit: {
+          steps: [{ run: "pnpm --silent dlx --reporter=silent vercel" }],
+        },
+      },
+    },
     { jobs: { audit: { steps: [{ run: "yarn dlx vercel" }] } } },
+    { jobs: { audit: { steps: [{ run: "yarn dlx --quiet vercel" }] } } },
     { jobs: { audit: { steps: [{ run: "bunx vercel" }] } } },
+    { jobs: { audit: { steps: [{ run: "bunx --bun vercel" }] } } },
+    {
+      jobs: {
+        audit: { steps: [{ run: 'echo "${{ vars.VERCEL_PREVIEW_URL }}"' }] },
+      },
+    },
+    {
+      jobs: {
+        audit: {
+          steps: [{ run: "echo \"${{ vars['VERCEL_BUILD_OUTPUT'] }}\"" }],
+        },
+      },
+    },
+    { jobs: { audit: { steps: [{ run: 'echo "$VERCEL_TOKEN"' }] } } },
     {
       jobs: {
         audit: { steps: [{ with: { command: "npx vercel --yes" } }] },
@@ -565,6 +624,14 @@ test("deployment guard rejects secret contexts and deploy steps", () => {
       `accepted forbidden workflow: ${JSON.stringify(workflow)}`,
     );
   }
+
+  assert.doesNotThrow(() =>
+    assertNoDeploymentCapabilities({
+      jobs: {
+        audit: { steps: [{ run: "npm run test:vercel-config" }] },
+      },
+    }),
+  );
 });
 
 test("workflow contract allows additive safe paths and jobs", async () => {
