@@ -340,20 +340,44 @@ test("the repository content satisfies the historical preservation baseline", as
       "utf8",
     ).then(JSON.parse),
   ]);
-  assert.equal(manifest.pages.length, 54);
+  assert.equal(manifest.pages.length, 86);
   const expectedPages = translations.pages.flatMap((page) => [
     { key: page.key, path: `en/${page.en}` },
     { key: page.key, path: `vi/${page.vi}` },
   ]);
+  const legacyExpectedPages = translations.pages
+    .filter((page) => page.group !== "course")
+    .flatMap((page) => [
+      { key: page.key, path: `en/${page.en}` },
+      { key: page.key, path: `vi/${page.vi}` },
+    ]);
+  const courseExpectedPages = translations.pages
+    .filter((page) => page.group === "course")
+    .flatMap((page) => [
+      { key: page.key, path: `en/${page.en}` },
+      { key: page.key, path: `vi/${page.vi}` },
+    ]);
 
   assert.deepEqual(
-    manifest.pages.map(({ key, path }) => ({ key, path })),
-    expectedPages,
+    manifest.pages
+      .slice(0, legacyExpectedPages.length)
+      .map(({ key, path }) => ({
+        key,
+        path,
+      })),
+    legacyExpectedPages,
+    "the 54 historical records must remain first and in their original order",
   );
   assert.deepEqual(
-    preservationManifestCoverageErrors(translations, manifest),
-    [],
+    manifest.pages.slice(legacyExpectedPages.length).map(({ key, path }) => ({
+      key,
+      path,
+    })),
+    courseExpectedPages,
+    "the 32 course records must follow translation-manifest order, EN then VI",
   );
+  assert.equal(translations.pages.length, 43);
+  assert.equal(expectedPages.length, 86);
   for (const page of translations.pages) {
     const entries = manifest.pages.filter((entry) => entry.key === page.key);
     assert.equal(
@@ -367,6 +391,12 @@ test("the repository content satisfies the historical preservation baseline", as
       `${page.key} must have one EN and one VI path in order`,
     );
   }
+
+  assert.deepEqual(
+    new Set(manifest.pages.map(({ path }) => path)),
+    new Set(expectedPages.map(({ path }) => path)),
+    "the preservation manifest must cover every translated public path once",
+  );
 
   const errors = await validatePreservation(
     new URL("../", import.meta.url),

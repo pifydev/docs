@@ -106,9 +106,93 @@ async function readCoursePage(locale, filename) {
   );
 }
 
-function h2Headings(body) {
-  return [...body.matchAll(/^## ([^\r\n]+)\r?$/gm)].map((match) => match[1]);
+function maskFencedContent(body) {
+  let fence = null;
+
+  return body
+    .split(/(?<=\n)/)
+    .map((line) => {
+      const text = line.replace(/\r?\n$/, "");
+      if (fence) {
+        const closing = text.match(/^\s{0,3}([`~]{3,})\s*$/);
+        if (
+          closing &&
+          closing[1][0] === fence.character &&
+          closing[1].length >= fence.length
+        ) {
+          fence = null;
+        }
+        return line.replace(/[^\r\n]/g, " ");
+      }
+
+      const opening = text.match(/^\s{0,3}(`{3,}|~{3,})(.*)$/);
+      if (opening) {
+        fence = {
+          character: opening[1][0],
+          length: opening[1].length,
+        };
+        return line.replace(/[^\r\n]/g, " ");
+      }
+      return line;
+    })
+    .join("");
 }
+
+function h2Headings(body) {
+  return [...maskFencedContent(body).matchAll(/^## ([^\r\n]+)\r?$/gm)].map(
+    (match) => match[1],
+  );
+}
+
+function h2Section(body, heading) {
+  const match = maskFencedContent(body).match(
+    new RegExp(
+      `^## ${escapeRegExp(heading)}\\r?\\n([\\s\\S]*?)(?=^## |\\z)`,
+      "m",
+    ),
+  );
+  return match?.[1] ?? "";
+}
+
+function markdownListItems(body) {
+  return body.match(/^\s{0,3}[-*+]\s+\S.*$/gm) ?? [];
+}
+
+function fencedCommandCount(body, command) {
+  return [...body.matchAll(/^```bash\s*\r?\n([\s\S]*?)^```\s*$/gm)].filter(
+    (match) => match[1].trim() === command,
+  ).length;
+}
+
+test("checkpoint evidence helpers reject fenced and prose lookalikes", () => {
+  const command =
+    "npm run test:course:checkpoint -- course/test/00-complete-agent-trace.test.ts";
+  const lookalikes = `The prose says ${command}, but it is not executable evidence.
+
+\`\`\`markdown
+## Failure experiment
+
+This heading is inside a fence.
+:::note[Course implementation]
+:::info[Pi SDK 0.84.3]
+\`\`\`
+
+\`\`\`bash
+${command} --extra
+\`\`\`
+`;
+
+  assert.equal(h2Section(lookalikes, "Failure experiment"), "");
+  assert.equal(fencedCommandCount(lookalikes, command), 0);
+  assert.doesNotMatch(
+    maskFencedContent(lookalikes),
+    /^:::note\[Course implementation\]\s*$/m,
+  );
+  assert.doesNotMatch(
+    maskFencedContent(lookalikes),
+    /^:::info\[Pi SDK 0\.84\.3\]\s*$/m,
+  );
+});
 
 function fenceLanguages(body) {
   return [...body.matchAll(/^```([^\s`]*)/gm)].map((match) => match[1]);
@@ -420,6 +504,7 @@ test("every checkpoint satisfies the shared content contract", async () => {
 
       const source = await readCoursePage(locale, `${checkpoint.slug}.md`);
       const body = matter(source).content;
+      const visibleBody = maskFencedContent(body);
       const command = `npm run test:course:checkpoint -- ${checkpoint.test}`;
 
       try {
@@ -443,15 +528,30 @@ test("every checkpoint satisfies the shared content contract", async () => {
           new RegExp(`(?:^|\\n)${escapeRegExp(command)}(?:\\r?$|\\n)`),
           `${relativePath}: exact focused command`,
         );
-        assert.match(
-          body,
-          /Course implementation/,
-          `${relativePath}: Course implementation label`,
+        assert.equal(
+          fencedCommandCount(body, command),
+          1,
+          `${relativePath}: one exact focused command in a bash fence`,
+        );
+        const failureSection = h2Section(body, headingContracts[locale][6]);
+        assert.ok(
+          (failureSection.match(/[\p{L}\p{N}]+/gu) ?? []).length >= 20,
+          `${relativePath}: substantive failure experiment`,
+        );
+        const acceptanceSection = h2Section(body, headingContracts[locale][7]);
+        assert.ok(
+          markdownListItems(acceptanceSection).length >= 1,
+          `${relativePath}: acceptance checklist`,
         );
         assert.match(
-          body,
-          /Pi SDK 0\.84\.3/,
-          `${relativePath}: Pi SDK 0.84.3 label`,
+          visibleBody,
+          /^:::note\[Course implementation\]\s*$/m,
+          `${relativePath}: exact Course implementation callout label`,
+        );
+        assert.match(
+          visibleBody,
+          /^:::info\[Pi SDK 0\.84\.3\]\s*$/m,
+          `${relativePath}: exact Pi SDK 0.84.3 callout label`,
         );
         assertNoPerPageAttribution(source, relativePath);
       } catch (error) {

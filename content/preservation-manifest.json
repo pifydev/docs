@@ -810,6 +810,486 @@
       "minimumMermaidBlocks": 0,
       "minimumTables": 0,
       "approvedDeletions": []
+    },
+    {
+      "key": "course-overview",
+      "path": "en/course/index.mdx",
+      "baselineWords": 1452,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 8,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 3,
+      "minimumMermaidBlocks": 1,
+      "minimumTables": 1,
+      "approvedDeletions": []
+    },
+    {
+      "key": "course-overview",
+      "path": "vi/course/index.mdx",
+      "baselineWords": 1872,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 8,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 3,
+      "minimumMermaidBlocks": 1,
+      "minimumTables": 1,
+      "approvedDeletions": []
+    },
+    {
+      "key": "course-00-complete-agent-trace",
+      "path": "en/course/00-complete-agent-trace.md",
+      "baselineWords": 1136,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 10,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 4,
+      "minimumMermaidBlocks": 1,
+      "minimumTables": 2,
+      "approvedDeletions": []
+    },
+    {
+      "key": "course-00-complete-agent-trace",
+      "path": "vi/course/00-complete-agent-trace.md",
+      "baselineWords": 1319,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 10,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 4,
+      "minimumMermaidBlocks": 1,
+      "minimumTables": 2,
+      "approvedDeletions": []
+    },
+    {
+      "key": "course-01-typescript-protocols",
+      "path": "en/course/01-typescript-protocols.md",
+      "baselineWords": 1116,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 10,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 6,
+      "minimumMermaidBlocks": 1,
+      "minimumTables": 2,
+      "approvedDeletions": []
+    },
+    {
+      "key": "course-01-typescript-protocols",
+      "path": "vi/course/01-typescript-protocols.md",
+      "baselineWords": 1277,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 10,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 6,
+      "minimumMermaidBlocks": 1,
+      "minimumTables": 2,
+      "approvedDeletions": []
+    },
+    {
+      "key": "course-02-event-stream",
+      "path": "en/course/02-event-stream.md",
+      "baselineWords": 1161,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 10,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 4,
+      "minimumMermaidBlocks": 1,
+      "minimumTables": 2,
+      "approvedDeletions": []
+    },
+    {
+      "key": "course-02-event-stream",
+      "path": "vi/course/02-event-stream.md",
+      "baselineWords": 1318,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 10,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 4,
+      "minimumMermaidBlocks": 1,
+      "minimumTables": 2,
+      "approvedDeletions": []
+    },
+    {
+      "key": "course-03-message-ir",
+      "path": "en/course/03-message-ir.md",
+      "baselineWords": 1215,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 10,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 4,
+      "minimumMermaidBlocks": 1,
+      "minimumTables": 2,
+      "approvedDeletions": []
+    },
+    {
+      "key": "course-03-message-ir",
+      "path": "vi/course/03-message-ir.md",
+      "baselineWords": 1389,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 10,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 4,
+      "minimumMermaidBlocks": 1,
+      "minimumTables": 2,
+      "approvedDeletions": []
+    },
+    {
+      "key": "course-04-deterministic-model",
+      "path": "en/course/04-deterministic-model.md",
+      "baselineWords": 1241,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 10,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 4,
+      "minimumMermaidBlocks": 1,
+      "minimumTables": 2,
+      "approvedDeletions": []
+    },
+    {
+      "key": "course-04-deterministic-model",
+      "path": "vi/course/04-deterministic-model.md",
+      "baselineWords": 1808,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 10,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 4,
+      "minimumMermaidBlocks": 1,
+      "minimumTables": 2,
+      "approvedDeletions": []
+    },
+    {
+      "key": "course-05-provider-adapter",
+      "path": "en/course/05-provider-adapter.md",
+      "baselineWords": 1316,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 10,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 4,
+      "minimumMermaidBlocks": 1,
+      "minimumTables": 2,
+      "approvedDeletions": []
+    },
+    {
+      "key": "course-05-provider-adapter",
+      "path": "vi/course/05-provider-adapter.md",
+      "baselineWords": 1930,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 10,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 4,
+      "minimumMermaidBlocks": 1,
+      "minimumTables": 2,
+      "approvedDeletions": []
+    },
+    {
+      "key": "course-06-tool-contract",
+      "path": "en/course/06-tool-contract.md",
+      "baselineWords": 1383,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 10,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 3,
+      "minimumMermaidBlocks": 1,
+      "minimumTables": 2,
+      "approvedDeletions": []
+    },
+    {
+      "key": "course-06-tool-contract",
+      "path": "vi/course/06-tool-contract.md",
+      "baselineWords": 2087,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 10,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 3,
+      "minimumMermaidBlocks": 1,
+      "minimumTables": 2,
+      "approvedDeletions": []
+    },
+    {
+      "key": "course-07-agent-loop",
+      "path": "en/course/07-agent-loop.md",
+      "baselineWords": 1390,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 10,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 4,
+      "minimumMermaidBlocks": 1,
+      "minimumTables": 2,
+      "approvedDeletions": []
+    },
+    {
+      "key": "course-07-agent-loop",
+      "path": "vi/course/07-agent-loop.md",
+      "baselineWords": 2013,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 10,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 4,
+      "minimumMermaidBlocks": 1,
+      "minimumTables": 2,
+      "approvedDeletions": []
+    },
+    {
+      "key": "course-08-coding-tools",
+      "path": "en/course/08-coding-tools.md",
+      "baselineWords": 1249,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 10,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 4,
+      "minimumMermaidBlocks": 1,
+      "minimumTables": 2,
+      "approvedDeletions": []
+    },
+    {
+      "key": "course-08-coding-tools",
+      "path": "vi/course/08-coding-tools.md",
+      "baselineWords": 1846,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 10,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 4,
+      "minimumMermaidBlocks": 1,
+      "minimumTables": 2,
+      "approvedDeletions": []
+    },
+    {
+      "key": "course-09-stateful-agent",
+      "path": "en/course/09-stateful-agent.md",
+      "baselineWords": 1142,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 10,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 4,
+      "minimumMermaidBlocks": 1,
+      "minimumTables": 2,
+      "approvedDeletions": []
+    },
+    {
+      "key": "course-09-stateful-agent",
+      "path": "vi/course/09-stateful-agent.md",
+      "baselineWords": 1735,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 10,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 4,
+      "minimumMermaidBlocks": 1,
+      "minimumTables": 2,
+      "approvedDeletions": []
+    },
+    {
+      "key": "course-10-session-tree",
+      "path": "en/course/10-session-tree.md",
+      "baselineWords": 1208,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 10,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 4,
+      "minimumMermaidBlocks": 1,
+      "minimumTables": 2,
+      "approvedDeletions": []
+    },
+    {
+      "key": "course-10-session-tree",
+      "path": "vi/course/10-session-tree.md",
+      "baselineWords": 1781,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 10,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 4,
+      "minimumMermaidBlocks": 1,
+      "minimumTables": 2,
+      "approvedDeletions": []
+    },
+    {
+      "key": "course-11-context-compaction",
+      "path": "en/course/11-context-compaction.md",
+      "baselineWords": 1139,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 10,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 4,
+      "minimumMermaidBlocks": 1,
+      "minimumTables": 2,
+      "approvedDeletions": []
+    },
+    {
+      "key": "course-11-context-compaction",
+      "path": "vi/course/11-context-compaction.md",
+      "baselineWords": 1738,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 10,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 4,
+      "minimumMermaidBlocks": 1,
+      "minimumTables": 2,
+      "approvedDeletions": []
+    },
+    {
+      "key": "course-12-resources-extensions",
+      "path": "en/course/12-resources-extensions.md",
+      "baselineWords": 1145,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 10,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 5,
+      "minimumMermaidBlocks": 1,
+      "minimumTables": 2,
+      "approvedDeletions": []
+    },
+    {
+      "key": "course-12-resources-extensions",
+      "path": "vi/course/12-resources-extensions.md",
+      "baselineWords": 1435,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 10,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 5,
+      "minimumMermaidBlocks": 1,
+      "minimumTables": 2,
+      "approvedDeletions": []
+    },
+    {
+      "key": "course-13-runtime-composition",
+      "path": "en/course/13-runtime-composition.md",
+      "baselineWords": 1210,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 10,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 5,
+      "minimumMermaidBlocks": 1,
+      "minimumTables": 2,
+      "approvedDeletions": []
+    },
+    {
+      "key": "course-13-runtime-composition",
+      "path": "vi/course/13-runtime-composition.md",
+      "baselineWords": 1371,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 10,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 5,
+      "minimumMermaidBlocks": 1,
+      "minimumTables": 2,
+      "approvedDeletions": []
+    },
+    {
+      "key": "course-14-agent-evaluation",
+      "path": "en/course/14-agent-evaluation.md",
+      "baselineWords": 1574,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 10,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 4,
+      "minimumMermaidBlocks": 1,
+      "minimumTables": 2,
+      "approvedDeletions": []
+    },
+    {
+      "key": "course-14-agent-evaluation",
+      "path": "vi/course/14-agent-evaluation.md",
+      "baselineWords": 1791,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": {
+        "2": 10,
+        "3": 0,
+        "4": 0
+      },
+      "minimumCodeFences": 4,
+      "minimumMermaidBlocks": 1,
+      "minimumTables": 2,
+      "approvedDeletions": []
     }
   ]
 }
