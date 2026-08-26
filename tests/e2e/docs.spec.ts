@@ -2,6 +2,24 @@ import { expect, test } from "@playwright/test";
 
 const publicDocsOrigin = "https://docs.pify.dev";
 const publicDocsHostname = new URL(publicDocsOrigin).hostname;
+const vietnameseCoursePaths = [
+  "/vi/course",
+  "/vi/course/00-complete-agent-trace",
+  "/vi/course/01-typescript-protocols",
+  "/vi/course/02-event-stream",
+  "/vi/course/03-message-ir",
+  "/vi/course/04-deterministic-model",
+  "/vi/course/05-provider-adapter",
+  "/vi/course/06-tool-contract",
+  "/vi/course/07-agent-loop",
+  "/vi/course/08-coding-tools",
+  "/vi/course/09-stateful-agent",
+  "/vi/course/10-session-tree",
+  "/vi/course/11-context-compaction",
+  "/vi/course/12-resources-extensions",
+  "/vi/course/13-runtime-composition",
+  "/vi/course/14-agent-evaluation",
+] as const;
 
 function safelyDecodePathname(pathname: string): string {
   try {
@@ -258,6 +276,133 @@ test("switches the current page and keeps search results locale-scoped", async (
   ]);
 });
 
+test("switches the current course checkpoint to the same page in Vietnamese", async ({
+  page,
+}) => {
+  await page.goto("/en/course/10-session-tree");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+    "Checkpoint 10: Persist a Session Tree",
+  );
+
+  await page.getByRole("button", { name: "Choose a language" }).click();
+  await page.getByRole("button", { name: "Tiếng Việt", exact: true }).click();
+
+  await expect(page).toHaveURL(/\/vi\/course\/10-session-tree$/);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+    "Checkpoint 10: Lưu cây phiên làm việc",
+  );
+});
+
+test("keeps the complete localized course journey usable in the mobile drawer", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/vi/ch11-testing-evaluation");
+
+  const openNavigation = page
+    .getByRole("button", { name: "Mở thanh điều hướng" })
+    .first();
+  await openNavigation.click();
+
+  const drawer = page.getByRole("complementary");
+  const closeNavigation = drawer.getByRole("button", {
+    name: "Đóng thanh điều hướng",
+  });
+  await expect(closeNavigation).toBeVisible();
+  const chapter11 = drawer.locator('a[href="/vi/ch11-testing-evaluation"]');
+  const courseGroup = drawer.getByRole("button", {
+    name: "Tự xây Pi-style Agent",
+    exact: true,
+  });
+  const helpGroup = drawer.getByRole("button", {
+    name: "Hỗ trợ",
+    exact: true,
+  });
+  await expect(courseGroup).toHaveCount(1);
+  const [chapter11Box, courseGroupBox, helpGroupBox] = await Promise.all([
+    chapter11.boundingBox(),
+    courseGroup.boundingBox(),
+    helpGroup.boundingBox(),
+  ]);
+  expect(chapter11Box).not.toBeNull();
+  expect(courseGroupBox).not.toBeNull();
+  expect(helpGroupBox).not.toBeNull();
+  expect(chapter11Box!.y).toBeLessThan(courseGroupBox!.y);
+  expect(courseGroupBox!.y).toBeLessThan(helpGroupBox!.y);
+
+  if ((await courseGroup.getAttribute("aria-expanded")) !== "true") {
+    await courseGroup.click();
+  }
+  await expect(courseGroup).toHaveAttribute("aria-expanded", "true");
+
+  const courseOverview = drawer.locator('a[href="/vi/course"]');
+  const courseSubtree = courseOverview.locator(
+    "xpath=ancestor::*[.//a[@href='/vi/course/14-agent-evaluation']][1]",
+  );
+  await expect(courseOverview).toHaveAccessibleName("Tự xây Pi-style Agent");
+  await expect(courseSubtree).toHaveCount(1);
+  for (const path of vietnameseCoursePaths) {
+    await expect(courseSubtree.locator(`a[href="${path}"]`), path).toHaveCount(
+      1,
+    );
+  }
+  await expect(courseSubtree.locator('a[href="/vi/help"]')).toHaveCount(0);
+
+  const checkpoint00 = courseSubtree.locator(
+    'a[href="/vi/course/00-complete-agent-trace"]',
+  );
+  await courseOverview.focus();
+  await page.keyboard.press("Tab");
+  await expect(checkpoint00).toBeFocused();
+  const focusedLinkStyle = await checkpoint00.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      outlineStyle: style.outlineStyle,
+      outlineWidth: style.outlineWidth,
+    };
+  });
+  expect(focusedLinkStyle.outlineStyle).not.toBe("none");
+  expect(
+    Number.parseFloat(focusedLinkStyle.outlineWidth),
+  ).toBeGreaterThanOrEqual(2);
+
+  const overflow = await page.evaluate(
+    () =>
+      document.documentElement.scrollWidth -
+      document.documentElement.clientWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(1);
+
+  await page.keyboard.press("Escape");
+  await expect(closeNavigation).toBeHidden();
+  await expect(openNavigation).toBeFocused();
+  await expect(openNavigation).toMatchAriaSnapshot(
+    `- button "Mở thanh điều hướng"`,
+  );
+  const restoredFocusStyle = await openNavigation.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      outlineStyle: style.outlineStyle,
+      outlineWidth: style.outlineWidth,
+    };
+  });
+  expect(restoredFocusStyle.outlineStyle).not.toBe("none");
+  expect(
+    Number.parseFloat(restoredFocusStyle.outlineWidth),
+  ).toBeGreaterThanOrEqual(2);
+
+  await openNavigation.press("Enter");
+  const checkpoint14 = page.locator(
+    '#nd-sidebar-mobile a[href="/vi/course/14-agent-evaluation"]',
+  );
+  await checkpoint14.click();
+  await expect(page).toHaveURL(/\/vi\/course\/14-agent-evaluation$/);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+    "Checkpoint 14: Đánh giá Agent có thể tái lập",
+  );
+  await expect(closeNavigation).toBeHidden();
+});
+
 test("renders docs primitives, theme controls, and a usable mobile drawer", async ({
   page,
 }) => {
@@ -302,7 +447,9 @@ test("renders docs primitives, theme controls, and a usable mobile drawer", asyn
   ).toBeVisible();
   await expect(page.getByText("Kết quả", { exact: true })).toBeVisible();
   await expect(page.locator(".pify-docs-body")).not.toContainText(":::tip");
-  const mobileNav = page.getByRole("button", { name: "Mở thanh điều hướng" });
+  const mobileNav = page
+    .getByRole("button", { name: "Mở thanh điều hướng" })
+    .first();
   await expect(mobileNav).toBeVisible();
 
   const navBox = await mobileNav.boundingBox();
@@ -325,19 +472,16 @@ test("renders docs primitives, theme controls, and a usable mobile drawer", asyn
   expect(overflow).toBeLessThanOrEqual(1);
 
   await page.keyboard.press("Escape");
-  await page.keyboard.press("Tab");
-  const focusStyle = await page.locator(":focus").evaluate((element) => {
+  await expect(mobileNav).toBeFocused();
+  const focusStyle = await mobileNav.evaluate((element) => {
     const style = getComputedStyle(element);
     return {
-      tag: element.tagName,
-      outline: style.outlineStyle,
-      shadow: style.boxShadow,
+      outlineStyle: style.outlineStyle,
+      outlineWidth: style.outlineWidth,
     };
   });
-  expect(focusStyle.tag).not.toBe("BODY");
-  expect(focusStyle.outline !== "none" || focusStyle.shadow !== "none").toBe(
-    true,
-  );
+  expect(focusStyle.outlineStyle).not.toBe("none");
+  expect(Number.parseFloat(focusStyle.outlineWidth)).toBeGreaterThanOrEqual(2);
 });
 
 test("keeps course syntax highlighting and Mermaid rendering across themes", async ({
