@@ -48,6 +48,10 @@ describe("locale routing", () => {
 
   it("maps source paths to stable locale-prefixed URLs", () => {
     expect(toPublicPath("en", "index.mdx")).toBe("/en");
+    expect(toPublicPath("en", "course/index.mdx")).toBe("/en/course");
+    expect(toPublicPath("vi", "course/07-agent-loop.md")).toBe(
+      "/vi/course/07-agent-loop",
+    );
     expect(toPublicPath("vi", "how-to/add-custom-tool.md")).toBe(
       "/vi/how-to/add-custom-tool",
     );
@@ -67,6 +71,13 @@ describe("locale routing", () => {
     expect(
       resolveContentHref("en", "reference/api.md", "configuration.md#models"),
     ).toBe("/en/reference/configuration#models");
+    expect(
+      resolveContentHref(
+        "vi",
+        "course/06-tool-contract.md",
+        "./07-agent-loop.md#run-the-loop",
+      ),
+    ).toBe("/vi/course/07-agent-loop#run-the-loop");
   });
 
   it("leaves external, fragment, and clean route links unchanged", () => {
@@ -92,6 +103,23 @@ describe("locale routing", () => {
     expect(switchLocale("/vi/how-to/add-custom-tool", "en")).toBe(
       "/en/how-to/add-custom-tool",
     );
+    expect(switchLocale("/en/course/14-agent-evaluation", "vi")).toBe(
+      "/vi/course/14-agent-evaluation",
+    );
     expect(switchLocale("/en/not-in-the-manifest", "vi")).toBe("/vi");
+    expect(switchLocale("/en/course/not-in-the-manifest", "vi")).toBe("/vi");
+    expect(switchLocale("/course/not-in-the-manifest", "en")).toBe("/en");
+  });
+
+  it("maps legacy nested course Markdown URLs to clean routes", () => {
+    expect(cleanLegacyMarkdownPath("/course/07-agent-loop.md", "en")).toBe(
+      "/en/course/07-agent-loop",
+    );
+    expect(cleanLegacyMarkdownPath("/en/course/index.mdx", "vi")).toBe(
+      "/en/course",
+    );
+    expect(
+      cleanLegacyMarkdownPath("/vi/course/14-agent-evaluation.md", "en"),
+    ).toBe("/vi/course/14-agent-evaluation");
   });
 });

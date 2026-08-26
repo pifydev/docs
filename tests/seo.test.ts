@@ -11,10 +11,14 @@ describe("public documentation SEO", () => {
   it("publishes exactly one English and Vietnamese URL per source page", () => {
     const paths = buildPublicPagePaths();
 
-    expect(paths).toHaveLength(54);
-    expect(new Set(paths).size).toBe(54);
-    expect(paths.filter((path) => path.startsWith("/en"))).toHaveLength(27);
-    expect(paths.filter((path) => path.startsWith("/vi"))).toHaveLength(27);
+    expect(paths).toHaveLength(86);
+    expect(new Set(paths).size).toBe(86);
+    expect(paths.filter((path) => path.startsWith("/en"))).toHaveLength(43);
+    expect(paths.filter((path) => path.startsWith("/vi"))).toHaveLength(43);
+    expect(paths.filter((path) => path === "/en/course")).toHaveLength(1);
+    expect(
+      paths.filter((path) => path === "/vi/course/14-agent-evaluation"),
+    ).toHaveLength(1);
     expect(paths.some((path) => path.startsWith("/zh"))).toBe(false);
   });
 
@@ -24,6 +28,11 @@ describe("public documentation SEO", () => {
       vi: `${SITE_ORIGIN}/vi/ch03-agent-loop`,
       "x-default": `${SITE_ORIGIN}/en/ch03-agent-loop`,
     });
+    expect(buildLanguageAlternates("/en/course")).toEqual({
+      en: `${SITE_ORIGIN}/en/course`,
+      vi: `${SITE_ORIGIN}/vi/course`,
+      "x-default": `${SITE_ORIGIN}/en/course`,
+    });
   });
 
   it("adds paired alternates to every sitemap entry", () => {
@@ -31,11 +40,18 @@ describe("public documentation SEO", () => {
     const quickstart = sitemap.find(
       (entry) => entry.url === `${SITE_ORIGIN}/en/quickstart`,
     );
+    const finalCheckpoint = sitemap.find(
+      (entry) => entry.url === `${SITE_ORIGIN}/vi/course/14-agent-evaluation`,
+    );
 
-    expect(sitemap).toHaveLength(54);
+    expect(sitemap).toHaveLength(86);
     expect(quickstart?.alternates?.languages).toEqual({
       en: `${SITE_ORIGIN}/en/quickstart`,
       vi: `${SITE_ORIGIN}/vi/quickstart`,
+    });
+    expect(finalCheckpoint?.alternates?.languages).toEqual({
+      en: `${SITE_ORIGIN}/en/course/14-agent-evaluation`,
+      vi: `${SITE_ORIGIN}/vi/course/14-agent-evaluation`,
     });
     expect(sitemap.some((entry) => entry.url.includes("gitbook"))).toBe(false);
     expect(sitemap.some((entry) => entry.url.includes("/zh"))).toBe(false);

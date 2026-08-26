@@ -71,7 +71,9 @@ export function cleanLegacyMarkdownPath(
 export function toPublicPath(locale: Locale, sourcePath: string): string {
   const normalized = sourcePath.replaceAll("\\", "/").replace(/^\/+/, "");
   const withoutExtension = normalized.replace(/\.(?:md|mdx)$/i, "");
-  const slug = withoutExtension === "index" ? "" : withoutExtension;
+  const segments = withoutExtension.split("/").filter(Boolean);
+  if (segments.at(-1) === "index") segments.pop();
+  const slug = segments.join("/");
   return slug ? `/${locale}/${slug}` : `/${locale}`;
 }
 

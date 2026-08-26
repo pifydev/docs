@@ -282,6 +282,9 @@ test("redirects legacy Markdown URLs to clean localized routes", async ({
     ["/quickstart.md", "/en/quickstart"],
     ["/en/how-to/add-custom-tool.md", "/en/how-to/add-custom-tool"],
     ["/vi/reference/api.mdx", "/vi/reference/api"],
+    ["/course/07-agent-loop.md", "/en/course/07-agent-loop"],
+    ["/en/course/index.mdx", "/en/course"],
+    ["/vi/course/14-agent-evaluation.md", "/vi/course/14-agent-evaluation"],
   ] as const;
 
   for (const [legacyPath, cleanPath] of cases) {
