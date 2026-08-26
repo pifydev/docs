@@ -273,6 +273,24 @@ test("README and bilingual changelog describe the complete SDK and course releas
     readme,
     /`npm run test:course:checkpoint -- course\/test\/04-deterministic-model\.test\.ts`/,
   );
+  const completeGate = readme.match(
+    /Run the complete local gate:\s*```bash\s*([\s\S]*?)```/,
+  )?.[1];
+  assert.equal(
+    completeGate?.trim(),
+    [
+      "npm run quality:content",
+      "npm run typecheck",
+      "npm run build",
+      "npm run format:check",
+      "npm run test:e2e",
+      "git diff --check",
+    ].join("\n"),
+  );
+  assert.match(
+    readme,
+    /^\| `npm run quality:content`[^\r\n]*release[^\r\n]*eval[^\r\n]*lint[^\r\n]*\|$/im,
+  );
 
   const researchReference =
     "- Pedagogical research reference: [hahhforest/pi-textbook](https://github.com/hahhforest/pi-textbook), consulted at commit `20dd3a7d791c2470a87c5172aa0729c3963a6b18`.";

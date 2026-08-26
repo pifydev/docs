@@ -118,37 +118,36 @@ frontmatter schema, translation style, and review checklist.
 
 ## Validation
 
-Run the complete local gate:
-
-```bash
-npm run test:content
-npm run test:unit
-npm run test:course
-npm run lint
-npm run typecheck
-npm run build
-npm run format:check
-```
-
-The main commands are:
-
-| Command                                                                        | Purpose                                                                 |
-| ------------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
-| `npm run test:content`                                                         | Validate locale pairs, frontmatter, CI config, and migration invariants |
-| `npm run test:unit`                                                            | Test routes, locale behavior, and SEO helpers                           |
-| `npm run test:course`                                                          | Run all 15 offline workshop checkpoints                                 |
-| `npm run test:course:checkpoint -- course/test/04-deterministic-model.test.ts` | Run one workshop checkpoint                                             |
-| `npm run lint`                                                                 | Run synchronization, content, Mermaid, and application linting          |
-| `npm run typecheck`                                                            | Generate Next.js route types and run TypeScript                         |
-| `npm run build`                                                                | Create the optimized production build                                   |
-| `npm run format:check`                                                         | Check maintained files with Prettier                                    |
-
 Browser journeys require Chromium once:
 
 ```bash
 npx playwright install chromium
-npm run test:e2e
 ```
+
+Run the complete local gate:
+
+```bash
+npm run quality:content
+npm run typecheck
+npm run build
+npm run format:check
+npm run test:e2e
+git diff --check
+```
+
+The main commands are:
+
+| Command                                                                        | Purpose                                                                           |
+| ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| `npm run quality:content`                                                      | Run content, preservation, editorial, unit, course, release, eval, and lint gates |
+| `npm run test:content`                                                         | Validate locale pairs, frontmatter, CI config, and migration invariants           |
+| `npm run test:unit`                                                            | Test routes, locale behavior, and SEO helpers                                     |
+| `npm run test:course`                                                          | Run all 15 offline workshop checkpoints                                           |
+| `npm run test:course:checkpoint -- course/test/04-deterministic-model.test.ts` | Run one workshop checkpoint                                                       |
+| `npm run lint`                                                                 | Run synchronization, content, Mermaid, and application linting                    |
+| `npm run typecheck`                                                            | Generate Next.js route types and run TypeScript                                   |
+| `npm run build`                                                                | Create the optimized production build                                             |
+| `npm run format:check`                                                         | Check maintained files with Prettier                                              |
 
 ## Deployment
 
