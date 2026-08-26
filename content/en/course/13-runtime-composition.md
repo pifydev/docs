@@ -156,37 +156,47 @@ The file proves construction order, immutable ownership, Session resume, ordered
 
 ## Failure experiment
 
-Make only the replacement Session factory throw. This is the exact fail-closed experiment from `course/test/13-runtime-composition.test.ts`:
+Make only the replacement Session factory throw. Add this complete focused case to `course/test/13-runtime-composition.test.ts`; the file's `workspace()` helper registers both temporary roots for `afterEach` cleanup, while `finally` always disposes the manager-owned runtime:
 
 ```ts
-const factories: CourseRuntimeFactoryOverrides = {
-  createSession: async (input, fallback) => {
-    if (input.workspace.root === resolve(second)) {
-      throw new Error("candidate session failed");
-    }
-    return fallback(input);
-  },
-};
-const model = new ScriptedModel([scriptedResponse("old-live", "Still live")]);
-const manager = await createCourseRuntimeManager(
-  runtimeOptions(first, model, { factories }),
-);
-const old = manager.current;
+test("keeps the old runtime live when replacement construction fails", async () => {
+  const first = await workspace("closed-first-experiment");
+  const second = await workspace("closed-second-experiment");
+  const factories: CourseRuntimeFactoryOverrides = {
+    createSession: async (input, fallback) => {
+      if (input.workspace.root === resolve(second)) {
+        throw new Error("candidate session failed");
+      }
+      return fallback(input);
+    },
+  };
+  const model = new ScriptedModel([
+    scriptedResponse("old-live", "Still live"),
+  ]);
+  const manager = await createCourseRuntimeManager(
+    runtimeOptions(first, model, { factories }),
+  );
+  const old = manager.current;
 
-await expect(
-  manager.replace({
-    cwd: second,
-    session: { path: "course-session.jsonl", mode: "create" },
-  }),
-).rejects.toMatchObject({
-  name: "CourseRuntimeError",
-  code: "RUNTIME_CONSTRUCTION_FAILED",
+  try {
+    await expect(
+      manager.replace({
+        cwd: second,
+        session: { path: "course-session.jsonl", mode: "create" },
+      }),
+    ).rejects.toMatchObject({
+      name: "CourseRuntimeError",
+      code: "RUNTIME_CONSTRUCTION_FAILED",
+    });
+    expect(manager.current).toBe(old);
+
+    await drain(old.agent.prompt("Are you there?"));
+    await old.flush();
+    expect(old.session.activeMessages).toEqual(old.agent.messages);
+  } finally {
+    await manager.dispose();
+  }
 });
-expect(manager.current).toBe(old);
-
-await drain(old.agent.prompt("Are you there?"));
-await old.flush();
-expect(old.session.activeMessages).toEqual(old.agent.messages);
 ```
 
 Run the focused command again. The replacement must reject, candidate-owned values must roll back, and the old Agent must still persist a new prompt. Publishing the candidate before its Session factory settles, disposing the old graph first, or leaving a partial Session file all fail this checkpoint.

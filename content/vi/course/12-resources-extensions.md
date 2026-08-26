@@ -42,17 +42,17 @@ Focused test chỉ dùng directory tạm được tạo bằng `mkdtemp()`. Test
 
 ## Cơ chế
 
-`ResourceLoader.create()` yêu cầu ít nhất một root có ID ổn định và duy nhất. Hàm resolve từng directory được cấu hình, ghi canonical directory cùng filesystem identity rồi giữ nguyên thứ tự input. `loadText()` tìm trong root đứng trước trước, vì vậy Resource của workspace có thể chủ đích che một bundled fallback. Path không tồn tại sẽ chuyển sang root tiếp theo và cuối cùng trả `undefined`.
+`ResourceLoader.create()` yêu cầu ít nhất một root có ID ổn định và duy nhất. Hàm resolve từng directory được cấu hình, ghi canonical directory cùng filesystem identity rồi giữ nguyên thứ tự input. `loadText()` duyệt các root theo thứ tự khai báo; root xuất hiện sớm hơn có độ ưu tiên cao hơn, vì vậy Resource của workspace có thể chủ đích che một bundled fallback. Path không tồn tại sẽ chuyển sang root tiếp theo và cuối cùng trả `undefined`.
 
 Mỗi lần đọc đều kiểm tra confinement theo cả lexical path lẫn canonical path. Absolute path, traversal ra ngoài root, escape qua symlink hoặc junction, Windows device name, dạng alternate data stream và root bị thay sau lần ghi identity đầu tiên đều bị từ chối theo fail-closed. Loader mở regular file ở chế độ chỉ đọc, kiểm tra identity quanh lần đọc, nhận tối đa `MAX_RESOURCE_TEXT_BYTES` (`1,048,576` byte đã encode) và decode UTF-8 ở chế độ fatal. Boundary này thu hẹp phạm vi file; nó không biến code Extension tùy ý thành process sandbox.
 
 `ExtensionHost.discover()` chụp một definition array đặc, kiểm tra toàn bộ ID cùng factory trước khi thêm bất kỳ definition nào. Hàm không gọi `create()`. ID trùng trong batch mới làm cả lời gọi discovery bị từ chối, còn metadata trước đó giữ nguyên. Mỗi Extension được khám phá bắt đầu ở `discovered`; lời gọi tường minh `activate(id)` đưa nó qua `activating` tới `active` hoặc `failed`.
 
-Activation được serialize. Host tạo một vùng staging riêng rồi cấp cho `activate()` một `ExtensionContext` đã đóng băng với năm field: `resources` đáng tin cậy, `signal` của activation, `registerTool()`, `onAgentEvent()` và `onDispose()`. Các hàm đăng ký chỉ mở trong thời gian kết quả activation đã chọn đang settle. Đăng ký muộn và thao tác reentrant trên host bị từ chối thay vì sửa live state.
+Activation và event work dùng chung một hàng đợi tuần tự: operation mới chỉ bắt đầu sau khi phần việc đã xếp trước trên hàng đợi hoàn tất. Host tạo một vùng staging riêng rồi cấp cho `activate()` một `ExtensionContext` đã đóng băng với năm field: `resources` đáng tin cậy, `signal` của activation, `registerTool()`, `onAgentEvent()` và `onDispose()`. Các hàm đăng ký chỉ mở trong thời gian kết quả activation đã chọn đang settle. Đăng ký muộn và thao tác reentrant trên host bị từ chối thay vì sửa live state.
 
-Tool, hook và disposer ở lại vùng staging trong khi factory cùng `activate()` settle. Host clone live `ToolRegistry`, đăng ký toàn bộ tập Tool đang staging vào candidate đó rồi chụp các registration mới. Chỉ sau khi mọi Tool hợp lệ, host mới thay live registry, công bố hook, thêm activation order và đánh dấu Extension là `active`. Vì thế, một Tool name trùng không thể làm Tool đứng trước nó trong cùng batch lỗi bị lộ ra ngoài.
+Tool, hook và disposer ở lại vùng staging trong khi factory cùng `activate()` settle. Host clone live `ToolRegistry`, đăng ký toàn bộ tập Tool đang staging vào candidate đó rồi chụp các registration mới. Chỉ sau khi mọi Tool hợp lệ, host mới thay live registry, công bố hook, thêm activation order và đánh dấu Extension là `active`. Nếu một Tool phía sau trong batch trùng tên, toàn bộ candidate bị từ chối; những Tool đã được đưa vào staging trước điểm lỗi cũng không xuất hiện trong live registry.
 
-`emit()` chụp một `AgentEvent`, sau đó gọi hook theo activation order của Extension rồi registration order của hook. Lỗi từ một hook trở thành diagnostic bất biến; các hook sau vẫn chạy. `dispose()` hủy activation đang chờ, đợi sau cùng serialized queue và cleanup Extension đang active theo activation order ngược. Trong một Extension, callback `onDispose()` chạy theo registration order ngược, sau đó mới tới `dispose` của instance. Mọi cleanup đều được thử; nhiều lỗi được giữ lại trong một aggregate đã đóng băng.
+`emit()` chụp một `AgentEvent`, sau đó gọi hook theo activation order của Extension rồi registration order của hook. Lỗi từ một hook trở thành diagnostic bất biến; các hook sau vẫn chạy. `dispose()` hủy activation đang chờ, được xếp sau các operation đang chờ trên cùng hàng đợi tuần tự rồi cleanup Extension đang active theo activation order ngược. Trong một Extension, callback `onDispose()` chạy theo registration order ngược, sau đó mới tới `dispose` của instance. Mọi cleanup đều được thử; nhiều lỗi được giữ lại trong một aggregate đã đóng băng.
 
 ## Dấu vết hoặc mô hình
 
@@ -123,7 +123,7 @@ await expect(loader.loadText("instructions.md")).resolves.toMatchObject({
 });
 ```
 
-Đoạn này cũng được trích nguyên văn từ focused test. `rootId` được trả về ghi lại chính xác lớp ưu tiên đáng tin cậy đã cung cấp text.
+Đoạn này cũng được trích nguyên văn từ focused test. `rootId` được trả về ghi lại chính xác root nào trong chuỗi ưu tiên đã cung cấp text.
 
 ## Chạy focused test
 
@@ -133,35 +133,46 @@ Focused test là `course/test/12-resources-extensions.test.ts`. Chạy chính x�
 npm run test:course:checkpoint -- course/test/12-resources-extensions.test.ts
 ```
 
-File này chứng minh việc ghi root identity, thứ tự ưu tiên, confinement, path grammar dùng được trên nhiều nền tảng, yêu cầu regular file và UTF-8, boundary chính xác `1 MiB`, metadata-only discovery, lazy factory, serialize activation, contribution nguyên tử, thứ tự và cô lập hook, cancellation, từ chối reentrancy, phục hồi sau rollback, aggregate lỗi cleanup và reverse disposal.
+File này chứng minh việc ghi root identity, thứ tự ưu tiên, confinement, path grammar dùng được trên nhiều nền tảng, yêu cầu regular file và UTF-8, boundary chính xác `1 MiB`, metadata-only discovery, lazy factory, activation tuần tự, contribution nguyên tử, thứ tự và cô lập hook, cancellation, từ chối reentrancy, phục hồi sau rollback, aggregate lỗi cleanup và reverse disposal.
 
 ## Thử nghiệm lỗi
 
-Hãy kích hoạt một Extension cấp phát đúng một disposable resource rồi throw. Thêm case sau cạnh rollback test hiện có; nó dùng `host`, `echoTool()` và thiết lập Resource tạm của focused test:
+Hãy kích hoạt một Extension cấp phát đúng một disposable resource rồi throw. Thêm `test()` hoàn chỉnh này cạnh rollback test hiện có. Test tự tạo và dispose host; helper `emptyResources()` của focused file đăng ký temporary root để `afterEach` cleanup:
 
 ```ts
-const cleanup: string[] = [];
-host.discover([
-  {
-    id: "fails-after-allocation",
-    create: () => ({
-      activate(context) {
-        context.onDispose(() => cleanup.push("allocated-resource"));
-        context.registerTool(echoTool("never-live"));
-        throw new Error("activation failed after allocation");
-      },
-    }),
-  },
-]);
+test("rolls back one disposable after activation fails", async () => {
+  const cleanup: string[] = [];
+  const host = new ExtensionHost({
+    resources: await emptyResources(),
+    tools: [echoTool("base")],
+  });
 
-await expect(host.activate("fails-after-allocation")).rejects.toMatchObject({
-  code: "EXTENSION_ACTIVATION_FAILED",
-});
-expect(cleanup).toEqual(["allocated-resource"]);
-expect(host.tools.names).not.toContain("never-live");
-expect(host.extensions).toContainEqual({
-  id: "fails-after-allocation",
-  status: "failed",
+  try {
+    host.discover([
+      {
+        id: "fails-after-allocation",
+        create: () => ({
+          activate(context) {
+            context.onDispose(() => cleanup.push("allocated-resource"));
+            context.registerTool(echoTool("never-live"));
+            throw new Error("activation failed after allocation");
+          },
+        }),
+      },
+    ]);
+
+    await expect(host.activate("fails-after-allocation")).rejects.toMatchObject({
+      code: "EXTENSION_ACTIVATION_FAILED",
+    });
+    expect(cleanup).toEqual(["allocated-resource"]);
+    expect(host.tools.names).toEqual(["base"]);
+    expect(host.extensions).toContainEqual({
+      id: "fails-after-allocation",
+      status: "failed",
+    });
+  } finally {
+    await host.dispose();
+  }
 });
 ```
 
@@ -173,7 +184,7 @@ Chạy lại focused command. Thử nghiệm chỉ pass khi disposer chạy đú
 - Trusted root có thứ tự được canonicalize và kiểm tra identity; traversal, symlink, device path, root replacement, non-file, file quá lớn và UTF-8 sai đều bị từ chối theo fail-closed.
 - Text content bị giới hạn chính xác ở `1,048,576` byte đã encode trước khi decode UTF-8 ở chế độ fatal.
 - Discovery kiểm tra rồi commit metadata như một batch, không gọi bất kỳ Extension factory nào.
-- Activation là lazy và được serialize; context đóng lại khi async result đã chọn settle.
+- Activation là lazy và chạy tuần tự; context đóng lại khi async result đã chọn settle.
 - Contribution của Tool, hook và disposer giữ riêng tư cho tới khi mọi Tool trong staging hợp lệ.
 - Hook chạy theo activation order rồi registration order; lỗi được báo mà không bỏ qua hook phía sau.
 - Activation thất bại rollback mọi disposable đã lấy theo thứ tự ngược và không công bố contribution một phần.

@@ -18,7 +18,7 @@ reviewed_by: Pify maintainers
 
 Bạn sẽ thêm một [composition root](../glossary.md#composition-root) để tạo Tool registry, Resource loader, Session owner, Extension host và Agent theo dependency order cho một canonical workspace. `CourseRuntime` được trả về sở hữu subscription dùng để persist các Agent message đã được chấp nhận và chuyển tiếp event có thứ tự tới Extension. `flush()` của runtime chứng minh transcript của Agent, active Session branch, durable store và workspace identity vẫn đồng nhất.
 
-Bạn cũng sẽ thêm `CourseRuntimeManager`, owner duy nhất của public runtime reference. Request thay thế được serialize. Một candidate được dựng và kiểm tra hoàn chỉnh trong khi runtime trước vẫn live; chỉ sau đó manager mới swap reference, bind lại persistence gắn với workspace và dispose graph cũ. Construction thất bại theo nguyên tắc [fail-closed](../glossary.md#fail-closed): candidate được rollback còn runtime cũ vẫn dùng được.
+Bạn cũng sẽ thêm `CourseRuntimeManager`, owner duy nhất của public runtime reference. Các request thay thế được xử lý tuần tự. Một candidate được dựng và kiểm tra hoàn chỉnh trong khi runtime cũ vẫn live; chỉ sau đó manager mới swap reference, bind lại persistence gắn với workspace và dispose graph cũ. Construction thất bại theo nguyên tắc [fail-closed](../glossary.md#fail-closed): candidate được rollback còn runtime cũ vẫn dùng được.
 
 :::note[Course implementation]
 
@@ -45,11 +45,11 @@ Runtime dùng `ScriptedModel` của workshop; mọi focused test đều chạy o
 
 Construction tuân theo một dependency order: Tool, Resource, Session, Extension, Agent. Workspace root được canonicalize và filesystem identity của nó được kiểm tra quanh từng async factory. Relative Session path phải nằm dưới root đó; các dạng absolute, device-like, có dấu hai chấm, traversal và symlink escape bị từ chối. Create-mode parent directory cùng Session file mới đi vào ownership ledger trước khi factory phía sau có thể thất bại.
 
-Mỗi factory override nhận frozen input cùng `fallback()` đã memoize. Ledger đăng ký fallback product và selected product ngay khi chúng xuất hiện. Owned value không được chọn được cleanup đúng một lần. Nếu bước sau throw, ledger duyệt các ownership record còn lại theo thứ tự ngược. Nó dispose Extension host, chỉ xóa create-mode Session file chưa bị thay đổi và chỉ xóa parent directory rỗng chưa bị thay đổi. Sự thay thế hoặc chỉnh sửa từ bên ngoài khiến rollback từ chối xóa và báo `RUNTIME_SESSION_ROLLBACK_FAILED`.
+Mỗi factory override nhận frozen input cùng `fallback()` đã memoize. Ledger đăng ký fallback product và selected product ngay khi chúng xuất hiện. Owned value không được chọn sẽ được cleanup đúng một lần. Nếu bước sau throw, ledger duyệt các ownership record còn lại theo thứ tự ngược. Nó dispose Extension host, chỉ xóa create-mode Session file chưa bị thay đổi và chỉ xóa parent directory rỗng chưa bị thay đổi. Sự thay thế hoặc chỉnh sửa từ bên ngoài khiến rollback từ chối xóa và báo `RUNTIME_SESSION_ROLLBACK_FAILED`.
 
 `OwnedCourseRuntime` subscribe Agent ngay trong construction. Snapshot của `message.accepted` và `run.finished` đi vào một event tail. Trước mỗi lần phát event tới Extension, runtime reconcile từng transcript message mới lên active Session branch theo thứ tự. Sau đó runtime mới chạy Extension hook. Lỗi persistence hoặc hook làm runtime đó chuyển sang trạng thái lỗi với `RUNTIME_EVENT_FAILED` ổn định; lời gọi `flush()` sau đó trả lại chính lỗi này thay vì giả vờ store đang cập nhật. Session bị di chuyển từ bên ngoài hoặc transcript không khớp trở thành `RUNTIME_SESSION_DIVERGED`.
 
-`flush()` đợi sau các event đã chấp nhận, kiểm tra lại canonical workspace identity cùng tính nhất quán của transcript, flush `SessionStore` rồi kiểm tra cả hai lần nữa. Disposal là idempotent. Nó cancel Agent run đang active, đợi terminal event đi vào persistence, drain event work, gỡ subscription, kiểm tra tính nhất quán, flush Session rồi mới yêu cầu `ExtensionHost` cleanup graph theo thứ tự ngược. Mọi lỗi được thu lại trước khi runtime trở thành `disposed`.
+`flush()` chờ các event đã chấp nhận được xử lý xong, kiểm tra lại canonical workspace identity cùng tính nhất quán của transcript, flush `SessionStore` rồi kiểm tra cả hai lần nữa. Disposal là idempotent. Nó cancel Agent run đang active, đợi terminal event đi vào persistence, drain event work, gỡ subscription, kiểm tra tính nhất quán, flush Session rồi mới yêu cầu `ExtensionHost` cleanup graph theo thứ tự ngược. Mọi lỗi được thu lại trước khi runtime trở thành `disposed`.
 
 `CourseRuntimeManager.replace()` đặt mọi replacement vào một queue. Khi candidate đang được dựng, `manager.current` vẫn trả runtime trước. Candidate lỗi được rollback mà không đổi reference đó. Candidate hợp lệ đã sở hữu Session binding cùng Agent subscription; manager công bố nó bằng một phép gán rồi mới dispose runtime trước. Nếu cleanup runtime cũ thất bại, lời gọi báo `RUNTIME_REPLACEMENT_CLEANUP_FAILED`, nhưng runtime mới vẫn là current owner đang live. Các replacement đồng thời lặp lại toàn bộ workspace build theo thứ tự request.
 
@@ -156,40 +156,50 @@ File này chứng minh construction order, immutable ownership, resume Session, 
 
 ## Thử nghiệm lỗi
 
-Chỉ làm replacement Session factory throw. Đây là thử nghiệm fail-closed nguyên văn từ `course/test/13-runtime-composition.test.ts`:
+Chỉ cho replacement Session factory throw. Hãy thêm case hoàn chỉnh sau vào `course/test/13-runtime-composition.test.ts`; helper `workspace()` của file đăng ký cả hai temporary root để `afterEach` cleanup, còn khối `finally` luôn dispose runtime do manager sở hữu:
 
 ```ts
-const factories: CourseRuntimeFactoryOverrides = {
-  createSession: async (input, fallback) => {
-    if (input.workspace.root === resolve(second)) {
-      throw new Error("candidate session failed");
-    }
-    return fallback(input);
-  },
-};
-const model = new ScriptedModel([scriptedResponse("old-live", "Still live")]);
-const manager = await createCourseRuntimeManager(
-  runtimeOptions(first, model, { factories }),
-);
-const old = manager.current;
+test("keeps the old runtime live when replacement construction fails", async () => {
+  const first = await workspace("closed-first-experiment");
+  const second = await workspace("closed-second-experiment");
+  const factories: CourseRuntimeFactoryOverrides = {
+    createSession: async (input, fallback) => {
+      if (input.workspace.root === resolve(second)) {
+        throw new Error("candidate session failed");
+      }
+      return fallback(input);
+    },
+  };
+  const model = new ScriptedModel([
+    scriptedResponse("old-live", "Still live"),
+  ]);
+  const manager = await createCourseRuntimeManager(
+    runtimeOptions(first, model, { factories }),
+  );
+  const old = manager.current;
 
-await expect(
-  manager.replace({
-    cwd: second,
-    session: { path: "course-session.jsonl", mode: "create" },
-  }),
-).rejects.toMatchObject({
-  name: "CourseRuntimeError",
-  code: "RUNTIME_CONSTRUCTION_FAILED",
+  try {
+    await expect(
+      manager.replace({
+        cwd: second,
+        session: { path: "course-session.jsonl", mode: "create" },
+      }),
+    ).rejects.toMatchObject({
+      name: "CourseRuntimeError",
+      code: "RUNTIME_CONSTRUCTION_FAILED",
+    });
+    expect(manager.current).toBe(old);
+
+    await drain(old.agent.prompt("Are you there?"));
+    await old.flush();
+    expect(old.session.activeMessages).toEqual(old.agent.messages);
+  } finally {
+    await manager.dispose();
+  }
 });
-expect(manager.current).toBe(old);
-
-await drain(old.agent.prompt("Are you there?"));
-await old.flush();
-expect(old.session.activeMessages).toEqual(old.agent.messages);
 ```
 
-Chạy lại focused command. Replacement phải reject, value thuộc candidate phải rollback và Agent cũ vẫn persist được prompt mới. Công bố candidate trước khi Session factory settle, dispose graph cũ trước hoặc để lại Session file một phần đều làm checkpoint thất bại.
+Chạy lại focused command. Replacement phải reject, các value do candidate sở hữu phải được rollback và Agent cũ vẫn persist được prompt mới. Công bố candidate trước khi Session factory settle, dispose graph cũ trước hoặc để lại Session file một phần đều làm checkpoint thất bại.
 
 ## Tiêu chí chấp nhận
 
@@ -199,7 +209,7 @@ Chạy lại focused command. Replacement phải reject, value thuộc candidate
 - Agent event persist transcript message trước Extension hook, còn `flush()` chứng minh Session, Agent, store và workspace đồng nhất.
 - Runtime disposal cancel active work, đợi terminal persistence, unsubscribe, flush rồi mới reverse cleanup Extension.
 - Construction lỗi rollback mọi owned product theo thứ tự ngược và từ chối xóa Session state đã bị thay từ bên ngoài.
-- Replacement được serialize; runtime cũ vẫn public cho tới khi có candidate nhất quán hoàn chỉnh.
+- Replacement chạy tuần tự; runtime cũ vẫn public cho tới khi có candidate nhất quán hoàn chỉnh.
 - Publication bind Session persistence cùng Extension hook sang candidate trước khi cleanup runtime cũ bắt đầu.
 - Replacement lỗi giữ runtime cũ live; lỗi dispose runtime cũ giữ candidate đã công bố ở trạng thái live và báo cleanup failure.
 

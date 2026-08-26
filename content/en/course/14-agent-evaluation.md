@@ -1,6 +1,6 @@
 ---
 title: "Checkpoint 14: Evaluate the Agent reproducibly"
-description: Run held-out tasks in fresh offline runtimes, judge public evidence deterministically, compare aligned candidates, and emit privacy-bounded reports.
+description: Run held-out tasks in fresh offline runtimes, judge public evidence deterministically, compare baseline and candidate runs aligned by task/repetition identity, and emit privacy-bounded reports.
 translation_key: course-14-agent-evaluation
 language: en
 checkpoint: 14
@@ -19,7 +19,7 @@ reviewed_by: Pify maintainers
 
 You will build an offline [harness](../glossary.md#harness) for [held-out evaluation](../glossary.md#held-out-evaluation). It loads unknown fixture data defensively, creates a fresh workspace and runtime for every task repetition, gives the candidate only the public prompt, and asks a deterministic [judge](../glossary.md#judge) to turn bounded public evidence into a `pass` or `fail` [verdict](../glossary.md#verdict).
 
-The harness records a separate `error` verdict when a candidate runtime reports that it could not produce a valid observation. A thrown factory, runtime, judge, clock, cancellation, or cleanup failure rejects the evaluation as infrastructure failure. Baseline and candidate reports are compared only when they contain the same task and run identities. Stable aggregate rates and a strict report allowlist make repeated offline runs reviewable without serializing prompts, expected evidence, candidate evidence, transcripts, or file content.
+The harness records a separate `error` verdict when a candidate runtime reports that it could not produce a valid observation. A factory, runtime, judge, or clock exception, cancellation, or registered ownership-cleanup failure rejects the evaluation as infrastructure failure. Baseline and candidate reports are compared only when they contain the same task and run identities. Stable aggregate rates and a strict report allowlist make repeated offline runs reviewable without serializing prompts, expected evidence, candidate evidence, transcripts, or file content.
 
 :::note[Course implementation]
 
@@ -43,13 +43,17 @@ The fixture is fixed test data, not training data. Do not inspect expected field
 
 ## Mechanism
 
-`loadEvaluationTasks()` treats JSON as `unknown`. It requires `schemaVersion: 1`, a dense array of `1` to `256` unique tasks, stable bounded IDs, `split: "held-out"`, a bounded prompt, unique required public evidence, and fixture-only `candidatePublicEvidence` plus `expectedVerdict`. It snapshots and freezes every accepted layer. The last two fields let tests prove the evaluator behaves as expected, but neither field is passed to the candidate and `expectedVerdict` never selects a production verdict.
+`loadEvaluationTasks()` treats JSON as `unknown`. It requires `schemaVersion: 1`, a dense array of `1` to `256` unique tasks, stable bounded IDs, `split: "held-out"`, a bounded prompt, items that are unique within `expectedPublicEvidence.includes`, and fixture-only `candidatePublicEvidence` plus `expectedVerdict`. It snapshots and freezes every accepted layer. At run time, `EvaluationJudgeInput.candidatePublicEvidence` is the candidate's bounded output: it may overlap the required list and is compared with that list. By contrast, the task fixture fields `candidatePublicEvidence` and `expectedVerdict` are test oracles only. Neither enters candidate or judge input, and `expectedVerdict` never selects a production verdict.
 
 `runEvaluation()` expands tasks in fixture order and repetitions from `1` to `64`, assigning `run-000001`, `run-000002`, and so on. Tasks multiplied by repetitions may not exceed `4,096` runs. Execution is serialized by default; optional concurrency is capped at `8`. Each work item gets a new workspace, then a new `EvaluationRuntime` with candidate ID, task ID, run ID, repetition, workspace path, and cancellation signal. The runtime's `run()` receives only `{ prompt, signal }`.
 
 A completed runtime returns `publicEvidence` plus optional public metrics. The judge receives the prompt, required public evidence, candidate public evidence, IDs, and the signal. The default judge uses bounded set membership and counts required and matched evidence; it performs no model call. A valid judge result is only `pass` or `fail`. A runtime may instead return `{ status: "failed", errorCode }`; that creates a run with `verdict: "error"`, skips the judge, and preserves the sanitized code.
 
-An uncaught exception means the harness did not obtain a valid observation. Runtime construction, execution, and judge exceptions become `EVALUATION_RUNTIME_FACTORY_FAILED`, `EVALUATION_RUNTIME_FAILED`, or `EVALUATION_JUDGE_FAILED` and reject the full evaluation. Cancellation uses one shared internal signal: the first infrastructure failure stops new work and cancels concurrent workers. The runtime disposer and workspace cleanup still run exactly once. Each cleanup ignores run cancellation but must settle within at most `1,000` ms; cleanup failures aggregate with the primary failure.
+An uncaught exception means the harness did not obtain a valid observation. Runtime construction, execution, and judge exceptions become `EVALUATION_RUNTIME_FACTORY_FAILED`, `EVALUATION_RUNTIME_FAILED`, or `EVALUATION_JUDGE_FAILED` and reject the full evaluation. Cancellation uses one shared internal signal: the first infrastructure failure stops new work and cancels concurrent workers.
+
+Once runtime or workspace ownership has been registered, `runOne()` awaits the runtime disposer and then workspace cleanup through `settleOwnedCleanup()`. Each registered cleanup ignores run cancellation and receives its own configured `cleanupTimeoutMs`, capped at `1,000` ms. Cleanup failures produce `EVALUATION_CLEANUP_FAILED`; when a primary infrastructure failure already exists, the aggregate retains it before the cleanup failures.
+
+A separate path handles a workspace or runtime factory promise that returns an owned value after cancellation has already won the race. `invokeFactoryAbortable()` passes that late value to `observeLateCleanup()`, which invokes its cleanup on a best-effort basis and observes any returned promise without awaiting it. This path has no `1,000` ms cleanup cap, and synchronous throws or asynchronous rejections are swallowed rather than added to the evaluation's failure aggregate. It prevents an unhandled rejection without delaying cancellation.
 
 Evidence and metrics have explicit work budgets. Required and candidate evidence each allow at most `32` items; each item allows `4,096` Unicode code points; their combined per-task evidence budget is `65,536` code points. Runtime metrics and judge metrics each allow `64` finite entries, and a merged run report allows `128`. Prompt validation is capped at `100,000` UTF-16 code units. These ceilings bound local work and report size; they do not make arbitrary evidence safe to disclose.
 
@@ -67,12 +71,15 @@ flowchart LR
     O[Fixture-only candidate evidence and expected verdict]
   end
   subgraph H[Fresh run lifecycle]
-    W[New temporary workspace]
-    R[New candidate runtime]
+    W[Workspace factory and fresh workspace]
+    R[Runtime factory and fresh runtime]
     E[Bounded public evidence]
     J[Deterministic judge]
     C[Runtime dispose then workspace cleanup]
+    L[Best-effort cleanup of a late factory value]
     W --> R --> E --> J --> C
+    W -.->|value arrives after cancellation| L
+    R -.->|value arrives after cancellation| L
   end
   subgraph Q[Public report boundary]
     V[pass, fail, or error]
@@ -96,7 +103,8 @@ flowchart LR
 | Runtime returns `completed` | Yes | `pass` or `fail` | Valid task observation scored against the declared contract |
 | Runtime returns `failed` | No | `error` with sanitized code | Candidate could not produce a scorable observation |
 | Factory, runtime, or judge throws | Maybe, depending on phase | Evaluation rejects with typed infrastructure error | Repair harness, environment, or adapter before comparing quality |
-| Cancellation or cleanup fails | No further work | Evaluation rejects; cleanup errors aggregate | No complete reproducible report exists |
+| Cancellation or registered cleanup fails | No further work | Evaluation rejects; registered cleanup errors aggregate | No complete reproducible report exists |
+| Factory returns an owned value after cancellation | No further work | Selected cancellation is not delayed or replaced | Cleanup is best effort, observed, unawaited, and absent from the aggregate |
 
 ## Build it
 
@@ -138,7 +146,7 @@ The focused test is `course/test/14-agent-evaluation.test.ts`. Run exactly:
 npm run test:course:checkpoint -- course/test/14-agent-evaluation.test.ts
 ```
 
-The file proves held-out fixture isolation, fresh runtime and workspace ownership, deterministic pass/fail evaluation, `error` classification, custom judge adoption, exact baseline alignment, duration isolation, bounded concurrency, cancellation, late factory cleanup, cleanup aggregation and timeout, report allowlisting, duplicate identity rejection, evidence and metric caps, and hostile-object defenses.
+The file proves held-out fixture isolation, fresh runtime and workspace ownership, deterministic pass/fail evaluation, `error` classification, custom judge adoption, exact baseline alignment, duration isolation, bounded concurrency, cancellation, cleanup of workspace/runtime values returned by factories after cancellation, registered-cleanup aggregation and timeout, report allowlisting, duplicate identity rejection, evidence and metric caps, and hostile-object defenses.
 
 ## Failure experiment
 
@@ -185,8 +193,9 @@ Then remove the `try`/`catch` and let `run()` throw. `runEvaluation()` must reje
 - Fixtures accept only `1` to `256` unique held-out tasks and keep expected evidence and fixture oracles out of candidate inputs.
 - Every task repetition receives a fresh workspace and runtime; repetitions are capped at `64` and total runs at `4,096`.
 - The deterministic judge returns only `pass` or `fail`; a reported runtime failure becomes `error` and skips judging.
-- Thrown runtime, factory, judge, clock, cancellation, or cleanup faults remain typed infrastructure failures rather than fabricated task verdicts.
-- Shared cancellation stops later work, while runtime disposal and workspace cleanup still run once in ownership order with a maximum `1,000` ms per cleanup.
+- Factory, runtime, judge, or clock exceptions, cancellation, and registered ownership-cleanup faults remain typed infrastructure failures rather than fabricated task verdicts.
+- Shared cancellation stops later work; `settleOwnedCleanup()` awaits registered runtime disposal and workspace cleanup once in ownership order, with a configured maximum of `1,000` ms for each registered cleanup, and aggregates their failures with any primary failure.
+- `observeLateCleanup()` handles workspace/runtime values returned by factories after cancellation on a best-effort, unawaited path with no configured cleanup cap; its cleanup failures are observed and swallowed, not aggregated.
 - Evidence is capped at `32` items per side, `4,096` code points per item, and `65,536` combined code points per task.
 - Source metrics are capped at `64` per runtime or judge and merged reports at `128`; only finite values with valid names are accepted.
 - Baseline and candidate comparison requires identical task/run identities and reports reproducible rates separately for `pass`, `fail`, and `error`.

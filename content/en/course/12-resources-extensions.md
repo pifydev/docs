@@ -48,7 +48,7 @@ Each read checks both lexical and canonical confinement. Absolute paths, travers
 
 `ExtensionHost.discover()` snapshots a dense definition array and validates all IDs and factories before adding any definition. It does not call `create()`. A duplicate in the new batch rejects the whole discovery call, leaving the prior metadata unchanged. Every discovered Extension begins in `discovered`; explicit `activate(id)` moves it through `activating` to `active` or `failed`.
 
-Activation is serialized. The host creates a private staging area and gives `activate()` a frozen `ExtensionContext` with five fields: the trusted `resources`, an activation `signal`, `registerTool()`, `onAgentEvent()`, and `onDispose()`. Those registration functions remain open only during the selected activation settlement. Late registrations and reentrant host operations reject instead of modifying live state.
+Activation and event work share a serialized queue: each new operation starts only after work already pending on that queue settles. The host creates a private staging area and gives `activate()` a frozen `ExtensionContext` with five fields: the trusted `resources`, an activation `signal`, `registerTool()`, `onAgentEvent()`, and `onDispose()`. Those registration functions remain open only during the selected activation settlement. Late registrations and reentrant host operations reject instead of modifying live state.
 
 Tools, hooks, and disposers stay staged while the factory and `activate()` settle. The host clones the live `ToolRegistry`, registers the complete staged Tool set into that candidate, and snapshots the new registrations. Only after every Tool validates does it replace the live registry, publish hooks, append the activation order, and mark the Extension `active`. A duplicate Tool name therefore cannot expose an earlier Tool from the same failed batch.
 
@@ -137,31 +137,42 @@ The file proves root identity capture, precedence, confinement, portable path gr
 
 ## Failure experiment
 
-Activate an Extension that allocates one disposable resource and then throws. Add this case beside the existing rollback test; it uses the focused test's `host`, `echoTool()`, and temporary Resource setup:
+Activate an Extension that allocates one disposable resource and then throws. Add this complete `test()` beside the existing rollback test. It creates and disposes its own host; the focused file's `emptyResources()` helper registers its temporary root for `afterEach` cleanup:
 
 ```ts
-const cleanup: string[] = [];
-host.discover([
-  {
-    id: "fails-after-allocation",
-    create: () => ({
-      activate(context) {
-        context.onDispose(() => cleanup.push("allocated-resource"));
-        context.registerTool(echoTool("never-live"));
-        throw new Error("activation failed after allocation");
-      },
-    }),
-  },
-]);
+test("rolls back one disposable after activation fails", async () => {
+  const cleanup: string[] = [];
+  const host = new ExtensionHost({
+    resources: await emptyResources(),
+    tools: [echoTool("base")],
+  });
 
-await expect(host.activate("fails-after-allocation")).rejects.toMatchObject({
-  code: "EXTENSION_ACTIVATION_FAILED",
-});
-expect(cleanup).toEqual(["allocated-resource"]);
-expect(host.tools.names).not.toContain("never-live");
-expect(host.extensions).toContainEqual({
-  id: "fails-after-allocation",
-  status: "failed",
+  try {
+    host.discover([
+      {
+        id: "fails-after-allocation",
+        create: () => ({
+          activate(context) {
+            context.onDispose(() => cleanup.push("allocated-resource"));
+            context.registerTool(echoTool("never-live"));
+            throw new Error("activation failed after allocation");
+          },
+        }),
+      },
+    ]);
+
+    await expect(host.activate("fails-after-allocation")).rejects.toMatchObject({
+      code: "EXTENSION_ACTIVATION_FAILED",
+    });
+    expect(cleanup).toEqual(["allocated-resource"]);
+    expect(host.tools.names).toEqual(["base"]);
+    expect(host.extensions).toContainEqual({
+      id: "fails-after-allocation",
+      status: "failed",
+    });
+  } finally {
+    await host.dispose();
+  }
 });
 ```
 
