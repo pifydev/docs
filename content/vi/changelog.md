@@ -5,9 +5,17 @@ translation_key: changelog
 language: vi
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-08-24'
+last_updated: '2026-08-26'
 ---
 Trang này ghi các thay đổi của website tài liệu Pify. Để xem release của Pi, hãy dùng [lịch sử release upstream](https://github.com/earendil-works/pi/releases).
+
+## 2026-08-26
+
+- Cập nhật technical baseline và các code example theo Pi `0.84.3`.
+- Thêm Chương 11 và ba hướng dẫn How-to về SDK testing, evaluation và runtime hosting.
+- Xuất bản course song ngữ nguyên bản với trang tổng quan riêng và lộ trình Tự xây Pi-style Agent gồm 15 checkpoint.
+- Thêm workshop TypeScript offline kèm focused test cho từng checkpoint.
+- Mở rộng website lên 43 cặp trang Anh/Việt đồng bộ, tương ứng 86 tài liệu công khai.
 
 ## 2026-08-24
 

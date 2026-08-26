@@ -5,9 +5,17 @@ translation_key: changelog
 language: en
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-08-24'
+last_updated: '2026-08-26'
 ---
 This page records changes to the Pify documentation site. For Pi releases, use the [upstream release history](https://github.com/earendil-works/pi/releases).
+
+## 2026-08-26
+
+- Refreshed the technical baseline and code examples for Pi `0.84.3`.
+- Added Chapter 11 and three How-to guides for SDK testing, evaluation, and runtime hosting.
+- Published an original bilingual course with a separate overview and 15-checkpoint Build Your Own Pi-style Agent path.
+- Added an offline TypeScript workshop with focused tests for every checkpoint.
+- Expanded the site to 43 synchronized English/Vietnamese pairs and 86 public documents.
 
 ## 2026-08-24
 

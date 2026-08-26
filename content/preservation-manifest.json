@@ -784,10 +784,10 @@
     {
       "key": "changelog",
       "path": "en/changelog.md",
-      "baselineWords": 139,
+      "baselineWords": 275,
       "minimumWordRatio": 0.8,
       "minimumHeadingCounts": {
-        "2": 2,
+        "2": 4,
         "3": 0,
         "4": 0
       },
@@ -799,10 +799,10 @@
     {
       "key": "changelog",
       "path": "vi/changelog.md",
-      "baselineWords": 162,
+      "baselineWords": 340,
       "minimumWordRatio": 0.8,
       "minimumHeadingCounts": {
-        "2": 2,
+        "2": 4,
         "3": 0,
         "4": 0
       },

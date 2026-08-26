@@ -36,11 +36,17 @@ and [Pi source code](https://github.com/earendil-works/pi).
 
 ## What is included
 
-- An eleven-chapter walkthrough of the Pi Agent SDK architecture and runtime.
-- A ten-minute quickstart and eight focused how-to guides.
+- Eleven Pi SDK chapters covering architecture, runtime behavior, and the Agent
+  Loop. Chapter 11 focuses on testing and evaluation.
+- A ten-minute quickstart and eight How-to guides, including
+  [Test an agent deterministically](https://docs.pify.dev/en/how-to/test-agent-deterministically),
+  [Run Pi evaluations](https://docs.pify.dev/en/how-to/run-pi-evals), and
+  [Host a session runtime](https://docs.pify.dev/en/how-to/host-session-runtime).
+- A separate overview and 15-checkpoint Build Your Own Pi-style Agent course,
+  paired with a runnable offline TypeScript workshop.
 - API, configuration, and environment-variable references.
 - A glossary, FAQ, changelog, Mermaid diagrams, and runnable code examples.
-- 27 synchronized page pairs: 54 public English and Vietnamese documents.
+- 43 synchronized English/Vietnamese page pairs: 86 public documents.
 - Locale-aware navigation and search, dark and light themes, responsive layouts,
   canonical metadata, sitemap, robots, and LLM-friendly text endpoints.
 
@@ -83,6 +89,7 @@ content/en/                  Public English documentation
 content/vi/                  Public Vietnamese documentation
 content/translation-manifest.json
                              Stable English/Vietnamese page pairing
+course/                      Offline TypeScript workshop and checkpoint tests
 lib/                         Locale, routing, source, and SEO helpers
 public/                      Brand assets, social image, favicon, and fonts
 scripts/                     Content and CI validators
@@ -116,6 +123,7 @@ Run the complete local gate:
 ```bash
 npm run test:content
 npm run test:unit
+npm run test:course
 npm run lint
 npm run typecheck
 npm run build
@@ -124,14 +132,16 @@ npm run format:check
 
 The main commands are:
 
-| Command                | Purpose                                                                 |
-| ---------------------- | ----------------------------------------------------------------------- |
-| `npm run test:content` | Validate locale pairs, frontmatter, CI config, and migration invariants |
-| `npm run test:unit`    | Test routes, locale behavior, and SEO helpers                           |
-| `npm run lint`         | Run synchronization, content, Mermaid, and application linting          |
-| `npm run typecheck`    | Generate Next.js route types and run TypeScript                         |
-| `npm run build`        | Create the optimized production build                                   |
-| `npm run format:check` | Check maintained files with Prettier                                    |
+| Command                                                                        | Purpose                                                                 |
+| ------------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
+| `npm run test:content`                                                         | Validate locale pairs, frontmatter, CI config, and migration invariants |
+| `npm run test:unit`                                                            | Test routes, locale behavior, and SEO helpers                           |
+| `npm run test:course`                                                          | Run all 15 offline workshop checkpoints                                 |
+| `npm run test:course:checkpoint -- course/test/04-deterministic-model.test.ts` | Run one workshop checkpoint                                             |
+| `npm run lint`                                                                 | Run synchronization, content, Mermaid, and application linting          |
+| `npm run typecheck`                                                            | Generate Next.js route types and run TypeScript                         |
+| `npm run build`                                                                | Create the optimized production build                                   |
+| `npm run format:check`                                                         | Check maintained files with Prettier                                    |
 
 Browser journeys require Chromium once:
 
@@ -175,3 +185,4 @@ the same license unless a file states otherwise.
 - Original Chinese book: [dgzhuya.com](https://www.dgzhuya.com/)
 - Official Pi documentation: [pi.dev/docs/latest](https://pi.dev/docs/latest)
 - Pi source code: [earendil-works/pi](https://github.com/earendil-works/pi)
+- Pedagogical research reference: [hahhforest/pi-textbook](https://github.com/hahhforest/pi-textbook), consulted at commit `20dd3a7d791c2470a87c5172aa0729c3963a6b18`.

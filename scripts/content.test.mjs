@@ -243,6 +243,63 @@ test("translation manifest contains 43 unique EN/VI pairs", async () => {
   }
 });
 
+test("README and bilingual changelog describe the complete SDK and course release", async () => {
+  const readme = await readFile(new URL("README.md", repositoryRoot), "utf8");
+  const changelog = {
+    en: await readFile(
+      new URL("content/en/changelog.md", repositoryRoot),
+      "utf8",
+    ),
+    vi: await readFile(
+      new URL("content/vi/changelog.md", repositoryRoot),
+      "utf8",
+    ),
+  };
+
+  assert.match(readme, /eleven Pi SDK chapters/i);
+  assert.match(readme, /eight How-to guides/i);
+  assert.match(readme, /Chapter 11[^\r\n]*testing and evaluation/i);
+  assert.match(readme, /Test an agent deterministically/);
+  assert.match(readme, /Run Pi evaluations/);
+  assert.match(readme, /Host a session runtime/);
+  assert.match(
+    readme,
+    /separate overview[^\r\n]*15-checkpoint Build Your Own Pi-style Agent course/i,
+  );
+  assert.match(readme, /43 synchronized[^\r\n]*86 public documents/i);
+  assert.match(readme, /^course\/\s+Offline TypeScript workshop/m);
+  assert.match(readme, /`npm run test:course`/);
+  assert.match(
+    readme,
+    /`npm run test:course:checkpoint -- course\/test\/04-deterministic-model\.test\.ts`/,
+  );
+
+  const researchReference =
+    "- Pedagogical research reference: [hahhforest/pi-textbook](https://github.com/hahhforest/pi-textbook), consulted at commit `20dd3a7d791c2470a87c5172aa0729c3963a6b18`.";
+  assert.equal(readme.split(researchReference).length - 1, 1);
+  assert.equal(
+    readme
+      .split(/\r?\n/)
+      .filter((line) => line.includes("hahhforest/pi-textbook")).length,
+    1,
+    "README must contain exactly one pi-textbook reference bullet",
+  );
+
+  for (const markdown of Object.values(changelog)) {
+    assert.match(markdown, /^## 2026-08-26$/m);
+    assert.match(markdown, /Pi `0\.84\.3`/);
+    assert.match(markdown, /43[^\r\n]*(?:86|cặp|pairs)/i);
+    assert.match(markdown, /15(?:-| )checkpoint/i);
+  }
+
+  assert.match(changelog.en, /testing, evaluation, and runtime/i);
+  assert.match(changelog.en, /original bilingual course/i);
+  assert.match(changelog.en, /offline TypeScript workshop/i);
+  assert.match(changelog.vi, /testing, evaluation và runtime/i);
+  assert.match(changelog.vi, /course song ngữ nguyên bản/i);
+  assert.match(changelog.vi, /workshop TypeScript offline/i);
+});
+
 test("Chinese references remain internal provenance only", async () => {
   const manifest = JSON.parse(await readFile(manifestURL, "utf8"));
   const chinese = manifest.pages
