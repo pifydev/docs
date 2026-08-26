@@ -1,5 +1,100 @@
 import { expect, test } from "@playwright/test";
 
+const publicDocsOrigin = "https://docs.pify.dev";
+
+function safelyDecodePathname(pathname: string): string {
+  try {
+    return decodeURIComponent(pathname);
+  } catch {
+    return pathname;
+  }
+}
+
+function publishedPathnames(body: string): string[] {
+  const pathnames = new Set<string>();
+
+  for (const match of body.matchAll(/https?:\/\/[^\s<>"')\]]+/giu)) {
+    try {
+      const url = new URL(match[0]);
+      if (url.origin === publicDocsOrigin) {
+        pathnames.add(safelyDecodePathname(url.pathname));
+      }
+    } catch {
+      // Ignore prose that resembles an absolute URL but is not parseable.
+    }
+  }
+
+  for (const match of body.matchAll(
+    /(?:^|[\s("'=<>])(\/(?!\/)[^\s<>"')\]]*)/gmu,
+  )) {
+    const pathname = match[1];
+    if (!pathname) continue;
+
+    try {
+      const url = new URL(pathname, publicDocsOrigin);
+      pathnames.add(safelyDecodePathname(url.pathname));
+    } catch {
+      // Ignore malformed root-relative prose fragments.
+    }
+  }
+
+  return [...pathnames];
+}
+
+function unsupportedLocalePathnames(body: string): string[] {
+  return publishedPathnames(body).filter((pathname) => {
+    const [locale] = pathname.split("/").filter(Boolean);
+    return locale?.toLowerCase() === "zh";
+  });
+}
+
+function localMarkdownPathname(
+  href: string,
+  currentUrl: string,
+): string | null {
+  try {
+    const current = new URL(currentUrl);
+    const target = new URL(href, current);
+    if (target.origin !== current.origin) return null;
+
+    const pathname = safelyDecodePathname(target.pathname);
+    return /\.mdx?$/iu.test(pathname) ? pathname : null;
+  } catch {
+    return null;
+  }
+}
+
+test("recognizes unsupported locale paths and local Markdown targets", () => {
+  expect(
+    unsupportedLocalePathnames("<loc>https://docs.pify.dev/zh</loc>"),
+  ).toEqual(["/zh"]);
+  expect(
+    unsupportedLocalePathnames(
+      "- [Checkpoint](https://docs.pify.dev/zh/course/14-agent-evaluation)",
+    ),
+  ).toEqual(["/zh/course/14-agent-evaluation"]);
+  expect(unsupportedLocalePathnames("Documentation\n/zh\nEnglish")).toEqual([
+    "/zh",
+  ]);
+  expect(
+    unsupportedLocalePathnames(
+      "Prose may mention zh or Zhonghua without a URL.",
+    ),
+  ).toEqual([]);
+
+  const currentUrl = "http://127.0.0.1:3010/en/course/07-agent-loop";
+  expect(localMarkdownPathname("../quickstart.MD?view=full", currentUrl)).toBe(
+    "/en/quickstart.MD",
+  );
+  expect(
+    localMarkdownPathname("/en/reference/api%2Emdx#options", currentUrl),
+  ).toBe("/en/reference/api.mdx");
+  expect(localMarkdownPathname("/en/image.md.png", currentUrl)).toBeNull();
+  expect(
+    localMarkdownPathname("https://example.com/reference.md", currentUrl),
+  ).toBeNull();
+});
+
 test("negotiates locale and rejects unsupported public locales", async ({
   browser,
 }) => {
@@ -321,7 +416,7 @@ test("serves machine-readable documentation surfaces", async ({ request }) => {
   expect(englishFullBody).toContain("EVALUATION_CLEANUP_FAILED");
 
   for (const body of machineReadableBodies) {
-    expect(body).not.toMatch(/(?:https:\/\/docs\.pify\.dev)?\/zh(?:[\/#?]|$)/);
+    expect(unsupportedLocalePathnames(body)).toEqual([]);
   }
 });
 
@@ -368,6 +463,8 @@ test("renders every internal Markdown source link as a clean public route", asyn
   page,
   request,
 }) => {
+  test.setTimeout(120_000);
+
   const sitemap = await request.get("/sitemap.xml");
   expect(sitemap.ok()).toBe(true);
 
@@ -379,21 +476,42 @@ test("renders every internal Markdown source link as a clean public route", asyn
   );
   expect(paths).toHaveLength(86);
 
-  for (let index = 0; index < paths.length; index += 8) {
-    const batch = paths.slice(index, index + 8);
-    const pages = await Promise.all(
-      batch.map(async (path) => {
-        const response = await request.get(path);
-        return { path, response, body: await response.text() };
-      }),
-    );
+  const verifierPages = await Promise.all(
+    Array.from({ length: 6 }, () => page.context().newPage()),
+  );
 
-    for (const { path, response, body } of pages) {
-      expect(response.ok(), path).toBe(true);
-      expect(body, path).not.toMatch(
-        /<a[^>]+href="(?!https?:\/\/|mailto:|#)[^"]*\.mdx?(?:[?#][^"]*)?"/i,
+  try {
+    for (let index = 0; index < paths.length; index += verifierPages.length) {
+      const batch = paths.slice(index, index + verifierPages.length);
+      await Promise.all(
+        batch.map(async (path, offset) => {
+          const verifierPage = verifierPages[offset];
+          const response = await verifierPage.goto(path, {
+            waitUntil: "domcontentloaded",
+          });
+          expect(response?.ok(), path).toBe(true);
+
+          const hrefs = await verifierPage
+            .locator("a[href]")
+            .evaluateAll((anchors) =>
+              anchors.flatMap((anchor) => {
+                const href = anchor.getAttribute("href");
+                return href === null ? [] : [href];
+              }),
+            );
+          const markdownTargets = hrefs.flatMap((href) => {
+            const pathname = localMarkdownPathname(href, verifierPage.url());
+            return pathname === null ? [] : [{ href, pathname }];
+          });
+
+          expect(markdownTargets, path).toEqual([]);
+        }),
       );
     }
+  } finally {
+    await Promise.all(
+      verifierPages.map((verifierPage) => verifierPage.close()),
+    );
   }
 
   await page.goto("/en");
