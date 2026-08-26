@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { access, readFile, readdir } from "node:fs/promises";
-import { resolve } from "node:path";
+import { matchesGlob, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import ts from "typescript";
@@ -74,31 +74,60 @@ async function readWorkflow(filename) {
   return { source, workflow: parse(source) };
 }
 
-function assertNoDeploymentCapabilities(workflow) {
-  const parsedWorkflow = JSON.stringify(workflow);
-  assert.doesNotMatch(parsedWorkflow, /vercel/i);
-  assert.doesNotMatch(parsedWorkflow, /\bsecrets\s*(?:\.|\[)/i);
+function nestedEntries(value) {
+  if (!value || typeof value !== "object") return [];
+  return Object.entries(value).flatMap(([key, nestedValue]) => [
+    [key, nestedValue],
+    ...nestedEntries(nestedValue),
+  ]);
+}
 
-  for (const job of Object.values(workflow.jobs ?? {})) {
-    if (typeof job.uses === "string") {
-      assert.doesNotMatch(
-        job.uses,
-        /deploy-pages|upload-pages-artifact|actions\/deploy|\bdeploy(?:ment)?\b/i,
-      );
+function nestedStrings(value) {
+  if (typeof value === "string") return [value];
+  if (!value || typeof value !== "object") return [];
+  return Object.values(value).flatMap(nestedStrings);
+}
+
+function assertNoVercelCredentials(value) {
+  const vercelCredentialName =
+    /^VERCEL_(?:(?:.*_)?(?:TOKEN|KEY|SECRET|PASSWORD|CREDENTIALS?)(?:_.*)?|ORG_ID|PROJECT_ID|TEAM_ID)$/i;
+  const vercelCredentialReference =
+    /\bVERCEL_(?:(?:.*_)?(?:TOKEN|KEY|SECRET|PASSWORD|CREDENTIALS?)(?:_.*)?|ORG_ID|PROJECT_ID|TEAM_ID)\b/i;
+  for (const [key, nestedValue] of nestedEntries(value)) {
+    assert.doesNotMatch(key, vercelCredentialName);
+    if (typeof nestedValue === "string") {
+      assert.doesNotMatch(nestedValue, vercelCredentialReference);
     }
+  }
+}
+
+function assertNoDeploymentCommand(command) {
+  assert.doesNotMatch(
+    command,
+    /\b(?:npm|pnpm|bun)\s+run\s+deploy\b|\byarn\s+(?:run\s+)?deploy\b|\bvercel\s+(?:deploy\b|--prod\b)|\b(?:wrangler\s+)?pages\s+deploy\b|\bwrangler\s+deploy\b|\b(?:firebase|netlify)\s+deploy\b/i,
+  );
+}
+
+function assertNoDeploymentCapabilities(workflow) {
+  for (const job of Object.values(workflow.jobs ?? {})) {
+    for (const value of nestedStrings(job)) {
+      assert.doesNotMatch(value, /\bsecrets\s*(?:\.|\[)/i);
+    }
+    assertNoVercelCredentials(job.env);
+
     if (!Array.isArray(job.steps)) continue;
     for (const step of job.steps) {
       if (typeof step.uses === "string") {
         assert.doesNotMatch(
           step.uses,
-          /deploy-pages|upload-pages-artifact|actions\/deploy|\bdeploy(?:ment)?\b/i,
+          /^(?:actions\/(?:deploy-pages|upload-pages-artifact)|peaceiris\/actions-gh-pages|jamesives\/github-pages-deploy-action|firebaseextended\/action-hosting-deploy|azure\/static-web-apps-deploy|amondnet\/vercel-action|cloudflare\/pages-action|vercel\/[^@\s]+|[^/\s]+\/[^@\s]*(?:deploy|deployment)[^@\s]*)@/i,
         );
       }
-      if (typeof step.run === "string") {
-        assert.doesNotMatch(
-          step.run,
-          /deploy-pages|upload-pages-artifact|\b(?:deploy|deployment|vercel)\b/i,
-        );
+      assertNoVercelCredentials(step.env);
+      assertNoVercelCredentials(step.with);
+      if (typeof step.run === "string") assertNoDeploymentCommand(step.run);
+      for (const input of nestedStrings(step.with)) {
+        assertNoDeploymentCommand(input);
       }
     }
   }
@@ -113,26 +142,18 @@ function assertContainsRequired(actualValues, requiredValues) {
 
 function negativePatternOverlapsRequired(negativePattern, requiredPattern) {
   const pattern = negativePattern.slice(1);
-  if (pattern === requiredPattern) return true;
-
-  const wildcardIndex = pattern.search(/[*?[\]{}]/);
-  const literalPrefix = (
-    wildcardIndex === -1 ? pattern : pattern.slice(0, wildcardIndex)
-  ).replace(/\/+$/, "");
-  if (!literalPrefix) return true;
-
   const requiredIsRoot = requiredPattern.endsWith("/**");
-  const protectedPath = requiredIsRoot
-    ? requiredPattern.slice(0, -3)
-    : requiredPattern;
-  if (requiredIsRoot) {
-    return (
-      literalPrefix === protectedPath ||
-      literalPrefix.startsWith(`${protectedPath}/`) ||
-      protectedPath.startsWith(`${literalPrefix}/`)
-    );
+  if (!requiredIsRoot) return matchesGlob(requiredPattern, pattern);
+
+  const protectedSegments = requiredPattern.slice(0, -3).split("/");
+  const patternSegments = pattern.split("/");
+  for (let index = 0; index < protectedSegments.length; index += 1) {
+    const patternSegment = patternSegments[index];
+    if (patternSegment === undefined) return true;
+    if (patternSegment === "**") return true;
+    if (!matchesGlob(protectedSegments[index], patternSegment)) return false;
   }
-  return protectedPath.startsWith(literalPrefix);
+  return true;
 }
 
 function assertRequiredPatterns(patterns, requiredPatterns) {
@@ -185,40 +206,20 @@ function hasNonemptyRunner(runsOn) {
   return runnerValues.length > 0 && runnerValues.every(hasNonemptyRunner);
 }
 
-function isReusableWorkflowReference(reference) {
-  return (
-    /^\.\/\.github\/workflows\/[^/@\s]+\.ya?ml$/i.test(reference) ||
-    /^[^/\s]+\/[^/\s]+\/\.github\/workflows\/[^/@\s]+\.ya?ml@\S+$/i.test(
-      reference,
-    )
-  );
-}
-
 function assertValidJob(job) {
+  assert.ok(job && typeof job === "object");
   assertReadOnlyPermissions(job.permissions);
   assert.equal(Object.hasOwn(job, "secrets"), false);
-  const hasSteps = Object.hasOwn(job, "steps");
-  const hasReusableWorkflow = Object.hasOwn(job, "uses");
-  assert.notEqual(hasSteps, hasReusableWorkflow);
-
-  if (hasSteps) {
-    assert.ok(hasNonemptyRunner(job["runs-on"]));
-    assert.ok(Number.isInteger(job["timeout-minutes"]));
-    assert.ok(job["timeout-minutes"] > 0);
-    assert.ok(job["timeout-minutes"] <= maximumJobTimeoutMinutes);
-    assert.ok(Array.isArray(job.steps));
-    assert.ok(job.steps.length > 0);
-    for (const step of job.steps) {
-      assert.ok(step && typeof step === "object");
-    }
-    return;
+  assert.equal(Object.hasOwn(job, "uses"), false);
+  assert.ok(hasNonemptyRunner(job["runs-on"]));
+  assert.ok(Number.isInteger(job["timeout-minutes"]));
+  assert.ok(job["timeout-minutes"] > 0);
+  assert.ok(job["timeout-minutes"] <= maximumJobTimeoutMinutes);
+  assert.ok(Array.isArray(job.steps));
+  assert.ok(job.steps.length > 0);
+  for (const step of job.steps) {
+    assert.ok(step && typeof step === "object");
   }
-
-  assert.equal(typeof job.uses, "string");
-  assert.ok(job.uses.trim().length > 0);
-  assert.ok(isReusableWorkflowReference(job.uses));
-  assert.equal(Object.hasOwn(job, "runs-on"), false);
-  assert.equal(Object.hasOwn(job, "timeout-minutes"), false);
 }
 
 function assertRequiredJob(workflow, job, runCommands) {
@@ -226,44 +227,35 @@ function assertRequiredJob(workflow, job, runCommands) {
   assert.ok(Array.isArray(job.steps));
   assert.equal(Object.hasOwn(job, "if"), false);
   assert.equal(Object.hasOwn(job, "continue-on-error"), false);
-  assert.equal(Object.hasOwn(workflow.defaults?.run ?? {}, "shell"), false);
-  assert.equal(Object.hasOwn(job.defaults?.run ?? {}, "shell"), false);
+  assert.equal(Object.hasOwn(workflow.defaults ?? {}, "run"), false);
+  assert.equal(Object.hasOwn(job.defaults ?? {}, "run"), false);
   for (const step of job.steps) {
     assert.equal(Object.hasOwn(step, "if"), false);
     assert.equal(Object.hasOwn(step, "continue-on-error"), false);
     if (Object.hasOwn(step, "run")) {
       assert.equal(Object.hasOwn(step, "shell"), false);
+      assert.equal(Object.hasOwn(step, "working-directory"), false);
     }
   }
 
-  const checkoutIndexes = job.steps.flatMap((step, index) =>
-    typeof step.uses === "string" && /^actions\/checkout@\S+$/.test(step.uses)
-      ? [index]
-      : [],
-  );
-  const setupNodeIndexes = job.steps.flatMap((step, index) =>
-    typeof step.uses === "string" && /^actions\/setup-node@\S+$/.test(step.uses)
-      ? [index]
-      : [],
-  );
-  assert.equal(checkoutIndexes.length, 1);
-  assert.equal(setupNodeIndexes.length, 1);
-  const npmCIIndex = job.steps.findIndex((step) => step.run === "npm ci");
-  assert.ok(checkoutIndexes[0] < setupNodeIndexes[0]);
-  assert.ok(setupNodeIndexes[0] < npmCIIndex);
-
-  const setupNodeStep = job.steps[setupNodeIndexes[0]];
+  assert.equal(job.steps.length, runCommands.length + 2);
+  const [checkoutStep, setupNodeStep, ...runSteps] = job.steps;
+  assert.match(checkoutStep.uses, /^actions\/checkout@\S+$/);
+  assert.equal(Object.hasOwn(checkoutStep, "run"), false);
+  assert.match(setupNodeStep.uses, /^actions\/setup-node@\S+$/);
+  assert.equal(Object.hasOwn(setupNodeStep, "run"), false);
   assert.match(
     String(setupNodeStep.with?.["node-version"]),
     /^22(?:\.(?:x|\d+)){0,2}$/i,
   );
   assert.equal(setupNodeStep.with?.cache, "npm");
   assert.deepEqual(
-    job.steps
-      .filter((step) => Object.hasOwn(step, "run"))
-      .map((step) => step.run),
+    runSteps.map((step) => step.run),
     runCommands,
   );
+  for (const step of runSteps) {
+    assert.equal(Object.hasOwn(step, "uses"), false);
+  }
 }
 
 function assertWorkflowContract(workflow, contract) {
@@ -446,8 +438,40 @@ test("deployment guard rejects secret contexts and deploy steps", () => {
       },
     },
     { jobs: { audit: { steps: [{ uses: "example/deploy@v1" }] } } },
+    {
+      jobs: {
+        audit: { steps: [{ uses: "peaceiris/actions-gh-pages@v4" }] },
+      },
+    },
+    {
+      jobs: { audit: { steps: [{ uses: "actions/deploy-pages@v4" }] } },
+    },
+    {
+      jobs: {
+        audit: {
+          steps: [
+            {
+              uses: "cloudflare/wrangler-action@v3",
+              with: { command: "pages deploy out" },
+            },
+          ],
+        },
+      },
+    },
     { jobs: { audit: { steps: [{ run: "npm run deploy" }] } } },
     { jobs: { audit: { steps: [{ uses: "vercel/action@v1" }] } } },
+    {
+      jobs: {
+        audit: { steps: [{ env: { VERCEL_TOKEN: "credential" } }] },
+      },
+    },
+    {
+      jobs: {
+        audit: {
+          steps: [{ with: { token: "${{ vars.VERCEL_DEPLOY_TOKEN }}" } }],
+        },
+      },
+    },
   ];
 
   for (const workflow of forbiddenWorkflows) {
@@ -462,8 +486,13 @@ test("workflow contract allows additive safe paths and jobs", async () => {
   const { workflow } = await readWorkflow("deploy.yml");
   workflow.on.pull_request.paths.unshift("README.md");
   workflow.on.pull_request.paths.push("!examples/private/**");
+  workflow.on.pull_request.paths.push("!c[a]rgo/**");
+  workflow.on.pull_request.paths.push("docs/vercel-migration/**");
+  workflow.on.pull_request.paths.push("!course/**", "course/**");
   workflow.on.push.paths.push("README.md");
   workflow.on.push.paths.push("!examples/private/**");
+  workflow.on.push.paths.push("!c[a]rgo/**");
+  workflow.on.push.paths.push("docs/vercel-migration/**");
   workflow.on.push.branches.push("release");
   workflow.on.push.branches.push("!experimental");
   workflow.on.schedule = [{ cron: "0 0 * * 0" }];
@@ -497,16 +526,10 @@ test("workflow contract allows additive safe paths and jobs", async () => {
       },
       {
         name: "Inspect npm",
-        run: "npm --version",
+        run: "npm run test:vercel-config",
         "continue-on-error": true,
       },
     ],
-  };
-  workflow.jobs.reusable = {
-    name: "Reusable read-only checks",
-    uses: "example/repository/.github/workflows/check.yml@v1",
-    permissions: { contents: "read" },
-    if: "github.event_name == 'pull_request'",
   };
 
   assert.doesNotThrow(() =>
@@ -599,7 +622,14 @@ test("workflow contract rejects trigger drift", async () => {
     ),
   );
 
-  for (const negativePath of ["!course/**", "!course/private/**"]) {
+  for (const negativePath of [
+    "!course/**",
+    "!course/private/**",
+    "!c[o]urse/**",
+    "!c*e/**",
+    "!**/test/**",
+    "!*.json",
+  ]) {
     const negatedPathWorkflow = structuredClone(workflow);
     negatedPathWorkflow.on.pull_request.paths.push(negativePath);
     assert.throws(() =>
@@ -611,6 +641,15 @@ test("workflow contract rejects trigger drift", async () => {
   negatedMainWorkflow.on.push.branches.push("!main");
   assert.throws(() =>
     assertWorkflowContract(negatedMainWorkflow, applicationWorkflowContract),
+  );
+
+  const wildcardNegatedMainWorkflow = structuredClone(workflow);
+  wildcardNegatedMainWorkflow.on.push.branches.push("!m*");
+  assert.throws(() =>
+    assertWorkflowContract(
+      wildcardNegatedMainWorkflow,
+      applicationWorkflowContract,
+    ),
   );
 });
 
@@ -632,6 +671,31 @@ test("required jobs reject custom shell overrides", async () => {
   workflowShellWorkflow.defaults = { run: { shell: "echo {0}" } };
   assert.throws(() =>
     assertWorkflowContract(workflowShellWorkflow, applicationWorkflowContract),
+  );
+
+  const stepDirectoryWorkflow = structuredClone(workflow);
+  stepDirectoryWorkflow.jobs.build.steps[2]["working-directory"] = "course";
+  assert.throws(() =>
+    assertWorkflowContract(stepDirectoryWorkflow, applicationWorkflowContract),
+  );
+
+  const jobDirectoryWorkflow = structuredClone(workflow);
+  jobDirectoryWorkflow.jobs.build.defaults = {
+    run: { "working-directory": "course" },
+  };
+  assert.throws(() =>
+    assertWorkflowContract(jobDirectoryWorkflow, applicationWorkflowContract),
+  );
+
+  const workflowDirectoryWorkflow = structuredClone(workflow);
+  workflowDirectoryWorkflow.defaults = {
+    run: { "working-directory": "course" },
+  };
+  assert.throws(() =>
+    assertWorkflowContract(
+      workflowDirectoryWorkflow,
+      applicationWorkflowContract,
+    ),
   );
 });
 
@@ -663,6 +727,14 @@ test("required jobs reject reordered or duplicate setup actions", async () => {
       applicationWorkflowContract,
     ),
   );
+
+  const prepActionWorkflow = structuredClone(workflow);
+  prepActionWorkflow.jobs.build.steps.splice(2, 0, {
+    uses: "example/prepare@v1",
+  });
+  assert.throws(() =>
+    assertWorkflowContract(prepActionWorkflow, applicationWorkflowContract),
+  );
 });
 
 test("step jobs require a runner", async () => {
@@ -683,10 +755,10 @@ test("step jobs require a runner", async () => {
   );
 });
 
-test("reusable workflow jobs require a workflow reference", async () => {
+test("reusable workflow jobs are rejected", async () => {
   const { workflow } = await readWorkflow("deploy.yml");
   workflow.jobs.reusable = {
-    uses: "example/action@v1",
+    uses: "example/repository/.github/workflows/check.yml@v1",
     permissions: { contents: "read" },
   };
 
