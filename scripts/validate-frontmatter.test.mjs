@@ -81,6 +81,38 @@ test("frontmatter count expectation follows the manifest and public locales", ()
   assert.equal(publicDocumentCount({ pages: [{}, {}, {}] }, ["en", "vi"]), 6);
 });
 
+test("frontmatter validation rejects public route files outside the manifest", async () => {
+  await withChapterFixture(11, async (rootURL) => {
+    await writeFile(
+      new URL("content/en/orphan-route.md", rootURL),
+      `---
+title: Orphan route
+translation_key: orphan-route
+language: en
+---
+`,
+    );
+
+    const result = await validateFrontmatter(rootURL);
+    assert.equal(result.count, 3);
+    assert.deepEqual(result.errors, [
+      "en/orphan-route.md: public content file is not declared in translation-manifest.json",
+    ]);
+  });
+});
+
+test("frontmatter validation rejects manifest paths without public route files", async () => {
+  await withChapterFixture(11, async (rootURL) => {
+    await rm(new URL("content/vi/ch11-testing-evaluation.md", rootURL));
+
+    const result = await validateFrontmatter(rootURL);
+    assert.equal(result.count, 1);
+    assert.deepEqual(result.errors, [
+      "vi/ch11-testing-evaluation.md: manifest path has no localized public content file",
+    ]);
+  });
+});
+
 test("frontmatter validation accepts chapter 11 and still rejects chapter 12", async () => {
   await withChapterFixture(11, async (rootURL) => {
     const result = await validateFrontmatter(rootURL);

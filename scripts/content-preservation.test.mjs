@@ -4,6 +4,7 @@ import test from "node:test";
 
 import {
   contentMetrics,
+  historicalPreservationPrefixErrors,
   preservationManifestCoverageErrors,
   preservationErrors,
   validatePreservation,
@@ -329,6 +330,77 @@ test("preservation manifest coverage rejects incomplete and mis-keyed translatio
   ]);
 });
 
+test("preservation coverage keeps non-course pages before course pages", () => {
+  const translations = {
+    pages: [
+      { key: "home", group: "start", en: "index.mdx", vi: "index.mdx" },
+      {
+        key: "course-overview",
+        group: "course",
+        en: "course/index.mdx",
+        vi: "course/index.mdx",
+      },
+      {
+        key: "quickstart",
+        group: "start",
+        en: "quickstart.md",
+        vi: "quickstart.md",
+      },
+    ],
+  };
+  const manifest = {
+    pages: [
+      { ...validRule("en/index.mdx"), key: "home" },
+      { ...validRule("vi/index.mdx"), key: "home" },
+      { ...validRule("en/quickstart.md"), key: "quickstart" },
+      { ...validRule("vi/quickstart.md"), key: "quickstart" },
+      { ...validRule("en/course/index.mdx"), key: "course-overview" },
+      { ...validRule("vi/course/index.mdx"), key: "course-overview" },
+    ],
+  };
+
+  assert.deepEqual(
+    preservationManifestCoverageErrors(translations, manifest),
+    [],
+  );
+});
+
+test("historical preservation prefix rejects a coordinated route rename", async () => {
+  const [manifest, translations] = await Promise.all([
+    readFile(
+      new URL("../content/preservation-manifest.json", import.meta.url),
+      "utf8",
+    ).then(JSON.parse),
+    readFile(
+      new URL("../content/translation-manifest.json", import.meta.url),
+      "utf8",
+    ).then(JSON.parse),
+  ]);
+  const mutatedManifest = structuredClone(manifest);
+  const mutatedTranslations = structuredClone(translations);
+  const translation = mutatedTranslations.pages.find(
+    (page) => page.key === "quickstart",
+  );
+  translation.key = "getting-started";
+  translation.en = "getting-started.md";
+  translation.vi = "getting-started.md";
+  for (const page of mutatedManifest.pages.filter(
+    (page) => page.key === "quickstart",
+  )) {
+    page.key = "getting-started";
+    page.path = page.path.replace("quickstart.md", "getting-started.md");
+  }
+
+  assert.deepEqual(
+    preservationManifestCoverageErrors(mutatedTranslations, mutatedManifest),
+    [],
+    "a coordinated manifest/frontmatter rename remains structurally consistent",
+  );
+  assert.deepEqual(historicalPreservationPrefixErrors(mutatedManifest), [
+    "preservation-manifest.json: the immutable 54-record historical key/path prefix changed",
+  ]);
+});
+
 test("the repository content satisfies the historical preservation baseline", async () => {
   const [manifest, translations] = await Promise.all([
     readFile(
@@ -341,62 +413,12 @@ test("the repository content satisfies the historical preservation baseline", as
     ).then(JSON.parse),
   ]);
   assert.equal(manifest.pages.length, 86);
-  const expectedPages = translations.pages.flatMap((page) => [
-    { key: page.key, path: `en/${page.en}` },
-    { key: page.key, path: `vi/${page.vi}` },
-  ]);
-  const legacyExpectedPages = translations.pages
-    .filter((page) => page.group !== "course")
-    .flatMap((page) => [
-      { key: page.key, path: `en/${page.en}` },
-      { key: page.key, path: `vi/${page.vi}` },
-    ]);
-  const courseExpectedPages = translations.pages
-    .filter((page) => page.group === "course")
-    .flatMap((page) => [
-      { key: page.key, path: `en/${page.en}` },
-      { key: page.key, path: `vi/${page.vi}` },
-    ]);
-
-  assert.deepEqual(
-    manifest.pages
-      .slice(0, legacyExpectedPages.length)
-      .map(({ key, path }) => ({
-        key,
-        path,
-      })),
-    legacyExpectedPages,
-    "the 54 historical records must remain first and in their original order",
-  );
-  assert.deepEqual(
-    manifest.pages.slice(legacyExpectedPages.length).map(({ key, path }) => ({
-      key,
-      path,
-    })),
-    courseExpectedPages,
-    "the 32 course records must follow translation-manifest order, EN then VI",
-  );
   assert.equal(translations.pages.length, 43);
-  assert.equal(expectedPages.length, 86);
-  for (const page of translations.pages) {
-    const entries = manifest.pages.filter((entry) => entry.key === page.key);
-    assert.equal(
-      entries.length,
-      2,
-      `${page.key} must have exactly two entries`,
-    );
-    assert.deepEqual(
-      entries.map(({ path }) => path),
-      [`en/${page.en}`, `vi/${page.vi}`],
-      `${page.key} must have one EN and one VI path in order`,
-    );
-  }
-
   assert.deepEqual(
-    new Set(manifest.pages.map(({ path }) => path)),
-    new Set(expectedPages.map(({ path }) => path)),
-    "the preservation manifest must cover every translated public path once",
+    preservationManifestCoverageErrors(translations, manifest),
+    [],
   );
+  assert.deepEqual(historicalPreservationPrefixErrors(manifest), []);
 
   const errors = await validatePreservation(
     new URL("../", import.meta.url),

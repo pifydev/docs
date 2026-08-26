@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -9,6 +9,28 @@ import { codeFenceLanguages, extractMermaidBlocks } from "./lib/markdown.mjs";
 
 const locales = ["en", "vi"];
 const statuses = ["draft", "translated", "reviewed", "published"];
+
+async function markdownPaths(directory, prefix = "") {
+  const paths = [];
+  const entries = await readdir(directory, { withFileTypes: true });
+  entries.sort((left, right) => left.name.localeCompare(right.name));
+
+  for (const entry of entries) {
+    const relativePath = prefix ? `${prefix}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) {
+      paths.push(
+        ...(await markdownPaths(
+          path.join(directory, entry.name),
+          relativePath,
+        )),
+      );
+    } else if (entry.isFile() && /\.(?:md|mdx)$/.test(entry.name)) {
+      paths.push(relativePath);
+    }
+  }
+
+  return paths;
+}
 
 function countCodeLines(content) {
   let total = 0;
@@ -29,13 +51,42 @@ export async function validateFrontmatter(rootURL) {
     ),
   );
   const errors = [];
-  let count = 0;
+  const expectedPaths = new Set(
+    manifest.pages.flatMap((page) =>
+      locales.map((locale) => `${locale}/${page[locale]}`),
+    ),
+  );
+  const actualPaths = (
+    await Promise.all(
+      locales.map(async (locale) =>
+        (await markdownPaths(path.join(root, "content", locale))).map(
+          (relativePath) => `${locale}/${relativePath}`,
+        ),
+      ),
+    )
+  ).flat();
+  const actualPathSet = new Set(actualPaths);
+
+  for (const expectedPath of expectedPaths) {
+    if (!actualPathSet.has(expectedPath)) {
+      errors.push(
+        `${expectedPath}: manifest path has no localized public content file`,
+      );
+    }
+  }
+  for (const actualPath of actualPaths) {
+    if (!expectedPaths.has(actualPath)) {
+      errors.push(
+        `${actualPath}: public content file is not declared in translation-manifest.json`,
+      );
+    }
+  }
 
   for (const page of manifest.pages) {
     for (const locale of locales) {
-      count++;
       const relativePath = page[locale];
       const label = `${locale}/${relativePath}`;
+      if (!actualPathSet.has(label)) continue;
       const file = await readFile(
         path.join(root, "content", locale, relativePath),
         "utf8",
@@ -103,7 +154,7 @@ export async function validateFrontmatter(rootURL) {
     }
   }
 
-  return { count, errors };
+  return { count: actualPaths.length, errors };
 }
 
 async function main() {

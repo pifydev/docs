@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 
 const WORD_PATTERN = /[\p{L}\p{N}]+(?:[’'-][\p{L}\p{N}]+)*/gu;
@@ -16,6 +17,9 @@ const VALID_DELETION_METRICS = new Set([
   "mermaidBlocks",
   "tables",
 ]);
+const HISTORICAL_PRESERVATION_RECORDS = 54;
+const HISTORICAL_PRESERVATION_PREFIX_SHA256 =
+  "253683dee3be6f51cc2e740cc87e3ad4390e0429c7cdf41c5cdc5c5189a7d3e6";
 
 function withoutFrontmatter(source) {
   const lines = source.replace(/\r\n?/g, "\n").split("\n");
@@ -375,7 +379,11 @@ function validateManifest(manifest) {
 }
 
 export function preservationManifestCoverageErrors(translations, manifest) {
-  const expectedPages = (translations?.pages ?? []).flatMap((page) => [
+  const translationPages = translations?.pages ?? [];
+  const expectedPages = [
+    ...translationPages.filter((page) => page.group !== "course"),
+    ...translationPages.filter((page) => page.group === "course"),
+  ].flatMap((page) => [
     { key: page.key, path: `en/${page.en}` },
     { key: page.key, path: `vi/${page.vi}` },
   ]);
@@ -411,6 +419,22 @@ export function preservationManifestCoverageErrors(translations, manifest) {
   }
 
   return errors;
+}
+
+export function historicalPreservationPrefixErrors(manifest) {
+  const prefix = (manifest?.pages ?? [])
+    .slice(0, HISTORICAL_PRESERVATION_RECORDS)
+    .map(({ key, path }) => ({ key, path }));
+  const digest = createHash("sha256")
+    .update(JSON.stringify(prefix))
+    .digest("hex");
+
+  return prefix.length === HISTORICAL_PRESERVATION_RECORDS &&
+    digest === HISTORICAL_PRESERVATION_PREFIX_SHA256
+    ? []
+    : [
+        `${MANIFEST_LABEL}: the immutable 54-record historical key/path prefix changed`,
+      ];
 }
 
 export async function validatePreservation(rootURL, manifest) {
