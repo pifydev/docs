@@ -211,26 +211,157 @@ test("renders docs primitives, theme controls, and a usable mobile drawer", asyn
   );
 });
 
+test("keeps course syntax highlighting and Mermaid rendering across themes", async ({
+  page,
+}) => {
+  await page.goto("/en/course/07-agent-loop");
+
+  const diagram = page.locator(".pify-mermaid > div > svg").first();
+  const highlightedCode = page
+    .locator(".pify-docs-body figure.shiki code")
+    .first();
+  const highlightedToken = highlightedCode.locator("span[style]").first();
+
+  await expect(diagram).toBeVisible();
+  await expect(highlightedCode).toBeVisible();
+  await expect(highlightedToken).toBeVisible();
+
+  const lightTokenColor = await highlightedToken.evaluate(
+    (element) => getComputedStyle(element).color,
+  );
+
+  const html = page.locator("html");
+  await expect(html).toHaveClass(/light/);
+  await page
+    .getByRole("button", { name: "Toggle Theme" })
+    .evaluate((element: HTMLButtonElement) => element.click());
+  await expect(html).toHaveClass(/dark/);
+
+  const darkTokenColor = await highlightedToken.evaluate(
+    (element) => getComputedStyle(element).color,
+  );
+  expect(darkTokenColor).not.toBe(lightTokenColor);
+  await expect(highlightedToken).toBeVisible();
+  await expect(diagram).toBeVisible();
+});
+
 test("serves machine-readable documentation surfaces", async ({ request }) => {
-  const [robots, sitemap, index, full] = await Promise.all([
+  const [
+    robots,
+    sitemap,
+    englishIndex,
+    vietnameseIndex,
+    englishFull,
+    vietnameseFull,
+  ] = await Promise.all([
     request.get("/robots.txt"),
     request.get("/sitemap.xml"),
+    request.get("/en/llms.txt"),
     request.get("/vi/llms.txt"),
     request.get("/en/llms-full.txt"),
+    request.get("/vi/llms-full.txt"),
   ]);
 
-  for (const response of [robots, sitemap, index, full]) {
+  for (const response of [
+    robots,
+    sitemap,
+    englishIndex,
+    vietnameseIndex,
+    englishFull,
+    vietnameseFull,
+  ]) {
     expect(response.ok()).toBe(true);
   }
 
-  expect(await robots.text()).toContain(
-    "Sitemap: https://docs.pify.dev/sitemap.xml",
+  const machineReadableBodies = await Promise.all([
+    robots.text(),
+    sitemap.text(),
+    englishIndex.text(),
+    vietnameseIndex.text(),
+    englishFull.text(),
+    vietnameseFull.text(),
+  ]);
+  const [
+    robotsBody,
+    sitemapBody,
+    englishIndexBody,
+    vietnameseIndexBody,
+    englishFullBody,
+  ] = machineReadableBodies;
+
+  expect(robotsBody).toContain("Sitemap: https://docs.pify.dev/sitemap.xml");
+  expect(sitemapBody.match(/<url>/g)).toHaveLength(86);
+
+  for (const [response, body] of [
+    [englishIndex, englishIndexBody],
+    [vietnameseIndex, vietnameseIndexBody],
+  ] as const) {
+    expect(response.headers()["content-type"]).toContain("text/plain");
+    expect(body.match(/^- \[/gm)).toHaveLength(43);
+  }
+
+  expect(englishIndexBody).toContain(
+    "[Build Your Own Pi-style Agent](https://docs.pify.dev/en/course)",
   );
-  expect((await sitemap.text()).match(/<url>/g)).toHaveLength(54);
-  expect(index.headers()["content-type"]).toContain("text/plain");
-  expect((await index.text()).match(/^- \[/gm)).toHaveLength(27);
-  expect(full.headers()["content-type"]).toContain("text/plain");
-  expect((await full.text()).length).toBeGreaterThan(100_000);
+  expect(englishIndexBody).toContain(
+    "[Checkpoint 14: Evaluate the Agent reproducibly](https://docs.pify.dev/en/course/14-agent-evaluation)",
+  );
+  expect(vietnameseIndexBody).toContain(
+    "[Tự xây Pi-style Agent](https://docs.pify.dev/vi/course)",
+  );
+  expect(vietnameseIndexBody).toContain(
+    "[Checkpoint 14: Đánh giá Agent có thể tái lập](https://docs.pify.dev/vi/course/14-agent-evaluation)",
+  );
+
+  expect(englishFull.headers()["content-type"]).toContain("text/plain");
+  expect(englishFullBody.length).toBeGreaterThan(100_000);
+  expect(englishFullBody).toContain(
+    "The smallest credible release gate covers every layer",
+  );
+  expect(englishFullBody).toContain("EVALUATION_CLEANUP_FAILED");
+
+  for (const body of machineReadableBodies) {
+    expect(body).not.toMatch(/(?:https:\/\/docs\.pify\.dev)?\/zh(?:[\/#?]|$)/);
+  }
+});
+
+test("keeps course search results scoped to the requested locale", async ({
+  request,
+}) => {
+  const [englishResponse, vietnameseResponse] = await Promise.all([
+    request.get("/api/search?query=SCRIPT_EXHAUSTED&locale=en"),
+    request.get("/api/search?query=SCRIPT_EXHAUSTED&locale=vi"),
+  ]);
+
+  for (const response of [englishResponse, vietnameseResponse]) {
+    expect(response.ok()).toBe(true);
+  }
+
+  const englishResults = (await englishResponse.json()) as Array<{
+    url: string;
+  }>;
+  const vietnameseResults = (await vietnameseResponse.json()) as Array<{
+    url: string;
+  }>;
+
+  expect(englishResults.length).toBeGreaterThan(0);
+  expect(vietnameseResults.length).toBeGreaterThan(0);
+  expect(englishResults.every(({ url }) => /^\/en(?:[\/#]|$)/.test(url))).toBe(
+    true,
+  );
+  expect(
+    vietnameseResults.every(({ url }) => /^\/vi(?:[\/#]|$)/.test(url)),
+  ).toBe(true);
+  expect(
+    englishResults.some(({ url }) =>
+      url.startsWith("/en/course/04-deterministic-model"),
+    ),
+  ).toBe(true);
+  expect(
+    vietnameseResults.some(({ url }) =>
+      url.startsWith("/vi/course/04-deterministic-model"),
+    ),
+  ).toBe(true);
 });
 
 test("renders every internal Markdown source link as a clean public route", async ({
@@ -246,14 +377,23 @@ test("renders every internal Markdown source link as a clean public route", asyn
     ),
     (match) => match[1],
   );
-  expect(paths).toHaveLength(54);
+  expect(paths).toHaveLength(86);
 
-  for (const path of paths) {
-    const response = await request.get(path);
-    expect(response.ok(), path).toBe(true);
-    expect(await response.text(), path).not.toMatch(
-      /<a[^>]+href="(?!https?:\/\/|mailto:|#)[^"]*\.mdx?(?:[?#][^"]*)?"/i,
+  for (let index = 0; index < paths.length; index += 8) {
+    const batch = paths.slice(index, index + 8);
+    const pages = await Promise.all(
+      batch.map(async (path) => {
+        const response = await request.get(path);
+        return { path, response, body: await response.text() };
+      }),
     );
+
+    for (const { path, response, body } of pages) {
+      expect(response.ok(), path).toBe(true);
+      expect(body, path).not.toMatch(
+        /<a[^>]+href="(?!https?:\/\/|mailto:|#)[^"]*\.mdx?(?:[?#][^"]*)?"/i,
+      );
+    }
   }
 
   await page.goto("/en");
