@@ -1,4 +1,9 @@
-import { constants as fsConstants, realpathSync, statSync } from "node:fs";
+import {
+  constants as fsConstants,
+  realpathSync,
+  statSync,
+  type BigIntStats,
+} from "node:fs";
 import {
   lstat,
   mkdir,
@@ -71,10 +76,15 @@ type FileIdentity = Readonly<{
   device: number | bigint;
   inode: number | bigint;
 }>;
+type WorkspaceIdentity = Readonly<{
+  device: bigint;
+  inode: bigint;
+  birthtimeNs: bigint;
+}>;
 type CanonicalWorkspace = Readonly<{
   entry: string;
   root: string;
-  identity: FileIdentity;
+  identity: WorkspaceIdentity;
 }>;
 type NormalizedPath = Readonly<{
   display: string;
@@ -655,9 +665,9 @@ function canonicalizeWorkspace(root: string): CanonicalWorkspace {
       cause,
     );
   }
-  let metadata: ReturnType<typeof statSync>;
+  let metadata: BigIntStats;
   try {
-    metadata = statSync(canonical);
+    metadata = statSync(canonical, { bigint: true });
   } catch (cause) {
     throw codingError("INVALID_WORKSPACE_ROOT", cause);
   }
@@ -666,7 +676,7 @@ function canonicalizeWorkspace(root: string): CanonicalWorkspace {
   return Object.freeze({
     entry,
     root: canonical,
-    identity: identityFromStat(metadata),
+    identity: workspaceIdentityFromStat(metadata),
   });
 }
 
@@ -786,10 +796,10 @@ async function assertCanonicalWorkspace(
   workspace: CanonicalWorkspace,
 ): Promise<void> {
   let current: string;
-  let metadata: Awaited<ReturnType<typeof stat>>;
+  let metadata: BigIntStats;
   try {
     current = await realpath(workspace.entry);
-    metadata = await stat(current);
+    metadata = await stat(current, { bigint: true });
   } catch (cause) {
     throw codingError("WORKSPACE_ROOT_CHANGED", cause);
   }
@@ -798,7 +808,10 @@ async function assertCanonicalWorkspace(
   }
   if (
     !metadata.isDirectory() ||
-    !sameFileIdentity(identityFromStat(metadata), workspace.identity)
+    !sameWorkspaceIdentity(
+      workspaceIdentityFromStat(metadata),
+      workspace.identity,
+    )
   ) {
     throw codingError("WORKSPACE_ROOT_CHANGED");
   }
@@ -846,6 +859,27 @@ function identityFromStat(
 function sameFileIdentity(left: FileIdentity, right: FileIdentity): boolean {
   return (
     Object.is(left.device, right.device) && Object.is(left.inode, right.inode)
+  );
+}
+
+function workspaceIdentityFromStat(
+  value: Pick<BigIntStats, "dev" | "ino" | "birthtimeNs">,
+): WorkspaceIdentity {
+  return Object.freeze({
+    device: value.dev,
+    inode: value.ino,
+    birthtimeNs: value.birthtimeNs,
+  });
+}
+
+function sameWorkspaceIdentity(
+  left: WorkspaceIdentity,
+  right: WorkspaceIdentity,
+): boolean {
+  return (
+    left.device === right.device &&
+    left.inode === right.inode &&
+    left.birthtimeNs === right.birthtimeNs
   );
 }
 

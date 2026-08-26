@@ -14,7 +14,58 @@ import {
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 
-import { afterEach, beforeEach, expect, test } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
+
+const rootIdentityFixture = vi.hoisted(() => ({
+  path: undefined as string | undefined,
+  generation: BigInt(0),
+}));
+
+vi.mock("node:fs", async (importOriginal) => {
+  const original = await importOriginal<typeof import("node:fs")>();
+  return {
+    ...original,
+    statSync: ((...argumentsValue: unknown[]) => {
+      const statSync = original.statSync as (
+        ...argumentsValue: unknown[]
+      ) => object;
+      return maskRootIdentity(argumentsValue[0], statSync(...argumentsValue));
+    }) as typeof original.statSync,
+  };
+});
+
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const original = await importOriginal<typeof import("node:fs/promises")>();
+  return {
+    ...original,
+    stat: ((...argumentsValue: unknown[]) => {
+      const stat = original.stat as (
+        ...argumentsValue: unknown[]
+      ) => Promise<object>;
+      return stat(...argumentsValue).then((metadata) =>
+        maskRootIdentity(argumentsValue[0], metadata),
+      );
+    }) as typeof original.stat,
+  };
+});
+
+function maskRootIdentity<Path, Metadata extends object>(
+  path: Path,
+  metadata: Metadata,
+): Metadata {
+  if (path !== rootIdentityFixture.path) return metadata;
+  return new Proxy(metadata, {
+    get(target, property) {
+      if (property === "dev" || property === "ino") {
+        const current = Reflect.get(target, property, target) as unknown;
+        return typeof current === "bigint" ? BigInt(1) : 1;
+      }
+      if (property === "birthtimeNs") return rootIdentityFixture.generation;
+      const current = Reflect.get(target, property, target) as unknown;
+      return typeof current === "function" ? current.bind(target) : current;
+    },
+  });
+}
 
 import {
   COURSE_CODING_FILE_MAX_BYTES,
@@ -44,6 +95,8 @@ async function temporaryDirectory(prefix: string): Promise<string> {
 }
 
 beforeEach(async () => {
+  rootIdentityFixture.path = undefined;
+  rootIdentityFixture.generation = BigInt(0);
   workspace = await temporaryDirectory("pify-course-08-workspace-");
 });
 
@@ -874,12 +927,15 @@ test("termination never skips cleanup merely because the direct child has exited
 
 test("rejects a deleted and recreated workspace root for every coding Tool", async () => {
   await writeFile(join(workspace, "before.txt"), "before", "utf8");
+  rootIdentityFixture.path = await realpath(workspace);
+  rootIdentityFixture.generation = BigInt(1);
   const readTool = createReadTool(workspace);
   const writeTool = createWriteTool(workspace);
   const nodeTool = createNodeProcessTool(workspace);
   await rm(workspace, { recursive: true, force: true });
   await mkdir(workspace);
   await writeFile(join(workspace, "before.txt"), "replacement", "utf8");
+  rootIdentityFixture.generation = BigInt(2);
 
   await expect(
     readTool.execute(
