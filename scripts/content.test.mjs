@@ -245,6 +245,10 @@ test("translation manifest contains 43 unique EN/VI pairs", async () => {
 
 test("README and bilingual changelog describe the complete SDK and course release", async () => {
   const readme = await readFile(new URL("README.md", repositoryRoot), "utf8");
+  const contributing = await readFile(
+    new URL("CONTRIBUTING.md", repositoryRoot),
+    "utf8",
+  );
   const changelog = {
     en: await readFile(
       new URL("content/en/changelog.md", repositoryRoot),
@@ -269,6 +273,8 @@ test("README and bilingual changelog describe the complete SDK and course releas
   assert.match(readme, /43 synchronized[^\r\n]*86 public documents/i);
   assert.match(readme, /^course\/\s+Offline TypeScript workshop/m);
   assert.match(readme, /`npm run test:course`/);
+  assert.match(contributing, /compares all 43 public EN\/VI page pairs/);
+  assert.match(contributing, /validates all 86 public files/);
   assert.match(
     readme,
     /`npm run test:course:checkpoint -- course\/test\/04-deterministic-model\.test\.ts`/,
