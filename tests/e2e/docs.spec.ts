@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 const publicDocsOrigin = "https://docs.pify.dev";
+const publicDocsHostname = new URL(publicDocsOrigin).hostname;
 
 function safelyDecodePathname(pathname: string): string {
   try {
@@ -56,7 +57,8 @@ function localMarkdownPathname(
     const current = new URL(currentUrl);
     const target = new URL(href, current);
     const isLocal =
-      target.origin === current.origin || target.origin === publicDocsOrigin;
+      target.origin === current.origin ||
+      target.hostname === publicDocsHostname;
     if (!isLocal) return null;
 
     const pathname = safelyDecodePathname(target.pathname);
@@ -103,9 +105,27 @@ test("recognizes unsupported locale paths and local Markdown targets", () => {
       currentUrl,
     ),
   ).toBe("/vi/reference/api.mdx");
+  expect(
+    localMarkdownPathname(
+      "//docs.pify.dev/en/course/07-agent-loop.md",
+      currentUrl,
+    ),
+  ).toBe("/en/course/07-agent-loop.md");
+  expect(
+    localMarkdownPathname(
+      "http://docs.pify.dev/vi/course/14-agent-evaluation%2Emdx",
+      currentUrl,
+    ),
+  ).toBe("/vi/course/14-agent-evaluation.mdx");
   expect(localMarkdownPathname("/en/image.md.png", currentUrl)).toBeNull();
   expect(
     localMarkdownPathname("https://example.com/reference.md", currentUrl),
+  ).toBeNull();
+  expect(
+    localMarkdownPathname(
+      "https://docs.pify.dev.example/en/quickstart.md",
+      currentUrl,
+    ),
   ).toBeNull();
 });
 
