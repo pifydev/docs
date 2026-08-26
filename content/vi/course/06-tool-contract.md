@@ -22,7 +22,7 @@ Arguments không hợp lệ không bao giờ làm Tool được gọi. Tên khô
 
 :::note[Course implementation]
 
-`CourseTool`, `ToolRegistry`, `defineTool()`, `executeToolCall()`, các giới hạn của bộ tuần tự hóa và mã lỗi đều thuộc workshop. Hình dạng của validator và content result chỉ chứa string không phải interface trong Pi SDK.
+`CourseTool`, `ToolRegistry`, `defineTool()`, `executeToolCall()`, các giới hạn của bộ tuần tự hóa và mã lỗi đều thuộc workshop. Hình dạng validator và quy ước dùng một string duy nhất làm `content` của result không thuộc các interface trong Pi SDK.
 
 :::
 
@@ -35,7 +35,7 @@ Hãy đọc module Tool cùng bài kiểm thử tập trung:
 | Vai trò | Đường dẫn chính xác | Nội dung cần kiểm tra |
 | --- | --- | --- |
 | Mã nguồn tích lũy | `course/src/tool.ts` | Bản chụp định nghĩa, registry nguyên tử, ranh giới kiểm tra/tác dụng phụ, việc hủy, nguồn gốc lỗi, tuần tự hóa và liên kết result |
-| Bằng chứng tập trung | `course/test/06-tool-contract.test.ts` | Đầu vào thù địch, hoàn tác, lỗi có thể phục hồi hoặc lỗi nghiêm trọng, tranh chấp hủy, ngân sách đầu ra, result bất biến và các lượt gọi song song |
+| Bằng chứng tập trung | `course/test/06-tool-contract.test.ts` | Đầu vào thù địch, hoàn tác, lỗi có thể phục hồi hoặc lỗi nghiêm trọng, race khi hủy, ngân sách đầu ra, result bất biến và các lượt gọi song song |
 
 Bộ tuần tự hóa là một phần của quy ước an toàn và tài nguyên. Tool đã chạy khi quá trình tuần tự hóa bắt đầu, vì vậy đầu ra không an toàn hoặc không giới hạn không được đi vào transcript.
 
@@ -49,13 +49,13 @@ Lần thực thi bắt đầu bằng việc kiểm tra tín hiệu hủy và ch�
 
 Với Tool đã đăng ký, `validate(arguments)` chạy trước `execute`. Validator phải trả đồng bộ `{ ok: true, value }` hoặc `{ ok: false, error }`. Quyết định từ chối tạo `TOOL_ARGUMENTS_INVALID`; validator ném lỗi hoặc trả quyết định sai hình dạng tạo `TOOL_VALIDATION_FAILED`. Promise và thenable bị từ chối vì validator không được chạy bất đồng bộ, nhưng lần từ chối của chúng vẫn được quan sát để tiến trình kiểm thử không nhận lỗi promise chưa được xử lý. Nhờ đó, quyết định không tạo tác dụng phụ đã hoàn tất trước khi lần thực thi bắt đầu.
 
-Sau khi arguments hợp lệ, hàm thực thi nhận giá trị đã kiểm tra cùng ngữ cảnh `{ signal, toolCallId }` đã đóng băng. Tín hiệu hủy được kiểm tra trước và sau bước kiểm tra arguments, trước khi thực thi, trong lúc chờ, sau khi promise hoàn tất và sau khi kiểm tra đầu ra. Nếu việc hủy xảy ra trước khi thao tác hoàn tất, lý do hủy được truyền ra và không có Tool-result message nào được thêm. Tool cũng nhận cùng tín hiệu để tự dừng công việc.
+Sau khi arguments hợp lệ, hàm thực thi nhận giá trị đã kiểm tra cùng ngữ cảnh `{ signal, toolCallId }` đã đóng băng. Tín hiệu hủy được kiểm tra trước và sau bước kiểm tra arguments, trước khi thực thi, trong lúc chờ, sau khi promise resolve và sau khi kiểm tra đầu ra. Nếu tín hiệu hủy thắng race tại một trong các ranh giới này, lý do hủy được truyền ra và không có Tool-result message nào được công bố. Việc hủy vẫn có thể thắng sau khi promise thực thi của Tool đã resolve, hoặc sau khi đầu ra đã được tuần tự hóa và kiểm tra nhưng trước lúc công bố result. Tool cũng nhận cùng tín hiệu để tự dừng công việc.
 
-Giá trị lỗi thông thường và promise thực thi bị từ chối đều trở thành result `TOOL_EXECUTION_FAILED`. `NonRecoverableToolError` vượt qua ranh giới có thể phục hồi đó và làm lần thực thi bị từ chối. Class dùng một nhãn nguồn gốc chung nhưng riêng tư thay cho cờ công khai có thể ghi, vì vậy object hoặc prototype giả không thể biến lỗi thông thường thành lỗi nghiêm trọng. Nhãn nguồn gốc của `ToolContractError` cũng nằm nội bộ; Tool chưa đáng tin cậy không thể ném một lỗi giống bề ngoài để bỏ qua bước chuẩn hóa.
+Giá trị lỗi thông thường và promise thực thi bị từ chối đều được chuẩn hóa thành result `TOOL_EXECUTION_FAILED`. `NonRecoverableToolError` vượt qua ranh giới có thể phục hồi đó và làm lần thực thi bị từ chối. Class này dùng một nhãn nguồn gốc chung nhưng riêng tư thay cho cờ công khai có thể ghi, vì vậy object hoặc prototype giả không thể biến lỗi thông thường thành lỗi nghiêm trọng. Nhãn nguồn gốc của `ToolContractError` cũng nằm nội bộ; Tool chưa đáng tin cậy không thể ném một lỗi giống bề ngoài để bỏ qua bước chuẩn hóa.
 
-Đầu ra thành công được tuần tự hóa mà không gọi `toJSON`, getter hay method của collection do bên gọi cung cấp. Object thuần và object có prototype `null` được chấp nhận; các key string riêng có thể liệt kê được sắp xếp để đầu ra xác định; accessor bị bỏ qua; chu trình nhận marker; Proxy không hỗ trợ hoặc prototype khác thường tạo `TOOL_OUTPUT_SERIALIZATION_FAILED`. Công việc của bộ tuần tự hóa bị giới hạn ở độ sâu `32`, `128` node, `256` lượt thăm collection, `4096` ký tự trong string/key và độ lớn BigInt `4096` bit.
+Đầu ra thành công được tuần tự hóa mà không gọi `toJSON`, getter hay phương thức của collection do bên gọi cung cấp. Object thuần và object có prototype `null` được chấp nhận; các key string riêng có thể liệt kê được sắp xếp để đầu ra deterministic; accessor bị bỏ qua; chu trình nhận marker; Proxy không hỗ trợ hoặc prototype khác thường tạo `TOOL_OUTPUT_SERIALIZATION_FAILED`. Công việc của bộ tuần tự hóa bị giới hạn ở độ sâu `32`, `128` node, `256` lượt thăm collection, `4096` ký tự trong string/key và độ lớn BigInt `4096` bit.
 
-`content` cuối cùng bị giới hạn chính xác ở `4096` Unicode code point, tính cả marker duy nhất `\n[Tool output truncated]`. Result thành công hoặc có thể phục hồi được đóng băng và liên kết ngược bằng `toolCallId`, `toolName` cùng ID message được sinh theo mẫu `tool-result-${toolCall.id}`. Content lỗi là JSON xác định, chứa mã ổn định cùng message dễ đọc.
+`content` cuối cùng bị giới hạn chính xác ở `4096` Unicode code point, tính cả marker duy nhất `\n[Tool output truncated]`. Cả result thành công lẫn result chứa lỗi có thể phục hồi đều được đóng băng, rồi liên kết ngược bằng `toolCallId`, `toolName` cùng ID message được sinh theo mẫu `tool-result-${toolCall.id}`. `content` lỗi là JSON deterministic, chứa mã ổn định cùng message dễ đọc.
 
 ## Dấu vết hoặc mô hình
 
@@ -85,7 +85,7 @@ flowchart LR
 | Kiểm tra batch | Không | Ghi nhận toàn bộ batch | Hoàn tác nguyên tử khi có phần tử không hợp lệ |
 | Kiểm tra arguments | Không | Giá trị đã được thu hẹp type | Result lỗi có thể phục hồi và liên kết đúng |
 | Thực thi | Có | Đầu ra `unknown` | Result có thể phục hồi, việc hủy hoặc lỗi nghiêm trọng |
-| Tuần tự hóa | Tác dụng phụ đã hoàn tất | String xác định, có giới hạn | Result lỗi tuần tự hóa được liên kết đúng |
+| Tuần tự hóa | Tác dụng phụ đã hoàn tất | String deterministic, có giới hạn | Result lỗi tuần tự hóa được liên kết đúng |
 | Liên kết | Không có tác dụng phụ mới | `toolResult` đã đóng băng | Giữ ID/name của call ban đầu |
 
 Việc kiểm tra arguments ngăn tác dụng phụ bắt đầu; quá trình tuần tự hóa giới hạn dữ liệu mà tác dụng phụ có thể trả vào transcript. Đây là hai ranh giới riêng và cả hai đều phải giữ đúng quy ước.
@@ -137,13 +137,13 @@ Test tập trung nằm tại `course/test/06-tool-contract.test.ts`. Hãy chạy
 npm run test:course:checkpoint -- course/test/06-tool-contract.test.ts
 ```
 
-File này kiểm chứng rằng mỗi field của định nghĩa bất biến chỉ được đọc một lần, field kế thừa bị từ chối, batch được đăng ký nguyên tử, name trùng được xử lý, registry sở hữu dữ liệu bất biến, arguments được kiểm tra trước tác dụng phụ, result xác định và liên kết đúng, lỗi có thể hoặc không thể phục hồi được phân loại, lần từ chối của validator bất đồng bộ được quan sát, tín hiệu hủy được kiểm tra tại nhiều ranh giới, quá trình tuần tự hóa an toàn có giới hạn, đầu ra được cắt, call thù địch được chuẩn hóa, bản chụp được cách ly và các lần thực thi song song không nối nhầm dữ liệu. Bài kiểm thử không khẳng định có sandbox cho filesystem, cô lập process, sinh schema, giải mã có ràng buộc phía provider hay tự động hoàn tác tác dụng phụ đã chạy.
+File này kiểm chứng rằng mỗi field của định nghĩa bất biến chỉ được đọc một lần, field kế thừa bị từ chối, batch được đăng ký nguyên tử, name trùng được xử lý, registry sở hữu dữ liệu bất biến, arguments được kiểm tra trước tác dụng phụ, result deterministic và liên kết đúng, lỗi có thể hoặc không thể phục hồi được phân loại, lần từ chối của validator bất đồng bộ được quan sát, tín hiệu hủy được kiểm tra tại nhiều ranh giới, quá trình tuần tự hóa an toàn có giới hạn, đầu ra được cắt, call thù địch được chuẩn hóa, bản chụp được cách ly và các lần thực thi song song không nối nhầm dữ liệu. Bài kiểm thử không khẳng định có sandbox cho filesystem, cô lập process, sinh schema, giải mã có ràng buộc phía provider hay tự động hoàn tác tác dụng phụ đã chạy.
 
 ## Thử nghiệm lỗi
 
 Hãy dùng nguyên đoạn phía trên. Call gửi `left: "twenty"`, trong khi hàm thực thi gián điệp sẽ trả object hợp lệ nếu được gọi. Chạy lệnh kiểm thử tập trung rồi xác nhận hai quan sát độc lập: result chứa `TOOL_ARGUMENTS_INVALID` được liên kết với `call-invalid-add`, và `execute` chưa được gọi lần nào.
 
-Sau đó chỉ đổi validator để trả `{ ok: true, value: { left: 20, right: 22 } }`. Hàm gián điệp được gọi một lần và result trở thành thành công. Khôi phục validator từ chối trước khi tiếp tục. Đừng làm hàm thực thi ném lỗi trong thử nghiệm này; thao tác đó kiểm tra cách chuẩn hóa lỗi sau khi tác dụng phụ đã bắt đầu, không còn kiểm tra arguments trước tác dụng phụ.
+Sau đó chỉ đổi validator để trả `{ ok: true, value: { left: 20, right: 22 } }`. Hàm gián điệp được gọi một lần và lần gọi trả về result thành công. Khôi phục validator từ chối trước khi tiếp tục. Đừng làm hàm thực thi ném lỗi trong thử nghiệm này; thao tác đó kiểm tra cách chuẩn hóa lỗi sau khi tác dụng phụ đã bắt đầu, không còn kiểm tra arguments trước tác dụng phụ.
 
 ## Tiêu chí chấp nhận
 
@@ -152,7 +152,7 @@ Sau đó chỉ đổi validator để trả `{ ok: true, value: { left: 20, righ
 - `registerMany()` kiểm tra toàn bộ batch cùng mọi name trước khi thay đổi registry.
 - Arguments được chụp lại và kiểm tra đồng bộ trước khi `execute` có thể chạy.
 - Tool chưa đăng ký cùng lỗi thông thường khi kiểm tra, thực thi hoặc tuần tự hóa đều trở thành result lỗi bất biến, được liên kết đúng.
-- Tín hiệu hủy được truyền qua trước tác dụng phụ và trong khi chờ thực thi; nó không trở thành Tool result gây hiểu nhầm.
+- Tín hiệu hủy được truyền qua trước tác dụng phụ, trong khi chờ thực thi, sau khi promise của Tool resolve và sau khi kiểm tra đầu ra; nó không trở thành Tool result gây hiểu nhầm.
 - Chỉ `NonRecoverableToolError` thật mới thoát khỏi ranh giới Tool có thể phục hồi dưới dạng lỗi lập trình nghiêm trọng.
 - Content đã tuần tự hóa không vượt `4096` Unicode code point tính cả một marker báo cắt, và quá trình duyệt tuân theo ngân sách công việc tường minh.
 - Arguments không hợp lệ gửi đến spy Tool tạo `TOOL_ARGUMENTS_INVALID` và không gây tác dụng phụ.

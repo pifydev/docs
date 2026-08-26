@@ -1,5 +1,5 @@
 ---
-title: "Checkpoint 04: Xây dựng test double xác định cho model"
+title: "Checkpoint 04: Xây dựng test double deterministic cho model"
 description: Xếp hàng các factory phản hồi theo kịch bản, ghi lại yêu cầu bất biến, giữ thứ tự chunk và làm rõ trạng thái hết kịch bản cùng việc hủy.
 translation_key: course-04-deterministic-model
 language: vi
@@ -15,7 +15,7 @@ reviewed_by: Pify maintainers
 
 ## Kết quả
 
-Bạn sẽ thay dấu vết cố định từ checkpoint `00` bằng một test double xác định cho model, tức thành phần thay thế có kiểm soát cho model thật trong khi kiểm thử. `ScriptedModel` sở hữu hàng đợi FIFO hữu hạn gồm các hàm `ScriptedResponseFactory`. Mỗi lượt gọi chụp lại yêu cầu, lấy tối đa một factory khỏi hàng đợi, chuyển tiếp các chunk theo đúng thứ tự rồi hoàn tất bằng kết quả cuối của `EventStream`.
+Bạn sẽ thay dấu vết cố định từ checkpoint `00` bằng một test double deterministic cho model, tức thành phần thay thế có kiểm soát cho model thật trong khi kiểm thử. `ScriptedModel` sở hữu hàng đợi FIFO hữu hạn gồm các hàm `ScriptedResponseFactory`. Mỗi lượt gọi chụp lại yêu cầu, lấy tối đa một factory khỏi hàng đợi, chuyển tiếp các chunk theo đúng thứ tự rồi hoàn tất bằng kết quả cuối của `EventStream`.
 
 Model ghi lại mọi yêu cầu đã được gửi, kể cả lượt gọi diễn ra sau khi hàng đợi đã hết. Nhờ vậy, bài kiểm thử có thể phát hiện một lượt gọi model dư mà không cần đọc log. Khi hàng đợi trống, `ScriptedModelError` mang mã `SCRIPT_EXHAUSTED`; test double không tự bịa câu trả lời dự phòng. Tín hiệu hủy được kiểm tra trước khi lấy factory khỏi hàng đợi, giữa các bước của iterator, trước khi phát từng chunk và trước khi chấp nhận phản hồi cuối.
 
@@ -33,7 +33,7 @@ Hoàn thành [checkpoint 03](03-message-ir.md). Bạn cần hiểu `EventStream`
 
 | Vai trò | Đường dẫn chính xác | Nội dung cần kiểm tra |
 | --- | --- | --- |
-| Mã nguồn tích lũy | `course/src/scripted-model.ts` | Hàng đợi factory, việc ghi yêu cầu, quyền sở hữu iterator, bản chụp, kiểm tra trạng thái kết thúc và tranh chấp hủy |
+| Mã nguồn tích lũy | `course/src/scripted-model.ts` | Hàng đợi factory, việc ghi yêu cầu, quyền sở hữu iterator, bản chụp, kiểm tra trạng thái kết thúc và race khi hủy |
 | Bằng chứng tập trung | `course/test/04-deterministic-model.test.ts` | Thay thế/nối thêm theo FIFO, thứ tự chunk, trạng thái hết kịch bản, việc hủy, liên kết ID và tái sử dụng iterator |
 
 Không có đồng hồ, giá trị ngẫu nhiên, thông tin xác thực của provider hay kết nối mạng nào tham gia chọn phản hồi. Bài kiểm thử quyết định trước hàng đợi, ID, chunk, usage và lý do dừng.
@@ -171,11 +171,11 @@ Chạy lệnh kiểm thử tập trung. Cả phép lặp lẫn `stream.result` �
 
 :::
 
-Faux provider của Pi tạo `Provider` có hình dạng dùng trong production, tích hợp với tập hợp model và phát các sự kiện assistant cho text, thinking, Tool call, hoàn tất, lỗi, hủy cùng phản hồi trì hoãn. Nó có thể ước lượng usage và chia content thành các chunk. ID, timestamp và kích thước chunk mặc định có thể phụ thuộc thời gian hoặc giá trị ngẫu nhiên, vì vậy faux provider không phải test double có chuỗi đầu ra hoàn toàn xác định như `ScriptedModel`.
+Faux provider của Pi tạo `Provider` có hình dạng dùng trong production, tích hợp với tập hợp model và phát các sự kiện assistant cho text, thinking, Tool call, hoàn tất, lỗi, hủy cùng phản hồi trì hoãn. Nó có thể ước lượng usage và chia content thành các chunk. ID, timestamp và kích thước chunk mặc định có thể phụ thuộc thời gian hoặc giá trị ngẫu nhiên, vì vậy faux provider không phải test double có trình tự đầu ra deterministic như `ScriptedModel`.
 
 Phần triển khai của khóa học được thu gọn có chủ đích. Nó chỉ nhận `textDelta` và chunk `toolCall` đã hoàn chỉnh, dùng Message IR của khóa học, có hai lý do dừng và yêu cầu bài kiểm thử chỉ định mọi ID cùng giá trị usage. Nó dùng thuộc tính `result`, còn `EventStream` của Pi cung cấp phương thức `result()`. Hai interface này không thể thay thế trực tiếp cho nhau.
 
-Hãy dùng các faux helper do Pi xuất khi kiểm thử một tích hợp Pi với `AssistantMessage` và hành vi provider đúng theo bản phát hành. Dùng `ScriptedModel` để nghiên cứu nhu cầu gọi theo FIFO, cách liên kết ID, ranh giới hủy và dấu vết Agent Loop xác định trong workshop này.
+Hãy dùng các faux helper do Pi xuất khi kiểm thử một tích hợp Pi với `AssistantMessage` và hành vi provider đúng theo bản phát hành. Dùng `ScriptedModel` để nghiên cứu nhu cầu gọi theo FIFO, cách liên kết ID, ranh giới hủy và dấu vết Agent Loop deterministic trong workshop này.
 
 ## Checkpoint tiếp theo
 

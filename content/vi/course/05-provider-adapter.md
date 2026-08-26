@@ -200,7 +200,7 @@ Luồng assistant của Pi có các sự kiện vòng đời cho lúc bắt đ�
 
 Adapter của khóa học là một bài tập parser nhỏ hơn. Nó nhận biết năm loại record vận chuyển, không có registry cho provider, phát Tool-call chunk hoàn chỉnh thay vì chuỗi sự kiện Tool call dạng bắt đầu/delta/kết thúc và chỉ ghi hai giá trị đếm token. Các mã `FixtureProviderError` cùng fixture `schemaVersion: 1` không phải API của Pi.
 
-Khi triển khai provider cho Pi, hãy dùng quy ước `Provider` cùng các sự kiện assistant đã phát hành và đọc module provider tương ứng tại commit của bản phát hành đã ghim. Giữ các nguyên tắc ranh giới từ checkpoint này: phân tích đầu vào `unknown`, bảo toàn ID bất minh, chỉ chuẩn hóa một lần, từ chối trạng thái kết thúc mâu thuẫn và giữ chi tiết vận chuyển bên ngoài vòng lặp Agent (Agent Loop).
+Khi triển khai provider cho Pi, hãy dùng quy ước `Provider` cùng các sự kiện assistant đã phát hành và đọc module provider tương ứng tại commit của bản phát hành đã ghim. Giữ các nguyên tắc ranh giới từ checkpoint này: phân tích đầu vào `unknown`, bảo toàn ID không diễn giải, chỉ chuẩn hóa một lần, từ chối trạng thái kết thúc mâu thuẫn và giữ chi tiết vận chuyển bên ngoài vòng lặp Agent (Agent Loop).
 
 ## Checkpoint tiếp theo
 
