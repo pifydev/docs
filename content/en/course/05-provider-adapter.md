@@ -192,7 +192,7 @@ Stream that response and await both the chunks and terminal result. The Tool-cal
 
 :::info[Pi SDK 0.84.3]
 
-`@earendil-works/pi-ai` exports `Provider`, `createProvider()`, `createModels()`, `MutableModels`, `AssistantMessageEventStream`, `AssistantMessageEvent`, `ToolCall`, `Usage`, and `StopReason`. `createProvider()` builds and returns a production-facing `Provider` from auth, models, and API stream parts. It does not register that provider. `createModels()` returns `MutableModels`, whose `models.setProvider(provider)` method upserts the provider into the collection.
+`@earendil-works/pi-ai` exports `Provider`, `createProvider()`, `createModels()`, `MutableModels`, `AssistantMessageEventStream`, `AssistantMessageEvent`, `ToolCall`, `Usage`, and `StopReason`. `createProvider()` builds and returns a production-facing `Provider` from auth, models, and API stream parts. It does not register that provider. `createModels()` returns `MutableModels`; call `models.setProvider(provider)` on that returned instance to upsert the provider into the collection.
 
 :::
 

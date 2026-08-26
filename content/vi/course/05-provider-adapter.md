@@ -192,7 +192,7 @@ Sao chép fixture thành một giá trị tạm rồi xóa `response_end` khỏi
 
 :::info[Pi SDK 0.84.3]
 
-`@earendil-works/pi-ai` xuất `Provider`, `createProvider()`, `createModels()`, `MutableModels`, `AssistantMessageEventStream`, `AssistantMessageEvent`, `ToolCall`, `Usage` và `StopReason`. `createProvider()` dựng rồi trả về một `Provider` dùng trong production từ các thành phần xác thực, model và luồng API; hàm này không đăng ký provider. `createModels()` trả về `MutableModels`; phương thức `models.setProvider(provider)` thêm mới hoặc thay thế provider trong tập hợp đó.
+`@earendil-works/pi-ai` xuất `Provider`, `createProvider()`, `createModels()`, `MutableModels`, `AssistantMessageEventStream`, `AssistantMessageEvent`, `ToolCall`, `Usage` và `StopReason`. `createProvider()` dựng rồi trả về một `Provider` dùng trong production từ các thành phần xác thực, model và luồng API; hàm này không đăng ký provider. `createModels()` trả về `MutableModels`; hãy gọi `models.setProvider(provider)` trên instance được trả về để thêm mới hoặc thay thế provider trong tập hợp đó.
 
 :::
 

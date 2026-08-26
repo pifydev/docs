@@ -994,7 +994,7 @@
     {
       "key": "course-05-provider-adapter",
       "path": "en/course/05-provider-adapter.md",
-      "baselineWords": 1317,
+      "baselineWords": 1321,
       "minimumWordRatio": 0.8,
       "minimumHeadingCounts": {
         "2": 10,
@@ -1009,7 +1009,7 @@
     {
       "key": "course-05-provider-adapter",
       "path": "vi/course/05-provider-adapter.md",
-      "baselineWords": 1930,
+      "baselineWords": 1936,
       "minimumWordRatio": 0.8,
       "minimumHeadingCounts": {
         "2": 10,

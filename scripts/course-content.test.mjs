@@ -277,18 +277,52 @@ function localLinks(body) {
 }
 
 function groupedIntegerCodeTokens(body) {
-  const tokens = new Set();
+  const tokens = [];
   for (const inlineCode of maskFencedContent(body).matchAll(
     /(?<!`)`([^`\r\n]+)`(?!`)/g,
   )) {
     for (const groupedInteger of inlineCode[1].matchAll(
       /(?<![\d.])\d{1,3}(?:[,.]\d{3})+(?![\d.])/g,
     )) {
-      tokens.add(groupedInteger[0]);
+      tokens.push(groupedInteger[0]);
     }
   }
-  return [...tokens].sort();
+  return tokens;
 }
+
+test("grouped integer parity rejects reordered inline literals", () => {
+  const en = groupedIntegerCodeTokens("Use `1,000`, then `2,000`.");
+  const vi = groupedIntegerCodeTokens("Dùng `2,000`, sau đó `1,000`.");
+
+  assert.notDeepEqual(en, vi);
+});
+
+test("grouped integer parity rejects a missing duplicate", () => {
+  const en = groupedIntegerCodeTokens("Compare `1,000` with `1,000`.");
+  const vi = groupedIntegerCodeTokens("So sánh với `1,000`.");
+
+  assert.notDeepEqual(en, vi);
+});
+
+test("grouped integer parity ignores literals inside fenced code", () => {
+  const body = "Keep `1,000`.\n\n```text\n2,000\n```\n";
+
+  assert.deepEqual(groupedIntegerCodeTokens(body), ["1,000"]);
+});
+
+test("grouped integer parity accepts ordered inline literals", () => {
+  const en = groupedIntegerCodeTokens("Use `1,000`, then `2,000`.");
+  const vi = groupedIntegerCodeTokens("Dùng `1,000`, sau đó `2,000`.");
+
+  assert.deepEqual(en, vi);
+});
+
+test("grouped integer parity preserves comma and dot separators", () => {
+  const comma = groupedIntegerCodeTokens("Use `1,000`.");
+  const dot = groupedIntegerCodeTokens("Use `1.000`.");
+
+  assert.notDeepEqual(comma, dot);
+});
 
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
