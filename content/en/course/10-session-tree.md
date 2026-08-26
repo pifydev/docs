@@ -17,7 +17,7 @@ reviewed_by: Pify maintainers
 
 You will persist course messages as a versioned Session Tree. One JSONL header identifies the session. Every later record is an immutable entry with its own `id`, `parentId`, timestamp, and Message IR value. `SessionTree` tracks an active leaf and projects only the root-to-leaf path into `activeMessages`; changing branches never deletes the inactive descendants.
 
-The logical history is append-only: a new action creates a new entry and no API edits or removes an old entry. For stronger deterministic recovery in this workshop, `SessionStore` persists each prospective record set as an atomically replaced file generation rather than issuing an unguarded append syscall. Loading tolerates only a syntactically incomplete final JSON object. Complete or middle corruption fails closed.
+The logical history is append-only: a new action creates a new entry and no API edits or removes an old entry. For stronger deterministic recovery in this workshop, `SessionStore` persists each prospective record set as an atomically replaced file generation rather than issuing an unguarded append syscall. Loading tolerates only a syntactically incomplete final JSON object. Complete or middle corruption fails closed: the loader rejects the session instead of guessing or skipping data.
 
 :::note[Course implementation]
 

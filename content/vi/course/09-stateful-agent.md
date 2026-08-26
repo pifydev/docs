@@ -1,6 +1,6 @@
 ---
-title: "Checkpoint 09: Sở hữu lifecycle của stateful Agent"
-description: Serialize quyền sở hữu prompt, công bố immutable state, lập lịch message điều hướng/tiếp nối và phục hồi sạch sau cancellation hoặc failure.
+title: "Checkpoint 09: Quản lý vòng đời của Agent có trạng thái"
+description: Tuần tự hóa quyền sở hữu prompt, công bố trạng thái bất biến, lập lịch message điều hướng/tiếp nối và phục hồi sạch sau khi bị hủy hoặc gặp lỗi.
 translation_key: course-09-stateful-agent
 language: vi
 checkpoint: 9
@@ -15,44 +15,44 @@ reviewed_by: Pify maintainers
 
 ## Kết quả
 
-Bạn sẽ bổ sung `Agent`, một stateful owner bao quanh `runAgentLoop()`. Nó sở hữu transcript qua nhiều lần gọi, từ chối prompt ownership chồng lấn, cung cấp bản sao message snapshot bất biến ở mọi tầng, publish event cho subscriber và quay lại idle sau completion, cancellation hoặc failure. Message điều hướng (steering) được đưa vào tại ranh giới Turn đã hoàn tất; message tiếp nối (follow-up) chỉ chạy sau khi model lẽ ra đã dừng.
+Bạn sẽ bổ sung `Agent`, một thành phần có trạng thái bao quanh `runAgentLoop()` và sở hữu dữ liệu. Nó giữ transcript qua nhiều lần gọi, từ chối các prompt giành quyền sở hữu chồng lấn, cung cấp bản chụp message bất biến ở mọi tầng, phát sự kiện cho subscriber và quay lại trạng thái chờ sau khi hoàn tất, bị hủy hoặc gặp lỗi. Message điều hướng (steering) được đưa vào tại ranh giới Turn đã hoàn tất; message tiếp nối (follow-up) chỉ chạy sau khi model lẽ ra đã dừng.
 
-Một logical run có thể gọi nhiều low-level loop một bước. Wrapper đánh lại số event của chúng thành một total sequence rồi chỉ phát đúng một `run.finished`. Các queue giữ explicit work sau run lỗi hoặc bị cancel để caller tự quyết định có resume bằng `continue()` hay không.
+Một lần chạy logic có thể gọi vòng lặp cấp thấp một bước nhiều lần. Lớp bọc đánh lại số sự kiện thành một dãy thứ tự toàn phần rồi chỉ phát đúng một `run.finished`. Các hàng đợi giữ công việc đã được yêu cầu rõ ràng sau khi lần chạy gặp lỗi hoặc bị hủy, nhờ đó mã gọi tự quyết định có tiếp tục bằng `continue()` hay không.
 
 :::note[Course implementation]
 
-Course `Agent`, `AgentBusyError`, message ID, queue limit, subscriber diagnostic và `EventStream` return value là API của Course implementation. Chúng nhỏ hơn và có settlement semantics khác public `Agent` của Pi.
+`Agent`, `AgentBusyError`, ID message, giới hạn hàng đợi, chẩn đoán subscriber và giá trị trả về từ `EventStream` là API của phần triển khai trong khóa học. Phạm vi của chúng nhỏ hơn và quy tắc kết thúc cũng khác `Agent` công khai của Pi.
 
 :::
 
 ## Điều kiện tiên quyết
 
-Hoàn thành [checkpoint 08](08-coding-tools.md). Bạn cần hiểu vòng lặp Agent (Agent Loop) không giữ state, một Tool round hoàn chỉnh, các terminal variant của `RunResult`, `AbortSignal`, Tool registry snapshot và lý do cancellation không được tạo transcript message giả.
+Hoàn thành [checkpoint 08](08-coding-tools.md). Bạn cần hiểu vòng lặp Agent (Agent Loop) không giữ trạng thái, một lượt Tool hoàn chỉnh, các biến thể kết thúc của `RunResult`, `AbortSignal`, bản chụp Tool registry và lý do việc hủy không được tạo message giả trong transcript.
 
-Đọc cả hai file trước khi thay đổi lifecycle behavior:
+Đọc cả hai tệp trước khi thay đổi hành vi vòng đời:
 
-| Vai trò | Path chính xác | Nội dung cần kiểm tra |
+| Vai trò | Đường dẫn chính xác | Nội dung cần kiểm tra |
 | --- | --- | --- |
-| Cumulative source | `course/src/agent.ts` | Busy guard, owned transcript, queue reservation, safe point, event forwarding, cancellation race, subscriber và recovery |
-| Focused evidence | `course/test/09-stateful-agent.test.ts` | Prompt ownership, concurrent rejection, immutable getter, queue, cancellation, listener isolation, recovery và capacity ceiling |
+| Mã nguồn tích lũy | `course/src/agent.ts` | Busy guard, transcript do Agent sở hữu, sức chứa dành trước cho hàng đợi, điểm an toàn, chuyển tiếp sự kiện, race khi hủy, subscriber và phục hồi |
+| Bằng chứng tập trung | `course/test/09-stateful-agent.test.ts` | Quyền sở hữu prompt, từ chối lần gọi đồng thời, getter bất biến, hàng đợi, việc hủy, cô lập listener, phục hồi và trần sức chứa |
 
-Model và Tool registry được snapshot trong lúc tạo Agent. Việc đăng ký Tool muộn hơn hoặc thay model method không thể làm đổi configuration của Agent ấy.
+Model và Tool registry được chụp lại trong lúc tạo Agent. Đăng ký thêm Tool hoặc thay phương thức của model sau thời điểm đó không thể làm đổi cấu hình Agent.
 
 ## Cơ chế
 
-`prompt()` áp dụng busy guard trước tiên. Method này reserve đủ transcript capacity, tạo một immutable user message, append vào state do Agent sở hữu rồi bắt đầu logical run. `continue()` dựa vào tail hiện tại: message điều hướng đang queue có ưu tiên; nếu tail là assistant thì cần message tiếp nối. Trong lúc một run sở hữu transcript, `prompt()` hoặc `continue()` khác sẽ throw `AgentBusyError` đồng bộ. Caller dùng `steer()` hoặc `followUp()` thay vì tạo một owner thứ hai chạy đua.
+`prompt()` áp dụng busy guard trước tiên. Phương thức này dành trước đủ sức chứa transcript, tạo một user message bất biến, thêm message vào trạng thái do Agent sở hữu rồi bắt đầu một lần chạy logic. `continue()` dựa vào phần cuối hiện tại: message điều hướng đang chờ được ưu tiên; nếu message cuối là của assistant thì phải có message tiếp nối. Trong lúc một lần chạy giữ transcript, lời gọi `prompt()` hoặc `continue()` khác sẽ ném `AgentBusyError` ngay lập tức. Mã gọi dùng `steer()` hoặc `followUp()` để nêu rõ thời điểm mong muốn thay vì tạo chủ sở hữu thứ hai.
 
-Public getter `messages` trả một frozen array mới ở mỗi lần đọc. Mọi nested message và assistant block đã được dựng lại rồi freeze. Caller có thể giữ, so sánh hoặc chia sẻ snapshot nhưng không thể `push` hay sửa Tool call bên trong. Agent cũng freeze model method và một `ToolRegistry.snapshot()` ngay lúc construction.
+Getter công khai `messages` trả một mảng mới đã đóng băng sau mỗi lần đọc. Mọi message lồng nhau và block của assistant đều được dựng lại rồi đóng băng. Mã gọi có thể giữ, so sánh hoặc chia sẻ bản chụp nhưng không thể `push` hay sửa Tool call bên trong. Agent cũng cố định phương thức của model và một `ToolRegistry.snapshot()` ngay lúc khởi tạo.
 
-Bên trong, wrapper gọi `runAgentLoop()` với `maxSteps: 1`. Message điều hướng đã queue khi idle có thể đi cùng prompt mới tại initial safe boundary. Trong lúc run, message điều hướng chờ complete Turn settle và wrapper chỉ nhận validated returned transcript. Nếu low-level result là `maxSteps`, các assistant Tool call và result của Turn hiện tại đã hoàn chỉnh; ranh giới này an toàn để nhận đúng một message điều hướng. Message điều hướng cũng chạy trước final completion nếu đang queued. Message tiếp nối được xét sau đó, chỉ khi một `completed` response lẽ ra kết thúc logical run. Mỗi queued item vẫn là một user message riêng.
+Bên trong, lớp bọc gọi `runAgentLoop()` với `maxSteps: 1`. Message điều hướng đã nằm trong hàng đợi khi Agent ở trạng thái chờ có thể đi cùng prompt mới tại điểm an toàn ban đầu. Trong lúc chạy, message điều hướng phải chờ một Turn hoàn tất; lớp bọc chỉ nhận transcript mà vòng lặp cấp thấp đã kiểm tra. Nếu kết quả cấp thấp là `maxSteps`, các Tool call của assistant và Tool result trong Turn hiện tại đã đầy đủ, nên ranh giới này nhận đúng một message điều hướng. Message điều hướng cũng được xét trước khi lần chạy hoàn tất. Message tiếp nối chỉ được xét sau đó, khi một response `completed` lẽ ra đã kết thúc lần chạy logic. Mỗi phần tử trong hàng đợi vẫn là một user message riêng.
 
-Wrapper duy trì một logical request counter và một event counter xuyên suốt các subloop. Nó bỏ inner `message.accepted` cùng `run.finished`, publish accepted queue message của riêng mình, forward model/Tool event với `sequence` mới rồi publish một terminal event. `maxSteps` giới hạn tổng số subloop, không reset riêng cho từng subloop.
+Lớp bọc giữ một bộ đếm request và một bộ đếm sự kiện cho toàn bộ lần chạy logic. Nó bỏ `message.accepted` và `run.finished` do vòng lặp bên trong phát, tự phát sự kiện nhận message từ hàng đợi, chuyển tiếp sự kiện model/Tool với `sequence` mới rồi phát một sự kiện kết thúc. `maxSteps` giới hạn tổng số vòng lặp con thay vì được đặt lại cho từng vòng.
 
-`subscribe()` lưu listener theo insertion order và trả idempotent unsubscribe function. Khi publish, Agent snapshot listener list hiện tại cho event đó. Synchronous failure và rejected listener Promise trở thành immutable `subscriberErrors`; chúng không chặn listener phía sau hay thay đổi Agent settlement. Listener Promise được observe nhưng không await, vì vậy một subscriber await active run không thể gây deadlock. Unsubscribe ngăn future event delivery và giải phóng listener reference đã lưu.
+`subscribe()` lưu listener theo thứ tự đăng ký và trả một hàm hủy đăng ký có thể gọi lặp lại an toàn. Mỗi lần phát sự kiện, Agent chụp lại danh sách listener hiện tại. Lỗi đồng bộ và Promise bị listener từ chối được ghi thành `subscriberErrors` bất biến; chúng không chặn listener phía sau và không đổi kết quả của Agent. Agent quan sát nhưng không `await` Promise của listener, nên subscriber chờ lần chạy hiện tại sẽ không gây deadlock. Hủy đăng ký ngăn các sự kiện sau đi tới listener và giải phóng tham chiếu đã lưu.
 
-`cancel(reason)` trả `false` khi Agent idle, đã abort hoặc terminal outcome đã được chọn. Một cancellation được chấp nhận sẽ abort active low-level loop. Nó thắng completed-result adoption race xảy ra gần đồng thời và tạo đúng một `cancelled` result. Message điều hướng/tiếp nối đang queue vẫn còn tường minh để resume sau. Trong `finally`, owner xóa `#activeRun`; internal failure thông thường được normalize thành `AGENT_STATE_FAILED`, capacity failure thành `AGENT_MESSAGE_LIMIT`, rồi Agent dùng lại được.
+`cancel(reason)` trả `false` khi Agent đang chờ, đã bị hủy hoặc đã chọn kết quả cuối. Một yêu cầu hủy được chấp nhận sẽ hủy vòng lặp cấp thấp đang chạy. Nếu kết quả `completed` xuất hiện gần như đồng thời, việc hủy vẫn thắng khi lớp bọc nhận kết quả và tạo đúng một kết quả `cancelled`. Message điều hướng/tiếp nối trong hàng đợi vẫn được giữ để tiếp tục sau. Khối `finally` xóa `#activeRun`; lỗi nội bộ thông thường trở thành `AGENT_STATE_FAILED`, còn lỗi sức chứa thành `AGENT_MESSAGE_LIMIT`, sau đó Agent có thể dùng lại.
 
-Queued work bị giới hạn ở `256` message và owned transcript ở `4096`. Reservation tính cả cặp user/assistant cho queued work; trong một active Tool Turn chưa biết kết quả, nó còn reserve worst-case output theo low-level chunk ceiling. Công việc bất khả thi bị từ chối ngay lúc enqueue thay vì được nhận rồi mắc kẹt ở cap.
+Hàng đợi chứa tối đa `256` message, còn transcript do Agent giữ có tối đa `4096` message. Phép dành trước sức chứa tính cả cặp user/assistant cho công việc đang chờ. Trong một Tool Turn đang chạy mà chưa biết kết quả, phép tính còn dành chỗ cho đầu ra lớn nhất theo trần chunk cấp thấp. Công việc không thể nằm trong giới hạn sẽ bị từ chối ngay lúc đưa vào hàng đợi thay vì được nhận rồi mắc kẹt ở trần.
 
 ## Dấu vết hoặc mô hình
 
@@ -61,30 +61,29 @@ stateDiagram-v2
   [*] --> Idle
   Idle --> Running: prompt hoặc continue
   Running --> Running: Tool Turn hoàn tất
-  Running --> SteeringBoundary: Turn hoàn tất và có message điều hướng queued
+  Running --> SteeringBoundary: Turn hoàn tất và có message điều hướng
   SteeringBoundary --> Running: nhận một message điều hướng
   Running --> FollowUpBoundary: model lẽ ra dừng
   FollowUpBoundary --> Running: nhận một message tiếp nối
-  Running --> Cancelling: cancel được chấp nhận
-  Cancelling --> Settling: low-level loop settle
+  Running --> Cancelling: chấp nhận cancel
+  Cancelling --> Settling: vòng lặp cấp thấp kết thúc
   Running --> Settling: completed, maxSteps hoặc failed
-  Settling --> Idle: publish một run.finished và xóa owner
-  Running --> Running: ghi nhận subscriber failure
-  Running --> BusyRejected: prompt hoặc continue chồng lấn
-  BusyRejected --> Running
+  Settling --> Idle: phát một run.finished và xóa chủ sở hữu
+  Running --> Running: ghi nhận lỗi subscriber
+  Running --> Running: prompt hoặc continue chồng lấn ném AgentBusyError
 ```
 
-| Action trong khi running | Được nhận? | Thời điểm tác động transcript |
+| Thao tác khi Agent đang chạy | Được nhận? | Thời điểm tác động transcript |
 | --- | --- | --- |
-| `prompt()` / `continue()` | Không; throw `AgentBusyError` | Không bao giờ |
-| `steer()` | Có nếu còn capacity | Ranh giới Turn hoàn tất kế tiếp |
-| `followUp()` | Có nếu còn capacity | Sau response lẽ ra đã complete |
-| `cancel(reason)` | Một lần | Chọn cancellation trước final adoption |
-| `subscribe()` / unsubscribe | Có | Listener set cho các lần publish sau |
+| `prompt()` / `continue()` | Không; ném `AgentBusyError` | Không bao giờ |
+| `steer()` | Có nếu còn sức chứa | Ranh giới Turn hoàn tất kế tiếp |
+| `followUp()` | Có nếu còn sức chứa | Sau response lẽ ra đã hoàn tất |
+| `cancel(reason)` | Một lần | Chọn việc hủy trước khi nhận kết quả cuối |
+| `subscribe()` / hủy đăng ký | Có | Tập listener áp dụng cho các lần phát sự kiện sau |
 
 ## Xây dựng
 
-Cumulative module là `course/src/agent.ts`. Đoạn trích nguyên văn từ focused test dưới đây thể hiện normal ownership transition và single terminal event:
+Module tích lũy là `course/src/agent.ts`. Đoạn trích nguyên văn từ bài kiểm thử tập trung dưới đây thể hiện chuyển giao quyền sở hữu thông thường và một sự kiện kết thúc duy nhất:
 
 ```ts
 const model = new ScriptedModel([
@@ -113,21 +112,21 @@ expect(events.filter((event) => event.type === "run.finished")).toHaveLength(
 );
 ```
 
-`settle()` drain event iterator rồi await result của chính stream đó. Production code cũng nên consume hoặc chủ động observe cả hai channel để event handling và terminal state luôn tường minh.
+`settle()` đọc hết iterator sự kiện rồi chờ kết quả của chính stream đó. Mã production cũng nên tiêu thụ hoặc chủ động quan sát cả hai kênh để việc xử lý sự kiện và trạng thái cuối luôn rõ ràng.
 
 ## Chạy focused test
 
-Focused test là `course/test/09-stateful-agent.test.ts`. Chạy chính xác:
+Bài kiểm thử tập trung là `course/test/09-stateful-agent.test.ts`. Chạy chính xác:
 
 ```bash
 npm run test:course:checkpoint -- course/test/09-stateful-agent.test.ts
 ```
 
-File này chứng minh lifecycle ownership, busy guard, deep snapshot immutability, cancellation settlement, thứ tự message điều hướng/tiếp nối, subscriber isolation/unsubscribe, Promise listener không blocking, cancellation race, reentrant message điều hướng, failure recovery, construction snapshot, total `maxSteps` cùng queue/transcript reservation limit. Test đi qua public method của wrapper thay vì sửa private state.
+Tệp này chứng minh quyền sở hữu theo vòng đời, busy guard, tính bất biến sâu của bản chụp, cách kết thúc khi hủy, thứ tự message điều hướng/tiếp nối, việc cô lập và hủy đăng ký subscriber, Promise của listener không gây chặn, race khi hủy, message điều hướng gọi lồng, phục hồi sau lỗi, bản chụp lúc khởi tạo, tổng `maxSteps` cùng giới hạn sức chứa dành trước cho hàng đợi/transcript. Bài kiểm thử chỉ gọi phương thức công khai của lớp bọc, không sửa trạng thái riêng tư.
 
 ## Thử nghiệm lỗi
 
-Giữ model request đầu tiên ở trạng thái chờ rồi phát hai concurrent prompt. Lần gọi thứ hai phải lỗi đồng bộ trong khi lần đầu còn ownership. Đoạn dưới đây được lấy nguyên văn từ focused test:
+Giữ request đầu tiên của model ở trạng thái chờ rồi gọi hai prompt đồng thời. Lần gọi thứ hai phải lỗi ngay trong khi lần đầu còn giữ quyền sở hữu. Đoạn dưới đây được lấy nguyên văn từ bài kiểm thử tập trung:
 
 ```ts
 const entered = deferred<void>();
@@ -157,32 +156,32 @@ await settle(active);
 expect(model.callCount).toBe(1);
 ```
 
-Nếu model nhận hai request thì hai caller đã đồng thời sở hữu một transcript. Không “sửa” thử nghiệm bằng cách tự động queue `prompt()` thứ hai; course yêu cầu caller chọn `steer()` hoặc `followUp()` để timing intent được thể hiện rõ.
+Nếu model nhận hai request thì hai mã gọi đã cùng lúc giữ một transcript. Không tự động đưa `prompt()` thứ hai vào hàng đợi chỉ để bài kiểm thử đạt; khóa học yêu cầu mã gọi chọn `steer()` hoặc `followUp()` để thể hiện rõ thời điểm mong muốn.
 
 ## Tiêu chí chấp nhận
 
-- Focused command chỉ chọn `course/test/09-stateful-agent.test.ts` và pass offline.
-- `prompt()` và `continue()` từ chối active owner thứ hai bằng stable `AgentBusyError` behavior.
-- `messages` trả fresh frozen array với các nested transcript value bất biến.
-- Message điều hướng chỉ vào sau complete Turn; message tiếp nối chỉ vào sau otherwise-terminal response; hai loại không merge user message.
-- Agent phát một total event sequence và đúng một `run.finished` cho mỗi logical run.
-- Subscriber chạy theo registration order, unsubscribe sạch và không thể chặn settlement hoặc phá Agent state khi chúng lỗi.
-- Accepted cancellation thắng terminal adoption, settle một lần và giữ explicit queued work.
-- Completion, cancellation, capacity failure và internal failure đều xóa active owner để lần `continue()` hợp lệ sau đó có thể phục hồi.
-- Queue/transcript reservation từ chối công việc bất khả thi trước khi vượt `256` queued hoặc `4096` owned message.
+- Lệnh tập trung chỉ chọn `course/test/09-stateful-agent.test.ts` và chạy đạt khi ngoại tuyến.
+- `prompt()` và `continue()` từ chối chủ sở hữu đang chạy thứ hai bằng `AgentBusyError` ổn định.
+- `messages` trả một mảng mới đã đóng băng, trong đó mọi giá trị transcript lồng nhau đều bất biến.
+- Message điều hướng chỉ được đưa vào sau một Turn hoàn chỉnh; message tiếp nối chỉ được đưa vào sau response lẽ ra đã kết thúc; hai loại không gộp user message.
+- Agent phát một dãy sự kiện có thứ tự toàn phần và đúng một `run.finished` cho mỗi lần chạy logic.
+- Subscriber chạy theo thứ tự đăng ký, được hủy đăng ký sạch và không thể chặn việc kết thúc hoặc làm hỏng trạng thái Agent khi gặp lỗi.
+- Việc hủy đã được chấp nhận thắng bước nhận kết quả cuối, chỉ kết thúc một lần và giữ nguyên công việc đã được đưa vào hàng đợi.
+- Khi hoàn tất, bị hủy, vượt sức chứa hoặc gặp lỗi nội bộ, Agent đều xóa chủ sở hữu đang chạy để lần `continue()` hợp lệ sau đó có thể phục hồi.
+- Phép dành trước cho hàng đợi/transcript từ chối công việc không thể chứa trước khi vượt `256` message trong hàng đợi hoặc `4096` message do Agent sở hữu.
 
 ## So sánh với Pi SDK 0.84.3
 
 :::info[Pi SDK 0.84.3]
 
-`@earendil-works/pi-agent-core` export `Agent`, `AgentOptions`, `AgentState`, `AgentEvent` và các queue-related type. `Agent` của Pi cung cấp `prompt()`, `continue()`, `steer()`, `followUp()`, `subscribe()`, `abort()`, `waitForIdle()`, queue control và `reset()`.
+`@earendil-works/pi-agent-core` xuất công khai `Agent`, `AgentOptions`, `AgentState`, `AgentEvent` cùng các kiểu liên quan tới hàng đợi. `Agent` của Pi cung cấp `prompt()`, `continue()`, `steer()`, `followUp()`, `subscribe()`, `abort()`, `waitForIdle()`, cơ chế điều khiển hàng đợi và `reset()`.
 
 :::
 
-Public Agent của Pi cũng từ chối processing chồng lấn và cung cấp queue cho message điều hướng/tiếp nối. Ở pinned release, queue drain mode có thể cấu hình, `prompt()` resolve `Promise<void>`, `abort()` không nhận result string kiểu course và subscriber Promise được await theo registration order như một phần của run settlement. Pi còn cung cấp state, Tool execution policy, retry configuration và event lifecycle phong phú hơn.
+`Agent` công khai của Pi cũng từ chối các lần xử lý chồng lấn và cung cấp hàng đợi cho message điều hướng/tiếp nối. Ở release đã ghim, mã gọi có thể cấu hình chế độ rút hàng đợi, `prompt()` phân giải `Promise<void>`, `abort()` không nhận chuỗi lý do như khóa học, còn Promise của subscriber được `await` theo thứ tự đăng ký như một phần của quá trình kết thúc lần chạy. Pi còn cung cấp trạng thái, chính sách thực thi Tool, cấu hình thử lại và vòng đời sự kiện phong phú hơn.
 
-Course trả `EventStream<AgentEvent, RunResult>`, observe nhưng không await subscriber Promise, nhận text-only queue helper, cố định one-at-a-time scheduling và áp dụng capacity rule riêng cho workshop. Đây là teaching constraint có chủ đích chứ không phải compatibility shim. Với code Pi, hãy import và làm theo contract của Pi SDK `0.84.3`.
+Khóa học trả `EventStream<AgentEvent, RunResult>`, quan sát nhưng không `await` Promise của subscriber, chỉ nhận văn bản trong hàm hỗ trợ hàng đợi, cố định cách lập lịch từng message một và áp dụng quy tắc sức chứa riêng cho workshop. Đây là giới hạn phục vụ giảng dạy có chủ đích, không phải lớp tương thích. Với mã Pi, hãy import và làm theo contract của Pi SDK `0.84.3`.
 
 ## Checkpoint tiếp theo
 
-[Checkpoint 10](10-session-tree.md) persist Agent message thành parent-linked JSONL tree. Bạn sẽ di chuyển active leaf để branch mà không rewrite logical history, đồng thời reload an toàn sau một final record thật sự chưa hoàn chỉnh.
+[Checkpoint 10](10-session-tree.md) lưu message của Agent thành một cây JSONL nối bằng `parentId`. Bạn sẽ di chuyển leaf hiện tại để tạo nhánh mà không viết lại lịch sử logic, đồng thời tải lại an toàn sau bản ghi cuối thực sự chưa hoàn chỉnh.

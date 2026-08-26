@@ -1,6 +1,6 @@
 ---
-title: "Checkpoint 11: Nén ngữ cảnh tại safe boundary"
-description: Nhóm complete Tool round, tính budget ngữ cảnh theo cách deterministic, validate summary, giữ recent message và commit compaction mà không mutate prior state.
+title: "Checkpoint 11: Nén ngữ cảnh tại ranh giới an toàn"
+description: Nhóm các lượt Tool hoàn chỉnh, tính ngân sách ngữ cảnh theo cách có thể tái lập, kiểm tra bản tóm tắt, giữ message gần đây và commit mà không sửa trạng thái trước đó.
 translation_key: course-11-context-compaction
 language: vi
 checkpoint: 11
@@ -16,76 +16,76 @@ reviewed_by: Pify maintainers
 
 ## Kết quả
 
-Bạn sẽ biến một valid transcript thành immutable `ActiveContext` với requirement riêng, optional prior summary, recent message và append-only compaction record list. Khi deterministic unit budget của ngữ cảnh vượt `maxUnits`, `compactContext()` chọn một complete old prefix, yêu cầu summarizer được inject trả plain text, validate prospective context rồi trả state mới.
+Bạn sẽ biến một transcript hợp lệ thành `ActiveContext` bất biến, gồm các yêu cầu tách biệt, một bản tóm tắt trước đó nếu có, các message gần đây và danh sách bản ghi nén chỉ thêm mới. Khi ngân sách đơn vị có tính xác định của ngữ cảnh vượt `maxUnits`, `compactContext()` chọn một tiền tố cũ nhưng hoàn chỉnh, yêu cầu summarizer được truyền vào trả văn bản thuần, kiểm tra ngữ cảnh dự kiến rồi trả trạng thái mới.
 
-Không compaction boundary nào được cắt assistant Tool call khỏi matching Tool result. Summary lỗi, thiếu safe boundary, cancellation, malformed transcript hoặc over-budget result đều giữ input object không đổi từng byte và không append compaction record.
+Không ranh giới nén nào được tách Tool call của assistant khỏi Tool result tương ứng. Nếu bản tóm tắt lỗi, không có ranh giới an toàn, có yêu cầu hủy, transcript sai hoặc kết quả vượt ngân sách, hàm không sửa dữ liệu đầu vào hay ngữ cảnh trước đó và không thêm bản ghi nén.
 
 :::note[Course implementation]
 
-`ActiveContext`, deterministic unit formula, `groupToolRounds()`, `selectCompactionBoundary()`, `compactContext()`, limit và error code là contract của Course implementation. Unit này không phải provider token, còn summary shape không phải compaction format của Pi.
+`ActiveContext`, công thức đơn vị có tính xác định, `groupToolRounds()`, `selectCompactionBoundary()`, `compactContext()`, các giới hạn và mã lỗi tạo thành contract của phần triển khai trong khóa học. Đơn vị này không phải token của provider, còn cấu trúc bản tóm tắt không phải định dạng nén của Pi.
 
 :::
 
 ## Điều kiện tiên quyết
 
-Hoàn thành [checkpoint 10](10-session-tree.md). Bạn cần hiểu validated Message IR, parent-linked history, root-to-leaf projection, complete Tool call/result linkage, immutable snapshot, cancellation và state transition chỉ commit sau validation.
+Hoàn thành [checkpoint 10](10-session-tree.md). Bạn cần hiểu Message IR đã được kiểm tra, lịch sử nối bằng parent, phép chiếu từ root tới leaf, liên kết Tool call/result hoàn chỉnh, bản chụp bất biến, việc hủy và chuyển trạng thái chỉ commit sau khi kiểm tra xong.
 
-Đọc mechanism cùng test song song:
+Đọc phần cơ chế song song với bài kiểm thử:
 
-| Vai trò | Path chính xác | Nội dung cần kiểm tra |
+| Vai trò | Đường dẫn chính xác | Nội dung cần kiểm tra |
 | --- | --- | --- |
-| Cumulative source | `course/src/context.ts` | Snapshot ngữ cảnh, Tool-round grouping, exact unit estimator, boundary selection, summary observation, validation, cancellation và immutable commit |
-| Focused evidence | `course/test/11-context-compaction.test.ts` | Overlapping round, exact budget, retention, summary attack, linkage failure, cancellation race, thenable, depth bound và repeated compaction |
+| Mã nguồn tích lũy | `course/src/context.ts` | Bản chụp ngữ cảnh, nhóm lượt Tool, bộ ước lượng đơn vị chính xác, chọn ranh giới, quan sát bản tóm tắt, kiểm tra dữ liệu, xử lý việc hủy và commit bất biến |
+| Bằng chứng tập trung | `course/test/11-context-compaction.test.ts` | Các lượt Tool chồng lấn, ngân sách chính xác, giữ message, tấn công qua bản tóm tắt, lỗi liên kết, race khi hủy, thenable, giới hạn độ sâu và nhiều lần nén |
 
-Course summarizer được inject. Focused test trả scripted text và không gọi network. Runtime ở checkpoint sau có thể cung cấp model-backed implementation, nhưng checkpoint này kiểm tra boundary một cách độc lập.
+Khóa học nhận summarizer từ bên ngoài. Bài kiểm thử tập trung trả văn bản theo kịch bản và không gọi mạng. Runtime ở checkpoint sau có thể cung cấp phần triển khai dùng model, nhưng checkpoint này kiểm tra ranh giới một cách độc lập.
 
 ## Cơ chế
 
-`buildActiveContext()` snapshot bốn channel tách biệt: tối đa `128` requirement, một nullable summary, tối đa `4,096` message và tối đa `256` compaction record. Nó chỉ đọc plain own data, từ chối sparse/hostile/deep structure, validate transcript, copy nested JSON rồi freeze mọi exposed layer. Validation work bị giới hạn ở depth `32`, `16,384` collection item, `65,536` Unicode code point cho mỗi bounded string và `1,000,000` aggregate deterministic unit.
+`buildActiveContext()` chụp bốn kênh riêng: tối đa `128` yêu cầu, một bản tóm tắt có thể bằng `null`, tối đa `4,096` message và tối đa `256` bản ghi nén. Hàm chỉ đọc các thuộc tính trực tiếp của dữ liệu thuần, từ chối mảng thưa cùng cấu trúc đối nghịch hoặc quá sâu, kiểm tra transcript, sao chép JSON lồng nhau rồi đóng băng mọi tầng được công bố. Quá trình kiểm tra bị giới hạn ở độ sâu `32`, `16,384` phần tử trong tập hợp, `65,536` code point Unicode cho mỗi chuỗi có giới hạn và tổng `1,000,000` đơn vị có tính xác định.
 
-`groupToolRounds()` trước tiên index mỗi Tool result bằng `toolCallId`. Với mỗi assistant message có Tool call, nó tạo interval từ assistant đến matching result cuối cùng. Overlapping interval được merge để nested/interleaved call không thể lộ cut giữa related work. Ordinary adjacent message vẫn là group riêng. Missing, duplicate, mismatched hoặc orphaned result làm transcript validation fail thay vì tạo best-effort group.
+`groupToolRounds()` trước tiên lập chỉ mục cho từng Tool result bằng `toolCallId`. Với mỗi message của assistant có Tool call, hàm tạo một khoảng từ assistant tới result tương ứng cuối cùng. Các khoảng chồng lấn được gộp, nên những call lồng hoặc xen kẽ không thể tạo điểm cắt giữa các phần liên quan. Message thông thường liền kề vẫn là nhóm riêng. Result bị thiếu, trùng, sai liên kết hoặc mồ côi làm bước kiểm tra transcript thất bại thay vì tạo một nhóm gần đúng.
 
-Budgeting đếm Unicode code point và fixed structural weight. Requirement, summary ID/content, message ID/role, text block, Tool name/ID/arguments, result linkage và scalar JSON value đều góp unit theo cách deterministic; object key được sort. Phép tính cho cùng kết quả trên mọi supported platform, nhưng đây là educational estimator chứ không phải model tokenizer.
+Phép tính ngân sách đếm code point Unicode cùng các trọng số cấu trúc cố định. ID và nội dung của yêu cầu/bản tóm tắt, ID/role của message, block văn bản, tên/ID/arguments của Tool, liên kết result và giá trị JSON vô hướng đều góp đơn vị theo quy tắc có tính xác định; các key của object được sắp xếp. Cùng một dữ liệu đầu vào cho cùng kết quả trên mọi nền tảng được hỗ trợ, nhưng đây là bộ ước lượng phục vụ học tập chứ không phải tokenizer của model.
 
-`selectCompactionBoundary()` reserve toàn bộ `summaryMaxUnits`, giữ ít nhất `retainRecentMessages` rồi scan complete group từ cũ đến mới. Nó trừ cả group trong một bước và trả exclusive transcript index đầu tiên mà fixed requirement, reserved summary cùng retained message vừa `targetUnits`. Nếu một group vượt latest allowed boundary hoặc không whole-group cut nào đủ, function trả `null`.
+`selectCompactionBoundary()` dành đủ toàn bộ `summaryMaxUnits`, giữ ít nhất `retainRecentMessages` rồi duyệt các nhóm hoàn chỉnh từ cũ tới mới. Hàm trừ cả nhóm trong một bước và trả chỉ mục transcript loại trừ đầu tiên mà phần yêu cầu cố định, phần dành cho bản tóm tắt cùng các message được giữ vừa `targetUnits`. Nếu một nhóm vượt ranh giới muộn nhất được phép, hoặc không có điểm cắt theo nhóm nguyên vẹn nào đáp ứng ngân sách, hàm trả `null`.
 
-`compactContext()` trả chính ngữ cảnh đó với status `unchanged` khi current unit nhỏ hơn hoặc bằng `maxUnits`; summarizer không được gọi trên path này. Nếu cần nén, function kiểm tra cancellation và unique `recordId`, chọn positive safe boundary rồi truyền cho summarizer một frozen request gồm requirement, previous summary, exact compacted prefix, boundary cùng summary limit.
+`compactContext()` trả chính ngữ cảnh đó với trạng thái `unchanged` khi số đơn vị hiện tại nhỏ hơn hoặc bằng `maxUnits`; summarizer không được gọi trên nhánh này. Nếu cần nén, hàm kiểm tra yêu cầu hủy và tính duy nhất của `recordId`, chọn một ranh giới an toàn lớn hơn `0` rồi truyền cho summarizer một request đã đóng băng, gồm yêu cầu, `previousSummary`, tiền tố cần nén chính xác, ranh giới và giới hạn bản tóm tắt.
 
-Returned value phải resolve thành string, chứa non-whitespace text, không vượt ordinary string ceiling và vừa `summaryMaxUnits` sau khi tính ID cùng structural cost. Object không thể inject assistant hoặc Tool block. Retained suffix phải tự validate như transcript, còn requirement + summary mới + retained message phải vừa `targetUnits`. Chỉ sau đó function mới append frozen record chứa compacted message ID cùng before/after unit, rebuild và revalidate final context, kiểm tra cancellation lần cuối rồi expose state mới.
+Giá trị trả về phải phân giải thành chuỗi, có ký tự khác khoảng trắng, không vượt giới hạn chuỗi thông thường và vừa `summaryMaxUnits` sau khi tính cả ID cùng chi phí cấu trúc. Object không thể chèn block của assistant hoặc Tool. Hậu tố được giữ phải tự tạo thành transcript hợp lệ; tổng yêu cầu, bản tóm tắt mới và các message được giữ phải vừa `targetUnits`. Chỉ sau các bước đó, hàm mới thêm một bản ghi đã đóng băng chứa ID của các message đã nén cùng số đơn vị trước/sau, dựng và kiểm tra lại ngữ cảnh cuối, kiểm tra việc hủy lần cuối rồi công bố trạng thái mới.
 
-Cancellation được kiểm tra trước summarization, trong lúc await, sau khi resolve và trước final exposure. Boundary observe ordinary Promise cùng thenable adoption chain tối đa `64` level mà không cho foreign object giả `ContextCompactionError` code. Late rejection được observe để tránh process-level noise. Thrown/rejected/malformed async value hoặc chain sâu hơn thành `CONTEXT_SUMMARIZER_FAILED`; accepted abort thành `CONTEXT_CANCELLED`. Không path nào mutate old summary, message hoặc record.
+Yêu cầu hủy được kiểm tra trước lúc tóm tắt, trong khi `await`, sau khi phân giải và trước khi công bố kết quả. Phần mã ở ranh giới này theo dõi Promise thông thường cùng chuỗi tiếp nhận thenable tối đa `64` tầng, đồng thời không cho object bên ngoài giả mã `ContextCompactionError`. Lần từ chối muộn cũng được theo dõi để tránh nhiễu ở cấp tiến trình. Giá trị bất đồng bộ bị ném, bị từ chối, sai cấu trúc hoặc có chuỗi sâu hơn sẽ trở thành `CONTEXT_SUMMARIZER_FAILED`; yêu cầu hủy được chấp nhận trở thành `CONTEXT_CANCELLED`. Không nhánh nào sửa bản tóm tắt, message hay bản ghi cũ.
 
 ## Dấu vết hoặc mô hình
 
 ```mermaid
 sequenceDiagram
-  participant B as Bộ chọn budget
-  participant O as Immutable ngữ cảnh cũ
+  participant B as Bộ chọn ngân sách
+  participant O as Ngữ cảnh cũ bất biến
   participant S as Summarizer
-  participant N as Immutable ngữ cảnh mới
-  Note over O: requirement + prior summary + old message + recent Tool round
-  B->>O: nhóm complete Tool round
-  B->>O: chọn earliest safe exclusive boundary
-  B->>S: frozen old prefix + previous summary + maxSummaryUnits
-  S-->>B: plain summary text
-  B->>B: validate text, suffix, target budget, cancellation
-  B->>N: requirement + summary mới + retained recent message
-  B->>N: chỉ append compaction record sau validation
-  Note over O: không đổi khi success hoặc failure
-  Note over N: không orphan Tool result và không split Tool round
+  participant N as Ngữ cảnh mới bất biến
+  Note over O: yêu cầu + bản tóm tắt trước + message cũ + lượt Tool gần đây
+  B->>O: nhóm lượt Tool hoàn chỉnh
+  B->>O: chọn ranh giới loại trừ an toàn sớm nhất
+  B->>S: tiền tố cũ đã đóng băng + previous summary + maxSummaryUnits
+  S-->>B: văn bản tóm tắt thuần
+  B->>B: kiểm tra văn bản, hậu tố, ngân sách đích, việc hủy
+  B->>N: yêu cầu + bản tóm tắt mới + message gần đây được giữ
+  B->>N: chỉ thêm bản ghi nén sau khi kiểm tra
+  Note over O: không đổi khi thành công hoặc thất bại
+  Note over N: không có Tool result mồ côi và không cắt lượt Tool
 ```
 
-| Trước compaction | Boundary rule | Sau compaction |
+| Trước khi nén | Quy tắc ranh giới | Sau khi nén |
 | --- | --- | --- |
-| Requirement | Không bao giờ compact | Giữ nguyên frozen requirement |
-| Prior summary | Truyền vào summarizer | Thay bằng validated summary |
-| Old complete prefix | Chỉ whole message/Tool group | Ghi ID vào một compaction record |
-| Recent suffix | Ít nhất bằng configured count | Giữ nguyên và transcript-valid |
-| Existing record | Không rewrite | Append một immutable record mới |
+| Yêu cầu | Không bao giờ bị nén | Giữ nguyên yêu cầu đã đóng băng |
+| Bản tóm tắt trước | Truyền vào summarizer | Thay bằng bản tóm tắt đã kiểm tra |
+| Tiền tố cũ hoàn chỉnh | Chỉ nhóm message/Tool nguyên vẹn | Ghi ID vào một bản ghi nén |
+| Hậu tố gần đây | Ít nhất bằng số lượng đã cấu hình | Giữ nguyên và tạo transcript hợp lệ |
+| Bản ghi hiện có | Không viết lại | Thêm một bản ghi bất biến mới |
 
 ## Xây dựng
 
-Cumulative module là `course/src/context.ts`. Fragment nguyên văn từ focused success test dưới đây thể hiện commit point cùng retained suffix:
+Module tích lũy là `course/src/context.ts`. Đoạn nguyên văn từ bài kiểm thử tập trung thành công dưới đây thể hiện điểm commit cùng hậu tố được giữ:
 
 ```ts
 const result = await compactContext(
@@ -111,21 +111,21 @@ expect(result.record).toMatchObject({
 });
 ```
 
-Exclusive boundary là `4`, nằm sau assistant Tool-call message cùng cả hai result. Chỉ `recent-user` còn trong live transcript; requirement và validated summary vẫn là các channel ngữ cảnh riêng.
+Ranh giới loại trừ là `4`, nằm sau message Tool call của assistant cùng cả hai result. Chỉ `recent-user` còn trong transcript đang dùng; các yêu cầu và bản tóm tắt đã kiểm tra vẫn nằm ở kênh ngữ cảnh riêng.
 
 ## Chạy focused test
 
-Focused test là `course/test/11-context-compaction.test.ts`. Chạy chính xác:
+Bài kiểm thử tập trung là `course/test/11-context-compaction.test.ts`. Chạy chính xác:
 
 ```bash
 npm run test:course:checkpoint -- course/test/11-context-compaction.test.ts
 ```
 
-File này chứng minh grouping cùng overlapping Tool interval, exact Unicode budgeting, earliest safe boundary selection, recent retention, unchanged fast path, summary validation, no mutation on failure, hostile/deep/aggregate-limit rejection, cancellation timing, Promise/thenable observation, bounded async adoption, unavailable boundary và propagation của prior summary vào immutable record kế tiếp.
+Tệp này chứng minh cách nhóm các khoảng Tool chồng lấn, phép tính ngân sách Unicode chính xác, cách chọn ranh giới an toàn sớm nhất, giữ message gần đây, nhánh không cần nén, kiểm tra bản tóm tắt, không sửa trạng thái khi lỗi, từ chối dữ liệu đầu vào đối nghịch/quá sâu hoặc vượt giới hạn tổng, thời điểm hủy, quan sát Promise/thenable, tiếp nhận giá trị bất đồng bộ có giới hạn, trường hợp không có ranh giới và việc đưa bản tóm tắt trước vào bản ghi bất biến kế tiếp.
 
 ## Thử nghiệm lỗi
 
-Dùng transcript có index `0 = old user`, `1 = assistant với hai Tool call`, `2..3 = matching result` và `4 = recent user`. Đặt budget mà một naïve slicer có thể đạt ở index `2`. Safe selector chỉ được tiến theo whole group và phải trả `4`, không bao giờ trả `2` hoặc `3`:
+Dùng transcript có chỉ mục `0 = user message cũ`, `1 = assistant với hai Tool call`, `2..3 = result tương ứng` và `4 = user message gần đây`. Đặt ngân sách mà một bộ cắt ngây thơ có thể đạt ở chỉ mục `2`. Bộ chọn an toàn chỉ được tiến theo nhóm nguyên vẹn và phải trả `4`, không bao giờ trả `2` hoặc `3`:
 
 ```ts
 const context = buildActiveContext({
@@ -152,32 +152,32 @@ expect(
 ).toBe(4);
 ```
 
-Đây là exact boundary assertion từ `course/test/11-context-compaction.test.ts`. Buộc `retainRecentMessages` bằng toàn transcript thì selector trả `null`; `compactContext()` sau đó reject `CONTEXT_BOUNDARY_UNAVAILABLE` mà không gọi summarizer. Nếu nhận index `2` hoặc `3`, boundary đã tách Tool call khỏi một hoặc cả hai result và checkpoint thất bại.
+Đây là phép khẳng định ranh giới chính xác từ `course/test/11-context-compaction.test.ts`. Nếu đặt `retainRecentMessages` bằng toàn bộ transcript, bộ chọn trả `null`; `compactContext()` sau đó từ chối với `CONTEXT_BOUNDARY_UNAVAILABLE` mà không gọi summarizer. Nếu nhận chỉ mục `2` hoặc `3`, ranh giới đã tách Tool call khỏi một hoặc cả hai result và checkpoint thất bại.
 
 ## Tiêu chí chấp nhận
 
-- Focused command chỉ chọn `course/test/11-context-compaction.test.ts` và pass offline.
-- Active-context snapshot bất biến ở mọi tầng và tuân thủ toàn bộ message, requirement, record, depth, collection, string cùng aggregate ceiling.
-- Mỗi Tool call với tất cả matching result tạo một group; overlapping interval được merge và invalid linkage fail closed.
-- Unit estimate là phép tính Unicode-code-point deterministic với documented structural cost.
-- Boundary selection reserve summary capacity, giữ recent message và chỉ bỏ whole group.
-- Ngữ cảnh dưới threshold được trả unchanged mà không gọi summarizer.
-- Summary output phải là plain non-empty text, vừa cả summary budget lẫn target budget và để lại valid transcript suffix.
-- Cancellation trước, trong hoặc sau summary selection trả stable error và không append record.
-- Mọi failure giữ prior ngữ cảnh nguyên vẹn; success append đúng một frozen record sau khi prospective validation hoàn tất.
+- Lệnh tập trung chỉ chọn `course/test/11-context-compaction.test.ts` và chạy đạt khi ngoại tuyến.
+- Bản chụp ngữ cảnh đang dùng bất biến ở mọi tầng và tuân thủ toàn bộ trần về message, yêu cầu, bản ghi, độ sâu, collection, chuỗi và tổng đơn vị.
+- Mỗi Tool call cùng tất cả result tương ứng tạo một nhóm; các khoảng chồng lấn được gộp và liên kết không hợp lệ khiến thao tác từ chối toàn bộ dữ liệu.
+- Phép ước lượng đơn vị đếm code point Unicode theo cách có tính xác định với chi phí cấu trúc đã ghi trong tài liệu.
+- Việc chọn ranh giới dành đủ sức chứa cho bản tóm tắt, giữ message gần đây và chỉ bỏ nhóm nguyên vẹn.
+- Ngữ cảnh dưới ngưỡng được trả `unchanged` mà không gọi summarizer.
+- Đầu ra của summarizer phải là văn bản thuần không rỗng, vừa cả ngân sách tóm tắt lẫn ngân sách đích và để lại hậu tố transcript hợp lệ.
+- Yêu cầu hủy trước, trong hoặc sau lúc chọn bản tóm tắt trả lỗi ổn định và không thêm bản ghi.
+- Mọi lỗi giữ ngữ cảnh trước đó nguyên vẹn; khi thành công, hàm chỉ thêm đúng một bản ghi đã đóng băng sau khi kiểm tra toàn bộ trạng thái dự kiến.
 
 ## So sánh với Pi SDK 0.84.3
 
 :::info[Pi SDK 0.84.3]
 
-`@earendil-works/pi-coding-agent` export `compact()`, `prepareCompaction()`, `shouldCompact()`, `findCutPoint()`, `findTurnStartIndex()`, `estimateTokens()`, `calculateContextTokens()`, `DEFAULT_COMPACTION_SETTINGS` cùng related result/settings type.
+`@earendil-works/pi-coding-agent` xuất công khai `compact()`, `shouldCompact()`, `findCutPoint()`, `findTurnStartIndex()`, `estimateTokens()`, `calculateContextTokens()`, `DEFAULT_COMPACTION_SETTINGS` cùng các kiểu kết quả/cấu hình liên quan.
 
 :::
 
-Pinned compaction implementation của Pi estimate mức sử dụng ngữ cảnh model, tìm turn-aware cut point, preserve recent token, đưa previous compaction vào quá trình xử lý, generate hoặc update LLM summary và có thể kèm file-operation detail. `SessionManager` của Pi lưu compaction entry rồi rebuild ngữ cảnh của active branch quanh chúng.
+Phần triển khai nén ở release đã ghim của Pi ước lượng mức sử dụng ngữ cảnh model, tìm điểm cắt có xét ranh giới Turn, giữ token gần đây, đưa lần nén trước vào quá trình xử lý, tạo hoặc cập nhật bản tóm tắt bằng LLM và có thể kèm chi tiết thao tác tệp. `SessionManager` của Pi lưu entry nén rồi dựng lại ngữ cảnh của nhánh hiện tại quanh các entry đó.
 
-Course dùng provider-independent deterministic unit, injected offline summarizer, requirement/summary channel tách biệt và Tool-call/result grouping trên Message IR nhỏ hơn. `summaryMaxUnits`, ID, record, thenable defense và boundary đều riêng cho workshop. Hãy dùng public compaction/session API của Pi trong ứng dụng Pi; không chuyển course unit thành tuyên bố về model token.
+Khóa học dùng đơn vị có tính xác định, độc lập với provider; summarizer ngoại tuyến được truyền vào; kênh yêu cầu/bản tóm tắt tách biệt; mô hình nhóm Tool call/result trên Message IR cũng được giản lược hơn. `summaryMaxUnits`, ID, bản ghi, biện pháp phòng vệ trước thenable và ranh giới đều riêng cho workshop. Hãy dùng API nén/phiên làm việc công khai của Pi trong ứng dụng Pi; không diễn giải đơn vị của khóa học thành token của model.
 
 ## Checkpoint tiếp theo
 
-[Checkpoint 12](12-resources-extensions.md) discover trusted resource mà chưa activate, sau đó đăng ký Extension contribution như một transaction có rollback và reverse-order disposal.
+[Checkpoint 12](12-resources-extensions.md) tìm tài nguyên tin cậy nhưng chưa kích hoạt, sau đó đăng ký phần đóng góp của Extension như một transaction có rollback và dọn dẹp theo thứ tự ngược.

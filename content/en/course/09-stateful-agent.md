@@ -70,8 +70,7 @@ stateDiagram-v2
   Running --> Settling: completed, maxSteps, or failed
   Settling --> Idle: publish one run.finished and clear owner
   Running --> Running: subscriber failure recorded
-  Running --> BusyRejected: overlapping prompt or continue
-  BusyRejected --> Running
+  Running --> Running: overlapping prompt or continue throws AgentBusyError
 ```
 
 | Action while running | Accepted? | When it affects the transcript |

@@ -1,6 +1,6 @@
 ---
 title: "Checkpoint 10: Lưu cây phiên làm việc"
-description: Lưu immutable parent-linked JSONL entry, project một active branch, phục hồi truncated tail và thay durable snapshot theo kiểu atomic.
+description: Lưu các entry JSONL bất biến nối bằng `parentId`, chiếu một nhánh hiện tại, phục hồi phần cuối bị cắt và thay bản chụp bền vững theo cơ chế atomic.
 translation_key: course-10-session-tree
 language: vi
 checkpoint: 10
@@ -15,74 +15,74 @@ reviewed_by: Pify maintainers
 
 ## Kết quả
 
-Bạn sẽ persist course message thành một cây phiên làm việc (Session Tree) có version. Một JSONL header định danh phiên làm việc (session). Mọi record sau đó là immutable entry có `id`, `parentId`, timestamp và Message IR value riêng. `SessionTree` theo dõi active leaf rồi chỉ project root-to-leaf path vào `activeMessages`; việc chuyển branch không bao giờ xóa inactive descendant.
+Bạn sẽ lưu message của khóa học thành một cây phiên làm việc (Session Tree) có phiên bản. Một header JSONL định danh phiên làm việc (session). Mỗi bản ghi phía sau là một entry bất biến có `id`, `parentId`, timestamp và giá trị Message IR riêng. `SessionTree` theo dõi leaf hiện tại rồi chỉ chiếu đường đi từ root tới leaf vào `activeMessages`; chuyển nhánh không bao giờ xóa các node con không còn hiện tại.
 
-Logical history là append-only: action mới tạo entry mới và không API nào sửa hoặc xóa entry cũ. Để recovery deterministic hơn trong workshop này, `SessionStore` persist mỗi prospective record set thành một atomically replaced file generation thay vì gọi append syscall không được bảo vệ. Loader chỉ chấp nhận một final JSON object chưa hoàn tất về mặt cú pháp. Complete corruption hoặc middle corruption sẽ fail closed.
+Lịch sử logic tuân theo nguyên tắc chỉ thêm mới: mỗi thao tác tạo entry mới và không API nào sửa hoặc xóa entry cũ. Để việc phục hồi có kết quả xác định hơn trong workshop, `SessionStore` ghi toàn bộ tập bản ghi dự kiến thành một thế hệ tệp mới rồi thay thế theo cơ chế atomic, thay vì gọi syscall `append` không được bảo vệ. Loader chỉ chấp nhận object JSON cuối cùng chưa hoàn tất về mặt cú pháp. Với dữ liệu hỏng đã hoàn chỉnh hoặc nằm giữa tệp, loader áp dụng fail-closed: từ chối cả phiên làm việc thay vì đoán hay bỏ qua dữ liệu.
 
 :::note[Course implementation]
 
-`SessionStore`, `SessionTree`, format version `1`, error code, file algorithm, exact limit và quy tắc chọn stored entry mới nhất làm initial active leaf là contract của Course implementation. Chúng không tương thích với file phiên làm việc của Pi.
+`SessionStore`, `SessionTree`, phiên bản định dạng `1`, mã lỗi, thuật toán tệp, các giới hạn chính xác và quy tắc lấy entry mới nhất đã lưu làm leaf hiện tại ban đầu tạo thành contract của phần triển khai trong khóa học. Chúng không tương thích với tệp phiên làm việc của Pi.
 
 :::
 
 ## Điều kiện tiên quyết
 
-Hoàn thành [checkpoint 09](09-stateful-agent.md). Bạn cần hiểu immutable Message IR value, Tool call/result linkage, Agent-owned transcript snapshot, serialized state change và failure recovery không âm thầm bỏ queued work.
+Hoàn thành [checkpoint 09](09-stateful-agent.md). Bạn cần hiểu giá trị Message IR bất biến, liên kết Tool call/result, bản chụp transcript do Agent sở hữu, thay đổi trạng thái được tuần tự hóa và cách phục hồi sau lỗi mà không âm thầm bỏ công việc trong hàng đợi.
 
-Kiểm tra storage code cùng failure evidence:
+Kiểm tra mã lưu trữ cùng bằng chứng về các trường hợp lỗi:
 
-| Vai trò | Path chính xác | Nội dung cần kiểm tra |
+| Vai trò | Đường dẫn chính xác | Nội dung cần kiểm tra |
 | --- | --- | --- |
-| Cumulative source | `course/src/session.ts` | Versioned record, parsing, parent/link validation, path identity, atomic generation, rollback, tree projection và operation queue |
-| Focused evidence | `course/test/10-session-tree.test.ts` | Branching, reload, incomplete tail, corruption, hostile data, concurrent store, rollback, replacement detection và bound |
+| Mã nguồn tích lũy | `course/src/session.ts` | Bản ghi có phiên bản, phân tích cú pháp, kiểm tra parent/link, định danh đường dẫn, thế hệ atomic, rollback, phép chiếu trên cây và hàng đợi thao tác |
+| Bằng chứng tập trung | `course/test/10-session-tree.test.ts` | Tạo nhánh, tải lại, phần cuối chưa hoàn chỉnh, dữ liệu hỏng, dữ liệu đối nghịch, nhiều store cùng thao tác, rollback, phát hiện đường dẫn bị thay và các giới hạn |
 
-Test tạo một file phiên làm việc trong temporary directory mới. Deterministic clock và ID factory giúp record order cùng parent selection có thể assert trực tiếp.
+Bài kiểm thử tạo một tệp phiên làm việc trong thư mục tạm mới. Đồng hồ và factory tạo ID có kết quả xác định, nhờ đó bài kiểm thử có thể kiểm tra trực tiếp thứ tự bản ghi cùng parent đã chọn.
 
 ## Cơ chế
 
-`SessionStore.create()` ghi đúng một frozen header gồm `type: "session"`, `version: 1`, non-empty ID phiên làm việc và creation timestamp. Nó dùng exclusive creation, ghi đủ byte, `fsync` file, kiểm tra identity của file handle đã mở rồi sync parent directory. `load()` từ chối non-regular file, replaced file, oversized file hoặc file có UTF-8 không hợp lệ trước khi trả store.
+`SessionStore.create()` ghi đúng một header đã đóng băng gồm `type: "session"`, `version: 1`, ID phiên làm việc không rỗng và timestamp tạo phiên. Nó tạo tệp ở chế độ độc quyền, ghi đủ byte, gọi `fsync`, kiểm tra định danh qua handle đã mở rồi đồng bộ thư mục cha. `load()` từ chối đường dẫn không trỏ tới tệp thường, tệp bị thay, tệp quá lớn hoặc UTF-8 không hợp lệ trước khi trả `SessionStore`.
 
-Một entry có `type: "entry"`, `version: 1`, non-empty `id` duy nhất, `parentId` là `null` hoặc tên của entry xuất hiện trước đó, timestamp và `CourseMessage` đã deep snapshot. Reload dựng lại từng record mà không gọi accessor. Nó từ chối field thừa/thiếu, duplicate ID, forward/missing parent, unsupported version, Message IR không hợp lệ và Tool result không tìm thấy matching call trong ancestor chain của branch đó.
+Mỗi entry có `type: "entry"`, `version: 1`, `id` duy nhất và không rỗng, `parentId` bằng `null` hoặc trỏ tới entry xuất hiện trước đó, timestamp và một `CourseMessage` đã được chụp sâu. Khi tải lại, loader dựng lại từng bản ghi mà không gọi accessor. Nó từ chối field thừa hoặc thiếu, ID trùng, parent nằm phía sau hoặc không tồn tại, phiên bản không được hỗ trợ, Message IR không hợp lệ và Tool result không tìm thấy call tương ứng trong chuỗi ancestor của nhánh đó.
 
-JSONL dành một bounded JSON object cho mỗi line. Một line tối đa `65,536` byte; cả file tối đa `4,194,304` byte; một phiên làm việc tối đa `4,096` entry. CRLF và final line hợp lệ nhưng không có `\n` vẫn được chấp nhận. Invalid UTF-8 luôn là fatal. Final unterminated string/object prefix như `{"type":"entry","id":"cut` được nhận diện là chưa hoàn tất rồi bỏ qua trong lần load ấy. Arbitrary text, impossible JSON prefix, valid JSON kèm trailing garbage hoặc malformed JSON đã kết thúc bằng newline đều là corruption chứ không phải crash tail.
+JSONL dành một object JSON có giới hạn cho mỗi dòng. Một dòng tối đa `65,536` byte; cả tệp tối đa `4,194,304` byte; một phiên làm việc tối đa `4,096` entry. CRLF và dòng cuối hợp lệ nhưng không có `\n` vẫn được chấp nhận. UTF-8 không hợp lệ luôn gây lỗi nghiêm trọng. Tiền tố chuỗi/object cuối chưa kết thúc, chẳng hạn `{"type":"entry","id":"cut`, được nhận diện là chưa hoàn tất rồi bỏ qua trong lần tải đó. Văn bản tùy ý, tiền tố JSON không thể hoàn thành, JSON hợp lệ kèm dữ liệu rác phía sau hoặc JSON sai cú pháp đã có newline đều là dữ liệu hỏng, không phải phần cuối bị cắt khi tiến trình dừng đột ngột.
 
-Ban đầu recovery chỉ thay parsed view: incomplete byte vẫn còn trên disk. Lần `append()` kế tiếp serialize accepted header/entry cùng entry mới thành canonical newline-terminated generation và loại abandoned tail. Không được bỏ qua corrupt middle line vì mọi `parentId`, ID và Tool linkage phía sau khi đó sẽ bị diễn giải dựa trên một history giả.
+Ban đầu, quá trình phục hồi chỉ thay phần dữ liệu đã phân tích; các byte chưa hoàn chỉnh vẫn còn trên đĩa. Lần `append()` kế tiếp tuần tự hóa header/entry đã chấp nhận cùng entry mới thành một thế hệ chuẩn có newline cuối, qua đó loại phần đuôi bị bỏ lại. Loader không được bỏ dòng hỏng ở giữa, vì mọi `parentId`, ID và liên kết Tool phía sau khi ấy sẽ bị diễn giải dựa trên lịch sử giả.
 
-`append(parentId, message)` snapshot input trước khi vào queue. Bên trong cả store-local queue lẫn canonical-path lock, nó kiểm tra lại root/file identity, validate capacity cùng parent, tạo record, validate branch-local Tool linkage rồi chuẩn bị full prospective entry array. Chỉ sau khi durable commit thành công nó mới update in-memory array và ID map. Vì vậy failed append giữ cả hai view ở old generation, còn queued work phía sau vẫn có thể retry.
+`append(parentId, message)` chụp dữ liệu đầu vào trước khi đưa vào hàng đợi. Bên trong cả hàng đợi riêng của store lẫn khóa theo đường dẫn chuẩn tắc, phương thức kiểm tra lại định danh thư mục gốc/tệp, sức chứa và parent, tạo bản ghi, kiểm tra liên kết Tool trong nhánh rồi chuẩn bị toàn bộ mảng entry dự kiến. Chỉ sau khi commit bền vững thành công, nó mới cập nhật mảng trong bộ nhớ và bảng ánh xạ ID. Vì vậy, khi append lỗi, cả hai phần dữ liệu vẫn ở thế hệ cũ; công việc phía sau trong hàng đợi vẫn có thể thử lại.
 
-Atomic commit ghi một exclusive sibling temporary rồi `fsync`. Nó kiểm tra temporary identity, hard-link current generation thành recovery marker, kiểm tra lại storage identity, rename temporary vào đúng path, xác minh installed generation, sync directory rồi xóa marker. Cleanup chỉ nhắm identity do thao tác sở hữu. Nếu installation hoặc finalization lỗi, rollback khôi phục prior generation; nếu không thể chứng minh rollback thành công, typed state `SESSION_ROLLBACK_FAILED` giữ recovery marker và poison các lần dùng sau thay vì phỏng đoán.
+Commit atomic ghi một tệp tạm cùng cấp ở chế độ độc quyền rồi gọi `fsync`. Nó kiểm tra định danh tệp tạm, tạo hard link từ thế hệ hiện tại làm dấu mốc phục hồi, kiểm tra lại định danh nơi lưu trữ, đổi tên tệp tạm vào đường dẫn chính, xác minh thế hệ vừa cài, đồng bộ thư mục rồi xóa dấu mốc. Bước dọn dẹp chỉ đụng tới định danh do thao tác sở hữu. Nếu bước cài đặt hoặc hoàn tất gặp lỗi, rollback khôi phục thế hệ trước. Nếu không thể chứng minh rollback thành công, trạng thái có kiểu `SESSION_ROLLBACK_FAILED` giữ dấu mốc phục hồi và khóa các lần dùng sau thay vì phỏng đoán.
 
-`SessionTree` bắt đầu tại stored entry cuối cùng. `moveTo(id)` chỉ đổi in-memory active leaf sau khi validate membership; `moveTo(null)` chọn vị trí tạo root mới. `append(message)` chờ các tree operation trước đó, dùng current leaf làm `parentId`, rồi chỉ advance leaf sau store commit thành công. `activeEntries` đi ngược parent từ leaf đến root, reverse path đã thu thập và trả frozen projection. Inactive descendant vẫn nằm trong `entries` và trên disk.
+`SessionTree` bắt đầu tại entry đã lưu cuối cùng. `moveTo(id)` chỉ đổi leaf hiện tại trong bộ nhớ sau khi kiểm tra entry có thuộc cây; `moveTo(null)` chọn vị trí tạo root mới. `append(message)` chờ các thao tác cây trước đó, dùng leaf hiện tại làm `parentId`, rồi chỉ chuyển leaf sau khi store commit thành công. `activeEntries` lần theo parent từ leaf về root, đảo ngược đường đi đã thu thập và trả một phép chiếu đã đóng băng. Node con không còn hiện tại vẫn nằm trong `entries` và trên đĩa.
 
 ## Dấu vết hoặc mô hình
 
 ```mermaid
 flowchart TD
   H[Header phiên làm việc] --> R[entry-001: root]
-  R --> O[entry-002: branch cũ]
+  R --> O[entry-002: nhánh cũ]
   O --> OT[entry-003: leaf cũ]
-  R --> N[entry-004: branch mới]
-  N --> A[entry-005: active leaf]
-  A -. parent walk .-> N
-  N -. parent walk .-> R
-  A --> P[activeMessages projection]
+  R --> N[entry-004: nhánh mới]
+  N --> A[entry-005: leaf hiện tại]
+  A -. đi theo parent .-> N
+  N -. đi theo parent .-> R
+  A --> P[Phép chiếu activeMessages]
   R --> P
   N --> P
-  OT -. được giữ nhưng inactive .-> S[Tất cả immutable entry]
-  O -. được giữ nhưng inactive .-> S
+  OT -. được giữ nhưng không hiện tại .-> S[Tất cả entry bất biến]
+  O -. được giữ nhưng không hiện tại .-> S
 ```
 
-| Stored fact | Có đổi khi `moveTo()`? | Có trong active projection? |
+| Dữ liệu đã lưu | Có đổi khi `moveTo()`? | Có trong phép chiếu hiện tại? |
 | --- | --- | --- |
-| Header và entry line | Không | Header là metadata, không phải message |
-| Inactive descendant | Không | Không |
-| Selected entry và ancestor | Không | Có, theo thứ tự root đến leaf |
-| Active leaf pointer | Có, trong memory | Chọn projection |
-| Entry được append kế tiếp | Durable child mới | Có sau successful commit |
+| Header và dòng entry | Không | Header là metadata, không phải message |
+| Node con không còn hiện tại | Không | Không |
+| Entry đã chọn và các ancestor | Không | Có, theo thứ tự root tới leaf |
+| Con trỏ leaf hiện tại | Có, trong bộ nhớ | Quyết định phép chiếu |
+| Entry được thêm kế tiếp | Node con mới đã lưu bền vững | Có sau khi commit thành công |
 
 ## Xây dựng
 
-Cumulative module là `course/src/session.ts`. Đoạn trích nguyên văn từ focused test dưới đây tạo branch đồng thời chứng minh abandoned leaf vẫn được giữ:
+Module tích lũy là `course/src/session.ts`. Đoạn trích nguyên văn từ bài kiểm thử tập trung dưới đây tạo nhánh và chứng minh leaf bị bỏ lại vẫn được giữ:
 
 ```ts
 const store = await SessionStore.create(sessionPath, deterministicOptions());
@@ -107,21 +107,21 @@ expect(tree.entries.map((entry) => entry.id)).toEqual([
 expect(tree.entries.find((entry) => entry.id === oldLeaf.id)).toBe(oldLeaf);
 ```
 
-Branch được biểu diễn hoàn toàn bằng parent link và một active pointer. Common prefix không bị copy, còn `oldLeaf` không bị xóa.
+Một nhánh chỉ cần liên kết parent và một con trỏ tới leaf hiện tại. Tiền tố chung không bị sao chép, còn `oldLeaf` không bị xóa.
 
 ## Chạy focused test
 
-Focused test là `course/test/10-session-tree.test.ts`. Chạy chính xác:
+Bài kiểm thử tập trung là `course/test/10-session-tree.test.ts`. Chạy chính xác:
 
 ```bash
 npm run test:course:checkpoint -- course/test/10-session-tree.test.ts
 ```
 
-File này kiểm tra header creation, deterministic parent order, branch, in-memory leaf movement, CRLF/no-final-newline input, exact truncated-tail recovery, middle/final corruption, invalid UTF-8, record/message validation, Tool linkage, hostile option, serialization qua nhiều store, atomic flush, các rollback stage, recovery marker, concurrent tree operation, root/file replacement, typed error và mọi line/file/record ceiling.
+Tệp này kiểm tra việc tạo header, thứ tự parent có kết quả xác định, tạo nhánh, thay leaf trong bộ nhớ, dữ liệu CRLF hoặc thiếu newline cuối, phục hồi chính xác phần cuối bị cắt, dữ liệu hỏng ở giữa/cuối tệp, UTF-8 không hợp lệ, kiểm tra bản ghi/message, liên kết Tool, option đối nghịch, tuần tự hóa giữa nhiều store, flush atomic, các giai đoạn rollback, dấu mốc phục hồi, thao tác cây đồng thời, thư mục gốc/tệp bị thay, lỗi có kiểu và mọi trần theo dòng/tệp/bản ghi.
 
 ## Thử nghiệm lỗi
 
-So sánh hai file bị hỏng. Đầu tiên, truncate final record bên trong một JSON string chưa hoàn thành. Loader được phép giữ prior record và lần append sau sẽ canonicalize file. Tiếp theo, đặt corruption ở complete middle line; loader phải reject toàn bộ phiên làm việc:
+So sánh hai tệp bị hỏng. Trước tiên, cắt bản ghi cuối bên trong một chuỗi JSON chưa hoàn thành. Loader được phép giữ các bản ghi trước đó, và lần append sau sẽ chuẩn hóa lại tệp. Tiếp theo, đặt dữ liệu hỏng vào một dòng hoàn chỉnh ở giữa; loader phải từ chối toàn bộ phiên làm việc:
 
 ```ts
 await writeFile(
@@ -143,32 +143,32 @@ await expectSessionError(
 );
 ```
 
-Hai fragment dùng đúng helper và payload từ `course/test/10-session-tree.test.ts`. Không mở rộng recovery cho mọi unterminated tail: `not-json`, syntactically impossible prefix, invalid UTF-8 và complete garbage vẫn là fatal ngay cả khi nằm ở physical line cuối.
+Hai đoạn dùng đúng hàm hỗ trợ và dữ liệu từ `course/test/10-session-tree.test.ts`. Không mở rộng khả năng phục hồi cho mọi phần cuối chưa kết thúc: `not-json`, tiền tố JSON không thể hoàn thành, UTF-8 không hợp lệ và dữ liệu rác hoàn chỉnh vẫn là lỗi nghiêm trọng ngay cả khi nằm ở dòng vật lý cuối.
 
 ## Tiêu chí chấp nhận
 
-- Focused command chỉ chọn `course/test/10-session-tree.test.ts` và pass offline.
-- Versioned header đứng trước một bounded JSON object cho mỗi accepted entry.
-- Entry ID là duy nhất; mỗi non-null parent gọi đúng record trước đó; message và branch-local Tool linkage validate trước adoption.
-- `moveTo()` không đổi file byte nào, còn successful append kế tiếp trở thành child của selected leaf.
-- `activeEntries` và `activeMessages` là frozen root-to-leaf projection; inactive branch vẫn được lưu.
-- Chỉ syntactically incomplete final JSON object là recoverable; middle corruption, complete garbage, invalid prefix và invalid UTF-8 đều fail closed.
-- Lần append sau recoverable tail ghi một canonical newline-terminated generation.
-- Append/flush commit bằng identity-checked temporary, recovery marker, rename, directory sync, cleanup và rollback; memory chỉ đổi sau commit.
-- Giới hạn giữ nguyên `65,536` byte mỗi line, `4,194,304` byte mỗi file và `4,096` entry.
+- Lệnh tập trung chỉ chọn `course/test/10-session-tree.test.ts` và chạy đạt khi ngoại tuyến.
+- Header có phiên bản đứng trước một object JSON có giới hạn cho mỗi entry được chấp nhận.
+- ID entry là duy nhất; mỗi `parentId` khác `null` trỏ tới bản ghi phía trước; message và liên kết Tool trong nhánh được kiểm tra trước khi nhận.
+- `moveTo()` không đổi byte nào trong tệp, còn lần append thành công kế tiếp trở thành node con của leaf đã chọn.
+- `activeEntries` và `activeMessages` là phép chiếu đã đóng băng từ root tới leaf; nhánh không còn hiện tại vẫn được lưu.
+- Chỉ object JSON cuối chưa hoàn tất đúng cú pháp mới phục hồi được; dữ liệu hỏng ở giữa, dữ liệu rác hoàn chỉnh, tiền tố không hợp lệ và UTF-8 không hợp lệ đều khiến loader từ chối toàn bộ phiên.
+- Lần append sau phần cuối có thể phục hồi sẽ ghi một thế hệ chuẩn có newline cuối.
+- Append/flush commit qua tệp tạm đã kiểm tra định danh, dấu mốc phục hồi, đổi tên, đồng bộ thư mục, dọn dẹp và rollback; bộ nhớ chỉ đổi sau commit.
+- Giới hạn giữ nguyên `65,536` byte mỗi dòng, `4,194,304` byte mỗi tệp và `4,096` entry.
 
 ## So sánh với Pi SDK 0.84.3
 
 :::info[Pi SDK 0.84.3]
 
-`@earendil-works/pi-coding-agent` export `SessionManager`, `SessionEntry`, `SessionHeader`, `SessionTreeNode`, `buildContextEntries()`, `buildSessionContext()` và `CURRENT_SESSION_VERSION`.
+`@earendil-works/pi-coding-agent` xuất công khai `SessionManager`, `SessionEntry`, `SessionHeader`, `SessionTreeNode`, `buildContextEntries()`, `buildSessionContext()` và `CURRENT_SESSION_VERSION`.
 
 :::
 
-Pinned `SessionManager` của Pi mô tả append-only JSONL tree với `id`/`parentId`, current leaf, `getBranch()`, `getTree()`, `branch()` và compaction-aware context building. Release format của Pi là version `3` và hỗ trợ thêm nhiều entry kind, gồm model/thinking change, compaction, branch summary, custom entry, label và thông tin phiên làm việc.
+`SessionManager` ở release đã ghim của Pi mô tả cây JSONL chỉ thêm mới với `id`/`parentId`, leaf hiện tại, `getBranch()`, `getTree()`, `branch()` và cách dựng ngữ cảnh có xét việc nén. Định dạng của release là phiên bản `3` và hỗ trợ thêm nhiều loại entry, gồm thay model/mức suy luận, nén, tóm tắt nhánh, entry tùy chỉnh, nhãn và thông tin phiên làm việc.
 
-Course format là version `1`, chỉ lưu header cùng Message IR entry, dùng atomic whole-generation commit và recovery-marker protocol riêng cho workshop, đồng thời chọn record mới nhất làm active leaf sau load. JSONL file của course không phải phiên làm việc Pi và loader này cũng không nhận file phiên làm việc Pi. Hãy dùng `SessionManager` cùng migration function của Pi cho phiên làm việc thực tế.
+Định dạng của khóa học là phiên bản `1`, chỉ lưu header cùng entry Message IR, dùng commit atomic cho toàn bộ thế hệ và giao thức dấu mốc phục hồi riêng cho workshop, đồng thời lấy bản ghi mới nhất làm leaf hiện tại sau khi tải. Tệp JSONL của khóa học không phải phiên làm việc Pi, và loader này cũng không nhận tệp phiên làm việc Pi. Hãy dùng `SessionManager` cùng hàm chuyển đổi phiên bản của Pi cho phiên làm việc thực tế.
 
 ## Checkpoint tiếp theo
 
-[Checkpoint 11](11-context-compaction.md) tạo bounded active context từ các complete message group. Bạn sẽ summarize old prefix mà không cắt assistant Tool call khỏi bất kỳ matching result nào.
+[Checkpoint 11](11-context-compaction.md) tạo ngữ cảnh có giới hạn từ các nhóm message hoàn chỉnh. Bạn sẽ tóm tắt tiền tố cũ mà không tách Tool call của assistant khỏi bất kỳ result tương ứng nào.

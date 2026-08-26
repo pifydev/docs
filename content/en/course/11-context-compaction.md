@@ -18,7 +18,7 @@ reviewed_by: Pify maintainers
 
 You will turn a valid transcript into an immutable `ActiveContext` with separate requirements, an optional prior summary, recent messages, and an append-only compaction record list. When its deterministic unit budget exceeds `maxUnits`, `compactContext()` selects a complete old prefix, asks a supplied summarizer for plain text, validates the prospective context, and returns a new state.
 
-No compaction boundary may split an assistant Tool call from any matching Tool result. A failed summary, missing safe boundary, cancellation, malformed transcript, or over-budget result leaves the input object byte-for-byte unchanged and appends no compaction record.
+No compaction boundary may split an assistant Tool call from any matching Tool result. A failed summary, missing safe boundary, cancellation, malformed transcript, or over-budget result does not mutate the input or prior context and appends no compaction record.
 
 :::note[Course implementation]
 
@@ -170,7 +170,7 @@ This is the exact boundary assertion from `course/test/11-context-compaction.tes
 
 :::info[Pi SDK 0.84.3]
 
-`@earendil-works/pi-coding-agent` exports `compact()`, `prepareCompaction()`, `shouldCompact()`, `findCutPoint()`, `findTurnStartIndex()`, `estimateTokens()`, `calculateContextTokens()`, `DEFAULT_COMPACTION_SETTINGS`, and related result/settings types.
+`@earendil-works/pi-coding-agent` exports `compact()`, `shouldCompact()`, `findCutPoint()`, `findTurnStartIndex()`, `estimateTokens()`, `calculateContextTokens()`, `DEFAULT_COMPACTION_SETTINGS`, and related result/settings types.
 
 :::
 

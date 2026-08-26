@@ -47,7 +47,7 @@ Path validation rejects empty paths, NUL, absolute POSIX and Windows paths, driv
 
 `read_file` opens a regular file and compares the opened handle's identity with the current canonical target before returning content. It reads at most `65,536 + 1` bytes so that an oversized file is detected, decodes with fatal UTF-8 validation, and returns `{ path, content, bytes }`. Cancellation is checked before and during the read.
 
-`write_file` validates UTF-8 size before touching the filesystem. For each canonical target, an in-process lock serializes concurrent writes. The Tool creates a sibling with exclusive `wx` mode and permissions `0600`, writes and `fsync`s it, checks that the pathname still names the opened file, rechecks the workspace, parent, target, and cancellation, then renames the temporary over the destination. Rename failure leaves the old destination intact; cleanup removes only the temporary identity owned by this operation. These checks reduce races within the course threat model, but they do not turn the workspace into a hardened multi-tenant sandbox.
+`write_file` validates UTF-8 size before touching the filesystem. For each canonical target, an in-process lock serializes concurrent writes. The Tool creates a sibling with exclusive `wx` mode and permissions `0600`, writes and `fsync`s it, checks that the pathname still names the opened file, rechecks the workspace, parent, target, and cancellation, then renames the temporary over the destination. If rename itself fails, the old destination remains intact and cleanup removes only the temporary identity owned by this operation. After a successful rename, an unexpected installed identity is detected and removed when it is still the inspected identity; the course does not promise restoration of the previous destination at that point. These checks reduce races within the course threat model, but they do not turn the workspace into a hardened multi-tenant sandbox.
 
 `node_process` accepts JavaScript `source` and a string `arguments` array. It writes a temporary CommonJS file inside the workspace, launches `process.execPath` with `shell: false`, sets `cwd` to the canonical root, hides the Windows console, and passes arguments after `--`. The source is capped at `32,768` UTF-8 bytes. There may be at most `32` arguments, each at most `2,048` bytes and together at most `8,192` bytes; Windows command-line quoting is also checked against a conservative `30,000` UTF-16-unit ceiling.
 
@@ -129,35 +129,74 @@ The focused test is `course/test/08-coding-tools.test.ts`. Run exactly:
 npm run test:course:checkpoint -- course/test/08-coding-tools.test.ts
 ```
 
-The file covers accepted UTF-8 reads/writes, path normalization, POSIX/Windows traversal forms, ADS/device names, symlink and junction escapes, root replacement, file and source limits, atomic rename and rollback, target write serialization, temporary-path substitution, exact argument boundaries, UTF-8-safe output caps, nonzero exit, timeout, cancellation, process cleanup, and hostile input shapes. It is an offline filesystem/process contract, not a penetration test of an OS sandbox.
+The file covers accepted UTF-8 reads/writes, path normalization, POSIX/Windows traversal forms, ADS/device names, symlink and junction escapes, root replacement, file and source limits, atomic rename failure and destination preservation, target write serialization, temporary-path substitution, exact argument boundaries, UTF-8-safe output caps, nonzero exit, timeout, cancellation, process cleanup, and hostile input shapes. It is an offline filesystem/process contract, not a penetration test of an OS sandbox.
 
 ## Failure experiment
 
-Create an empty parent directory and a `workspace` child, then attempt to write `../outside.txt`. The validator must reject before any temporary file or destination appears:
+Create a managed temporary parent and its `workspace` child, then attempt to write `../outside.txt`. The resolved outside target remains inside that managed parent, and the `finally` block removes only the exact directory created by this experiment:
 
 ```ts
-const outsidePath = join(workspace, "..", "outside.txt");
-const registry = new ToolRegistry([createWriteTool(workspace)]);
-const result = await executeToolCall(
-  registry,
-  call("write_file", {
-    path: "../outside.txt",
-    content: "must stay inside",
-  }),
-  new AbortController().signal,
-);
+import { access, mkdir, mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
-expect(result.isError).toBe(true);
-expect(parseToolContent(result.content)).toMatchObject({
-  error: {
-    code: "TOOL_ARGUMENTS_INVALID",
-    message: "INVALID_RELATIVE_PATH",
-  },
+import { expect, test } from "vitest";
+
+import {
+  ToolRegistry,
+  createWriteTool,
+  executeToolCall,
+  type CourseToolCall,
+} from "../src/index";
+
+function call(
+  name: string,
+  argumentsValue: CourseToolCall["arguments"],
+): CourseToolCall {
+  return {
+    type: "toolCall",
+    id: `call-${name}-failure`,
+    name,
+    arguments: argumentsValue,
+  };
+}
+
+function parseToolContent(content: string): unknown {
+  return JSON.parse(content) as unknown;
+}
+
+test("rejects traversal before creating an outside file", async () => {
+  const parent = await mkdtemp(join(tmpdir(), "pify-course-08-failure-"));
+  const workspace = join(parent, "workspace");
+  const outsidePath = join(parent, "outside.txt");
+
+  try {
+    await mkdir(workspace);
+    const registry = new ToolRegistry([createWriteTool(workspace)]);
+    const result = await executeToolCall(
+      registry,
+      call("write_file", {
+        path: "../outside.txt",
+        content: "must stay inside",
+      }),
+      new AbortController().signal,
+    );
+
+    expect(result.isError).toBe(true);
+    expect(parseToolContent(result.content)).toMatchObject({
+      error: {
+        code: "TOOL_ARGUMENTS_INVALID",
+        message: "INVALID_RELATIVE_PATH",
+      },
+    });
+    await expect(access(outsidePath)).rejects.toMatchObject({ code: "ENOENT" });
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
 });
-await expect(access(outsidePath)).rejects.toMatchObject({ code: "ENOENT" });
 ```
 
-This small experiment uses the same helpers and contract as `course/test/08-coding-tools.test.ts`. Restore the temporary directory afterward. If `outside.txt` exists, path rejection occurred too late and the checkpoint fails even if the Tool returned an error.
+Save this runnable Vitest file beside `course/test/08-coding-tools.test.ts`, so `../src/index` resolves to the cumulative module. It never targets a shared `%TEMP%/outside.txt` or `/tmp/outside.txt`. If the managed `outsidePath` exists before cleanup, path rejection occurred too late and the checkpoint fails even if the Tool returned an error.
 
 ## Acceptance criteria
 
@@ -165,7 +204,7 @@ This small experiment uses the same helpers and contract as `course/test/08-codi
 - Every Tool captures a canonical directory identity and rejects a replaced or repointed workspace.
 - Relative-path validation rejects traversal, absolute, drive, UNC, device, ADS, reserved-name, and ambiguous trailing-character forms before effects.
 - Read/write resolution rejects symlink and junction escapes; reads require regular, valid UTF-8 files.
-- Writes serialize one target, `fsync` an owned temporary, verify its identity, rename atomically, and preserve the old destination on failure.
+- Writes serialize one target, `fsync` an owned temporary, verify its identity, rename atomically, and preserve the old destination when rename itself fails; they do not claim post-rename rollback.
 - File, source, argument, output, and time limits equal the documented constants.
 - Process launch uses `process.execPath`, `shell: false`, canonical `cwd`, bounded independent outputs, and a temporary script that is always cleaned.
 - Cancellation and timeout terminate active process work and settle without leaving `.pify-node-*` or `.pify-tmp-*` artifacts.
