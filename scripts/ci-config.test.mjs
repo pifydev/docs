@@ -9,6 +9,7 @@ import { parse } from "yaml";
 
 const repositoryRoot = new URL("../", import.meta.url);
 const repositoryRootPath = fileURLToPath(repositoryRoot);
+const maximumJobTimeoutMinutes = 20;
 
 const contentPaths = [
   "content/**",
@@ -51,20 +52,7 @@ const contentWorkflowContract = {
     "cancel-in-progress": true,
   },
   jobKey: "quality",
-  job: {
-    name: "Validate content and application",
-    "runs-on": "ubuntu-latest",
-    "timeout-minutes": 20,
-    steps: [
-      { uses: "actions/checkout@v4" },
-      {
-        uses: "actions/setup-node@v4",
-        with: { "node-version": 22, cache: "npm" },
-      },
-      { run: "npm ci" },
-      { run: "npm run quality:content" },
-    ],
-  },
+  runCommands: ["npm ci", "npm run quality:content"],
 };
 
 const applicationWorkflowContract = {
@@ -75,21 +63,7 @@ const applicationWorkflowContract = {
     "cancel-in-progress": true,
   },
   jobKey: "build",
-  job: {
-    name: "Build Next.js application",
-    "runs-on": "ubuntu-latest",
-    "timeout-minutes": 20,
-    steps: [
-      { uses: "actions/checkout@v4" },
-      {
-        uses: "actions/setup-node@v4",
-        with: { "node-version": 22, cache: "npm" },
-      },
-      { run: "npm ci" },
-      { run: "npm run typecheck" },
-      { run: "npm run build" },
-    ],
-  },
+  runCommands: ["npm ci", "npm run typecheck", "npm run build"],
 };
 
 async function readWorkflow(filename) {
@@ -100,37 +74,107 @@ async function readWorkflow(filename) {
   return { source, workflow: parse(source) };
 }
 
-function assertNoDeploymentCapabilities(source) {
+function assertNoDeploymentCapabilities(source, workflow) {
+  const searchableWorkflow = workflow
+    ? `${source}\n${JSON.stringify(workflow)}`
+    : source;
   assert.doesNotMatch(
-    source,
+    searchableWorkflow,
     /\bvercel\b|deploy-pages|upload-pages-artifact|actions\/deploy|\bsecrets\s*(?:\.|\[)|\bwrite-all\b/i,
   );
   assert.doesNotMatch(source, /^\s*[\w-]+:\s*write\s*(?:#.*)?$/im);
-  assert.doesNotMatch(source, /^\s*-\s+(?:uses|run):[^\r\n]*\bdeploy\b/im);
+  assert.doesNotMatch(
+    searchableWorkflow,
+    /(?:\buses\b|\brun\b)["']?\s*:\s*["']?[^"'\r\n]*\bdeploy\b/i,
+  );
+}
+
+function assertContainsRequired(actualValues, requiredValues) {
+  assert.ok(Array.isArray(actualValues));
+  const actualSet = new Set(actualValues);
+  const missingValues = requiredValues.filter((value) => !actualSet.has(value));
+  assert.deepEqual(missingValues, []);
+}
+
+function assertReadOnlyPermissions(
+  permissions,
+  { required = false, requireContents = false } = {},
+) {
+  if (permissions === undefined) {
+    assert.equal(required, false);
+    return;
+  }
+  if (typeof permissions === "string") {
+    assert.equal(permissions, "read-all");
+    return;
+  }
+
+  assert.ok(permissions && typeof permissions === "object");
+  for (const access of Object.values(permissions)) {
+    assert.ok(access === "read" || access === "none");
+  }
+  if (requireContents) assert.equal(permissions.contents, "read");
+}
+
+function assertSafeJob(job) {
+  assert.ok(Number.isInteger(job["timeout-minutes"]));
+  assert.ok(job["timeout-minutes"] > 0);
+  assert.ok(job["timeout-minutes"] <= maximumJobTimeoutMinutes);
+  assertReadOnlyPermissions(job.permissions);
+  assert.equal(Object.hasOwn(job, "if"), false);
+  assert.equal(Object.hasOwn(job, "continue-on-error"), false);
+  assert.ok(Array.isArray(job.steps));
+  assert.ok(job.steps.length > 0);
+
+  for (const step of job.steps) {
+    assert.equal(Object.hasOwn(step, "if"), false);
+    assert.equal(Object.hasOwn(step, "continue-on-error"), false);
+  }
+}
+
+function assertRequiredJob(job, runCommands) {
+  assert.ok(job);
+  const checkoutStep = job.steps.find(
+    (step) =>
+      typeof step.uses === "string" &&
+      step.uses.startsWith("actions/checkout@"),
+  );
+  const setupNodeStep = job.steps.find(
+    (step) =>
+      typeof step.uses === "string" &&
+      step.uses.startsWith("actions/setup-node@"),
+  );
+  assert.ok(checkoutStep);
+  assert.ok(setupNodeStep);
+  assert.match(
+    String(setupNodeStep.with?.["node-version"]),
+    /^22(?:\.(?:x|\d+)){0,2}$/i,
+  );
+  assert.equal(setupNodeStep.with?.cache, "npm");
+  assert.deepEqual(
+    job.steps
+      .filter((step) => Object.hasOwn(step, "run"))
+      .map((step) => step.run),
+    runCommands,
+  );
 }
 
 function assertWorkflowContract(source, workflow, contract) {
   assert.equal(workflow.name, contract.name);
-  assert.deepEqual(Object.keys(workflow.on).sort(), [
-    "pull_request",
-    "push",
-    "workflow_dispatch",
-  ]);
-  assert.deepEqual(workflow.on.pull_request, { paths: contract.paths });
-  assert.deepEqual(workflow.on.push, {
-    branches: ["main"],
-    paths: contract.paths,
+  for (const event of ["pull_request", "push", "workflow_dispatch"]) {
+    assert.ok(Object.hasOwn(workflow.on, event));
+  }
+  assertContainsRequired(workflow.on.pull_request.paths, contract.paths);
+  assertContainsRequired(workflow.on.push.paths, contract.paths);
+  assertContainsRequired(workflow.on.push.branches, ["main"]);
+  assertReadOnlyPermissions(workflow.permissions, {
+    required: true,
+    requireContents: true,
   });
-  assert.equal(workflow.on.workflow_dispatch, null);
-  assert.deepEqual(workflow.permissions, { contents: "read" });
   assert.deepEqual(workflow.concurrency, contract.concurrency);
-  assert.deepEqual(Object.keys(workflow.jobs), [contract.jobKey]);
-  assert.equal(
-    Object.hasOwn(workflow.jobs[contract.jobKey], "permissions"),
-    false,
-  );
-  assert.deepEqual(workflow.jobs[contract.jobKey], contract.job);
-  assertNoDeploymentCapabilities(source);
+  for (const job of Object.values(workflow.jobs)) assertSafeJob(job);
+  assertRequiredJob(workflow.jobs[contract.jobKey], contract.runCommands);
+  assertNoDeploymentCapabilities(source, workflow);
 }
 
 async function findTypeScriptFiles(directory) {
@@ -297,14 +341,53 @@ test("deployment guard rejects secrets and write or deploy capabilities", () => 
   }
 });
 
-test("workflow contract rejects extra jobs and conditional steps", async () => {
+test("workflow contract allows additive safe paths and jobs", async () => {
   const { source, workflow } = await readWorkflow("deploy.yml");
-  const extraJobWorkflow = structuredClone(workflow);
-  extraJobWorkflow.jobs.deploy = structuredClone(workflow.jobs.build);
+  workflow.on.pull_request.paths.unshift("README.md");
+  workflow.on.push.paths.push("README.md");
+  workflow.on.push.branches.push("release");
+  workflow.on.schedule = [{ cron: "0 0 * * 0" }];
+  workflow.jobs.build.steps[0] = {
+    name: "Checkout sources",
+    uses: "actions/checkout@v5",
+    with: { "fetch-depth": 1 },
+  };
+  workflow.jobs.build.steps[1] = {
+    name: "Set up Node",
+    uses: "actions/setup-node@v5",
+    with: {
+      "node-version": "22.x",
+      cache: "npm",
+      "cache-dependency-path": "package-lock.json",
+    },
+  };
+  workflow.jobs.docs = {
+    name: "Read-only docs check",
+    "runs-on": "ubuntu-latest",
+    "timeout-minutes": 10,
+    permissions: { contents: "read" },
+    steps: [
+      { name: "Checkout", uses: "actions/checkout@v5" },
+      { name: "Inspect npm", run: "npm --version" },
+    ],
+  };
+
+  assert.doesNotThrow(() =>
+    assertWorkflowContract(source, workflow, applicationWorkflowContract),
+  );
+});
+
+test("workflow contract rejects unbounded jobs and conditional steps", async () => {
+  const { source, workflow } = await readWorkflow("deploy.yml");
+  const unboundedJobWorkflow = structuredClone(workflow);
+  unboundedJobWorkflow.jobs.audit = {
+    "runs-on": "ubuntu-latest",
+    steps: [{ run: "npm --version" }],
+  };
   assert.throws(() =>
     assertWorkflowContract(
       source,
-      extraJobWorkflow,
+      unboundedJobWorkflow,
       applicationWorkflowContract,
     ),
   );
@@ -328,11 +411,34 @@ test("workflow contract rejects extra jobs and conditional steps", async () => {
       applicationWorkflowContract,
     ),
   );
+
+  const deployWorkflow = structuredClone(workflow);
+  deployWorkflow.jobs.audit = {
+    "runs-on": "ubuntu-latest",
+    "timeout-minutes": 10,
+    steps: [{ uses: "example/deploy@v1" }],
+  };
+  assert.throws(() =>
+    assertWorkflowContract(source, deployWorkflow, applicationWorkflowContract),
+  );
+
+  const secretWorkflow = structuredClone(workflow);
+  secretWorkflow.jobs.build.steps[0].env = {
+    TOKEN: "${{ secrets['DEPLOY_TOKEN'] }}",
+  };
+  assert.throws(() =>
+    assertWorkflowContract(source, secretWorkflow, applicationWorkflowContract),
+  );
 });
 
 test("workflow contract rejects job-level permission overrides", async () => {
   const { source, workflow } = await readWorkflow("deploy.yml");
-  workflow.jobs.build.permissions = "write-all";
+  workflow.jobs.audit = {
+    "runs-on": "ubuntu-latest",
+    "timeout-minutes": 10,
+    permissions: "write-all",
+    steps: [{ run: "npm --version" }],
+  };
 
   assert.throws(() =>
     assertWorkflowContract(source, workflow, applicationWorkflowContract),
@@ -341,22 +447,25 @@ test("workflow contract rejects job-level permission overrides", async () => {
 
 test("workflow contract rejects trigger drift", async () => {
   const { source, workflow } = await readWorkflow("deploy.yml");
-  const extraPathWorkflow = structuredClone(workflow);
-  extraPathWorkflow.on.pull_request.paths.push("README.md");
+  const missingPathWorkflow = structuredClone(workflow);
+  missingPathWorkflow.on.pull_request.paths =
+    missingPathWorkflow.on.pull_request.paths.filter(
+      (path) => path !== "course/**",
+    );
   assert.throws(() =>
     assertWorkflowContract(
       source,
-      extraPathWorkflow,
+      missingPathWorkflow,
       applicationWorkflowContract,
     ),
   );
 
-  const extraBranchWorkflow = structuredClone(workflow);
-  extraBranchWorkflow.on.push.branches.push("release");
+  const missingMainWorkflow = structuredClone(workflow);
+  missingMainWorkflow.on.push.branches = ["release"];
   assert.throws(() =>
     assertWorkflowContract(
       source,
-      extraBranchWorkflow,
+      missingMainWorkflow,
       applicationWorkflowContract,
     ),
   );
