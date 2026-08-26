@@ -106,36 +106,51 @@ async function readCoursePage(locale, filename) {
   );
 }
 
-function maskFencedContent(body) {
+function scanMarkdownFences(body) {
   let fence = null;
+  const blocks = [];
 
-  return body
+  const visibleBody = body
     .split(/(?<=\n)/)
     .map((line) => {
       const text = line.replace(/\r?\n$/, "");
       if (fence) {
-        const closing = text.match(/^\s{0,3}([`~]{3,})\s*$/);
+        const closing = text.match(/^\s{0,3}(`{3,}|~{3,})\s*$/);
         if (
           closing &&
           closing[1][0] === fence.character &&
           closing[1].length >= fence.length
         ) {
+          blocks.push({
+            language: fence.language,
+            body: fence.lines.join(""),
+          });
           fence = null;
+        } else {
+          fence.lines.push(line);
         }
         return line.replace(/[^\r\n]/g, " ");
       }
 
       const opening = text.match(/^\s{0,3}(`{3,}|~{3,})(.*)$/);
-      if (opening) {
+      if (opening && !(opening[1][0] === "`" && opening[2].includes("`"))) {
         fence = {
           character: opening[1][0],
           length: opening[1].length,
+          language: opening[2].trim().split(/\s+/, 1)[0] ?? "",
+          lines: [],
         };
         return line.replace(/[^\r\n]/g, " ");
       }
       return line;
     })
     .join("");
+
+  return { blocks, visibleBody };
+}
+
+function maskFencedContent(body) {
+  return scanMarkdownFences(body).visibleBody;
 }
 
 function h2Headings(body) {
@@ -145,13 +160,17 @@ function h2Headings(body) {
 }
 
 function h2Section(body, heading) {
-  const match = maskFencedContent(body).match(
-    new RegExp(
-      `^## ${escapeRegExp(heading)}\\r?\\n([\\s\\S]*?)(?=^## |\\z)`,
-      "m",
-    ),
-  );
-  return match?.[1] ?? "";
+  const visibleBody = maskFencedContent(body);
+  const headingMatch = new RegExp(
+    `^## ${escapeRegExp(heading)}\\r?$`,
+    "m",
+  ).exec(visibleBody);
+  if (!headingMatch) return "";
+
+  const sectionStart = headingMatch.index + headingMatch[0].length;
+  const remainder = visibleBody.slice(sectionStart).replace(/^\r?\n/, "");
+  const nextHeading = remainder.search(/^##(?:\s+|$)/m);
+  return nextHeading === -1 ? remainder : remainder.slice(0, nextHeading);
 }
 
 function markdownListItems(body) {
@@ -159,8 +178,8 @@ function markdownListItems(body) {
 }
 
 function fencedCommandCount(body, command) {
-  return [...body.matchAll(/^```bash\s*\r?\n([\s\S]*?)^```\s*$/gm)].filter(
-    (match) => match[1].trim() === command,
+  return scanMarkdownFences(body).blocks.filter(
+    (block) => block.language === "bash" && block.body.trim() === command,
   ).length;
 }
 
@@ -191,6 +210,46 @@ ${command} --extra
   assert.doesNotMatch(
     maskFencedContent(lookalikes),
     /^:::info\[Pi SDK 0\.84\.3\]\s*$/m,
+  );
+});
+
+test("checkpoint command evidence respects outer fences and fence length", () => {
+  const command =
+    "npm run test:course:checkpoint -- course/test/00-complete-agent-trace.test.ts";
+  const nestedInFourBackticks = `\`\`\`\`markdown
+\`\`\`bash
+${command}
+\`\`\`
+\`\`\`\`
+`;
+  const nestedInTildes = `~~~~markdown
+\`\`\`bash
+${command}
+\`\`\`
+~~~~
+`;
+  const validTopLevelFences = `\`\`\`\`bash
+${command}
+\`\`\`\`
+
+~~~bash
+${command}
+~~~
+`;
+
+  assert.equal(fencedCommandCount(nestedInFourBackticks, command), 0);
+  assert.equal(fencedCommandCount(nestedInTildes, command), 0);
+  assert.equal(fencedCommandCount(validTopLevelFences, command), 2);
+});
+
+test("checkpoint section evidence includes a final H2 body through EOF", () => {
+  const body = `## Failure experiment
+
+Break the invariant deliberately and confirm the focused test reports it.`;
+
+  assert.equal(
+    h2Section(body, "Failure experiment").trim(),
+    "Break the invariant deliberately and confirm the focused test reports it.",
   );
 });
 
