@@ -1,6 +1,6 @@
 ---
-title: "Checkpoint 06: Thực thi Tool contract"
-description: Snapshot Tool definition, đăng ký batch atomically, validate trước effect, propagate cancellation và trả bounded linked result.
+title: "Checkpoint 06: Thực thi quy ước Tool"
+description: Chụp lại định nghĩa Tool, đăng ký cả batch theo cách nguyên tử, kiểm tra trước tác dụng phụ, truyền tín hiệu hủy và trả result có giới hạn, được liên kết đúng.
 translation_key: course-06-tool-contract
 language: vi
 checkpoint: 6
@@ -16,46 +16,46 @@ reviewed_by: Pify maintainers
 
 ## Kết quả
 
-Bạn sẽ xây dựng Tool boundary biến untrusted `CourseToolCall` thành một successful Tool-result message, một recoverable error result hoặc exceptional cancellation/programmer failure. `defineTool()` snapshot Tool definition. `ToolRegistry` sở hữu immutable definition và đăng ký batch atomically. `executeToolCall()` validate arguments trước effect, chuyển cancellation vào execution, serialize output trong fixed budget và giữ call/result linkage.
+Bạn sẽ xây dựng ranh giới Tool để biến `CourseToolCall` chưa đáng tin cậy thành một Tool-result message thành công, một result chứa lỗi có thể phục hồi (recoverable), hoặc một exception do hủy hay lỗi lập trình. `defineTool()` chụp lại định nghĩa Tool. `ToolRegistry` sở hữu các định nghĩa bất biến và đăng ký cả batch theo cách nguyên tử. `executeToolCall()` kiểm tra arguments trước mọi tác dụng phụ, truyền tín hiệu hủy vào lần thực thi, tuần tự hóa đầu ra trong ngân sách cố định và giữ đúng liên kết giữa call với result.
 
-Invalid arguments không bao giờ invoke Tool. Unknown name, rejected arguments, ordinary validator failure, ordinary execution failure và unsafe output trở thành message `isError: true` để model turn tiếp theo inspect. Cancellation reject thay vì bị encode thành Tool result. `NonRecoverableToolError` chỉ dành cho authenticated invariant hoặc programmer failure buộc Agent run phải dừng.
+Arguments không hợp lệ không bao giờ làm Tool được gọi. Tên không tồn tại, arguments bị từ chối, lỗi thông thường từ validator hoặc lần thực thi và đầu ra không an toàn đều trở thành message `isError: true` để lượt model tiếp theo đọc được. Việc hủy làm thao tác bị từ chối thay vì được mã hóa thành Tool result. `NonRecoverableToolError` chỉ dành cho invariant đã được xác thực hoặc lỗi lập trình buộc lượt chạy Agent phải dừng.
 
 :::note[Course implementation]
 
-`CourseTool`, `ToolRegistry`, `defineTool()`, `executeToolCall()`, các serializer limit cùng error code thuộc workshop. Validator shape và string-only result content của chúng không phải interface trong Pi SDK.
+`CourseTool`, `ToolRegistry`, `defineTool()`, `executeToolCall()`, các giới hạn của bộ tuần tự hóa và mã lỗi đều thuộc workshop. Hình dạng của validator và content result chỉ chứa string không phải interface trong Pi SDK.
 
 :::
 
 ## Điều kiện tiên quyết
 
-Hoàn thành [checkpoint 05](05-provider-adapter.md). Bạn cần hiểu normalized Tool call, JSON snapshot, own-property inspection, synchronous validation, promise và thenable, `AbortSignal`, immutable message cùng các call/result rule từ checkpoint `03`.
+Hoàn thành [checkpoint 05](05-provider-adapter.md). Bạn cần hiểu Tool call đã chuẩn hóa, bản chụp JSON, cách kiểm tra thuộc tính riêng, phép kiểm tra đồng bộ, promise và thenable, `AbortSignal`, message bất biến cùng các quy tắc liên kết call/result từ checkpoint `03`.
 
-Đọc Tool module bên cạnh focused test:
+Hãy đọc module Tool cùng bài kiểm thử tập trung:
 
 | Vai trò | Đường dẫn chính xác | Nội dung cần kiểm tra |
 | --- | --- | --- |
-| Source tích lũy | `course/src/tool.ts` | Definition snapshot, atomic registry, validation/effect boundary, cancellation, provenance, serialization và result linkage |
-| Bằng chứng tập trung | `course/test/06-tool-contract.test.ts` | Hostile input, rollback, recoverable/fatal failure, abort race, output budget, immutable result và parallel call |
+| Mã nguồn tích lũy | `course/src/tool.ts` | Bản chụp định nghĩa, registry nguyên tử, ranh giới kiểm tra/tác dụng phụ, việc hủy, nguồn gốc lỗi, tuần tự hóa và liên kết result |
+| Bằng chứng tập trung | `course/test/06-tool-contract.test.ts` | Đầu vào thù địch, hoàn tác, lỗi có thể phục hồi hoặc lỗi nghiêm trọng, tranh chấp hủy, ngân sách đầu ra, result bất biến và các lượt gọi song song |
 
-Serializer là một phần của security và resource contract. Tool đã execute khi serialization bắt đầu, vì vậy unsafe hoặc unbounded output không được thoát vào transcript.
+Bộ tuần tự hóa là một phần của quy ước an toàn và tài nguyên. Tool đã chạy khi quá trình tuần tự hóa bắt đầu, vì vậy đầu ra không an toàn hoặc không giới hạn không được đi vào transcript.
 
 ## Cơ chế
 
-Course Tool definition có bốn own field: `name` non-empty, `description` non-empty, `validate` synchronous và `execute`. `defineTool()` đọc mỗi field đúng một lần, wrap hai function bằng stable call rồi freeze definition kết quả. Inherited field bị từ chối mà không invoke inherited getter. Mutation về sau trên object của caller không thể đổi tên registered Tool hoặc thay function của nó.
+Định nghĩa Tool của khóa học có bốn field riêng: `name` không rỗng, `description` không rỗng, `validate` đồng bộ và `execute`. `defineTool()` đọc mỗi field đúng một lần, bọc hai hàm bằng cách gọi ổn định rồi đóng băng định nghĩa kết quả. Field kế thừa bị từ chối mà getter kế thừa không được gọi. Việc bên gọi sửa object về sau không thể đổi tên Tool đã đăng ký hoặc thay hàm của Tool.
 
-`ToolRegistry.registerMany()` có hai phase. Trước tiên nó snapshot mọi definition rồi kiểm tra duplicate name trong pending batch và với membership hiện có. Chỉ sau khi toàn batch pass, nó mới mutate internal `Map`. Hostile definition thứ hai, sparse array hoặc duplicate bất kỳ đều để registry nguyên trạng. `snapshot()` copy registry membership và reuse các immutable Tool snapshot đã có; checkpoint `07` dùng hành vi này để đóng băng Tool set cho một Agent run.
+`ToolRegistry.registerMany()` có hai giai đoạn. Trước tiên, hàm chụp lại mọi định nghĩa rồi kiểm tra name trùng trong batch đang chờ và trong registry hiện có. Chỉ khi toàn bộ batch đạt kiểm tra, hàm mới thay đổi `Map` nội bộ. Một định nghĩa thù địch ở vị trí thứ hai, mảng thưa hoặc name trùng đều để registry nguyên trạng. `snapshot()` sao chép danh sách thành viên và dùng lại các bản chụp Tool bất biến đã có; checkpoint `07` dựa vào hành vi này để đóng băng tập Tool cho một lượt chạy Agent.
 
-Execution bắt đầu bằng kiểm tra cancellation và snapshot Tool call. Invalid call shape ném `ToolContractError` với `INVALID_TOOL_CALL`. Unknown Tool có shape hợp lệ không làm thay đổi registry và không throw. Nó trả linked error message có code `TOOL_NOT_FOUND`.
+Lần thực thi bắt đầu bằng việc kiểm tra tín hiệu hủy và chụp lại Tool call. Call có hình dạng không hợp lệ ném `ToolContractError` với `INVALID_TOOL_CALL`. Một Tool chưa đăng ký nhưng có call hợp lệ không làm thay đổi registry và không ném lỗi. Thay vào đó, hàm trả về message lỗi được liên kết đúng với mã `TOOL_NOT_FOUND`.
 
-Với known Tool, `validate(arguments)` chạy trước `execute`. Validator phải synchronously trả `{ ok: true, value }` hoặc `{ ok: false, error }`. False decision tạo `TOOL_ARGUMENTS_INVALID`; decision bị throw hoặc malformed tạo `TOOL_VALIDATION_FAILED`. Promise và thenable bị từ chối vì là asynchronous validator, còn rejection của chúng được observe để test process không nhận unhandled rejection. Nhờ đó, no-effect decision hoàn tất trước khi execution bắt đầu.
+Với Tool đã đăng ký, `validate(arguments)` chạy trước `execute`. Validator phải trả đồng bộ `{ ok: true, value }` hoặc `{ ok: false, error }`. Quyết định từ chối tạo `TOOL_ARGUMENTS_INVALID`; validator ném lỗi hoặc trả quyết định sai hình dạng tạo `TOOL_VALIDATION_FAILED`. Promise và thenable bị từ chối vì validator không được chạy bất đồng bộ, nhưng lần từ chối của chúng vẫn được quan sát để tiến trình kiểm thử không nhận lỗi promise chưa được xử lý. Nhờ đó, quyết định không tạo tác dụng phụ đã hoàn tất trước khi lần thực thi bắt đầu.
 
-Sau successful validation, execution nhận validated value cùng frozen context `{ signal, toolCallId }`. Cancellation được kiểm tra trước validation, sau validation, trước execution, trong lúc await execution, sau resolution và sau output inspection. Nếu cancellation thắng, reason của nó propagate và không có Tool-result message được append. Tool cũng nhận cùng signal để có thể dừng công việc của chính nó.
+Sau khi arguments hợp lệ, hàm thực thi nhận giá trị đã kiểm tra cùng ngữ cảnh `{ signal, toolCallId }` đã đóng băng. Tín hiệu hủy được kiểm tra trước và sau bước kiểm tra arguments, trước khi thực thi, trong lúc chờ, sau khi promise hoàn tất và sau khi kiểm tra đầu ra. Nếu việc hủy xảy ra trước khi thao tác hoàn tất, lý do hủy được truyền ra và không có Tool-result message nào được thêm. Tool cũng nhận cùng tín hiệu để tự dừng công việc.
 
-Ordinary thrown value và rejected execution promise trở thành result `TOOL_EXECUTION_FAILED`. `NonRecoverableToolError` đi qua recoverable boundary đó và reject execution. Class dùng private shared provenance thay vì writable public flag, vì vậy forged object hoặc prototype không thể làm ordinary failure trở thành fatal. Provenance của `ToolContractError` cũng là internal; untrusted Tool không thể throw look-alike để bypass normalization.
+Giá trị lỗi thông thường và promise thực thi bị từ chối đều trở thành result `TOOL_EXECUTION_FAILED`. `NonRecoverableToolError` vượt qua ranh giới có thể phục hồi đó và làm lần thực thi bị từ chối. Class dùng một nhãn nguồn gốc chung nhưng riêng tư thay cho cờ công khai có thể ghi, vì vậy object hoặc prototype giả không thể biến lỗi thông thường thành lỗi nghiêm trọng. Nhãn nguồn gốc của `ToolContractError` cũng nằm nội bộ; Tool chưa đáng tin cậy không thể ném một lỗi giống bề ngoài để bỏ qua bước chuẩn hóa.
 
-Successful output được serialize mà không gọi `toJSON`, getter hay user collection method. Plain object và null-prototype object được chấp nhận, own enumerable string key được sort để output deterministic, accessor bị omit, cycle nhận marker, còn unsupported Proxy hoặc exotic prototype tạo `TOOL_OUTPUT_SERIALIZATION_FAILED`. Serializer work bị giới hạn bởi depth `32`, node `128`, collection visit `256`, string/key character `4096` và BigInt magnitude `4096` bit.
+Đầu ra thành công được tuần tự hóa mà không gọi `toJSON`, getter hay method của collection do bên gọi cung cấp. Object thuần và object có prototype `null` được chấp nhận; các key string riêng có thể liệt kê được sắp xếp để đầu ra xác định; accessor bị bỏ qua; chu trình nhận marker; Proxy không hỗ trợ hoặc prototype khác thường tạo `TOOL_OUTPUT_SERIALIZATION_FAILED`. Công việc của bộ tuần tự hóa bị giới hạn ở độ sâu `32`, `128` node, `256` lượt thăm collection, `4096` ký tự trong string/key và độ lớn BigInt `4096` bit.
 
-Final `content` bị cap chính xác ở `4096` Unicode code point, tính cả marker duy nhất `\n[Tool output truncated]`. Successful hoặc recoverable result được freeze và link ngược bằng `toolCallId`, `toolName` cùng generated message ID `tool-result-${toolCall.id}`. Error content là deterministic JSON chứa stable code cùng human-readable message.
+`content` cuối cùng bị giới hạn chính xác ở `4096` Unicode code point, tính cả marker duy nhất `\n[Tool output truncated]`. Result thành công hoặc có thể phục hồi được đóng băng và liên kết ngược bằng `toolCallId`, `toolName` cùng ID message được sinh theo mẫu `tool-result-${toolCall.id}`. Content lỗi là JSON xác định, chứa mã ổn định cùng message dễ đọc.
 
 ## Dấu vết hoặc mô hình
 
@@ -79,22 +79,22 @@ flowchart LR
   O --> Z
 ```
 
-| Phase | Tool effect có thể chạy? | Success output | Failure behavior |
+| Giai đoạn | Tác dụng phụ của Tool có thể chạy? | Đầu ra khi thành công | Hành vi khi lỗi |
 | --- | ---: | --- | --- |
-| Definition snapshot | Không | Frozen registered shape | `ToolContractError` trước mutation |
-| Batch validation | Không | Commit toàn bộ batch | Atomic rollback khi có invalid entry |
-| Argument validation | Không | Narrowed value | Linked recoverable error result |
-| Execution | Có | Unknown output | Recoverable result, cancellation hoặc fatal rejection |
-| Serialization | Effect đã hoàn tất | Bounded deterministic string | Linked serialization error result |
-| Linkage | Không có effect mới | Frozen `toolResult` | Giữ original call ID/name |
+| Bản chụp định nghĩa | Không | Hình dạng đã đăng ký và đóng băng | `ToolContractError` trước khi thay đổi trạng thái |
+| Kiểm tra batch | Không | Ghi nhận toàn bộ batch | Hoàn tác nguyên tử khi có phần tử không hợp lệ |
+| Kiểm tra arguments | Không | Giá trị đã được thu hẹp type | Result lỗi có thể phục hồi và liên kết đúng |
+| Thực thi | Có | Đầu ra `unknown` | Result có thể phục hồi, việc hủy hoặc lỗi nghiêm trọng |
+| Tuần tự hóa | Tác dụng phụ đã hoàn tất | String xác định, có giới hạn | Result lỗi tuần tự hóa được liên kết đúng |
+| Liên kết | Không có tác dụng phụ mới | `toolResult` đã đóng băng | Giữ ID/name của call ban đầu |
 
-Validation ngăn một effect; serialization giới hạn dữ liệu effect có thể trả vào transcript. Đây là hai boundary riêng và cả hai đều phải giữ contract.
+Việc kiểm tra arguments ngăn tác dụng phụ bắt đầu; quá trình tuần tự hóa giới hạn dữ liệu mà tác dụng phụ có thể trả vào transcript. Đây là hai ranh giới riêng và cả hai đều phải giữ đúng quy ước.
 
 ## Xây dựng
 
-Module tích lũy là `course/src/tool.ts`. Định nghĩa Tool bằng pure synchronous validator và asynchronous executor chỉ nhận validated shape. Đăng ký definition trước khi vòng lặp Agent (Agent Loop) bắt đầu, sau đó gọi `executeToolCall()` với normalized call cùng run signal.
+Module tích lũy là `course/src/tool.ts`. Hãy định nghĩa Tool bằng validator đồng bộ, không có tác dụng phụ và hàm thực thi bất đồng bộ chỉ nhận dữ liệu đã được kiểm tra. Đăng ký định nghĩa trước khi vòng lặp Agent (Agent Loop) bắt đầu, sau đó gọi `executeToolCall()` với call đã chuẩn hóa cùng tín hiệu của lượt chạy.
 
-Focused fragment này được chép nguyên văn từ `course/test/06-tool-contract.test.ts`. Nó compile trong file đó, nơi `vi`, `ToolRegistry`, `defineTool`, `executeToolCall`, `call`, `expect` và `test` đã được import hoặc khai báo:
+Đoạn tập trung này được chép nguyên văn từ `course/test/06-tool-contract.test.ts`. Nó biên dịch trong file đó, nơi `vi`, `ToolRegistry`, `defineTool`, `executeToolCall`, `call`, `expect` và `test` đã được import hoặc khai báo:
 
 ```ts
 test("argument validation runs before effects and preserves validation details", async () => {
@@ -125,52 +125,52 @@ test("argument validation runs before effects and preserves validation details",
 });
 ```
 
-Result vẫn là một phần của transcript dù nó là error. Nhờ đó, model turn sau có thể sửa arguments hoặc giải thích failure. Cancelled call thì khác: nó reject current operation và không tạo result để append.
+Result vẫn là một phần của transcript dù mang lỗi. Nhờ đó, lượt model sau có thể sửa arguments hoặc giải thích nguyên nhân. Tool call bị hủy thì khác: thao tác hiện tại bị từ chối và không có result nào được thêm vào transcript.
 
-Không làm yếu `validate` thành cast hoặc chuyển side effect vào đó. Validator ghi file rồi trả `{ ok: false }` vẫn đúng return shape nhưng vi phạm effect boundary của checkpoint.
+Đừng làm yếu `validate` thành một phép ép type hoặc chuyển tác dụng phụ vào validator. Một validator ghi file rồi trả `{ ok: false }` vẫn đúng hình dạng trả về nhưng đã vi phạm ranh giới tác dụng phụ của checkpoint.
 
 ## Chạy focused test
 
-Focused test là `course/test/06-tool-contract.test.ts`. Chạy đúng command:
+Test tập trung nằm tại `course/test/06-tool-contract.test.ts`. Hãy chạy đúng lệnh:
 
 ```bash
 npm run test:course:checkpoint -- course/test/06-tool-contract.test.ts
 ```
 
-File chứng minh one-read immutable definition, inherited-field rejection, atomic batch registration, duplicate handling, immutable registry ownership, argument validation trước effect, deterministic linked result, recoverable và non-recoverable error, quan sát rejection của async validator, cancellation tại nhiều boundary, bounded safe serialization, output truncation, hostile call normalization, snapshot isolation cùng independent parallel execution. Nó không tuyên bố filesystem sandboxing, process isolation, schema generation, provider-side constrained decoding hay automatic rollback đối với effect đã chạy.
+File này kiểm chứng rằng mỗi field của định nghĩa bất biến chỉ được đọc một lần, field kế thừa bị từ chối, batch được đăng ký nguyên tử, name trùng được xử lý, registry sở hữu dữ liệu bất biến, arguments được kiểm tra trước tác dụng phụ, result xác định và liên kết đúng, lỗi có thể hoặc không thể phục hồi được phân loại, lần từ chối của validator bất đồng bộ được quan sát, tín hiệu hủy được kiểm tra tại nhiều ranh giới, quá trình tuần tự hóa an toàn có giới hạn, đầu ra được cắt, call thù địch được chuẩn hóa, bản chụp được cách ly và các lần thực thi song song không nối nhầm dữ liệu. Bài kiểm thử không khẳng định có sandbox cho filesystem, cô lập process, sinh schema, giải mã có ràng buộc phía provider hay tự động hoàn tác tác dụng phụ đã chạy.
 
 ## Thử nghiệm lỗi
 
-Dùng nguyên focused fragment phía trên. Call gửi `left: "twenty"`, trong khi spy executor sẽ trả object hợp lệ nếu được gọi. Chạy focused command rồi xác nhận hai quan sát độc lập: result chứa `TOOL_ARGUMENTS_INVALID` được link với `call-invalid-add`, và `execute` có zero call.
+Hãy dùng nguyên đoạn phía trên. Call gửi `left: "twenty"`, trong khi hàm thực thi gián điệp sẽ trả object hợp lệ nếu được gọi. Chạy lệnh kiểm thử tập trung rồi xác nhận hai quan sát độc lập: result chứa `TOOL_ARGUMENTS_INVALID` được liên kết với `call-invalid-add`, và `execute` chưa được gọi lần nào.
 
-Sau đó chỉ đổi validator để trả `{ ok: true, value: { left: 20, right: 22 } }`. Spy được invoke một lần và result trở thành success. Khôi phục rejecting validator trước khi tiếp tục. Không làm executor throw trong thử nghiệm này; throw sẽ kiểm tra error normalization sau khi effect đã bắt đầu, không phải validation trước effect.
+Sau đó chỉ đổi validator để trả `{ ok: true, value: { left: 20, right: 22 } }`. Hàm gián điệp được gọi một lần và result trở thành thành công. Khôi phục validator từ chối trước khi tiếp tục. Đừng làm hàm thực thi ném lỗi trong thử nghiệm này; thao tác đó kiểm tra cách chuẩn hóa lỗi sau khi tác dụng phụ đã bắt đầu, không còn kiểm tra arguments trước tác dụng phụ.
 
 ## Tiêu chí chấp nhận
 
-- Focused command chỉ chọn `course/test/06-tool-contract.test.ts` và pass offline.
-- Tool definition được copy từ bốn own field, freeze và cách ly khỏi caller mutation về sau.
-- `registerMany()` validate toàn batch cùng mọi name trước một registry mutation.
-- Arguments được snapshot và synchronously validate trước khi `execute` có thể chạy.
-- Unknown Tool cùng ordinary validation, execution hoặc serialization failure trở thành immutable linked error result.
-- Cancellation propagate trước effect và trong khi await execution; nó không trở thành Tool result gây hiểu nhầm.
-- Chỉ authentic `NonRecoverableToolError` thoát recoverable Tool boundary dưới dạng fatal programmer failure.
-- Serialized content không vượt `4096` Unicode code point tính cả một truncation marker, và traversal tuân theo explicit work budget.
-- Invalid arguments gửi đến spy Tool tạo `TOOL_ARGUMENTS_INVALID` và zero side effect.
+- Lệnh kiểm thử tập trung chỉ chọn `course/test/06-tool-contract.test.ts` và chạy đạt khi không có mạng.
+- Định nghĩa Tool được sao chép từ bốn field riêng, đóng băng và cách ly khỏi thay đổi về sau của bên gọi.
+- `registerMany()` kiểm tra toàn bộ batch cùng mọi name trước khi thay đổi registry.
+- Arguments được chụp lại và kiểm tra đồng bộ trước khi `execute` có thể chạy.
+- Tool chưa đăng ký cùng lỗi thông thường khi kiểm tra, thực thi hoặc tuần tự hóa đều trở thành result lỗi bất biến, được liên kết đúng.
+- Tín hiệu hủy được truyền qua trước tác dụng phụ và trong khi chờ thực thi; nó không trở thành Tool result gây hiểu nhầm.
+- Chỉ `NonRecoverableToolError` thật mới thoát khỏi ranh giới Tool có thể phục hồi dưới dạng lỗi lập trình nghiêm trọng.
+- Content đã tuần tự hóa không vượt `4096` Unicode code point tính cả một marker báo cắt, và quá trình duyệt tuân theo ngân sách công việc tường minh.
+- Arguments không hợp lệ gửi đến spy Tool tạo `TOOL_ARGUMENTS_INVALID` và không gây tác dụng phụ.
 
 ## So sánh với Pi SDK 0.84.3
 
 :::info[Pi SDK 0.84.3]
 
-`@earendil-works/pi-ai` export `Tool`, `ToolCall`, `ToolResultMessage`, `Type`, `Static`, `TSchema` và `validateToolArguments()`. `@earendil-works/pi-agent-core` export `AgentTool`, `AgentToolResult` phong phú hơn cùng các Tool lifecycle member của `AgentEvent`.
+`@earendil-works/pi-ai` xuất `Tool`, `ToolCall`, `ToolResultMessage`, `Type`, `Static`, `TSchema` và `validateToolArguments()`. `@earendil-works/pi-agent-core` xuất `AgentTool`, `AgentToolResult` phong phú hơn cùng các member về vòng đời Tool trong `AgentEvent`.
 
 :::
 
-Public `Tool` của Pi dùng TypeBox `parameters` schema. `AgentTool` thêm UI `label`, optional `prepareArguments`, asynchronous `execute(toolCallId, params, signal, onUpdate)`, optional `executionMode` cùng structured `AgentToolResult` content/details/usage. Pi Agent Loop validate arguments trước execution, có thể chạy Tool call sequentially hoặc parallel, emit start/update/end event và chuyển ordinary Tool failure thành record `ToolResultMessage`.
+`Tool` công khai của Pi dùng schema `parameters` của TypeBox. `AgentTool` thêm `label` cho UI, `prepareArguments` tùy chọn, hàm bất đồng bộ `execute(toolCallId, params, signal, onUpdate)`, `executionMode` tùy chọn và `AgentToolResult` có cấu trúc với content/details/usage. Pi Agent Loop kiểm tra arguments trước khi thực thi, có thể chạy Tool call tuần tự hoặc song song, phát các sự kiện bắt đầu/cập nhật/kết thúc và chuyển lỗi Tool thông thường thành record `ToolResultMessage`.
 
-Course contract đơn giản hơn và nghiêm ngặt theo các hướng khác. Validator của nó trả explicit synchronous decision, executor nhận context object, result chứa một string thay vì text/image block cùng details của Pi, còn custom serializer/output cap là workshop behavior. `ToolRegistry`, `ToolContractError`, `NonRecoverableToolError` và các hằng `COURSE_TOOL_*` không phải export của Pi.
+Quy ước của khóa học đơn giản hơn và nghiêm ngặt theo các hướng khác. Validator trả một quyết định đồng bộ tường minh, hàm thực thi nhận object ngữ cảnh, result chứa một string thay vì block text/image cùng details của Pi, còn bộ tuần tự hóa tùy chỉnh và giới hạn đầu ra là hành vi riêng của workshop. `ToolRegistry`, `ToolContractError`, `NonRecoverableToolError` và các hằng `COURSE_TOOL_*` không phải export của Pi.
 
-Hãy dùng TypeBox schema cùng `AgentTool` shape đã phát hành trong ứng dụng Pi. Giữ các invariant có thể chuyển giao: validate trước effect, mang `toolCallId` qua mọi event/result, truyền cancellation vào execution, coi Tool failure là dữ liệu model có thể thấy khi còn khả năng recovery và giới hạn mọi nội dung được lưu trong long-lived transcript.
+Hãy dùng schema TypeBox cùng hình dạng `AgentTool` đã phát hành trong ứng dụng Pi. Giữ các invariant có thể chuyển giao: kiểm tra trước tác dụng phụ, mang `toolCallId` qua mọi sự kiện/result, truyền tín hiệu hủy vào lần thực thi, coi lỗi Tool là dữ liệu model có thể thấy khi vẫn còn khả năng phục hồi và giới hạn mọi nội dung được lưu trong transcript dài hạn.
 
 ## Checkpoint tiếp theo
 
-[Checkpoint 07](07-agent-loop.md) kết hợp model cùng Tool boundary. Bạn sẽ sở hữu transcript, thực thi complete Tool round, áp dụng step budget và emit một event sequence có global order.
+[Checkpoint 07](07-agent-loop.md) kết hợp ranh giới model và Tool. Bạn sẽ sở hữu transcript, thực thi một lượt Tool hoàn chỉnh, áp dụng ngân sách bước và phát chuỗi sự kiện có thứ tự toàn cục.

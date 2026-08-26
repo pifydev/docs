@@ -1,6 +1,6 @@
 ---
-title: "Checkpoint 04: Xây dựng test double deterministic cho model"
-description: Xếp hàng scripted response factory, capture immutable request, giữ thứ tự chunk và làm cho exhaustion cùng cancellation quan sát được.
+title: "Checkpoint 04: Xây dựng test double xác định cho model"
+description: Xếp hàng các factory phản hồi theo kịch bản, ghi lại yêu cầu bất biến, giữ thứ tự chunk và làm rõ trạng thái hết kịch bản cùng việc hủy.
 translation_key: course-04-deterministic-model
 language: vi
 checkpoint: 4
@@ -15,42 +15,42 @@ reviewed_by: Pify maintainers
 
 ## Kết quả
 
-Bạn sẽ thay trace cố định từ checkpoint `00` bằng một test double deterministic cho model, tức thành phần thay thế có kiểm soát trong khi test. `ScriptedModel` sở hữu hàng đợi FIFO hữu hạn gồm các function `ScriptedResponseFactory`. Mỗi call tạo snapshot cho request, tiêu thụ tối đa một factory, chuyển tiếp chunk của factory theo đúng thứ tự và settle qua terminal result của `EventStream`.
+Bạn sẽ thay dấu vết cố định từ checkpoint `00` bằng một test double xác định cho model, tức thành phần thay thế có kiểm soát cho model thật trong khi kiểm thử. `ScriptedModel` sở hữu hàng đợi FIFO hữu hạn gồm các hàm `ScriptedResponseFactory`. Mỗi lượt gọi chụp lại yêu cầu, lấy tối đa một factory khỏi hàng đợi, chuyển tiếp các chunk theo đúng thứ tự rồi hoàn tất bằng kết quả cuối của `EventStream`.
 
-Model ghi lại mọi request đã thử, kể cả call được thực hiện sau khi hàng đợi đã hết. Nhờ vậy, nhu cầu gọi model có thể được quan sát mà không cần log. Hàng đợi trống fail bằng `ScriptedModelError` với code `SCRIPT_EXHAUSTED`; test double không tự tạo fallback answer. Cancellation được kiểm tra trước khi lấy factory khỏi hàng đợi, giữa các iterator step, trước khi publish từng chunk và trước khi chấp nhận terminal response.
+Model ghi lại mọi yêu cầu đã được gửi, kể cả lượt gọi diễn ra sau khi hàng đợi đã hết. Nhờ vậy, bài kiểm thử có thể phát hiện một lượt gọi model dư mà không cần đọc log. Khi hàng đợi trống, `ScriptedModelError` mang mã `SCRIPT_EXHAUSTED`; test double không tự bịa câu trả lời dự phòng. Tín hiệu hủy được kiểm tra trước khi lấy factory khỏi hàng đợi, giữa các bước của iterator, trước khi phát từng chunk và trước khi chấp nhận phản hồi cuối.
 
 :::note[Course implementation]
 
-`ScriptedModel`, `ScriptedResponseFactory` và bốn code `SCRIPT_*` là contract của workshop. Chúng mô hình hóa ranh giới hẹp mà các checkpoint sau cần dùng và không phải alias cho export của Pi.
+`ScriptedModel`, `ScriptedResponseFactory` và bốn mã `SCRIPT_*` là quy ước của workshop. Chúng mô hình hóa ranh giới hẹp mà các checkpoint sau cần dùng, không phải bí danh của bất kỳ export nào từ Pi.
 
 :::
 
 ## Điều kiện tiên quyết
 
-Hoàn thành [checkpoint 03](03-message-ir.md). Bạn cần hiểu `EventStream`, async generator, `AbortController`, các normalized message constructor, request/response correlation cùng khác biệt giữa streamed chunk và terminal response.
+Hoàn thành [checkpoint 03](03-message-ir.md). Bạn cần hiểu `EventStream`, generator bất đồng bộ, `AbortController`, các constructor tạo message đã chuẩn hóa, cách liên kết yêu cầu với phản hồi và khác biệt giữa chunk được phát trong luồng với phản hồi cuối.
 
 Đọc module tích lũy và bằng chứng tập trung cùng nhau:
 
 | Vai trò | Đường dẫn chính xác | Nội dung cần kiểm tra |
 | --- | --- | --- |
-| Source tích lũy | `course/src/scripted-model.ts` | Factory queue, request capture, iterator ownership, snapshot, terminal check và abort race |
-| Bằng chứng tập trung | `course/test/04-deterministic-model.test.ts` | Hành vi replace/append FIFO, ordered chunk, exhaustion, cancellation, correlation và iterator reuse |
+| Mã nguồn tích lũy | `course/src/scripted-model.ts` | Hàng đợi factory, việc ghi yêu cầu, quyền sở hữu iterator, bản chụp, kiểm tra trạng thái kết thúc và tranh chấp hủy |
+| Bằng chứng tập trung | `course/test/04-deterministic-model.test.ts` | Thay thế/nối thêm theo FIFO, thứ tự chunk, trạng thái hết kịch bản, việc hủy, liên kết ID và tái sử dụng iterator |
 
-Không có clock, random value, provider credential hay network connection nào chọn response. Test quyết định trước queue, ID, chunk, usage và stop reason.
+Không có đồng hồ, giá trị ngẫu nhiên, thông tin xác thực của provider hay kết nối mạng nào tham gia chọn phản hồi. Bài kiểm thử quyết định trước hàng đợi, ID, chunk, usage và lý do dừng.
 
 ## Cơ chế
 
-Một `ScriptedResponseFactory` nhận immutable snapshot của `CourseModelRequest` cùng `AbortSignal` từ caller. Factory trả async generator có các giá trị yield là record `CourseModelChunk`, còn return value là một `CourseModelResponse`. Factory có thể đọc request hiện tại khi dựng response, vì vậy request correlation luôn tường minh thay vì phụ thuộc global fixture.
+Một `ScriptedResponseFactory` nhận bản chụp bất biến của `CourseModelRequest` cùng `AbortSignal` từ bên gọi. Factory trả về một generator bất đồng bộ: mỗi giá trị được sinh ra là một record `CourseModelChunk`, còn giá trị trả về là một `CourseModelResponse`. Factory có thể đọc yêu cầu hiện tại khi dựng phản hồi, vì vậy việc liên kết yêu cầu luôn tường minh thay vì phụ thuộc vào fixture toàn cục.
 
-`stream()` thực hiện phần việc tại ranh giới theo cách synchronous trước. Hàm snapshot request, append snapshot đó vào `capturedRequests`, tăng `callCount`, tạo `EventStream` rồi khởi động producer. Getter public `requests` trả một array mới đã freeze, trong khi captured message và Tool arguments lồng bên trong đã được copy và freeze từ trước. Mutation request của caller sau `stream()` không thể thay đổi dữ liệu mà factory hoặc assertion quan sát.
+`stream()` xử lý đồng bộ phần việc tại ranh giới trước. Hàm chụp lại yêu cầu, thêm bản chụp đó vào `capturedRequests`, tăng `callCount`, tạo `EventStream` rồi khởi động bộ phát. Thuộc tính đọc công khai `requests` trả về một mảng mới đã được đóng băng; các message và arguments của Tool lồng bên trong cũng đã được sao chép và đóng băng. Vì thế, việc bên gọi sửa yêu cầu sau `stream()` không thể thay đổi dữ liệu mà factory hoặc phép kiểm chứng nhìn thấy.
 
-Producer kiểm tra cancellation trước khi shift queue. Thứ tự này có chủ đích: request bị cancel trước production vẫn được tính là attempted call và xuất hiện trong `requests`, nhưng không tiêu tốn scripted response. Lần retry sau có thể dùng chính factory đó. Sau khi factory đã bị shift, failure hoặc cancellation giữa stream không đưa nó trở lại vì execution đã bắt đầu.
+Bộ phát kiểm tra tín hiệu hủy trước khi lấy phần tử đầu hàng đợi. Thứ tự này có chủ đích: yêu cầu bị hủy trước khi bộ phát chạy vẫn được tính là một lượt gọi đã thử và xuất hiện trong `requests`, nhưng chưa tiêu tốn phản hồi theo kịch bản. Lần thử lại sau vẫn có thể dùng factory đó. Khi factory đã được lấy ra, lỗi hoặc việc hủy giữa luồng không đưa nó trở lại vì quá trình xử lý đã bắt đầu.
 
-Mỗi factory sở hữu đúng một iterator. `claimIteratorOnce()` từ chối concurrent hoặc sequential reuse bằng `SCRIPT_ITERATOR_REUSED`, kể cả giữa nhiều model instance. Nếu thiếu rule này, hai request có thể cùng gọi `next()` trên một generator rồi nhận các chunk xen kẽ từ cùng một response. Reusable iterable chỉ hợp lệ khi nó tạo iterator mới cho mỗi response.
+Mỗi factory sở hữu đúng một iterator. `claimIteratorOnce()` dùng `SCRIPT_ITERATOR_REUSED` để từ chối việc tái sử dụng đồng thời hoặc tuần tự, kể cả giữa nhiều instance của model. Nếu thiếu quy tắc này, hai yêu cầu có thể cùng gọi `next()` trên một generator rồi nhận các chunk xen kẽ từ cùng một phản hồi. Một iterable có thể tái sử dụng chỉ hợp lệ khi nó tạo iterator mới cho từng phản hồi.
 
-Với từng giá trị được yield, model snapshot chunk rồi so sánh `requestId` với active request. Text delta giữ nguyên thứ tự. Tool call đi qua ranh giới snapshot của Message IR, nơi JSON arguments được copy và freeze. Khi generator return, response được copy, correlate và kiểm tra theo `stopReason`: `toolCall` cần ít nhất một Tool-call block, còn `stop` cấm Tool-call block. Usage count phải là non-negative safe integer.
+Với từng giá trị generator sinh ra, model chụp lại chunk rồi so sánh `requestId` với yêu cầu đang xử lý. Các text delta giữ nguyên thứ tự. Tool call đi qua ranh giới bản chụp của Message IR, nơi arguments JSON được sao chép và đóng băng. Khi generator trả về, phản hồi được sao chép, liên kết với yêu cầu rồi kiểm tra theo `stopReason`: `toolCall` cần ít nhất một Tool-call block, còn `stop` không được chứa Tool-call block. Mỗi giá trị đếm usage phải là số nguyên an toàn không âm.
 
-`waitForAbort()` race một `next()` đang pending với signal mà không polling hay sleep. Nếu cancellation thắng, producer reject cả event iteration lẫn `stream.result`, sau đó yêu cầu generator cleanup. Cleanup error không thể thay primary failure. Factory exception, correlation error hoặc invalid terminal response đi qua cùng failure path của EventStream, nên consumer không thể nhận successful result sau khi event channel fail.
+`waitForAbort()` cho một lệnh `next()` đang chờ chạy đua với tín hiệu mà không cần thăm dò định kỳ hay tạm dừng. Nếu tín hiệu hủy đến trước, bộ phát làm cả phép lặp sự kiện và `stream.result` bị từ chối, sau đó yêu cầu generator dọn dẹp. Lỗi dọn dẹp không thể thay thế lỗi chính. Exception từ factory, lỗi liên kết hoặc phản hồi cuối không hợp lệ đều đi qua cùng luồng lỗi của `EventStream`, nên bên tiêu thụ không thể nhận kết quả thành công sau khi kênh sự kiện đã lỗi.
 
 ## Dấu vết hoặc mô hình
 
@@ -80,19 +80,19 @@ sequenceDiagram
   M->>S: fail SCRIPT_EXHAUSTED
 ```
 
-| Ranh giới | Trạng thái trước | Trạng thái sau | Contract quan sát được |
+| Ranh giới | Trạng thái trước | Trạng thái sau | Quy ước quan sát được |
 | --- | --- | --- | --- |
-| `stream()` | Caller sở hữu mutable request | Model sở hữu frozen snapshot | `requests` ghi lại chính xác call input |
-| Queue shift | `pendingResponseCount = n` | `n - 1` sau khi production bắt đầu | Factory được tiêu thụ theo FIFO |
-| Chunk yield | Generator sở hữu raw chunk | Stream nhận frozen correlated chunk | Thứ tự ở consumer bằng thứ tự generator |
-| Generator return | Raw response và usage | Frozen validated response | `stream.result` settle đúng một lần |
-| Empty queue | Không còn factory | Failed stream | Code là `SCRIPT_EXHAUSTED` |
+| `stream()` | Bên gọi sở hữu yêu cầu có thể sửa | Model sở hữu bản chụp đã đóng băng | `requests` ghi lại chính xác đầu vào của lượt gọi |
+| Lấy phần tử khỏi hàng đợi | `pendingResponseCount = n` | `n - 1` sau khi bộ phát bắt đầu | Factory được lấy theo FIFO |
+| Generator sinh chunk | Generator sở hữu chunk thô | Luồng nhận chunk đã đóng băng và liên kết | Thứ tự bên nhận bằng thứ tự từ generator |
+| Generator trả về | Phản hồi và usage thô | Phản hồi đã được kiểm tra và đóng băng | `stream.result` hoàn tất đúng một lần |
+| Hàng đợi trống | Không còn factory | Luồng báo lỗi | Mã lỗi là `SCRIPT_EXHAUSTED` |
 
-Timeline phân biệt attempted call với consumed factory. `callCount` tăng trước asynchronous production, còn `pendingResponseCount` chỉ giảm sau abort pre-check và queue shift.
+Dòng thời gian phân biệt lượt gọi đã thử với factory đã lấy khỏi hàng đợi. `callCount` tăng trước khi bộ phát chạy bất đồng bộ, còn `pendingResponseCount` chỉ giảm sau bước kiểm tra tín hiệu hủy và thao tác lấy factory.
 
 ## Xây dựng
 
-Module tích lũy là `course/src/scripted-model.ts`. Hãy bắt đầu bằng một factory helper nhỏ, rồi thêm factory có control flow biểu lộ đúng hành vi cần test. Đoạn sau được chép nguyên văn từ `course/test/04-deterministic-model.test.ts`; nó compile trong file đó vì `ScriptedResponseFactory` và `responseFor()` được định nghĩa ở surrounding test context:
+Module tích lũy là `course/src/scripted-model.ts`. Hãy bắt đầu bằng một helper nhỏ để tạo factory, rồi thêm các factory có luồng điều khiển thể hiện đúng hành vi cần kiểm thử. Đoạn sau được chép nguyên văn từ `course/test/04-deterministic-model.test.ts`; nó biên dịch trong file đó vì `ScriptedResponseFactory` và `responseFor()` đã được định nghĩa trong ngữ cảnh xung quanh:
 
 ```ts
 function textFactory(text: string, id: string): ScriptedResponseFactory {
@@ -103,25 +103,25 @@ function textFactory(text: string, id: string): ScriptedResponseFactory {
 }
 ```
 
-Factory lấy `requestId` từ argument cho cả chunk lẫn response. Hard-code một request ID khác sẽ kiểm thử correlation failure thay vì normal response. Việc trả async generator cũng có ý nghĩa: ordinary promise không thể cung cấp ordered chunk channel mà course model boundary yêu cầu.
+Factory lấy `requestId` từ argument cho cả chunk lẫn phản hồi. Nếu ghi cứng một ID yêu cầu khác, bài kiểm thử sẽ đi vào nhánh lỗi liên kết thay vì tạo phản hồi bình thường. Việc trả về generator bất đồng bộ cũng có ý nghĩa: một promise thông thường không thể cung cấp kênh chunk có thứ tự mà ranh giới model của khóa học yêu cầu.
 
-Dùng `setResponses()` khi test cần replace toàn bộ pending behavior và `appendResponse()` khi cần nối dài queue. Cả hai validate factory trước mutation. `setResponses()` snapshot toàn bộ replacement trước, vì vậy sparse hoặc invalid array không thể khiến queue bị replace một phần.
+Dùng `setResponses()` khi bài kiểm thử cần thay toàn bộ hành vi đang chờ và dùng `appendResponse()` khi cần nối dài hàng đợi. Cả hai đều kiểm tra factory trước khi thay đổi trạng thái. `setResponses()` tạo bản chụp đầy đủ của danh sách thay thế trước, vì vậy một mảng thưa hoặc không hợp lệ không thể làm hàng đợi bị thay dở dang.
 
-Không chỉ assert final text. Hãy collect async iterable và await `stream.result`, rồi kiểm tra chunk order, correlation ID, terminal field, freeze boundary, `callCount` cùng queue length còn lại. Các quan sát này phân biệt model double đúng contract với stub trả expected sentence nhưng vi phạm protocol.
+Đừng chỉ kiểm tra text cuối. Hãy thu thập iterable bất đồng bộ và chờ `stream.result`, sau đó kiểm tra thứ tự chunk, ID liên kết, các field cuối, ranh giới đóng băng, `callCount` và độ dài hàng đợi còn lại. Những quan sát này phân biệt model double đúng quy ước với một stub chỉ trả đúng câu mong đợi nhưng vi phạm protocol.
 
 ## Chạy focused test
 
-Focused test là `course/test/04-deterministic-model.test.ts`. Chạy đúng command:
+Test tập trung nằm tại `course/test/04-deterministic-model.test.ts`. Hãy chạy đúng lệnh:
 
 ```bash
 npm run test:course:checkpoint -- course/test/04-deterministic-model.test.ts
 ```
 
-File này chứng minh immutable request capture, thứ tự text và Tool-call chunk, immutable terminal snapshot, replace và append queue, typed exhaustion, cancellation trước và giữa stream, factory-failure propagation, chunk/response correlation, stop-reason semantics cùng quyền sở hữu duy nhất đối với response iterator. Test không đưa ra claim về production retry policy, provider conversion, độ chính xác token accounting hay network behavior.
+File này kiểm chứng việc ghi yêu cầu bất biến, thứ tự text và Tool-call chunk, bản chụp phản hồi cuối bất biến, thao tác thay thế hoặc nối thêm hàng đợi, lỗi có type khi hết kịch bản, việc hủy trước và giữa luồng, cách lan truyền lỗi từ factory, liên kết chunk với phản hồi, ý nghĩa của lý do dừng và quyền sở hữu duy nhất đối với iterator phản hồi. Bài kiểm thử không khẳng định chính sách thử lại trong production, cách chuyển đổi provider, độ chính xác của việc tính token hay hành vi mạng.
 
 ## Thử nghiệm lỗi
 
-Yêu cầu thêm một response sau khi hàng đợi hữu hạn đã hết. Focused test đã chứa chính xác trường hợp này:
+Hãy yêu cầu thêm một phản hồi sau khi hàng đợi hữu hạn đã hết. Test tập trung đã chứa chính xác trường hợp này:
 
 ```ts
 test("fails closed with SCRIPT_EXHAUSTED instead of inventing a response", async () => {
@@ -150,33 +150,33 @@ test("fails closed with SCRIPT_EXHAUSTED instead of inventing a response", async
 });
 ```
 
-Chạy focused command. Cả hai consumption path reject với cùng typed code, trong khi attempted request vẫn được capture. Sau đó prepend một `textFactory(...)` rồi chạy lại: call đầu pass còn call thứ hai fail. Không thêm default factory vì nó sẽ che giấu một model turn dư ngoài dự kiến trong test cho vòng lặp Agent (Agent Loop) về sau.
+Chạy lệnh kiểm thử tập trung. Cả phép lặp lẫn `stream.result` đều bị từ chối với cùng mã lỗi có type, trong khi yêu cầu đã thử vẫn được ghi lại. Sau đó thêm một `textFactory(...)` vào đầu hàng đợi rồi chạy lại: lượt gọi đầu đạt, lượt thứ hai lỗi. Đừng thêm factory mặc định vì nó sẽ che giấu một lượt model dư ngoài dự kiến trong bài kiểm thử cho vòng lặp Agent (Agent Loop) về sau.
 
 ## Tiêu chí chấp nhận
 
-- Focused command chỉ chọn `course/test/04-deterministic-model.test.ts` và pass offline.
-- `ScriptedModel` capture deeply immutable request trước caller mutation và expose frozen request list.
-- Response factory chỉ được replace hoặc append sau khi input đã validate, rồi được tiêu thụ theo FIFO.
-- Text và Tool-call chunk đến consumer theo thứ tự generator với active `requestId`.
-- Final response là immutable, correlated, đồng thời nhất quán với `stopReason` và non-negative usage count.
-- Request bị cancel trước production không tiêu thụ queued response; cancellation giữa stream ngắt pending iterator step.
-- Một response iterator không thể được chia sẻ giữa nhiều call hoặc model instance.
-- Queue exhaustion reject event iteration và `stream.result` bằng `SCRIPT_EXHAUSTED` nhưng vẫn giữ call evidence.
+- Lệnh kiểm thử tập trung chỉ chọn `course/test/04-deterministic-model.test.ts` và chạy đạt khi không có mạng.
+- `ScriptedModel` ghi lại bản chụp yêu cầu bất biến theo chiều sâu trước khi bên gọi sửa dữ liệu và trả danh sách yêu cầu đã đóng băng.
+- Factory phản hồi chỉ được thay thế hoặc nối thêm sau khi đầu vào đã được kiểm tra, rồi được lấy theo FIFO.
+- Text và Tool-call chunk đến bên tiêu thụ theo thứ tự generator với `requestId` đang xử lý.
+- Phản hồi cuối là bất biến, được liên kết đúng, đồng thời nhất quán với `stopReason` và giá trị đếm usage không âm.
+- Yêu cầu bị hủy trước khi bộ phát chạy không tiêu thụ phản hồi đang chờ; việc hủy giữa luồng ngắt bước iterator đang chờ.
+- Một iterator phản hồi không thể được chia sẻ giữa nhiều lượt gọi hoặc instance của model.
+- Khi hàng đợi hết, phép lặp sự kiện và `stream.result` cùng bị từ chối bằng `SCRIPT_EXHAUSTED`, nhưng bằng chứng về lượt gọi vẫn được giữ lại.
 
 ## So sánh với Pi SDK 0.84.3
 
 :::info[Pi SDK 0.84.3]
 
-`@earendil-works/pi-ai` export các testing helper `fauxProvider()`, `fauxAssistantMessage()`, `fauxToolCall()`, `FauxResponseFactory` và `FauxProviderHandle`. Cùng package đó export `EventStream` cùng `AssistantMessageEventStream` cho protocol truyền dữ liệu theo luồng (streaming) phong phú hơn.
+`@earendil-works/pi-ai` xuất các helper kiểm thử `fauxProvider()`, `fauxAssistantMessage()`, `fauxToolCall()`, `FauxResponseFactory` và `FauxProviderHandle`. Cùng package đó còn xuất `EventStream` và `AssistantMessageEventStream` cho protocol truyền dữ liệu theo luồng (streaming) phong phú hơn.
 
 :::
 
-Faux provider của Pi có `Provider` mang production shape, tích hợp models collection, cùng assistant event cho text, thinking, Tool call, completion, error, abort và deferred response. Nó có thể ước lượng usage và chia content thành chunk. Default ID, timestamp và chunk size của nó có thể dùng thời gian hoặc randomness, vì vậy đây không phải exact-sequence test double giống `ScriptedModel`.
+Faux provider của Pi tạo `Provider` có hình dạng dùng trong production, tích hợp với tập hợp model và phát các sự kiện assistant cho text, thinking, Tool call, hoàn tất, lỗi, hủy cùng phản hồi trì hoãn. Nó có thể ước lượng usage và chia content thành các chunk. ID, timestamp và kích thước chunk mặc định có thể phụ thuộc thời gian hoặc giá trị ngẫu nhiên, vì vậy faux provider không phải test double có chuỗi đầu ra hoàn toàn xác định như `ScriptedModel`.
 
-Course implementation cố ý nhỏ hơn. Nó chỉ nhận `textDelta` và complete `toolCall` chunk, dùng Message IR của course, có hai stop reason và yêu cầu test chọn mọi ID cùng usage value. Nó còn dùng property tên `result`; `EventStream` của Pi expose `result()` dưới dạng method. Không thay thế interface này bằng interface kia.
+Phần triển khai của khóa học được thu gọn có chủ đích. Nó chỉ nhận `textDelta` và chunk `toolCall` đã hoàn chỉnh, dùng Message IR của khóa học, có hai lý do dừng và yêu cầu bài kiểm thử chỉ định mọi ID cùng giá trị usage. Nó dùng thuộc tính `result`, còn `EventStream` của Pi cung cấp phương thức `result()`. Hai interface này không thể thay thế trực tiếp cho nhau.
 
-Dùng exported faux helper của Pi khi kiểm thử Pi integration với `AssistantMessage` và provider behavior mang release shape. Dùng `ScriptedModel` để nghiên cứu FIFO demand, correlation, cancellation boundary và deterministic Agent Loop trace trong workshop này.
+Hãy dùng các faux helper do Pi xuất khi kiểm thử một tích hợp Pi với `AssistantMessage` và hành vi provider đúng theo bản phát hành. Dùng `ScriptedModel` để nghiên cứu nhu cầu gọi theo FIFO, cách liên kết ID, ranh giới hủy và dấu vết Agent Loop xác định trong workshop này.
 
 ## Checkpoint tiếp theo
 
-[Checkpoint 05](05-provider-adapter.md) đẩy trust boundary ra ngoài. Bạn sẽ parse unknown transport fixture record thành cùng model chunk và terminal response mà không thêm credential hay network client.
+[Checkpoint 05](05-provider-adapter.md) đưa ranh giới tin cậy ra phía vận chuyển. Bạn sẽ phân tích các record `unknown` trong fixture vận chuyển thành cùng loại chunk model và phản hồi cuối mà không thêm thông tin xác thực hay client mạng.

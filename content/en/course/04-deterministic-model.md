@@ -15,7 +15,7 @@ reviewed_by: Pify maintainers
 
 ## Outcome
 
-You will replace the fixed trace from checkpoint `00` with a deterministic model test double. `ScriptedModel` owns a finite FIFO queue of `ScriptedResponseFactory` functions. Each call snapshots its request, consumes at most one factory, forwards the factory's chunks in order, and settles through the `EventStream` terminal result.
+You will replace the fixed trace from checkpoint `00` with a deterministic model test double: a controlled substitute for the real model during tests. `ScriptedModel` owns a finite FIFO queue of `ScriptedResponseFactory` functions. Each call snapshots its request, consumes at most one factory, forwards the factory's chunks in order, and settles through the `EventStream` terminal result.
 
 The model records every attempted request, including a call made after the queue is empty. This makes model demand observable without logs. An empty queue fails with `ScriptedModelError` and code `SCRIPT_EXHAUSTED`; the double never invents a fallback answer. Cancellation is checked before a queued factory is removed, between iterator steps, before each chunk is published, and before the terminal response is accepted.
 

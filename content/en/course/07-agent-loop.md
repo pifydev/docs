@@ -49,7 +49,7 @@ The loop owns a private mutable transcript derived from that frozen start. It fi
 
 For each step, `requestSnapshot()` freezes the current transcript and creates `request-001`, `request-002`, and so on, offset by `requestSequenceStart` when an owning lifecycle already consumed request numbers. The loop calls `model.stream()` and drains its event channel before awaiting the terminal response. Each valid chunk becomes `model.chunk`. The loop caps one step at `1024` chunks, `65,536` Unicode code points of text, and `1024` assistant blocks.
 
-Model chunks and the terminal assistant message must agree exactly in content and order. Request IDs must match the active request. Tool arguments must be plain bounded JSON with depth `32`, at most `257` values including the root, `256` object fields plus array slots, and `4096` Unicode code points across keys/string values. These checks occur before a Tool effect. Contradiction or excess becomes a failed `MODEL_PROTOCOL_ERROR` result.
+Before comparison, the loop coalesces adjacent streamed text deltas and adjacent terminal text blocks, using Tool calls as boundaries. The resulting normalized block sequences must agree in content and order; raw text-chunk segmentation may differ. Request IDs must match the active request. Tool arguments must be plain bounded JSON with depth `32`, at most `257` values including the root, `256` object fields plus array slots, and `4096` Unicode code points across keys/string values. These checks occur before a Tool effect. Contradiction or excess becomes a failed `MODEL_PROTOCOL_ERROR` result.
 
 When `stopReason` is `stop`, the assistant message is appended and `textFromAssistant()` becomes `finalText`. The loop emits `run.finished` with a `completed` result. Tool calls are forbidden in a stop response.
 
@@ -174,7 +174,7 @@ The focused test is `course/test/07-agent-loop.test.ts`. Run exactly:
 npm run test:course:checkpoint -- course/test/07-agent-loop.test.ts
 ```
 
-The file proves option validation, request numbering, immutable snapshots, direct completion, one and multiple Tool rounds, recoverable Tool continuation, cancellation during model and Tool work, one-step termination, invalid transcript handling, model correlation and chunk/response agreement, typed failures, registry snapshots, exact event sequences, `maxSteps = 64`, and explicit input/chunk/text/block/argument limits. It does not claim concurrent Tool execution, steering/follow-up queues, context transformation, provider retries, persistent session state, or a production scheduling policy.
+The file proves option validation, request numbering, immutable snapshots, direct completion, one and multiple Tool rounds, recoverable Tool continuation, cancellation during model and Tool work, one-step termination, invalid transcript handling, model correlation and normalized chunk/response agreement, typed failures, registry snapshots, exact event sequences, `maxSteps = 64`, and explicit input/chunk/text/block/argument limits. It does not claim concurrent Tool execution, steering/follow-up queues, context transformation, provider retries, persistent session state, or a production scheduling policy.
 
 ## Failure experiment
 

@@ -16,7 +16,7 @@ reviewed_by: Pify maintainers
 
 ## Outcome
 
-You will build an offline provider adapter whose input is untrusted transport data and whose output is the trusted course model protocol. `FixtureProviderAdapter` accepts a versioned fixture, owns a finite response queue, parses each record from `unknown`, and emits immutable `CourseModelChunk` values plus one terminal `CourseModelResponse`.
+You will build an offline provider adapter whose input is untrusted transport data and whose output is the trusted course model protocol. `FixtureProviderAdapter` accepts a versioned fixture, meaning fixed test records with an explicit schema version, owns a finite response queue, parses each record from `unknown`, and emits immutable `CourseModelChunk` values plus one terminal `CourseModelResponse`.
 
 The boundary preserves text-delta order and provider Tool-call IDs. It normalizes the transport stop reason `tool_call` to `toolCall`, accepts either camel-case or snake-case usage fields without accepting duplicate aliases, and correlates `response_start` with `response_end`. A response must contain exactly one terminal record. Missing, duplicate, mismatched, malformed, unknown, and post-terminal records fail with stable `FixtureProviderError` codes.
 
@@ -192,7 +192,7 @@ Stream that response and await both the chunks and terminal result. The Tool-cal
 
 :::info[Pi SDK 0.84.3]
 
-`@earendil-works/pi-ai` exports `Provider`, `createProvider()`, `AssistantMessageEventStream`, `AssistantMessageEvent`, `ToolCall`, `Usage`, and `StopReason`. `createProvider()` registers production-facing model and API stream functions rather than this course's fixture record grammar.
+`@earendil-works/pi-ai` exports `Provider`, `createProvider()`, `createModels()`, `MutableModels`, `AssistantMessageEventStream`, `AssistantMessageEvent`, `ToolCall`, `Usage`, and `StopReason`. `createProvider()` builds and returns a production-facing `Provider` from auth, models, and API stream parts. It does not register that provider. `createModels()` returns `MutableModels`, whose `setProvider(provider)` method upserts the provider into the collection.
 
 :::
 
