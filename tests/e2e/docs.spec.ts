@@ -55,7 +55,9 @@ function localMarkdownPathname(
   try {
     const current = new URL(currentUrl);
     const target = new URL(href, current);
-    if (target.origin !== current.origin) return null;
+    const isLocal =
+      target.origin === current.origin || target.origin === publicDocsOrigin;
+    if (!isLocal) return null;
 
     const pathname = safelyDecodePathname(target.pathname);
     return /\.mdx?$/iu.test(pathname) ? pathname : null;
@@ -89,6 +91,18 @@ test("recognizes unsupported locale paths and local Markdown targets", () => {
   expect(
     localMarkdownPathname("/en/reference/api%2Emdx#options", currentUrl),
   ).toBe("/en/reference/api.mdx");
+  expect(
+    localMarkdownPathname(
+      "https://docs.pify.dev/en/quickstart.md?view=full",
+      currentUrl,
+    ),
+  ).toBe("/en/quickstart.md");
+  expect(
+    localMarkdownPathname(
+      "https://docs.pify.dev/vi/reference/api%2Emdx#options",
+      currentUrl,
+    ),
+  ).toBe("/vi/reference/api.mdx");
   expect(localMarkdownPathname("/en/image.md.png", currentUrl)).toBeNull();
   expect(
     localMarkdownPathname("https://example.com/reference.md", currentUrl),
