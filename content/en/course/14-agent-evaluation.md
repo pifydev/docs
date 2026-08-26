@@ -17,7 +17,7 @@ reviewed_by: Pify maintainers
 
 ## Outcome
 
-You will build an offline [harness](../glossary.md#harness) for [held-out evaluation](../glossary.md#held-out-evaluation). It loads unknown fixture data defensively, creates a fresh workspace and runtime for every task repetition, gives the candidate only the public prompt, and asks a deterministic [judge](../glossary.md#judge) to turn bounded public evidence into a `pass` or `fail` [verdict](../glossary.md#verdict).
+You will build an offline [harness](../glossary.md#harness) for [held-out evaluation](../glossary.md#held-out-evaluation). It loads unknown fixture data defensively and creates a fresh workspace and runtime for every task repetition. The runtime factory receives run identifiers, repetition, workspace path, and cancellation signal; the only task content passed to `runtime.run()` is the public prompt, never the fixture-only oracles. A deterministic [judge](../glossary.md#judge) turns bounded public evidence into a `pass` or `fail` [verdict](../glossary.md#verdict).
 
 The harness records a separate `error` verdict when a candidate runtime reports that it could not produce a valid observation. A factory, runtime, judge, or clock exception, cancellation, or registered ownership-cleanup failure rejects the evaluation as infrastructure failure. Baseline and candidate reports are compared only when they contain the same task and run identities. Stable aggregate rates and a strict report allowlist make repeated offline runs reviewable without serializing prompts, expected evidence, candidate evidence, transcripts, or file content.
 

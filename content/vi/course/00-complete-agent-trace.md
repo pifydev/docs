@@ -40,9 +40,9 @@ Không dùng API key hay kết nối mạng. Input, Tool arguments, Tool output 
 
 ## Cơ chế
 
-Một lượt chạy Agent không chỉ gồm câu trả lời cuối. Đây là protocol có thứ tự; các record trung gian giải thích cách câu trả lời được tạo ra. Khi đọc source, bạn sẽ thấy prologue gán `sequence` từ `0` đến `7`. Focused test kiểm tra array loại sự kiện theo thứ tự đó nhưng không assert các field `sequence` dạng số. Renderer có thể chỉ hiển thị một số sự kiện, còn trace bên dưới vẫn phải giữ quan hệ nhân quả.
+Một lượt chạy Agent là một protocol có thứ tự; câu trả lời cuối chỉ là terminal output. Các record trung gian giải thích cách output đó được tạo ra. Khi đọc source, bạn sẽ thấy prologue gán `sequence` từ `0` đến `7`. Focused test kiểm tra array loại sự kiện theo thứ tự đó nhưng không assert các field `sequence` dạng số. Renderer có thể chỉ hiển thị một số sự kiện, còn trace bên dưới vẫn phải giữ quan hệ nhân quả.
 
-Model stream đầu tiên kết thúc bằng `tool_call_completed`, chưa phải câu trả lời cho user. `tool_execution_started` cho thấy execution chỉ bắt đầu sau khi có Tool call hoàn chỉnh. `tool_result_appended` đặt result vào transcript dưới `toolCallId` ban đầu. Chỉ sau đó model stream thứ hai mới được dùng result và tạo `final_text_completed`.
+Model stream đầu tiên kết thúc bằng `tool_call_completed`, chưa phải câu trả lời cho user. `tool_execution_started` cho thấy execution chỉ bắt đầu sau khi có Tool call hoàn chỉnh. Trong trace cố định này, `tool_result_appended` đánh dấu thời điểm runtime sẽ thêm result và giữ nguyên `toolCallId`; checkpoint `00` chưa dựng transcript. Chỉ sau đó model stream thứ hai mới được dùng result và tạo `final_text_completed`.
 
 Stable ID giữ nguyên identity qua thời gian. Tên `add` mô tả operation nhưng không thể phân biệt từng invocation khi model yêu cầu `add` hai lần. `call-add-001` định danh invocation này. Một Tool result có cùng tên nhưng ID khác không thuộc call đó và khiến trace không hợp lệ.
 

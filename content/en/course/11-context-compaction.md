@@ -47,13 +47,30 @@ The course summarizer is injected. Focused tests return scripted text and make n
 
 Budgeting counts Unicode code points and fixed structural weights. Requirements, summary IDs/content, message IDs/roles, text blocks, Tool names/IDs/arguments, result linkage, and scalar JSON values all contribute deterministically; object keys are sorted. This produces the same number on every supported platform, but it is an educational estimator rather than a model tokenizer.
 
+The estimator applies these exact formulas, where `u(value)` is the number of Unicode code points:
+
+| Value | Exact unit formula |
+| --- | --- |
+| Requirement | `3 + u(id) + u(content)` |
+| Summary | `5 + u(id) + u(content)` |
+| User message | `4 + u(id) + u(content)` |
+| Assistant message base | `4 + u(id)` |
+| Assistant text block | `2 + u(text)` |
+| Assistant Tool-call block | `6 + u(id) + u(name) + json(arguments)` |
+| Tool-result message | `6 + u(id) + u(toolCallId) + u(toolName) + u(content) + 1` for `isError` |
+| JSON `null`, string, number, boolean | `1`; `1 + u(value)`; `1 + String(value).length`; `5` for `true` or `6` for `false` |
+| JSON array | `2 + sum(1 + json(item))` |
+| JSON object | `2 + sum(1 + u(sortedKey) + json(value))` |
+
+For the focused ASCII case, requirement `{ id: "r", content: "AB" }` costs `3 + 1 + 2 = 6`; user message `{ id: "u", content: "a" }` costs `4 + 1 + 1 = 6`; total context cost is `12`. Replacing `"a"` with `"😀"` keeps the total at `12` because the emoji is one Unicode code point.
+
 `selectCompactionBoundary()` reserves the full `summaryMaxUnits`, retains at least `retainRecentMessages`, and scans complete groups from oldest to newest. It subtracts a whole group at once and returns the first exclusive transcript index whose fixed requirements, reserved summary, and retained messages fit `targetUnits`. If a group crosses the latest allowed boundary, or no whole-group cut is sufficient, it returns `null`.
 
 `compactContext()` returns the same context with status `unchanged` when current units are at or below `maxUnits`; it never invokes the summarizer in that path. Otherwise it checks cancellation and unique `recordId`, selects a positive safe boundary, and gives the summarizer a frozen request containing requirements, previous summary, the exact compacted prefix, boundary, and summary limit.
 
 The returned value must resolve to a string, contain non-whitespace text, fit the ordinary string ceiling, and fit `summaryMaxUnits` after its ID and structural cost are counted. Objects cannot inject assistant or Tool blocks. The retained suffix must itself validate as a transcript, and the new requirements + summary + retained messages must fit `targetUnits`. Only then does the function append a frozen record with compacted message IDs and before/after units, rebuild and revalidate the final context, check cancellation once more, and expose the new state.
 
-Cancellation is checked before summarization, while awaiting it, after it resolves, and before final exposure. The boundary observes ordinary Promises and thenable adoption chains up to `64` levels without allowing a foreign object to forge a `ContextCompactionError` code. Late rejections are observed to avoid process-level noise. Thrown/rejected/malformed or deeper async values become `CONTEXT_SUMMARIZER_FAILED`; an accepted abort becomes `CONTEXT_CANCELLED`. Neither path mutates the old summary, messages, or records.
+Cancellation is checked before summarization, while awaiting it, after it resolves, and before final exposure. The boundary observes ordinary Promises and thenable adoption chains up to `64` levels without allowing a foreign object to forge a `ContextCompactionError` code. Late rejections are observed to avoid process-level noise. Thrown, rejected, malformed, or deeper generic async values become `CONTEXT_SUMMARIZER_FAILED`. A Proxy-wrapped native Promise, or a native Promise whose locked constructor/species prevents guaranteed intrinsic observation, becomes `CONTEXT_ASYNC_VALUE_UNOBSERVABLE` under the creator-observation contract. An accepted abort becomes `CONTEXT_CANCELLED`. None of these paths mutates the old summary, messages, or records.
 
 ## Trace or model
 
@@ -163,6 +180,7 @@ This is the exact boundary assertion from `course/test/11-context-compaction.tes
 - Boundary selection reserves summary capacity, retains recent messages, and removes only whole groups.
 - A below-threshold context returns unchanged without invoking the summarizer.
 - Summary output must be plain non-empty text, fit both summary and target budgets, and leave a valid transcript suffix.
+- Unobservable native Promise identities fail with `CONTEXT_ASYNC_VALUE_UNOBSERVABLE`; other summarizer failures remain `CONTEXT_SUMMARIZER_FAILED`.
 - Cancellation before, during, or after summary selection returns a stable error and appends no record.
 - Any failure leaves the prior context unchanged; success appends exactly one frozen record after complete prospective validation.
 

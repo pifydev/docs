@@ -40,9 +40,9 @@ No API key or network connection is used. The input, Tool arguments, Tool output
 
 ## Mechanism
 
-An Agent run is more than the final sentence. It is an ordered protocol whose intermediate records explain why that sentence exists. Source inspection shows that the prologue assigns `sequence` values `0` through `7`. The focused test checks the event-type array in that source order, but it does not assert the numeric `sequence` fields. A renderer may show selected events, but the underlying trace must keep the causal sequence.
+An Agent run is an ordered protocol; the final sentence is only its terminal output. Intermediate records explain why that output exists. Source inspection shows that the prologue assigns `sequence` values `0` through `7`. The focused test checks the event-type array in that source order, but it does not assert the numeric `sequence` fields. A renderer may show selected events, but the underlying trace must keep the causal sequence.
 
-The first model stream ends with `tool_call_completed`, not with a user-facing answer. `tool_execution_started` shows that execution begins only after a complete call exists. `tool_result_appended` places the result in the transcript under the original `toolCallId`. Only then may the second model stream use that result and produce `final_text_completed`.
+The first model stream ends with `tool_call_completed`, not with a user-facing answer. `tool_execution_started` shows that execution begins only after a complete call exists. In this fixed trace, `tool_result_appended` marks the point where a runtime would append the result and preserves the original `toolCallId`; checkpoint `00` does not build a transcript. Only then may the second model stream use that result and produce `final_text_completed`.
 
 Stable IDs carry identity across time. The name `add` describes the operation, but it cannot identify one invocation when a model requests `add` twice. `call-add-001` identifies this invocation. A Tool result with the same name but another ID is unrelated and makes the trace invalid.
 

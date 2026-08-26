@@ -19,7 +19,7 @@ Code trong `course/src/` là **Course implementation**. Đây là hệ thống p
 
 ## Bạn sẽ xây dựng gì
 
-Workshop hoàn chỉnh là một Agent stack nhỏ nhưng chạy trọn vẹn. Message của user đi vào vòng lặp Agent (Agent Loop). Model có đầu ra deterministic sẽ phát text hoặc yêu cầu một Tool. Vòng lặp kiểm tra dữ liệu rồi thực thi Tool, liên kết kết quả với Tool call ban đầu và tiếp tục cho đến khi nhận được terminal result có type rõ ràng. Các checkpoint sau bổ sung prompt có state, cây phiên làm việc chỉ ghi nối tiếp, cách chọn ngữ cảnh có giới hạn, Resource và Extension, runtime có thể thay thế cùng bộ khung đánh giá (evaluation harness).
+Workshop hoàn chỉnh là một Agent stack nhỏ nhưng chạy trọn vẹn. Message của user đi vào vòng lặp Agent (Agent Loop). Model có đầu ra deterministic sẽ phát text hoặc yêu cầu một Tool. Vòng lặp kiểm tra dữ liệu rồi thực thi Tool, liên kết kết quả với Tool call ban đầu và tiếp tục cho đến khi nhận được terminal result có type rõ ràng. Các checkpoint sau bổ sung một Agent có state để sở hữu vòng đời prompt, cây phiên làm việc chỉ ghi nối tiếp, cách chọn ngữ cảnh có giới hạn, Resource và Extension, runtime có thể thay thế cùng bộ khung đánh giá (evaluation harness).
 
 Khóa học phù hợp khi bạn xây hạ tầng Agent, tích hợp Pi SDK, rà soát một Agent framework hoặc cần test làm lộ lỗi protocol và vòng đời. Nội dung đi thẳng vào các cơ chế như quyền sở hữu iterator, hủy tác vụ, xác thực transcript, đăng ký atomic, dọn dẹp và giới hạn output. Khóa học không dạy cách viết prompt, thiết lập tài khoản provider hay triển khai sandbox cho production.
 

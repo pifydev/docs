@@ -276,6 +276,20 @@ function localLinks(body) {
   ].map((match) => decodeURIComponent(match[1]));
 }
 
+function groupedIntegerCodeTokens(body) {
+  const tokens = new Set();
+  for (const inlineCode of maskFencedContent(body).matchAll(
+    /(?<!`)`([^`\r\n]+)`(?!`)/g,
+  )) {
+    for (const groupedInteger of inlineCode[1].matchAll(
+      /(?<![\d.])\d{1,3}(?:[,.]\d{3})+(?![\d.])/g,
+    )) {
+      tokens.add(groupedInteger[0]);
+    }
+  }
+  return [...tokens].sort();
+}
+
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -652,6 +666,11 @@ test("English and Vietnamese course pages keep structural parity", async () => {
         localLinks(en),
         localLinks(vi),
         `${filename}: local links`,
+      );
+      assert.deepEqual(
+        groupedIntegerCodeTokens(en),
+        groupedIntegerCodeTokens(vi),
+        `${filename}: grouped integer literals in inline code`,
       );
     } catch (error) {
       errors.push(error.message);

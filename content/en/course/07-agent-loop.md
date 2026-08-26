@@ -78,7 +78,6 @@ stateDiagram-v2
   ExecuteTools --> Failed: fatal Tool phase
   ExecuteTools --> MaxSteps: step budget reached
   ExecuteTools --> OpenModel: continuation allowed
-  ValidateOptions --> Cancelled: signal aborts
   SnapshotRun --> Cancelled: signal aborts
   EmitAccepted --> Cancelled: signal aborts
   OpenModel --> Cancelled: signal aborts
@@ -99,7 +98,7 @@ stateDiagram-v2
 | Tool batch | Append each complete linked result | `tool.started`, then `tool.finished` | `cancelled` or `failed` |
 | Step boundary | Frozen transcript available | `run.finished` only when terminal | `maxSteps` or continue |
 
-An event can describe partial progress while the transcript contains only complete protocol messages. This distinction prevents a cancelled delta from becoming durable assistant history.
+An event can describe partial progress while the transcript contains only complete protocol messages. Keeping partial events outside the transcript prevents a cancelled delta from becoming durable assistant history.
 
 ## Build it
 

@@ -814,7 +814,7 @@
     {
       "key": "course-overview",
       "path": "en/course/index.mdx",
-      "baselineWords": 1452,
+      "baselineWords": 1457,
       "minimumWordRatio": 0.8,
       "minimumHeadingCounts": {
         "2": 8,
@@ -829,7 +829,7 @@
     {
       "key": "course-overview",
       "path": "vi/course/index.mdx",
-      "baselineWords": 1872,
+      "baselineWords": 1879,
       "minimumWordRatio": 0.8,
       "minimumHeadingCounts": {
         "2": 8,
@@ -844,7 +844,7 @@
     {
       "key": "course-00-complete-agent-trace",
       "path": "en/course/00-complete-agent-trace.md",
-      "baselineWords": 1136,
+      "baselineWords": 1152,
       "minimumWordRatio": 0.8,
       "minimumHeadingCounts": {
         "2": 10,
@@ -859,7 +859,7 @@
     {
       "key": "course-00-complete-agent-trace",
       "path": "vi/course/00-complete-agent-trace.md",
-      "baselineWords": 1319,
+      "baselineWords": 1333,
       "minimumWordRatio": 0.8,
       "minimumHeadingCounts": {
         "2": 10,
@@ -994,7 +994,7 @@
     {
       "key": "course-05-provider-adapter",
       "path": "en/course/05-provider-adapter.md",
-      "baselineWords": 1316,
+      "baselineWords": 1317,
       "minimumWordRatio": 0.8,
       "minimumHeadingCounts": {
         "2": 10,
@@ -1024,7 +1024,7 @@
     {
       "key": "course-06-tool-contract",
       "path": "en/course/06-tool-contract.md",
-      "baselineWords": 1383,
+      "baselineWords": 1418,
       "minimumWordRatio": 0.8,
       "minimumHeadingCounts": {
         "2": 10,
@@ -1039,7 +1039,7 @@
     {
       "key": "course-06-tool-contract",
       "path": "vi/course/06-tool-contract.md",
-      "baselineWords": 2087,
+      "baselineWords": 2124,
       "minimumWordRatio": 0.8,
       "minimumHeadingCounts": {
         "2": 10,
@@ -1054,7 +1054,7 @@
     {
       "key": "course-07-agent-loop",
       "path": "en/course/07-agent-loop.md",
-      "baselineWords": 1390,
+      "baselineWords": 1394,
       "minimumWordRatio": 0.8,
       "minimumHeadingCounts": {
         "2": 10,
@@ -1069,7 +1069,7 @@
     {
       "key": "course-07-agent-loop",
       "path": "vi/course/07-agent-loop.md",
-      "baselineWords": 2013,
+      "baselineWords": 2018,
       "minimumWordRatio": 0.8,
       "minimumHeadingCounts": {
         "2": 10,
@@ -1174,7 +1174,7 @@
     {
       "key": "course-11-context-compaction",
       "path": "en/course/11-context-compaction.md",
-      "baselineWords": 1139,
+      "baselineWords": 1247,
       "minimumWordRatio": 0.8,
       "minimumHeadingCounts": {
         "2": 10,
@@ -1183,13 +1183,13 @@
       },
       "minimumCodeFences": 4,
       "minimumMermaidBlocks": 1,
-      "minimumTables": 2,
+      "minimumTables": 3,
       "approvedDeletions": []
     },
     {
       "key": "course-11-context-compaction",
       "path": "vi/course/11-context-compaction.md",
-      "baselineWords": 1738,
+      "baselineWords": 1860,
       "minimumWordRatio": 0.8,
       "minimumHeadingCounts": {
         "2": 10,
@@ -1198,13 +1198,13 @@
       },
       "minimumCodeFences": 4,
       "minimumMermaidBlocks": 1,
-      "minimumTables": 2,
+      "minimumTables": 3,
       "approvedDeletions": []
     },
     {
       "key": "course-12-resources-extensions",
       "path": "en/course/12-resources-extensions.md",
-      "baselineWords": 1145,
+      "baselineWords": 1166,
       "minimumWordRatio": 0.8,
       "minimumHeadingCounts": {
         "2": 10,
@@ -1219,7 +1219,7 @@
     {
       "key": "course-12-resources-extensions",
       "path": "vi/course/12-resources-extensions.md",
-      "baselineWords": 1435,
+      "baselineWords": 1460,
       "minimumWordRatio": 0.8,
       "minimumHeadingCounts": {
         "2": 10,
@@ -1264,7 +1264,7 @@
     {
       "key": "course-14-agent-evaluation",
       "path": "en/course/14-agent-evaluation.md",
-      "baselineWords": 1574,
+      "baselineWords": 1593,
       "minimumWordRatio": 0.8,
       "minimumHeadingCounts": {
         "2": 10,
@@ -1279,7 +1279,7 @@
     {
       "key": "course-14-agent-evaluation",
       "path": "vi/course/14-agent-evaluation.md",
-      "baselineWords": 1791,
+      "baselineWords": 1816,
       "minimumWordRatio": 0.8,
       "minimumHeadingCounts": {
         "2": 10,

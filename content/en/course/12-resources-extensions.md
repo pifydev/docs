@@ -19,7 +19,7 @@ reviewed_by: Pify maintainers
 
 You will load UTF-8 text Resources from an ordered set of trusted roots, then add an [Extension](../glossary.md#extension) host that separates discovery from activation. Discovery records immutable IDs and factories without executing user code. Activation runs only when requested, stages every Tool, event hook, and disposer, validates the complete contribution, and publishes it in one commit.
 
-If a factory, activation callback, Tool definition, cancellation check, or rollback step fails, no staged Tool or hook becomes live. Resources allocated before the failure are disposed in reverse registration order. Host shutdown also reverses Extension activation order, so ownership unwinds from the newest dependency to the oldest.
+If a factory, activation callback, Tool definition, cancellation check, or rollback step fails, no staged Tool or hook becomes live. The host attempts every disposer acquired before the failure in reverse registration order and aggregates cleanup failures after all attempts. Host shutdown applies the same all-attempted rule while reversing Extension activation order, so ownership unwinds from the newest dependency to the oldest even when one cleanup fails.
 
 :::note[Course implementation]
 
@@ -187,7 +187,7 @@ Run the focused command again. The experiment passes only when the disposer runs
 - Activation is lazy and serialized; its context closes when the selected async result settles.
 - Tool, hook, and disposer contributions remain private until every staged Tool validates.
 - Hooks run in activation then registration order; failures are reported without skipping later hooks.
-- Failed activation rolls back every acquired disposable in reverse order and publishes no partial contribution.
+- Failed activation attempts every acquired disposer in reverse order, aggregates rollback failures, and publishes no partial contribution.
 - Host disposal reverses Extension activation and per-Extension resource registration, attempts every cleanup, and aggregates failures.
 
 ## Compare with Pi SDK 0.84.3

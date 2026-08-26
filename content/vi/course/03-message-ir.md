@@ -73,7 +73,7 @@ flowchart TD
 | --- | --- | --- |
 | User message | `id` không rỗng, `role: "user"`, string `content` | `INVALID_MESSAGE` |
 | Assistant text block | `type: "text"`, string `text` | `INVALID_MESSAGE` |
-| Assistant Tool-call block | `id` duy nhất và không rỗng, `name` không rỗng, JSON object `arguments` | `EMPTY_TOOL_NAME` hoặc `INVALID_TOOL_ARGUMENTS` |
+| Assistant Tool-call block | `id` không rỗng và duy nhất trong transcript đã validate, `name` không rỗng, JSON object `arguments` | `EMPTY_TOOL_NAME` hoặc `INVALID_TOOL_ARGUMENTS` |
 | Tool-result message | ID/name không rỗng, string `content`, boolean `isError` | `INVALID_MESSAGE` hoặc `EMPTY_TOOL_NAME` |
 | Transcript linkage | Một result xuất hiện sau và khớp tên cho mỗi call duy nhất | Stable linkage code có `messageIndex` |
 

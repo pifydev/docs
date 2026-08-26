@@ -47,7 +47,7 @@ Trước khi bắt đầu công việc bất đồng bộ, vòng lặp chụp l�
 
 Vòng lặp sở hữu một transcript riêng có thể thay đổi, bắt nguồn từ bản đầu vào đã đóng băng. Trước hết, nó phát một sự kiện `message.accepted` cho mỗi message ban đầu. Mỗi sự kiện nhận số nguyên `sequence` kế tiếp; không thành phần nào giữ bộ đếm riêng. Các pha model và Tool dùng chung bộ đếm, nên mọi sự kiện vẫn có thứ tự toàn phần dù bên quan sát nhận chúng qua phép lặp bất đồng bộ.
 
-Ở mỗi bước, `requestSnapshot()` đóng băng transcript hiện tại rồi tạo `request-001`, `request-002` và các ID tiếp theo. `requestSequenceStart` dịch điểm bắt đầu khi vòng đời bên ngoài đã dùng một số thứ tự yêu cầu. Vòng lặp gọi `model.stream()`, đọc hết kênh sự kiện rồi mới chờ phản hồi cuối. Mỗi chunk hợp lệ trở thành một sự kiện `model.chunk`. Mỗi bước bị giới hạn ở `1024` chunk, `65.536` Unicode code point cho text và `1024` block của assistant.
+Ở mỗi bước, `requestSnapshot()` đóng băng transcript hiện tại rồi tạo `request-001`, `request-002` và các ID tiếp theo. `requestSequenceStart` dịch điểm bắt đầu khi vòng đời bên ngoài đã dùng một số thứ tự yêu cầu. Vòng lặp gọi `model.stream()`, đọc hết kênh sự kiện rồi mới chờ phản hồi cuối. Mỗi chunk hợp lệ trở thành một sự kiện `model.chunk`. Mỗi bước bị giới hạn ở `1024` chunk, `65,536` Unicode code point cho text và `1024` block của assistant.
 
 Trước khi so sánh, vòng lặp gộp các text delta liền kề của luồng và các text block liền kề của message cuối; Tool call là ranh giới giữa các nhóm. Hai dãy block sau chuẩn hóa phải có cùng nội dung và thứ tự, còn cách chia chunk text ban đầu có thể khác nhau. ID yêu cầu phải khớp yêu cầu đang hoạt động. Arguments của Tool phải là JSON thuần có giới hạn: độ sâu `32`, tối đa `257` giá trị tính cả gốc, tổng cộng `256` field object và phần tử mảng, cùng `4096` Unicode code point trên key và giá trị string. Các phép kiểm tra này chạy trước tác dụng phụ của Tool. Mâu thuẫn hoặc vượt giới hạn tạo kết quả `failed` với mã `MODEL_PROTOCOL_ERROR`.
 
@@ -78,7 +78,6 @@ stateDiagram-v2
   ExecuteTools --> Failed: fatal Tool phase
   ExecuteTools --> MaxSteps: step budget reached
   ExecuteTools --> OpenModel: continuation allowed
-  ValidateOptions --> Cancelled: signal aborts
   SnapshotRun --> Cancelled: signal aborts
   EmitAccepted --> Cancelled: signal aborts
   OpenModel --> Cancelled: signal aborts
@@ -99,7 +98,7 @@ stateDiagram-v2
 | Batch Tool | Thêm từng result hoàn chỉnh đã liên kết | `tool.started`, sau đó `tool.finished` | `cancelled` hoặc `failed` |
 | Ranh giới bước | Có transcript đã đóng băng | Chỉ có `run.finished` khi lượt chạy kết thúc | `maxSteps` hoặc tiếp tục |
 
-Sự kiện có thể mô tả tiến độ dở dang, trong khi transcript chỉ chứa các message protocol hoàn chỉnh. Quy tắc này ngăn một delta bị hủy trở thành lịch sử assistant được lưu lâu dài.
+Sự kiện có thể mô tả tiến độ dở dang, trong khi transcript chỉ chứa các message protocol hoàn chỉnh. Việc giữ sự kiện dở dang ngoài transcript ngăn một delta bị hủy trở thành lịch sử assistant được lưu lâu dài.
 
 ## Xây dựng
 

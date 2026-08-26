@@ -19,7 +19,7 @@ reviewed_by: Pify maintainers
 
 Bạn sẽ nạp text Resource UTF-8 từ một tập trusted root có thứ tự, sau đó thêm host cho [Extension](../glossary.md#extension) với ranh giới rõ ràng giữa discovery và activation. Discovery chỉ ghi ID cùng factory bất biến, không chạy code của người dùng. Activation chỉ chạy khi được yêu cầu, đưa mọi Tool, event hook và disposer vào vùng staging, kiểm tra toàn bộ contribution rồi công bố chúng bằng một lần commit.
 
-Nếu factory, activation callback, Tool definition, bước kiểm tra hủy hoặc rollback gặp lỗi, không Tool hay hook nào trong vùng staging trở thành trạng thái live. Resource được cấp phát trước lỗi sẽ được dispose theo thứ tự đăng ký ngược. Khi host shutdown, thứ tự kích hoạt Extension cũng được đảo ngược, nhờ vậy ownership được tháo từ dependency mới nhất về dependency cũ nhất.
+Nếu factory, activation callback, Tool definition, bước kiểm tra hủy hoặc rollback gặp lỗi, không Tool hay hook nào trong vùng staging trở thành trạng thái live. Host thử mọi disposer đã lấy trước lỗi theo thứ tự đăng ký ngược, rồi aggregate lỗi cleanup sau khi hoàn tất mọi lần thử. Khi shutdown, host áp dụng cùng quy tắc thử toàn bộ trong khi đảo ngược activation order của Extension, nên ownership vẫn được tháo từ dependency mới nhất về dependency cũ nhất dù một cleanup thất bại.
 
 :::note[Course implementation]
 
@@ -187,7 +187,7 @@ Chạy lại focused command. Thử nghiệm chỉ pass khi disposer chạy đú
 - Activation là lazy và chạy tuần tự; context đóng lại khi async result đã chọn settle.
 - Contribution của Tool, hook và disposer giữ riêng tư cho tới khi mọi Tool trong staging hợp lệ.
 - Hook chạy theo activation order rồi registration order; lỗi được báo mà không bỏ qua hook phía sau.
-- Activation thất bại rollback mọi disposable đã lấy theo thứ tự ngược và không công bố contribution một phần.
+- Activation thất bại thử mọi disposer đã lấy theo thứ tự ngược, aggregate lỗi rollback và không công bố contribution một phần.
 - Host disposal đảo ngược activation của Extension và thứ tự đăng ký Resource trong từng Extension, thử mọi cleanup rồi aggregate lỗi.
 
 ## So sánh với Pi SDK 0.84.3

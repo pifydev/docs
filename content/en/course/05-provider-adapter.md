@@ -93,7 +93,7 @@ flowchart LR
 | `text_delta` | Start already seen, string `text` | Appends text block and emits `textDelta` | `PROVIDER_MISSING_START` |
 | `tool_call` | Start seen, unique ID/name, JSON object arguments | Appends and emits frozen `toolCall` with the same ID | `PROVIDER_INVALID_EVENT` |
 | `response_end` | Matching ID, valid stop reason and usage | Builds and settles one terminal response | `PROVIDER_RESPONSE_MISMATCH` |
-| End of records | Terminal already stored | Finishes stream | `PROVIDER_MISSING_TERMINAL` |
+| End of records | A terminal record is required | Finishes only after the terminal; otherwise `PROVIDER_MISSING_TERMINAL` | `PROVIDER_MISSING_TERMINAL` |
 
 The trust boundary does not improve a guessed value. It either proves enough shape and ordering to construct the normalized protocol or returns a typed failure.
 
@@ -192,7 +192,7 @@ Stream that response and await both the chunks and terminal result. The Tool-cal
 
 :::info[Pi SDK 0.84.3]
 
-`@earendil-works/pi-ai` exports `Provider`, `createProvider()`, `createModels()`, `MutableModels`, `AssistantMessageEventStream`, `AssistantMessageEvent`, `ToolCall`, `Usage`, and `StopReason`. `createProvider()` builds and returns a production-facing `Provider` from auth, models, and API stream parts. It does not register that provider. `createModels()` returns `MutableModels`, whose `setProvider(provider)` method upserts the provider into the collection.
+`@earendil-works/pi-ai` exports `Provider`, `createProvider()`, `createModels()`, `MutableModels`, `AssistantMessageEventStream`, `AssistantMessageEvent`, `ToolCall`, `Usage`, and `StopReason`. `createProvider()` builds and returns a production-facing `Provider` from auth, models, and API stream parts. It does not register that provider. `createModels()` returns `MutableModels`, whose `models.setProvider(provider)` method upserts the provider into the collection.
 
 :::
 

@@ -51,7 +51,7 @@ Với Tool đã đăng ký, `validate(arguments)` chạy trước `execute`. Val
 
 Sau khi arguments hợp lệ, hàm thực thi nhận giá trị đã kiểm tra cùng ngữ cảnh `{ signal, toolCallId }` đã đóng băng. Tín hiệu hủy được kiểm tra trước và sau bước kiểm tra arguments, trước khi thực thi, trong lúc chờ, sau khi promise resolve và sau khi kiểm tra đầu ra. Nếu tín hiệu hủy thắng race tại một trong các ranh giới này, lý do hủy được truyền ra và không có Tool-result message nào được công bố. Việc hủy vẫn có thể thắng sau khi promise thực thi của Tool đã resolve, hoặc sau khi đầu ra đã được tuần tự hóa và kiểm tra nhưng trước lúc công bố result. Tool cũng nhận cùng tín hiệu để tự dừng công việc.
 
-Giá trị lỗi thông thường và promise thực thi bị từ chối đều được chuẩn hóa thành result `TOOL_EXECUTION_FAILED`. `NonRecoverableToolError` vượt qua ranh giới có thể phục hồi đó và làm lần thực thi bị từ chối. Class này dùng một nhãn nguồn gốc chung nhưng riêng tư thay cho cờ công khai có thể ghi, vì vậy object hoặc prototype giả không thể biến lỗi thông thường thành lỗi nghiêm trọng. Nhãn nguồn gốc của `ToolContractError` cũng nằm nội bộ; Tool chưa đáng tin cậy không thể ném một lỗi giống bề ngoài để bỏ qua bước chuẩn hóa.
+Giá trị lỗi thông thường và promise thực thi bị từ chối đều được chuẩn hóa thành result `TOOL_EXECUTION_FAILED`. Một `NonRecoverableToolError` được tạo đúng constructor sẽ được đăng ký vào registry dùng chung trong cùng realm rồi vượt qua ranh giới có thể phục hồi đó. Look-alike chưa đăng ký, chỉ giả field hoặc prototype, vẫn là lỗi có thể phục hồi; quy tắc này bao gồm cả object giả prototype của `NonRecoverableToolError`. Registry cùng brand dùng `Symbol.for` hỗ trợ module reload và subclass, nhưng code bất kỳ trong cùng realm có thể tìm thấy chúng, nên đây không phải security boundary. `ToolContractError` dùng ownership trong `WeakSet` cục bộ của module; look-alike chưa đăng ký do Tool chưa đáng tin cậy ném ra vẫn được chuẩn hóa.
 
 Đầu ra thành công được tuần tự hóa mà không gọi `toJSON`, getter hay phương thức của collection do bên gọi cung cấp. Object thuần và object có prototype `null` được chấp nhận; các key string riêng có thể liệt kê được sắp xếp để đầu ra deterministic; accessor bị bỏ qua; chu trình nhận marker; Proxy không hỗ trợ hoặc prototype khác thường tạo `TOOL_OUTPUT_SERIALIZATION_FAILED`. Công việc của bộ tuần tự hóa bị giới hạn ở độ sâu `32`, `128` node, `256` lượt thăm collection, `4096` ký tự trong string/key và độ lớn BigInt `4096` bit.
 
@@ -153,7 +153,7 @@ Sau đó chỉ đổi validator để trả `{ ok: true, value: { left: 20, righ
 - Arguments được chụp lại và kiểm tra đồng bộ trước khi `execute` có thể chạy.
 - Tool chưa đăng ký cùng lỗi thông thường khi kiểm tra, thực thi hoặc tuần tự hóa đều trở thành result lỗi bất biến, được liên kết đúng.
 - Tín hiệu hủy được truyền qua trước tác dụng phụ, trong khi chờ thực thi, sau khi promise của Tool resolve và sau khi kiểm tra đầu ra; nó không trở thành Tool result gây hiểu nhầm.
-- Chỉ `NonRecoverableToolError` thật mới thoát khỏi ranh giới Tool có thể phục hồi dưới dạng lỗi lập trình nghiêm trọng.
+- `NonRecoverableToolError` đã đăng ký thoát khỏi ranh giới Tool có thể phục hồi; look-alike chưa đăng ký chỉ giả field hoặc prototype vẫn là lỗi có thể phục hồi.
 - Content đã tuần tự hóa không vượt `4096` Unicode code point tính cả một marker báo cắt, và quá trình duyệt tuân theo ngân sách công việc tường minh.
 - Arguments không hợp lệ gửi đến spy Tool tạo `TOOL_ARGUMENTS_INVALID` và không gây tác dụng phụ.
 

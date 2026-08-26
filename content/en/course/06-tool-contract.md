@@ -51,7 +51,7 @@ For a known Tool, `validate(arguments)` runs before `execute`. The validator mus
 
 After successful validation, execution receives the validated value and a frozen `{ signal, toolCallId }` context. Cancellation is checked before validation, after validation, before execution, while awaiting execution, after resolution, and after output inspection. If cancellation wins, its reason propagates and no Tool-result message is appended. The Tool also receives the same signal so it can stop its own work.
 
-Ordinary thrown values and rejected execution promises become `TOOL_EXECUTION_FAILED` results. `NonRecoverableToolError` crosses that recoverable boundary and rejects execution. The class uses private shared provenance rather than a writable public flag, so a forged object or prototype cannot make an ordinary failure fatal. `ToolContractError` provenance is also internal; an untrusted Tool cannot throw a look-alike and bypass normalization.
+Ordinary thrown values and rejected execution promises become `TOOL_EXECUTION_FAILED` results. A constructed `NonRecoverableToolError` is registered in a shared same-realm registry and crosses that recoverable boundary. An unregistered field-only or prototype-only look-alike stays recoverable, including an object with a forged `NonRecoverableToolError` prototype. The registry and `Symbol.for` brand support module reloads and subclasses, but they are discoverable by arbitrary code in the same realm and are not a security boundary. `ToolContractError` instead uses module-local `WeakSet` ownership, so an untrusted Tool's unregistered look-alike is normalized.
 
 Successful output is serialized without calling `toJSON`, getters, or user collection methods. Plain and null-prototype objects are accepted, own enumerable string keys are sorted for deterministic output, accessors are omitted, cycles receive a marker, and unsupported Proxies or exotic prototypes produce `TOOL_OUTPUT_SERIALIZATION_FAILED`. Serializer work is bounded by depth `32`, nodes `128`, collection visits `256`, string/key characters `4096`, and BigInt magnitude `4096` bits.
 
@@ -152,8 +152,8 @@ Then change only the validator to return `{ ok: true, value: { left: 20, right: 
 - `registerMany()` validates the whole batch and all names before one registry mutation.
 - Arguments are snapshotted and synchronously validated before `execute` can run.
 - Unknown Tools and ordinary validation, execution, or serialization failures become immutable linked error results.
-- Cancellation propagates before effects and while awaiting execution; it does not become a misleading Tool result.
-- Only an authentic `NonRecoverableToolError` escapes the recoverable Tool boundary as a fatal programmer failure.
+- Cancellation propagates before effects, while awaiting execution, after the Tool promise resolves, and after output inspection; it does not become a misleading Tool result.
+- A registered `NonRecoverableToolError` escapes the recoverable Tool boundary; unregistered field-only and prototype-only look-alikes remain recoverable.
 - Serialized content never exceeds `4096` Unicode code points including one truncation marker, and traversal obeys the explicit work budgets.
 - Invalid arguments sent to the spy Tool produce `TOOL_ARGUMENTS_INVALID` and zero side effects.
 

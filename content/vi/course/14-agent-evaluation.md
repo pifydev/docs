@@ -17,7 +17,7 @@ reviewed_by: Pify maintainers
 
 ## Kết quả
 
-Bạn sẽ dựng một [harness](../glossary.md#harness) offline cho [held-out evaluation](../glossary.md#held-out-evaluation). Harness đọc fixture data chưa biết theo cách phòng thủ, tạo workspace cùng runtime mới cho từng lần lặp task, chỉ đưa public prompt cho candidate rồi yêu cầu một [judge](../glossary.md#judge) có tính xác định chuyển public evidence có giới hạn thành [verdict](../glossary.md#verdict) `pass` hoặc `fail`.
+Bạn sẽ dựng một [harness](../glossary.md#harness) offline cho [held-out evaluation](../glossary.md#held-out-evaluation). Harness đọc fixture data chưa biết theo cách phòng thủ rồi tạo workspace cùng runtime mới cho từng lần lặp task. Runtime factory nhận các run identifier, repetition, workspace path và cancellation signal; task content duy nhất được truyền vào `runtime.run()` là public prompt, không bao giờ gồm oracle chỉ dành cho fixture. Một [judge](../glossary.md#judge) có tính xác định chuyển public evidence có giới hạn thành [verdict](../glossary.md#verdict) `pass` hoặc `fail`.
 
 Harness ghi verdict `error` riêng khi candidate runtime báo rằng nó không tạo được observation hợp lệ. Exception từ factory, runtime, judge hoặc clock, cancellation hay lỗi trong cleanup ownership đã đăng ký sẽ làm evaluation bị reject như infrastructure failure. Baseline và candidate report chỉ được so sánh khi có cùng task identity và run identity. Aggregate rate ổn định cùng report allowlist nghiêm ngặt giúp review nhiều lần chạy offline mà không serialize prompt, expected evidence, candidate evidence, transcript hay file content.
 

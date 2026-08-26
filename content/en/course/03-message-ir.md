@@ -73,7 +73,7 @@ flowchart TD
 | --- | --- | --- |
 | User message | Non-empty `id`, `role: "user"`, string `content` | `INVALID_MESSAGE` |
 | Assistant text block | `type: "text"`, string `text` | `INVALID_MESSAGE` |
-| Assistant Tool-call block | Unique non-empty `id`, non-empty `name`, JSON object `arguments` | `EMPTY_TOOL_NAME` or `INVALID_TOOL_ARGUMENTS` |
+| Assistant Tool-call block | Non-empty `id` that is unique across a validated transcript, non-empty `name`, JSON object `arguments` | `EMPTY_TOOL_NAME` or `INVALID_TOOL_ARGUMENTS` |
 | Tool-result message | Non-empty IDs/name, string `content`, boolean `isError` | `INVALID_MESSAGE` or `EMPTY_TOOL_NAME` |
 | Transcript linkage | One later, name-matched result per unique call | Stable linkage code with `messageIndex` |
 

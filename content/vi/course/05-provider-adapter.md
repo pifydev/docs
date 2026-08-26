@@ -93,7 +93,7 @@ flowchart LR
 | `text_delta` | Đã thấy record bắt đầu, `text` là string | Thêm text block rồi phát `textDelta` | `PROVIDER_MISSING_START` |
 | `tool_call` | Đã thấy record bắt đầu, ID/name duy nhất, arguments là object JSON | Thêm rồi phát `toolCall` đã đóng băng với cùng ID | `PROVIDER_INVALID_EVENT` |
 | `response_end` | ID khớp, lý do dừng và usage hợp lệ | Dựng rồi hoàn tất một phản hồi cuối | `PROVIDER_RESPONSE_MISMATCH` |
-| Hết record | Record kết thúc đã được lưu | Hoàn tất luồng | `PROVIDER_MISSING_TERMINAL` |
+| Hết record | Bắt buộc có record kết thúc | Chỉ hoàn tất sau record kết thúc; nếu thiếu thì trả `PROVIDER_MISSING_TERMINAL` | `PROVIDER_MISSING_TERMINAL` |
 
 Ranh giới tin cậy không biến một giá trị đoán mò thành dữ liệu hợp lệ. Nó phải chứng minh đủ hình dạng và thứ tự để dựng protocol đã chuẩn hóa; nếu không, nó trả một lỗi có type.
 

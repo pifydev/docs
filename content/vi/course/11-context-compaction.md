@@ -47,13 +47,30 @@ Khóa học nhận summarizer từ bên ngoài. Bài kiểm thử tập trung tr
 
 Phép tính ngân sách đếm code point Unicode cùng các trọng số cấu trúc cố định. ID và nội dung của yêu cầu/bản tóm tắt, ID/role của message, block văn bản, tên/ID/arguments của Tool, liên kết result và giá trị JSON vô hướng đều góp đơn vị theo quy tắc có tính xác định; các key của object được sắp xếp. Cùng một dữ liệu đầu vào cho cùng kết quả trên mọi nền tảng được hỗ trợ, nhưng đây là bộ ước lượng phục vụ học tập chứ không phải tokenizer của model.
 
+Bộ ước lượng áp dụng các công thức chính xác sau, trong đó `u(value)` là số code point Unicode:
+
+| Giá trị | Công thức đơn vị chính xác |
+| --- | --- |
+| Requirement | `3 + u(id) + u(content)` |
+| Summary | `5 + u(id) + u(content)` |
+| User message | `4 + u(id) + u(content)` |
+| Phần cơ sở của assistant message | `4 + u(id)` |
+| Text block của assistant | `2 + u(text)` |
+| Tool-call block của assistant | `6 + u(id) + u(name) + json(arguments)` |
+| Tool-result message | `6 + u(id) + u(toolCallId) + u(toolName) + u(content) + 1` cho `isError` |
+| JSON `null`, string, number, boolean | `1`; `1 + u(value)`; `1 + String(value).length`; `5` cho `true` hoặc `6` cho `false` |
+| JSON array | `2 + sum(1 + json(item))` |
+| JSON object | `2 + sum(1 + u(sortedKey) + json(value))` |
+
+Trong ca ASCII của focused test, requirement `{ id: "r", content: "AB" }` tốn `3 + 1 + 2 = 6`; user message `{ id: "u", content: "a" }` tốn `4 + 1 + 1 = 6`; tổng chi phí ngữ cảnh là `12`. Thay `"a"` bằng `"😀"` vẫn cho tổng `12` vì emoji đó là một code point Unicode.
+
 `selectCompactionBoundary()` dành đủ toàn bộ `summaryMaxUnits`, giữ ít nhất `retainRecentMessages` rồi duyệt các nhóm hoàn chỉnh từ cũ tới mới. Hàm trừ cả nhóm trong một bước và trả chỉ mục transcript loại trừ đầu tiên mà phần yêu cầu cố định, phần dành cho bản tóm tắt cùng các message được giữ vừa `targetUnits`. Nếu một nhóm vượt ranh giới muộn nhất được phép, hoặc không có điểm cắt theo nhóm nguyên vẹn nào đáp ứng ngân sách, hàm trả `null`.
 
 `compactContext()` trả chính ngữ cảnh đó với trạng thái `unchanged` khi số đơn vị hiện tại nhỏ hơn hoặc bằng `maxUnits`; summarizer không được gọi trên nhánh này. Nếu cần nén, hàm kiểm tra yêu cầu hủy và tính duy nhất của `recordId`, chọn một ranh giới an toàn lớn hơn `0` rồi truyền cho summarizer một request đã đóng băng, gồm yêu cầu, `previousSummary`, tiền tố cần nén chính xác, ranh giới và giới hạn bản tóm tắt.
 
 Giá trị trả về phải phân giải thành chuỗi, có ký tự khác khoảng trắng, không vượt giới hạn chuỗi thông thường và vừa `summaryMaxUnits` sau khi tính cả ID cùng chi phí cấu trúc. Object không thể chèn block của assistant hoặc Tool. Hậu tố được giữ phải tự tạo thành transcript hợp lệ; tổng yêu cầu, bản tóm tắt mới và các message được giữ phải vừa `targetUnits`. Chỉ sau các bước đó, hàm mới thêm một bản ghi đã đóng băng chứa ID của các message đã nén cùng số đơn vị trước/sau, dựng và kiểm tra lại ngữ cảnh cuối, kiểm tra việc hủy lần cuối rồi công bố trạng thái mới.
 
-Yêu cầu hủy được kiểm tra trước lúc tóm tắt, trong khi `await`, sau khi phân giải và trước khi công bố kết quả. Phần mã ở ranh giới này theo dõi Promise thông thường cùng chuỗi tiếp nhận thenable tối đa `64` tầng, đồng thời không cho object bên ngoài giả mã `ContextCompactionError`. Lần từ chối muộn cũng được theo dõi để tránh nhiễu ở cấp tiến trình. Giá trị bất đồng bộ bị ném, bị từ chối, sai cấu trúc hoặc có chuỗi sâu hơn sẽ trở thành `CONTEXT_SUMMARIZER_FAILED`; yêu cầu hủy được chấp nhận trở thành `CONTEXT_CANCELLED`. Không nhánh nào sửa bản tóm tắt, message hay bản ghi cũ.
+Yêu cầu hủy được kiểm tra trước lúc tóm tắt, trong khi `await`, sau khi phân giải và trước khi công bố kết quả. Phần mã ở ranh giới này theo dõi Promise thông thường cùng chuỗi tiếp nhận thenable tối đa `64` tầng, đồng thời không cho object bên ngoài giả mã `ContextCompactionError`. Lần từ chối muộn cũng được theo dõi để tránh nhiễu ở cấp tiến trình. Giá trị async thông thường bị ném, bị từ chối, sai cấu trúc hoặc có chuỗi sâu hơn sẽ trở thành `CONTEXT_SUMMARIZER_FAILED`. Native Promise được bọc trong Proxy, hoặc native Promise có constructor/species bị khóa khiến intrinsic không thể bảo đảm theo dõi, sẽ trở thành `CONTEXT_ASYNC_VALUE_UNOBSERVABLE` theo creator-observation contract. Yêu cầu hủy được chấp nhận trở thành `CONTEXT_CANCELLED`. Không đường lỗi nào sửa bản tóm tắt, message hay bản ghi cũ.
 
 ## Dấu vết hoặc mô hình
 
@@ -163,6 +180,7 @@ expect(
 - Việc chọn ranh giới dành đủ sức chứa cho bản tóm tắt, giữ message gần đây và chỉ bỏ nhóm nguyên vẹn.
 - Ngữ cảnh dưới ngưỡng được trả `unchanged` mà không gọi summarizer.
 - Đầu ra của summarizer phải là văn bản thuần không rỗng, vừa cả ngân sách tóm tắt lẫn ngân sách đích và để lại hậu tố transcript hợp lệ.
+- Native Promise không thể theo dõi trả `CONTEXT_ASYNC_VALUE_UNOBSERVABLE`; các lỗi summarizer khác vẫn là `CONTEXT_SUMMARIZER_FAILED`.
 - Yêu cầu hủy trước, trong hoặc sau lúc chọn bản tóm tắt trả lỗi ổn định và không thêm bản ghi.
 - Mọi lỗi giữ ngữ cảnh trước đó nguyên vẹn; khi thành công, hàm chỉ thêm đúng một bản ghi đã đóng băng sau khi kiểm tra toàn bộ trạng thái dự kiến.
 

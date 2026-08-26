@@ -19,7 +19,7 @@ The code under `course/src/` is the **Course implementation**. It is an original
 
 ## What you will build
 
-The finished workshop is a small but complete Agent stack. A user message enters an iterative Agent Loop. A deterministic model emits text or requests a Tool. The loop validates and executes the Tool, links its result to the original call, and continues until it reaches a typed terminal result. Later checkpoints add stateful prompts, an append-only Session Tree, bounded context selection, Resources and Extensions, replaceable runtimes, and an evaluation harness.
+The finished workshop is a small but complete Agent stack. A user message enters an iterative Agent Loop. A deterministic model emits text or requests a Tool. The loop validates and executes the Tool, links its result to the original call, and continues until it reaches a typed terminal result. Later checkpoints add a stateful Agent that owns prompt lifecycles, an append-only Session Tree, bounded context selection, Resources and Extensions, replaceable runtimes, and an evaluation harness.
 
 The course is useful if you build Agent infrastructure, integrate the Pi SDK, review an Agent framework, or need tests that expose protocol and lifecycle failures. It assumes you want to inspect mechanisms such as iterator ownership, cancellation, transcript validation, atomic registration, cleanup, and bounded output. It does not teach prompt writing, provider account setup, or how to deploy a production sandbox.
 
