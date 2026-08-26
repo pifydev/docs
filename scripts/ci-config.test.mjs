@@ -74,19 +74,34 @@ async function readWorkflow(filename) {
   return { source, workflow: parse(source) };
 }
 
-function assertNoDeploymentCapabilities(source, workflow) {
-  const searchableWorkflow = workflow
-    ? `${source}\n${JSON.stringify(workflow)}`
-    : source;
-  assert.doesNotMatch(
-    searchableWorkflow,
-    /\bvercel\b|deploy-pages|upload-pages-artifact|actions\/deploy|\bsecrets\s*(?:\.|\[)|\bwrite-all\b/i,
-  );
-  assert.doesNotMatch(source, /^\s*[\w-]+:\s*write\s*(?:#.*)?$/im);
-  assert.doesNotMatch(
-    searchableWorkflow,
-    /(?:\buses\b|\brun\b)["']?\s*:\s*["']?[^"'\r\n]*\bdeploy\b/i,
-  );
+function assertNoDeploymentCapabilities(workflow) {
+  const parsedWorkflow = JSON.stringify(workflow);
+  assert.doesNotMatch(parsedWorkflow, /vercel/i);
+  assert.doesNotMatch(parsedWorkflow, /\bsecrets\s*(?:\.|\[)/i);
+
+  for (const job of Object.values(workflow.jobs ?? {})) {
+    if (typeof job.uses === "string") {
+      assert.doesNotMatch(
+        job.uses,
+        /deploy-pages|upload-pages-artifact|actions\/deploy|\bdeploy(?:ment)?\b/i,
+      );
+    }
+    if (!Array.isArray(job.steps)) continue;
+    for (const step of job.steps) {
+      if (typeof step.uses === "string") {
+        assert.doesNotMatch(
+          step.uses,
+          /deploy-pages|upload-pages-artifact|actions\/deploy|\bdeploy(?:ment)?\b/i,
+        );
+      }
+      if (typeof step.run === "string") {
+        assert.doesNotMatch(
+          step.run,
+          /deploy-pages|upload-pages-artifact|\b(?:deploy|deployment|vercel)\b/i,
+        );
+      }
+    }
+  }
 }
 
 function assertContainsRequired(actualValues, requiredValues) {
@@ -94,6 +109,50 @@ function assertContainsRequired(actualValues, requiredValues) {
   const actualSet = new Set(actualValues);
   const missingValues = requiredValues.filter((value) => !actualSet.has(value));
   assert.deepEqual(missingValues, []);
+}
+
+function negativePatternOverlapsRequired(negativePattern, requiredPattern) {
+  const pattern = negativePattern.slice(1);
+  if (pattern === requiredPattern) return true;
+
+  const wildcardIndex = pattern.search(/[*?[\]{}]/);
+  const literalPrefix = (
+    wildcardIndex === -1 ? pattern : pattern.slice(0, wildcardIndex)
+  ).replace(/\/+$/, "");
+  if (!literalPrefix) return true;
+
+  const requiredIsRoot = requiredPattern.endsWith("/**");
+  const protectedPath = requiredIsRoot
+    ? requiredPattern.slice(0, -3)
+    : requiredPattern;
+  if (requiredIsRoot) {
+    return (
+      literalPrefix === protectedPath ||
+      literalPrefix.startsWith(`${protectedPath}/`) ||
+      protectedPath.startsWith(`${literalPrefix}/`)
+    );
+  }
+  return protectedPath.startsWith(literalPrefix);
+}
+
+function assertRequiredPatterns(patterns, requiredPatterns) {
+  assertContainsRequired(patterns, requiredPatterns);
+  for (const requiredPattern of requiredPatterns) {
+    const lastRequiredIndex = patterns.lastIndexOf(requiredPattern);
+    const overlappingNegative = patterns
+      .slice(lastRequiredIndex + 1)
+      .find(
+        (pattern) =>
+          typeof pattern === "string" &&
+          pattern.startsWith("!") &&
+          negativePatternOverlapsRequired(pattern, requiredPattern),
+      );
+    assert.equal(
+      overlappingNegative,
+      undefined,
+      `${requiredPattern} is negated by ${overlappingNegative}`,
+    );
+  }
 }
 
 function assertReadOnlyPermissions(
@@ -116,36 +175,84 @@ function assertReadOnlyPermissions(
   if (requireContents) assert.equal(permissions.contents, "read");
 }
 
-function assertSafeJob(job) {
-  assert.ok(Number.isInteger(job["timeout-minutes"]));
-  assert.ok(job["timeout-minutes"] > 0);
-  assert.ok(job["timeout-minutes"] <= maximumJobTimeoutMinutes);
+function hasNonemptyRunner(runsOn) {
+  if (typeof runsOn === "string") return runsOn.trim().length > 0;
+  if (Array.isArray(runsOn)) {
+    return runsOn.length > 0 && runsOn.every(hasNonemptyRunner);
+  }
+  if (!runsOn || typeof runsOn !== "object") return false;
+  const runnerValues = Object.values(runsOn);
+  return runnerValues.length > 0 && runnerValues.every(hasNonemptyRunner);
+}
+
+function isReusableWorkflowReference(reference) {
+  return (
+    /^\.\/\.github\/workflows\/[^/@\s]+\.ya?ml$/i.test(reference) ||
+    /^[^/\s]+\/[^/\s]+\/\.github\/workflows\/[^/@\s]+\.ya?ml@\S+$/i.test(
+      reference,
+    )
+  );
+}
+
+function assertValidJob(job) {
   assertReadOnlyPermissions(job.permissions);
+  assert.equal(Object.hasOwn(job, "secrets"), false);
+  const hasSteps = Object.hasOwn(job, "steps");
+  const hasReusableWorkflow = Object.hasOwn(job, "uses");
+  assert.notEqual(hasSteps, hasReusableWorkflow);
+
+  if (hasSteps) {
+    assert.ok(hasNonemptyRunner(job["runs-on"]));
+    assert.ok(Number.isInteger(job["timeout-minutes"]));
+    assert.ok(job["timeout-minutes"] > 0);
+    assert.ok(job["timeout-minutes"] <= maximumJobTimeoutMinutes);
+    assert.ok(Array.isArray(job.steps));
+    assert.ok(job.steps.length > 0);
+    for (const step of job.steps) {
+      assert.ok(step && typeof step === "object");
+    }
+    return;
+  }
+
+  assert.equal(typeof job.uses, "string");
+  assert.ok(job.uses.trim().length > 0);
+  assert.ok(isReusableWorkflowReference(job.uses));
+  assert.equal(Object.hasOwn(job, "runs-on"), false);
+  assert.equal(Object.hasOwn(job, "timeout-minutes"), false);
+}
+
+function assertRequiredJob(workflow, job, runCommands) {
+  assert.ok(job);
+  assert.ok(Array.isArray(job.steps));
   assert.equal(Object.hasOwn(job, "if"), false);
   assert.equal(Object.hasOwn(job, "continue-on-error"), false);
-  assert.ok(Array.isArray(job.steps));
-  assert.ok(job.steps.length > 0);
-
+  assert.equal(Object.hasOwn(workflow.defaults?.run ?? {}, "shell"), false);
+  assert.equal(Object.hasOwn(job.defaults?.run ?? {}, "shell"), false);
   for (const step of job.steps) {
     assert.equal(Object.hasOwn(step, "if"), false);
     assert.equal(Object.hasOwn(step, "continue-on-error"), false);
+    if (Object.hasOwn(step, "run")) {
+      assert.equal(Object.hasOwn(step, "shell"), false);
+    }
   }
-}
 
-function assertRequiredJob(job, runCommands) {
-  assert.ok(job);
-  const checkoutStep = job.steps.find(
-    (step) =>
-      typeof step.uses === "string" &&
-      step.uses.startsWith("actions/checkout@"),
+  const checkoutIndexes = job.steps.flatMap((step, index) =>
+    typeof step.uses === "string" && /^actions\/checkout@\S+$/.test(step.uses)
+      ? [index]
+      : [],
   );
-  const setupNodeStep = job.steps.find(
-    (step) =>
-      typeof step.uses === "string" &&
-      step.uses.startsWith("actions/setup-node@"),
+  const setupNodeIndexes = job.steps.flatMap((step, index) =>
+    typeof step.uses === "string" && /^actions\/setup-node@\S+$/.test(step.uses)
+      ? [index]
+      : [],
   );
-  assert.ok(checkoutStep);
-  assert.ok(setupNodeStep);
+  assert.equal(checkoutIndexes.length, 1);
+  assert.equal(setupNodeIndexes.length, 1);
+  const npmCIIndex = job.steps.findIndex((step) => step.run === "npm ci");
+  assert.ok(checkoutIndexes[0] < setupNodeIndexes[0]);
+  assert.ok(setupNodeIndexes[0] < npmCIIndex);
+
+  const setupNodeStep = job.steps[setupNodeIndexes[0]];
   assert.match(
     String(setupNodeStep.with?.["node-version"]),
     /^22(?:\.(?:x|\d+)){0,2}$/i,
@@ -159,22 +266,26 @@ function assertRequiredJob(job, runCommands) {
   );
 }
 
-function assertWorkflowContract(source, workflow, contract) {
+function assertWorkflowContract(workflow, contract) {
   assert.equal(workflow.name, contract.name);
   for (const event of ["pull_request", "push", "workflow_dispatch"]) {
     assert.ok(Object.hasOwn(workflow.on, event));
   }
-  assertContainsRequired(workflow.on.pull_request.paths, contract.paths);
-  assertContainsRequired(workflow.on.push.paths, contract.paths);
-  assertContainsRequired(workflow.on.push.branches, ["main"]);
+  assertRequiredPatterns(workflow.on.pull_request.paths, contract.paths);
+  assertRequiredPatterns(workflow.on.push.paths, contract.paths);
+  assertRequiredPatterns(workflow.on.push.branches, ["main"]);
   assertReadOnlyPermissions(workflow.permissions, {
     required: true,
     requireContents: true,
   });
   assert.deepEqual(workflow.concurrency, contract.concurrency);
-  for (const job of Object.values(workflow.jobs)) assertSafeJob(job);
-  assertRequiredJob(workflow.jobs[contract.jobKey], contract.runCommands);
-  assertNoDeploymentCapabilities(source, workflow);
+  for (const job of Object.values(workflow.jobs)) assertValidJob(job);
+  assertRequiredJob(
+    workflow,
+    workflow.jobs[contract.jobKey],
+    contract.runCommands,
+  );
+  assertNoDeploymentCapabilities(workflow);
 }
 
 async function findTypeScriptFiles(directory) {
@@ -207,7 +318,7 @@ function assertCourseFilesIncluded(courseFiles, programFiles) {
 test("content workflow validates the Fumadocs source tree", async () => {
   const { source, workflow } = await readWorkflow("content-quality.yml");
 
-  assertWorkflowContract(source, workflow, contentWorkflowContract);
+  assertWorkflowContract(workflow, contentWorkflowContract);
   const packageJSON = JSON.parse(
     await readFile(new URL("package.json", repositoryRoot), "utf8"),
   );
@@ -249,7 +360,7 @@ test("content workflow validates the Fumadocs source tree", async () => {
 test("application workflow builds Next.js without deploying", async () => {
   const { source, workflow } = await readWorkflow("deploy.yml");
 
-  assertWorkflowContract(source, workflow, applicationWorkflowContract);
+  assertWorkflowContract(workflow, applicationWorkflowContract);
   assert.doesNotMatch(source, /Astro|GitBook/i);
 });
 
@@ -324,28 +435,37 @@ test("Mermaid validation supplies the documented Chromium CI sandbox override", 
   assert.deepEqual(JSON.parse(configText), { args: ["--no-sandbox"] });
 });
 
-test("deployment guard rejects secrets and write or deploy capabilities", () => {
-  const forbiddenSources = [
-    "token: ${{ secrets.DEPLOY_TOKEN }}",
-    "token: ${{ secrets['DEPLOY_TOKEN'] }}",
-    "permissions: write-all",
-    "contents: write",
-    "- uses: example/deploy@v1",
+test("deployment guard rejects secret contexts and deploy steps", () => {
+  const forbiddenWorkflows = [
+    {
+      jobs: { audit: { steps: [{ env: { TOKEN: "${{ secrets.TOKEN }}" } }] } },
+    },
+    {
+      jobs: {
+        audit: { steps: [{ env: { TOKEN: "${{ secrets['TOKEN'] }}" } }] },
+      },
+    },
+    { jobs: { audit: { steps: [{ uses: "example/deploy@v1" }] } } },
+    { jobs: { audit: { steps: [{ run: "npm run deploy" }] } } },
+    { jobs: { audit: { steps: [{ uses: "vercel/action@v1" }] } } },
   ];
 
-  for (const source of forbiddenSources) {
+  for (const workflow of forbiddenWorkflows) {
     assert.throws(
-      () => assertNoDeploymentCapabilities(source),
-      `accepted forbidden workflow source: ${source}`,
+      () => assertNoDeploymentCapabilities(workflow),
+      `accepted forbidden workflow: ${JSON.stringify(workflow)}`,
     );
   }
 });
 
 test("workflow contract allows additive safe paths and jobs", async () => {
-  const { source, workflow } = await readWorkflow("deploy.yml");
+  const { workflow } = await readWorkflow("deploy.yml");
   workflow.on.pull_request.paths.unshift("README.md");
+  workflow.on.pull_request.paths.push("!examples/private/**");
   workflow.on.push.paths.push("README.md");
+  workflow.on.push.paths.push("!examples/private/**");
   workflow.on.push.branches.push("release");
+  workflow.on.push.branches.push("!experimental");
   workflow.on.schedule = [{ cron: "0 0 * * 0" }];
   workflow.jobs.build.steps[0] = {
     name: "Checkout sources",
@@ -366,47 +486,55 @@ test("workflow contract allows additive safe paths and jobs", async () => {
     "runs-on": "ubuntu-latest",
     "timeout-minutes": 10,
     permissions: { contents: "read" },
+    if: "github.event_name == 'pull_request'",
+    "continue-on-error": true,
     steps: [
       { name: "Checkout", uses: "actions/checkout@v5" },
-      { name: "Inspect npm", run: "npm --version" },
+      {
+        name: "Write report output",
+        uses: "example/report@v1",
+        with: { "output-mode": "write" },
+      },
+      {
+        name: "Inspect npm",
+        run: "npm --version",
+        "continue-on-error": true,
+      },
     ],
+  };
+  workflow.jobs.reusable = {
+    name: "Reusable read-only checks",
+    uses: "example/repository/.github/workflows/check.yml@v1",
+    permissions: { contents: "read" },
+    if: "github.event_name == 'pull_request'",
   };
 
   assert.doesNotThrow(() =>
-    assertWorkflowContract(source, workflow, applicationWorkflowContract),
+    assertWorkflowContract(workflow, applicationWorkflowContract),
   );
 });
 
 test("workflow contract rejects unbounded jobs and conditional steps", async () => {
-  const { source, workflow } = await readWorkflow("deploy.yml");
+  const { workflow } = await readWorkflow("deploy.yml");
   const unboundedJobWorkflow = structuredClone(workflow);
   unboundedJobWorkflow.jobs.audit = {
     "runs-on": "ubuntu-latest",
     steps: [{ run: "npm --version" }],
   };
   assert.throws(() =>
-    assertWorkflowContract(
-      source,
-      unboundedJobWorkflow,
-      applicationWorkflowContract,
-    ),
+    assertWorkflowContract(unboundedJobWorkflow, applicationWorkflowContract),
   );
 
   const conditionalWorkflow = structuredClone(workflow);
   conditionalWorkflow.jobs.build.steps[2].if = "${{ always() }}";
   assert.throws(() =>
-    assertWorkflowContract(
-      source,
-      conditionalWorkflow,
-      applicationWorkflowContract,
-    ),
+    assertWorkflowContract(conditionalWorkflow, applicationWorkflowContract),
   );
 
   const continueOnErrorWorkflow = structuredClone(workflow);
   continueOnErrorWorkflow.jobs.build.steps[3]["continue-on-error"] = true;
   assert.throws(() =>
     assertWorkflowContract(
-      source,
       continueOnErrorWorkflow,
       applicationWorkflowContract,
     ),
@@ -419,7 +547,7 @@ test("workflow contract rejects unbounded jobs and conditional steps", async () 
     steps: [{ uses: "example/deploy@v1" }],
   };
   assert.throws(() =>
-    assertWorkflowContract(source, deployWorkflow, applicationWorkflowContract),
+    assertWorkflowContract(deployWorkflow, applicationWorkflowContract),
   );
 
   const secretWorkflow = structuredClone(workflow);
@@ -427,12 +555,12 @@ test("workflow contract rejects unbounded jobs and conditional steps", async () 
     TOKEN: "${{ secrets['DEPLOY_TOKEN'] }}",
   };
   assert.throws(() =>
-    assertWorkflowContract(source, secretWorkflow, applicationWorkflowContract),
+    assertWorkflowContract(secretWorkflow, applicationWorkflowContract),
   );
 });
 
 test("workflow contract rejects job-level permission overrides", async () => {
-  const { source, workflow } = await readWorkflow("deploy.yml");
+  const { workflow } = await readWorkflow("deploy.yml");
   workflow.jobs.audit = {
     "runs-on": "ubuntu-latest",
     "timeout-minutes": 10,
@@ -441,43 +569,129 @@ test("workflow contract rejects job-level permission overrides", async () => {
   };
 
   assert.throws(() =>
-    assertWorkflowContract(source, workflow, applicationWorkflowContract),
+    assertWorkflowContract(workflow, applicationWorkflowContract),
   );
 });
 
 test("workflow contract rejects trigger drift", async () => {
-  const { source, workflow } = await readWorkflow("deploy.yml");
+  const { workflow } = await readWorkflow("deploy.yml");
   const missingPathWorkflow = structuredClone(workflow);
   missingPathWorkflow.on.pull_request.paths =
     missingPathWorkflow.on.pull_request.paths.filter(
       (path) => path !== "course/**",
     );
   assert.throws(() =>
-    assertWorkflowContract(
-      source,
-      missingPathWorkflow,
-      applicationWorkflowContract,
-    ),
+    assertWorkflowContract(missingPathWorkflow, applicationWorkflowContract),
   );
 
   const missingMainWorkflow = structuredClone(workflow);
   missingMainWorkflow.on.push.branches = ["release"];
   assert.throws(() =>
-    assertWorkflowContract(
-      source,
-      missingMainWorkflow,
-      applicationWorkflowContract,
-    ),
+    assertWorkflowContract(missingMainWorkflow, applicationWorkflowContract),
   );
 
   const missingDispatchWorkflow = structuredClone(workflow);
   delete missingDispatchWorkflow.on.workflow_dispatch;
   assert.throws(() =>
     assertWorkflowContract(
-      source,
       missingDispatchWorkflow,
       applicationWorkflowContract,
     ),
+  );
+
+  for (const negativePath of ["!course/**", "!course/private/**"]) {
+    const negatedPathWorkflow = structuredClone(workflow);
+    negatedPathWorkflow.on.pull_request.paths.push(negativePath);
+    assert.throws(() =>
+      assertWorkflowContract(negatedPathWorkflow, applicationWorkflowContract),
+    );
+  }
+
+  const negatedMainWorkflow = structuredClone(workflow);
+  negatedMainWorkflow.on.push.branches.push("!main");
+  assert.throws(() =>
+    assertWorkflowContract(negatedMainWorkflow, applicationWorkflowContract),
+  );
+});
+
+test("required jobs reject custom shell overrides", async () => {
+  const { workflow } = await readWorkflow("deploy.yml");
+  const stepShellWorkflow = structuredClone(workflow);
+  stepShellWorkflow.jobs.build.steps[2].shell = "echo {0}";
+  assert.throws(() =>
+    assertWorkflowContract(stepShellWorkflow, applicationWorkflowContract),
+  );
+
+  const jobShellWorkflow = structuredClone(workflow);
+  jobShellWorkflow.jobs.build.defaults = { run: { shell: "echo {0}" } };
+  assert.throws(() =>
+    assertWorkflowContract(jobShellWorkflow, applicationWorkflowContract),
+  );
+
+  const workflowShellWorkflow = structuredClone(workflow);
+  workflowShellWorkflow.defaults = { run: { shell: "echo {0}" } };
+  assert.throws(() =>
+    assertWorkflowContract(workflowShellWorkflow, applicationWorkflowContract),
+  );
+});
+
+test("required jobs reject reordered or duplicate setup actions", async () => {
+  const { workflow } = await readWorkflow("deploy.yml");
+  const lateSetupWorkflow = structuredClone(workflow);
+  const [setupNodeStep] = lateSetupWorkflow.jobs.build.steps.splice(1, 1);
+  lateSetupWorkflow.jobs.build.steps.push(setupNodeStep);
+  assert.throws(() =>
+    assertWorkflowContract(lateSetupWorkflow, applicationWorkflowContract),
+  );
+
+  const duplicateSetupWorkflow = structuredClone(workflow);
+  duplicateSetupWorkflow.jobs.build.steps.push({
+    uses: "actions/setup-node@v5",
+    with: { "node-version": 20, cache: "npm" },
+  });
+  assert.throws(() =>
+    assertWorkflowContract(duplicateSetupWorkflow, applicationWorkflowContract),
+  );
+
+  const duplicateCheckoutWorkflow = structuredClone(workflow);
+  duplicateCheckoutWorkflow.jobs.build.steps.push({
+    uses: "actions/checkout@v5",
+  });
+  assert.throws(() =>
+    assertWorkflowContract(
+      duplicateCheckoutWorkflow,
+      applicationWorkflowContract,
+    ),
+  );
+});
+
+test("step jobs require a runner", async () => {
+  const { workflow } = await readWorkflow("deploy.yml");
+  workflow.jobs.audit = {
+    "timeout-minutes": 10,
+    steps: [{ run: "npm --version" }],
+  };
+
+  assert.throws(() =>
+    assertWorkflowContract(workflow, applicationWorkflowContract),
+  );
+
+  const emptyRunnerWorkflow = structuredClone(workflow);
+  emptyRunnerWorkflow.jobs.audit["runs-on"] = [""];
+  assert.throws(() =>
+    assertWorkflowContract(emptyRunnerWorkflow, applicationWorkflowContract),
+  );
+});
+
+test("reusable workflow jobs require a workflow reference", async () => {
+  const { workflow } = await readWorkflow("deploy.yml");
+  workflow.jobs.reusable = {
+    uses: "example/action@v1",
+    permissions: { contents: "read" },
+  };
+
+  assert.throws(() =>
+    assertWorkflowContract(workflow, applicationWorkflowContract),
   );
 });
 
