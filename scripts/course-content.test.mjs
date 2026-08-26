@@ -305,7 +305,7 @@ test("grouped integer parity rejects a missing duplicate", () => {
 });
 
 test("grouped integer parity ignores literals inside fenced code", () => {
-  const body = "Keep `1,000`.\n\n```text\n2,000\n```\n";
+  const body = "Keep `1,000`.\n\n```text\n`2,000`\n```\n";
 
   assert.deepEqual(groupedIntegerCodeTokens(body), ["1,000"]);
 });
@@ -321,6 +321,8 @@ test("grouped integer parity preserves comma and dot separators", () => {
   const comma = groupedIntegerCodeTokens("Use `1,000`.");
   const dot = groupedIntegerCodeTokens("Use `1.000`.");
 
+  assert.deepEqual(comma, ["1,000"]);
+  assert.deepEqual(dot, ["1.000"]);
   assert.notDeepEqual(comma, dot);
 });
 
