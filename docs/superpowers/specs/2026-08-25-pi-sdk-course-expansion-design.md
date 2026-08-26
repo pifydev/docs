@@ -1,9 +1,9 @@
 # Pi SDK and Build-Your-Own Course Expansion Design
 
-**Date:** 2026-08-25  
+**Date:** 2026-08-25
 **Status:** Approved for planning
-**Published Pi release:** `0.84.3`, tag `v0.84.3`, commit `4e58f324fae8ebfa98a3d45181fb248072a2afac`  
-**Upstream audit head:** `dcd461925db2edf69a43c8135db1180d418afd54`  
+**Published Pi release:** `0.84.3`, tag `v0.84.3`, commit `4e58f324fae8ebfa98a3d45181fb248072a2afac`
+**Upstream audit head:** `dcd461925db2edf69a43c8135db1180d418afd54`
 **Pedagogical research reference:** `hahhforest/pi-textbook` at `20dd3a7d791c2470a87c5172aa0729c3963a6b18`
 
 ## Context
