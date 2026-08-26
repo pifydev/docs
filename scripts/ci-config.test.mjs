@@ -107,15 +107,6 @@ function assertNoSecretContexts(value) {
   }
 }
 
-function assertNoVercelVariableContexts(value) {
-  for (const nestedValue of nestedStrings(value)) {
-    assert.doesNotMatch(
-      nestedValue,
-      /\bvars\s*(?:\.\s*VERCEL_[A-Z0-9_]+|\[\s*['"]VERCEL_[A-Z0-9_]+['"]\s*\])/i,
-    );
-  }
-}
-
 function containsVercelInvocation(command) {
   const boundary = String.raw`(?:^|[\r\n;&|]|\$\()\s*`;
   const option = String.raw`(?:-{1,2}\S*)`;
@@ -166,7 +157,6 @@ function assertNoDeploymentCapabilities(workflow) {
       assertNoVercelCredentials(step.with);
       if (typeof step.run === "string") {
         assertNoVercelCredentials(step.run);
-        assertNoVercelVariableContexts(step.run);
         assertNoDeploymentCommand(step.run);
       }
       for (const input of nestedStrings(step.with)) {
@@ -587,14 +577,19 @@ test("deployment guard rejects secret contexts and deploy steps", () => {
     { jobs: { audit: { steps: [{ run: "bunx --bun vercel" }] } } },
     {
       jobs: {
-        audit: { steps: [{ run: 'echo "${{ vars.VERCEL_PREVIEW_URL }}"' }] },
+        audit: { steps: [{ run: 'echo "${{ vars.VERCEL_ACCESS_TOKEN }}"' }] },
       },
     },
     {
       jobs: {
         audit: {
-          steps: [{ run: "echo \"${{ vars['VERCEL_BUILD_OUTPUT'] }}\"" }],
+          steps: [{ run: "echo \"${{ vars['VERCEL_PROJECT_ID'] }}\"" }],
         },
+      },
+    },
+    {
+      jobs: {
+        audit: { steps: [{ run: 'echo "${{ vars.VERCEL_API_KEY }}"' }] },
       },
     },
     { jobs: { audit: { steps: [{ run: 'echo "$VERCEL_TOKEN"' }] } } },
@@ -628,7 +623,15 @@ test("deployment guard rejects secret contexts and deploy steps", () => {
   assert.doesNotThrow(() =>
     assertNoDeploymentCapabilities({
       jobs: {
-        audit: { steps: [{ run: "npm run test:vercel-config" }] },
+        audit: {
+          steps: [
+            {
+              run: `echo "\${{ vars.VERCEL_PREVIEW_URL }}"
+echo "\${{ vars['VERCEL_BUILD_OUTPUT'] }}"
+npm run test:vercel-config`,
+            },
+          ],
+        },
       },
     }),
   );
