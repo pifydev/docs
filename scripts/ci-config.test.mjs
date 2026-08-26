@@ -36,6 +36,14 @@ function assertWorkflowPath(workflow, expectedPath) {
   assert.ok(workflow.on.push.paths.includes(expectedPath));
 }
 
+function assertNoDeploymentCapabilities(source) {
+  assert.doesNotMatch(
+    source,
+    /\bvercel\b|deploy-pages|upload-pages-artifact|actions\/deploy|secrets\./i,
+  );
+  assert.doesNotMatch(source, /^\s+(?:pages|id-token):\s+write$/m);
+}
+
 test("content workflow validates the Fumadocs source tree", async () => {
   const { source, workflow } = await readWorkflow("content-quality.yml");
 
@@ -57,17 +65,25 @@ test("content workflow validates the Fumadocs source tree", async () => {
   assert.equal(packageJSON.scripts["test:course"], "vitest run course/test");
   assert.equal(packageJSON.scripts["test:course:checkpoint"], "vitest run");
   assert.equal(packageJSON.scripts["test:unit"], "vitest run tests");
-  assert.equal(
-    contentQualityCommands.filter(
-      (command) => command === "npm run test:course",
-    ).length,
-    1,
-  );
-  assert.ok(contentQualityCommands.includes("npm run test:preservation"));
-  assert.ok(contentQualityCommands.includes("npm run test:release"));
+  assert.deepEqual(contentQualityCommands, [
+    "npm run test:content",
+    "npm run test:preservation",
+    "npm run test:editorial",
+    "npm run test:unit",
+    "npm run test:course",
+    "npm run lint:sync",
+    "npm run lint:frontmatter",
+    "npm run lint:content",
+    "npm run lint:editorial",
+    "npm run lint:mermaid",
+    "npm run test:release",
+    "npm run test:evals-guide",
+    "npm run lint:app",
+  ]);
   assert.match(packageJSON.scripts["lint:content"], /--require-reviewed/);
   assert.match(packageJSON.scripts["quality:content"], /test:editorial/);
   assert.match(packageJSON.scripts["quality:content"], /lint:editorial/);
+  assertNoDeploymentCapabilities(source);
   assert.doesNotMatch(source, /GitBook|src\/content\/docs|lint:gitbook/i);
 });
 
@@ -84,12 +100,8 @@ test("application workflow builds Next.js without deploying", async () => {
   ]);
   assert.match(source, /app\/\*\*/);
   assert.match(source, /content\/\*\*/);
-  assert.doesNotMatch(
-    source,
-    /Astro|GitBook|deploy-pages|upload-pages-artifact/i,
-  );
-  assert.doesNotMatch(source, /^\s+(?:pages|id-token):\s+write$/m);
-  assert.doesNotMatch(source, /vercel/i);
+  assert.doesNotMatch(source, /Astro|GitBook/i);
+  assertNoDeploymentCapabilities(source);
 });
 
 test("duplicate PR sync workflow is absent", async () => {
@@ -107,6 +119,15 @@ test("resolved Vitest config discovers application and course tests", async () =
 
   assert.ok(vitestConfig.include.includes("tests/**/*.test.ts"));
   assert.ok(vitestConfig.include.includes("course/test/**/*.test.ts"));
+});
+
+test("TypeScript configuration includes course sources", async () => {
+  const tsconfig = JSON.parse(
+    await readFile(new URL("tsconfig.json", repositoryRoot), "utf8"),
+  );
+
+  assert.ok(tsconfig.include.includes("**/*.ts"));
+  assert.ok(!tsconfig.exclude.some((pattern) => pattern.includes("course")));
 });
 
 test("Mermaid validation supplies the documented Chromium CI sandbox override", async () => {
