@@ -4,8 +4,8 @@ description: Định nghĩa Tool có type, đăng ký với agent core hoặc Co
 translation_key: how-to-add-custom-tool
 language: vi
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/README.md#tools"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/docs/extensions.md#custom-tools"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/README.md#tools"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/docs/extensions.md#custom-tools"
 terms_used:
   - AgentTool
   - ToolDefinition
@@ -13,7 +13,7 @@ terms_used:
   - AbortSignal
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: "2026-08-25"
+last_updated: "2026-09-04"
 ---
 
 Hướng dẫn này tạo Tool `get_weather` có type để model gọi trong một turn. Ví dụ dùng một tập dữ liệu nhỏ trong bộ nhớ, nên bạn có thể kiểm thử Tool mà không cần dịch vụ bên ngoài. Contract thực thi này cũng dùng được với database hoặc HTTP client, miễn là bạn chuyển tiếp tín hiệu hủy và không đưa credential vào output mà model nhìn thấy.
@@ -36,12 +36,12 @@ Chỉ chọn một cách đăng ký ở tầng sản phẩm. Coding Agent sessio
 
 ## Điều kiện cần
 
-Pi `0.84.3` yêu cầu Node.js `>=22.19.0`. Tạo một dự án TypeScript dùng ESM và cài từng package được import trực tiếp trong ví dụ:
+Pi `0.85.0` yêu cầu Node.js `>=22.19.0`. Tạo một dự án TypeScript dùng ESM và cài từng package được import trực tiếp trong ví dụ:
 
 ```bash
 npm init -y
 npm pkg set type=module
-npm install @earendil-works/pi-ai@0.84.3 @earendil-works/pi-agent-core@0.84.3 @earendil-works/pi-coding-agent@0.84.3
+npm install @earendil-works/pi-ai@0.85.0 @earendil-works/pi-agent-core@0.85.0 @earendil-works/pi-coding-agent@0.85.0
 npm install --save-dev typescript tsx @types/node
 ```
 
@@ -360,6 +360,8 @@ Dùng cơ chế điều khiển Tool đang hoạt động cho hành vi của ses
 
 Coi đối số từ model là dữ liệu không tin cậy ngay cả sau schema validation. TypeBox kiểm tra shape, giới hạn và literal; nó không quyết định một customer ID, đường dẫn, URL hay shell command có được phép hay không. Kiểm tra lại các quy tắc đó ngay cạnh thao tác tạo side effect. Handler của Extension `tool_call` có thể sửa `event.input`, và Pi không kiểm tra schema lại sau thay đổi này, nên handler sửa input phải giữ hoặc tự kiểm tra lại các bất biến của schema.
 
+Đừng suy ra working directory cố định từ đối số của built-in Tool factory. Trong Pi 0.85.0, `bash`, `edit`, `find`, `grep`, `ls`, `read` và `write` dùng `ctx.cwd` của lời gọi hiện tại để xác định working directory và phân giải relative path; `cwd` truyền vào factory chỉ là fallback khi không có execution context. Custom Tool vẫn phải tự bảo vệ ranh giới authorization: dùng context hiện tại không khiến một path bất kỳ trở nên an toàn.
+
 Với Tool đọc một file đã tồn tại trong project, phân giải cả thư mục gốc lẫn file đích bằng `realpath()` rồi kiểm tra containment. Đoạn sau là mã ứng dụng, không phải helper của Pi:
 
 ```ts title="tools/project-path.ts"
@@ -463,7 +465,7 @@ Không chạy `agent-session.ts` cho cách này. Từ thư mục gốc của d�
 node --env-file=.env ./node_modules/@earendil-works/pi-coding-agent/dist/cli.js "What is the weather in Tokyo?"
 ```
 
-Khi CLI khởi động ở chế độ interactive, chỉ chấp nhận project-trust prompt sau khi review các resource của dự án; nếu từ chối, Pi sẽ bỏ qua Extension cục bộ. [Hướng dẫn Extensions](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/docs/extensions.md#extension-locations) đã ghim mô tả các vị trí được phát hiện, cách reload và ranh giới trust đó.
+Khi CLI khởi động ở chế độ interactive, chỉ chấp nhận project-trust prompt sau khi review các resource của dự án; nếu từ chối, Pi sẽ bỏ qua Extension cục bộ. [Hướng dẫn Extensions](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/docs/extensions.md#extension-locations) đã ghim mô tả các vị trí được phát hiện, cách reload và ranh giới trust đó.
 
 Khi debug toàn bộ loop, hãy subscribe trước khi gọi `prompt()`. Ghi log `tool_execution_start`, `tool_execution_update` và `tool_execution_end`; che payload nếu chúng có thể chứa dữ liệu người dùng hoặc credential.
 

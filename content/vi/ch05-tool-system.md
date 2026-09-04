@@ -6,8 +6,8 @@ language: vi
 chapter: 5
 source_url: "https://www.dgzhuya.com/modules/ch05-tool-system"
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/README.md#tools"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/docs/extensions.md#custom-tools"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/README.md#tools"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/docs/extensions.md#custom-tools"
 terms_used:
   - Tool
   - ToolCall
@@ -15,7 +15,7 @@ terms_used:
   - AgentTool
   - ToolDefinition
 status: reviewed
-last_updated: "2026-08-25"
+last_updated: "2026-09-04"
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -33,7 +33,7 @@ Chương 3 theo dõi một lượt của Agent: từ phản hồi của model, q
 
 Khối này không cấp quyền thực hiện thao tác và cũng không chứa mã có thể chạy. Runtime vẫn phải tìm đúng Tool theo tên, chuẩn bị và xác thực các đối số không đáng tin cậy, áp dụng chính sách của sản phẩm, xử lý yêu cầu hủy, chạy thao tác, báo tiến độ, chốt kết quả rồi tạo `ToolResultMessage` tương ứng. Khi một thông điệp chứa cả lô, runtime còn phải xác định những thao tác nào có thể chạy đồng thời mà không làm hỏng trạng thái dùng chung.
 
-Pi `0.84.3` giải quyết các yêu cầu đó bằng ba lớp kiểu có liên hệ với nhau và một luồng thực thi gồm nhiều giai đoạn. Mô hình giảng dạy năm bước trước đây vẫn hữu ích—chuẩn bị, xác thực, hook trước, thực thi, hook sau—nhưng phần triển khai hiện tại còn quy định cách lập lịch, thứ tự sự kiện, ranh giới hủy, cách tạo kết quả và điều kiện dừng cho cả lô. Chương này đi qua toàn bộ luồng đó theo commit được ghim `4e58f324fae8ebfa98a3d45181fb248072a2afac`.
+Pi `0.85.0` giải quyết các yêu cầu đó bằng ba lớp kiểu có liên hệ với nhau và một luồng thực thi gồm nhiều giai đoạn. Mô hình giảng dạy năm bước trước đây vẫn hữu ích—chuẩn bị, xác thực, hook trước, thực thi, hook sau—nhưng phần triển khai hiện tại còn quy định cách lập lịch, thứ tự sự kiện, ranh giới hủy, cách tạo kết quả và điều kiện dừng cho cả lô. Chương này đi qua toàn bộ luồng đó theo commit được ghim `107d79f11072bbc8a3a757ed7fd69596bee7d68c`.
 
 ## 1. Ba lớp kiểu giữ hướng phụ thuộc về phía lõi
 
@@ -934,11 +934,11 @@ Backend SSH hoặc container có thể triển khai cùng interface, nhưng ph�
 
 ### Bash và PowerShell là các phiên shell-tool riêng biệt
 
-Pi `0.84.3` đã publish cung cấp `powershell` như một built-in tùy chọn cho command Windows native và giữ Tool này riêng với `bash`. Với backend cục bộ mặc định, Bash resolve shell tương thích Bash và render prompt `$`; PowerShell ưu tiên `pwsh.exe`, fallback sang `powershell.exe`, khởi động bằng các flag non-interactive và render `PS>`. Các chi tiết về executable resolution, launch flag và prompt này thuộc implementation cục bộ mặc định. Custom `BashOperations` hoặc `PowerShellOperations` có thể ủy quyền sang nơi khác mà không resolve hay spawn host executable. Chọn một Tool không viết lại command cho Tool kia và cũng không đổi shell đã khởi chạy Pi.
+Pi `0.85.0` đã publish cung cấp `powershell` như một built-in tùy chọn cho command Windows native và giữ Tool này riêng với `bash`. Với backend cục bộ mặc định, Bash resolve shell tương thích Bash và render prompt `$`; PowerShell ưu tiên `pwsh.exe`, fallback sang `powershell.exe`, khởi động bằng các flag non-interactive và render `PS>`. Các chi tiết về executable resolution, launch flag và prompt này thuộc implementation cục bộ mặc định. Custom `BashOperations` hoặc `PowerShellOperations` có thể ủy quyền sang nơi khác mà không resolve hay spawn host executable. Chọn một Tool không viết lại command cho Tool kia và cũng không đổi shell đã khởi chạy Pi.
 
 Hai Tool dùng cùng contract tùy chọn cho metadata của Pi session, chứ không được bảo đảm chia sẻ một child-shell process persistent. Các operations Bash và PowerShell cục bộ mặc định khởi động một child process riêng cho mỗi Tool call. Custom operations thay vào đó ủy quyền cho backend đã cấu hình và không nhất thiết tạo local child process; backend đó quyết định persistence semantics. Việc expose session có điều kiện: `exposeSessionEnvironment` mặc định là `true`, nhưng Pi chỉ inject các field `PI_*` khi Tool được execute với Agent/Extension context. `exposeSessionEnvironment: false` chặn các field này ngay cả khi context đó tồn tại. Standalone hoặc custom invocation không có context đó sẽ không tự động nhận các field này; wrapper xóa session field kế thừa trước khi quyết định có inject giá trị hiện tại hay không. Khi các điều kiện đó cho phép inject, `PI_SESSION_ID` luôn có mặt. `PI_SESSION_FILE` chỉ có với file-backed session có session file path. `PI_PROVIDER` và `PI_MODEL` chỉ có khi `ctx.model` tồn tại, còn `PI_REASONING_LEVEL` chỉ có khi `ctx.thinkingLevel` là truthy. Với operations cục bộ mặc định, thay đổi trên filesystem tồn tại qua nhiều call, còn shell-local variable, function và thay đổi working directory thì không, trừ khi command persist chúng ở nơi khác.
 
-`powershell` có thể được chọn qua `defaultTools`, lựa chọn tool của CLI/SDK hoặc public factory. Nó **không** thuộc tập `defaultTools` mặc định trong Pi `0.84.3`: bỏ setting này chỉ bật `read`, `bash`, `edit` và `write`. Vì vậy cấu hình Windows phải chọn `powershell` tường minh khi model cần dùng PowerShell native thay cho, hoặc cùng với, Bash.
+`powershell` có thể được chọn qua `defaultTools`, lựa chọn tool của CLI/SDK hoặc public factory. Nó **không** thuộc tập `defaultTools` mặc định trong Pi `0.85.0`: bỏ setting này chỉ bật `read`, `bash`, `edit` và `write`. Vì vậy cấu hình Windows phải chọn `powershell` tường minh khi model cần dùng PowerShell native thay cho, hoặc cùng với, Bash.
 
 `createPowerShellTool()` nhận một object `PowerShellToolOptions` tùy chọn. Các option công khai là `operations`, `exposeSessionEnvironment` và `spawnHook`; `commandPrefix` cùng `shellPath` chỉ dành cho Bash, không phải PowerShell option. Factory và type `PowerShellOperations` được export từ package root:
 
@@ -990,6 +990,10 @@ Shell Tool wrapper tích lũy byte được stream, giới hạn output mà mode
 
 Các interface công khai hiện tại vẫn tách theo từng Tool thay vì tạo một hệ điều hành ảo lớn:
 
+Ở mỗi lời gọi đang thực thi, `bash`, `edit`, `find`, `grep`, `ls`, `read` và `write` lấy working directory hoặc phân giải relative path theo `ctx.cwd` khi execution context cung cấp giá trị này. `cwd` truyền vào factory chỉ là fallback cho lời gọi trực tiếp không có context đó, vì vậy bảy built-in Tool chịu ảnh hưởng không bị cố định vĩnh viễn vào directory tại thời điểm load. Renderer của chúng cũng nhận context hiện tại, nhờ đó path hiển thị khớp với vị trí mà thao tác thực sự sử dụng.
+
+`powershell` vốn đi theo path riêng của shell Tool nên không thuộc bản sửa cho bảy Tool này.
+
 | Tool  | Interface Operations | Phương thức bắt buộc và cấu trúc trả về chính xác                                                                               |
 | ----- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | Read  | `ReadOperations`     | `readFile(): Promise<Buffer>`, `access(): Promise<void>`, và `detectImageMimeType()` bất đồng bộ, tùy chọn                       |
@@ -1002,6 +1006,8 @@ Các interface công khai hiện tại vẫn tách theo từng Tool thay vì t�
 | Ls    | `LsOperations`       | `exists`, `stat` có `isDirectory()`, và `readdir(): string[]`, đồng bộ hoặc bất đồng bộ                                          |
 
 Read không thể ghi. Write không cần liệt kê thư mục. Grep và Find giữ đầu vào riêng cho thao tác tìm kiếm. Bash sở hữu byte truyền theo luồng, môi trường, thời gian chờ, `signal` và mã thoát. Interface nhỏ giúp bản giả lập trong kiểm thử ngắn gọn và ngăn Tool âm thầm dùng thao tác mà ràng buộc chưa từng khai báo.
+
+Khi thành công, built-in Tool `write` giờ chỉ báo `Successfully wrote to <path>`. Nó không báo số code unit UTF-16 như thể đó là byte count; caller cần kích thước theo byte phải tự đo theo encoding đã chọn.
 
 Operations và cơ chế lập lịch của Agent giải quyết hai vấn đề khác nhau. Đối tượng Operations chọn cách một thao tác tiếp cận tài nguyên. `executionMode` cùng `withFileMutationQueue()` quyết định nhiều thao tác chồng lấp ra sao. `beforeToolCall` quyết định thao tác có được phép hay không. Tách các lựa chọn này giúp kiểm thử từng phần độc lập.
 
@@ -1042,6 +1048,6 @@ Việc thực thi Tool là một giao thức có kiểm soát bao quanh thao tá
 
 Chương 6 sẽ theo dõi các thông điệp đó qua transcript Agent giàu thông tin hơn và ranh giới chuyển đổi của provider. Chương tiếp theo cũng giải thích vì sao `details` của Tool có thể phục vụ UI trong khi chỉ nội dung văn bản và hình ảnh đi vào kết quả thông thường dành cho model.
 
-Việc rà soát mã nguồn cho chương này dùng Pi `0.84.3` tại commit `4e58f324fae8ebfa98a3d45181fb248072a2afac`. Các đường dẫn chính gồm `packages/ai/src/types.ts`, `packages/ai/src/utils/validation.ts`, `packages/agent/src/types.ts`, `packages/agent/src/agent-loop.ts`, `packages/agent/src/agent.ts`, `packages/coding-agent/src/core/extensions/types.ts`, `packages/coding-agent/src/core/extensions/runner.ts`, `packages/coding-agent/src/core/extensions/wrapper.ts`, `packages/coding-agent/src/core/extensions/loader.ts`, `packages/coding-agent/src/core/agent-session.ts` và các phần triển khai Tool trong `packages/coding-agent/src/core/tools/`.
+Việc rà soát mã nguồn cho chương này dùng Pi `0.85.0` tại commit `107d79f11072bbc8a3a757ed7fd69596bee7d68c`. Các đường dẫn chính gồm `packages/ai/src/types.ts`, `packages/ai/src/utils/validation.ts`, `packages/agent/src/types.ts`, `packages/agent/src/agent-loop.ts`, `packages/agent/src/agent.ts`, `packages/coding-agent/src/core/extensions/types.ts`, `packages/coding-agent/src/core/extensions/runner.ts`, `packages/coding-agent/src/core/extensions/wrapper.ts`, `packages/coding-agent/src/core/extensions/loader.ts`, `packages/coding-agent/src/core/agent-session.ts` và các phần triển khai Tool trong `packages/coding-agent/src/core/tools/`.
 
 [Chương 6: Hệ thống thông điệp](ch06-messages.md)

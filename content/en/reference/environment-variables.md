@@ -5,7 +5,7 @@ translation_key: reference-environment-variables
 language: en
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-08-25'
+last_updated: '2026-09-04'
 ---
 
 Pi uses environment variables in three distinct places: its own process configuration, authentication for a selected provider, and the environment of commands launched by the LLM-callable `bash` and `powershell` tools. Scope matters: a variable recognized by one provider is not automatically a Pi-wide setting.
@@ -20,7 +20,7 @@ Most process flags affect startup. Provider authentication is resolved when Pi a
 
 For Pi's built-in providers, credential order is an explicit CLI `--api-key` or runtime override, a matching stored `auth.json` API key or OAuth credential, the configured `models.json` `apiKey` (a literal or `$ENV` reference under that file's contract), then the built-in provider's ambient environment. Extension-defined providers may implement a different contract. Use `/login` to write the protected credential store instead of putting secrets in project files.
 
-| Provider | Environment credential recognized by 0.84.3 |
+| Provider | Environment credential recognized by 0.85.0 |
 |---|---|
 | Anthropic | `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_OAUTH_TOKEN`, `ANTHROPIC_API_KEY` |
 | Ant Ling, OpenAI, Azure OpenAI | `ANT_LING_API_KEY`, `OPENAI_API_KEY`, `AZURE_OPENAI_API_KEY` |
@@ -66,11 +66,23 @@ pi
 | `PI_SKIP_VERSION_CHECK` | Set to `1` to skip only the latest-version request |
 | `PI_TELEMETRY` | `1`/`true`/`yes` enables install/update telemetry and Pi provider-attribution headers; `0`/`false`/`no` disables them |
 
-Use `--offline` or a supported truthy `PI_OFFLINE` value. Unset the variable to re-enable network work: some 0.84.3 downstream paths test whether `PI_OFFLINE` exists, so `PI_OFFLINE=0` is unsafe and can behave as offline. `PI_SKIP_VERSION_CHECK` is narrower than offline mode. Do not rely on undocumented spellings for `PI_TELEMETRY`.
+Use `--offline` or a supported truthy `PI_OFFLINE` value. Unset the variable to re-enable network work: some 0.85.0 downstream paths test whether `PI_OFFLINE` exists, so `PI_OFFLINE=0` is unsafe and can behave as offline. `PI_SKIP_VERSION_CHECK` is narrower than offline mode. Do not rely on undocumented spellings for `PI_TELEMETRY`.
 
 ### Terminal and editor behavior
 
 `PI_HARDWARE_CURSOR=1` makes the TUI hardware cursor visible. `PI_TUI_ESC_TIMEOUT` accepts a positive finite number of milliseconds for distinguishing a lone Escape from a split Alt-key sequence; the default is 100 ms when `SSH_CONNECTION` or `SSH_TTY` exists and 10 ms otherwise.
+
+Pi auto-detects OSC 8 hyperlinks, an inline image protocol, and truecolor. Pi 0.85.0 exposes these exact advanced overrides:
+
+| Capability | Environment value | Matching JSON setting |
+|---|---|---|
+| OSC 8 hyperlinks | `PI_HYPERLINKS=1\|0\|auto` | `terminal.hyperlinks: true\|false\|"auto"` |
+| Inline images | `PI_IMAGE_PROTOCOL=kitty\|iterm2\|none\|auto` | `terminal.images: "kitty"\|"iterm2"\|false\|"auto"` |
+| Truecolor | `PI_TRUE_COLOR=1\|0\|auto` | `terminal.trueColor: true\|false\|"auto"` |
+
+An explicit JSON setting takes precedence over its environment variable. If the setting is unset or `auto`, Pi next honors an explicit environment value; an unset or `auto` environment value leaves automatic detection in control. Force a capability only when the complete terminal, proxy, and multiplexer path supports it, because unsupported escape sequences can corrupt rendering.
+
+Automatic detection recognizes the Zed integrated terminal as truecolor- and hyperlink-capable, but it does not select an inline image protocol there. Under `auto`, Zed therefore uses the image text fallback; do not force Kitty or iTerm2 sequences unless the actual terminal path supports them.
 
 For Ctrl+G, the `externalEditor` setting wins, followed by `VISUAL`, then `EDITOR`, then the platform fallback. These variables contain an editor command, not file content.
 
@@ -80,7 +92,7 @@ For Ctrl+G, the `externalEditor` setting wins, followed by `VISUAL`, then `EDITO
 
 ### `PI_EXPERIMENTAL`
 
-`PI_EXPERIMENTAL=1` enables 0.84.3's preferred strict JSON-schema sampling for managed tools where the model/API supports it. The exact comparison is `1`; `true` is not accepted. Experimental behavior may change between releases and does not alter project trust or the selected tool set.
+`PI_EXPERIMENTAL=1` enables 0.85.0's preferred strict JSON-schema sampling for managed tools where the model/API supports it. The exact comparison is `1`; `true` is not accepted. Experimental behavior may change between releases and does not alter project trust or the selected tool set.
 
 ### Value rules
 
@@ -88,7 +100,7 @@ Environment variables are strings, but Pi does not treat every non-empty string 
 
 ## Proxy and TLS
 
-Pi 0.84.3 configures an Undici `EnvHttpProxyAgent` for Pi-managed fetch traffic.
+Pi 0.85.0 configures an Undici `EnvHttpProxyAgent` for Pi-managed fetch traffic.
 
 | Variable | Behavior |
 |---|---|
@@ -98,13 +110,13 @@ Pi 0.84.3 configures an Undici `EnvHttpProxyAgent` for Pi-managed fetch traffic.
 
 Undici also recognizes lowercase forms and gives them precedence over uppercase forms. The global `httpProxy` setting fills `HTTP_PROXY` and `HTTPS_PROXY` only when they are unset. Provider SDKs such as AWS or Google may own separate transports, so these variables are not a guarantee for every extension or cloud client.
 
-`SSL_CERT_FILE` is not read or installed by Pi's published 0.84.3 transport. Configure custom certificate trust through the selected Node runtime or provider SDK and verify that route independently; do not assume this baseline variable changes Pi-managed TLS.
+`SSL_CERT_FILE` is not read or installed by Pi's published 0.85.0 transport. Configure custom certificate trust through the selected Node runtime or provider SDK and verify that route independently; do not assume this baseline variable changes Pi-managed TLS.
 
 ## Provider-specific variables
 
 ### Azure OpenAI
 
-Azure OpenAI Responses requires `AZURE_OPENAI_API_KEY` and either `AZURE_OPENAI_BASE_URL` or `AZURE_OPENAI_RESOURCE_NAME`. Optional controls are `AZURE_OPENAI_API_VERSION` and the comma-separated `AZURE_OPENAI_DEPLOYMENT_NAME_MAP`. The generic `OPENAI_ORG_ID` baseline variable is not consumed by the 0.84.3 OpenAI provider.
+Azure OpenAI Responses requires `AZURE_OPENAI_API_KEY` and either `AZURE_OPENAI_BASE_URL` or `AZURE_OPENAI_RESOURCE_NAME`. Optional controls are `AZURE_OPENAI_API_VERSION` and the comma-separated `AZURE_OPENAI_DEPLOYMENT_NAME_MAP`. The generic `OPENAI_ORG_ID` baseline variable is not consumed by the 0.85.0 OpenAI provider.
 
 ### Amazon Bedrock
 
@@ -129,7 +141,7 @@ The old `ANTHROPIC_BASE_URL` variable is also not a current built-in override. C
 
 ## Process markers and shell-tool metadata
 
-CLI and RPC entry points set `AI_AGENT=pi` and `PI_CODING_AGENT=true`. Child processes inherit them, but they are not session identifiers and an SDK embedding does not set them automatically. Published 0.84.3 does not emit the old `PI_PARENT_SESSION` marker.
+CLI and RPC entry points set `AI_AGENT=pi` and `PI_CODING_AGENT=true`. Child processes inherit them, but they are not session identifiers and an SDK embedding does not set them automatically. Published 0.85.0 does not emit the old `PI_PARENT_SESSION` marker.
 
 Pi can expose the following current session context to commands run by the LLM-callable `bash` and `powershell` tools:
 
@@ -183,7 +195,7 @@ export const isolatedBashTool = createBashTool(process.cwd(), {
 ## Pitfalls and security
 
 - Do not put API keys in committed shell files, `settings.json`, extension source, logs, prompts, or transcripts. Prefer `/login`, a secret manager, or narrowly scoped process injection; remember that child processes inherit exported values.
-- Current names are exact. `PI_HOME`, `PI_LOG_LEVEL`, `PI_PARENT_SESSION`, `GOOGLE_API_KEY`, `GOOGLE_VERTEX_API_KEY`, `GITHUB_TOKEN`, `OPENAI_ORG_ID`, `ANTHROPIC_BASE_URL`, and misspelled `CLOUDflare_*` names are not compatibility aliases in published 0.84.3.
+- Current names are exact. `PI_HOME`, `PI_LOG_LEVEL`, `PI_PARENT_SESSION`, `GOOGLE_API_KEY`, `GOOGLE_VERTEX_API_KEY`, `GITHUB_TOKEN`, `OPENAI_ORG_ID`, `ANTHROPIC_BASE_URL`, and misspelled `CLOUDflare_*` names are not compatibility aliases in published 0.85.0.
 - A stored provider credential and a configured `models.json` `apiKey` both take precedence over ambient variables. Log out or update the stored entry, and remove or change the configured key, before expecting a rotated shell key to win.
 - `PI_EXPERIMENTAL` is unrelated to provider authentication and is not a permission or “yolo” switch.
 - Do not print complete environment dumps while debugging. Inspect only non-secret markers or individual metadata fields, and treat `PI_SESSION_FILE` as sensitive local data.

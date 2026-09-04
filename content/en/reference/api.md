@@ -6,6 +6,7 @@ language: en
 official_refs:
   - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/src/types.ts'
   - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/settings-manager.ts'
+  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/utils/mime.ts'
   - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/client/src/index.ts'
   - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/client/README.md'
   - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/protocol/src/index.ts'
@@ -438,6 +439,18 @@ declare class SettingsManager {
 When `showCacheMissNotices` is enabled, the transcript can also surface provider recovery diagnostics such as dropped Anthropic thinking blocks, in addition to significant cache misses and summary usage.
 
 Direct SDK hosts own cwd, trust, storage, and cleanup policy. Do not mutate session JSONL while a manager is active, and do not assume that `SettingsManager.create()` reproduces CLI trust resolution without the host supplying that decision.
+
+### Image MIME detection
+
+`detectSupportedImageMimeTypeFromFile()` is exported from the `@earendil-works/pi-coding-agent` package root with this exact published signature:
+
+```ts
+declare function detectSupportedImageMimeTypeFromFile(
+  filePath: string,
+): Promise<string | null>;
+```
+
+The function opens the filename supplied by `filePath`, reads at most the first 4,100 bytes, and checks file-header signatures and the limited structural fields needed to recognize Pi-supported JPEG, non-animated PNG, GIF, WebP, or BMP input. It returns the supported MIME string or `null` when those checks do not identify an accepted image; filesystem open or read failures still reject the promise. Detection is based on file content, not the filename extension, and it does not decode, resize, or validate every image pixel. Use the result as an input-format gate, not as proof that an image is fully decodable or safe.
 
 ### Extensions and managed tools
 

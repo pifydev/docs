@@ -6,8 +6,8 @@ language: en
 chapter: 5
 source_url: "https://www.dgzhuya.com/modules/ch05-tool-system"
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/README.md#tools"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/docs/extensions.md#custom-tools"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/README.md#tools"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/docs/extensions.md#custom-tools"
 terms_used:
   - Tool
   - ToolCall
@@ -15,7 +15,7 @@ terms_used:
   - AgentTool
   - ToolDefinition
 status: reviewed
-last_updated: "2026-08-25"
+last_updated: "2026-09-04"
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -33,7 +33,7 @@ Chapter 3 followed an Agent turn from a model response to Tool execution and bac
 
 That block does not authorize an operation and does not contain executable code. The runtime still has to find the named Tool, prepare and validate untrusted arguments, apply product policy, honor cancellation, run the effect, report progress, finalize the result, and create the matching `ToolResultMessage`. A batch adds another question: which effects may overlap without corrupting shared state?
 
-Pi `0.84.3` answers those questions with three related type layers and a staged execution path. The historical five-step teaching model remains useful—prepare, validate, pre-hook, execute, post-hook—but the current implementation also defines scheduling, event order, cancellation boundaries, result construction, and batch-wide termination. This chapter follows that full path against pinned commit `4e58f324fae8ebfa98a3d45181fb248072a2afac`.
+Pi `0.85.0` answers those questions with three related type layers and a staged execution path. The historical five-step teaching model remains useful—prepare, validate, pre-hook, execute, post-hook—but the current implementation also defines scheduling, event order, cancellation boundaries, result construction, and batch-wide termination. This chapter follows that full path against pinned commit `107d79f11072bbc8a3a757ed7fd69596bee7d68c`.
 
 ## 1. Three type layers keep dependencies pointed inward
 
@@ -934,11 +934,11 @@ An SSH or container backend can implement the same interface, but it must preser
 
 ### Bash and PowerShell are separate shell-tool sessions
 
-Published Pi `0.84.3` exposes `powershell` as an optional built-in for native Windows commands and keeps it separate from `bash`. With the default local backends, Bash resolves a Bash-compatible shell and renders the `$` prompt; PowerShell prefers `pwsh.exe`, falls back to `powershell.exe`, starts it with non-interactive flags, and renders `PS>`. Those executable-resolution, launch-flag, and prompt details belong to the default local implementations. Custom `BashOperations` or `PowerShellOperations` may delegate elsewhere without resolving or spawning a host executable. Selecting one Tool does not rewrite commands for the other or change the shell that launched Pi.
+Published Pi `0.85.0` exposes `powershell` as an optional built-in for native Windows commands and keeps it separate from `bash`. With the default local backends, Bash resolves a Bash-compatible shell and renders the `$` prompt; PowerShell prefers `pwsh.exe`, falls back to `powershell.exe`, starts it with non-interactive flags, and renders `PS>`. Those executable-resolution, launch-flag, and prompt details belong to the default local implementations. Custom `BashOperations` or `PowerShellOperations` may delegate elsewhere without resolving or spawning a host executable. Selecting one Tool does not rewrite commands for the other or change the shell that launched Pi.
 
 The two Tools use the same optional Pi session-metadata contract, not a guaranteed persistent child-shell process. The default local Bash and PowerShell operations start a separate child process for each Tool call. Custom operations instead delegate to their configured backend and need not create a local child process; that backend defines any persistence semantics. Session exposure is conditional: `exposeSessionEnvironment` defaults to `true`, but Pi injects the `PI_*` fields only when the Tool is executed with an Agent/Extension context. `exposeSessionEnvironment: false` suppresses them even when that context exists. A standalone or custom invocation without that context does not receive them automatically; the wrapper removes inherited session fields before deciding whether to inject current values. When those conditions permit injection, `PI_SESSION_ID` is always present. `PI_SESSION_FILE` is present only for a file-backed session with a session file path. `PI_PROVIDER` and `PI_MODEL` are present only when `ctx.model` exists, and `PI_REASONING_LEVEL` is present only when `ctx.thinkingLevel` is truthy. With the default local operations, filesystem changes survive across calls, while shell-local variables, functions, and working-directory changes do not unless the command persists them elsewhere.
 
-`powershell` is selectable through `defaultTools`, CLI/SDK tool selection, or its public factory. It is **not** in the default `defaultTools` set in Pi `0.84.3`: omitting that setting enables only `read`, `bash`, `edit`, and `write`. A Windows configuration must therefore select `powershell` explicitly when the model should use native PowerShell rather than, or alongside, Bash.
+`powershell` is selectable through `defaultTools`, CLI/SDK tool selection, or its public factory. It is **not** in the default `defaultTools` set in Pi `0.85.0`: omitting that setting enables only `read`, `bash`, `edit`, and `write`. A Windows configuration must therefore select `powershell` explicitly when the model should use native PowerShell rather than, or alongside, Bash.
 
 `createPowerShellTool()` accepts an optional `PowerShellToolOptions` object. Its public options are `operations`, `exposeSessionEnvironment`, and `spawnHook`; Bash-only `commandPrefix` and `shellPath` are not PowerShell options. The factory and `PowerShellOperations` type are exported from the package root:
 
@@ -990,6 +990,10 @@ The shell Tool wrapper accumulates streamed bytes, bounds model-visible output t
 
 Current public interfaces remain per-Tool rather than forming one large virtual operating system:
 
+At every live invocation, `bash`, `edit`, `find`, `grep`, `ls`, `read`, and `write` resolve their working directory or relative paths from `ctx.cwd` when the execution context supplies it. The factory `cwd` is only the fallback for a direct call without that context, so these seven affected built-in Tools are not permanently bound to a load-time directory. Their renderers receive the current context too, keeping displayed paths aligned with the location used by the effect.
+
+`powershell` already follows its separate shell Tool path and is not part of this seven-Tool correction.
+
 | Tool  | Operations interface | Required methods and exact return shape                                                                                     |
 | ----- | -------------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | Read  | `ReadOperations`     | `readFile(): Promise<Buffer>`, `access(): Promise<void>`, optional async `detectImageMimeType()`                             |
@@ -1002,6 +1006,8 @@ Current public interfaces remain per-Tool rather than forming one large virtual 
 | Ls    | `LsOperations`       | sync or async `exists`, `stat` with `isDirectory()`, and `readdir(): string[]`                                                |
 
 Read cannot write. Write does not need directory listing. Grep and Find keep their search-specific inputs. Bash owns streaming bytes, environment, timeout, signal, and exit code. Smaller interfaces make fakes short and prevent a Tool from quietly reaching an operation that its contract never declared.
+
+On success, the built-in `write` Tool now reports only `Successfully wrote to <path>`. It does not report a UTF-16 code-unit count as a byte count; callers that need a byte size must measure the chosen encoding separately.
 
 Operations capture and Agent scheduling solve separate problems. The operations object selects how one effect reaches a resource. `executionMode` and `withFileMutationQueue()` decide how multiple effects overlap. `beforeToolCall` decides whether the effect is allowed. Keeping those choices separate makes each one testable.
 
@@ -1042,6 +1048,6 @@ Tool execution is therefore a controlled protocol around an effect. The schema l
 
 Chapter 6 follows those messages across the richer Agent transcript and the provider conversion boundary. It explains why Tool details can serve the UI while only text and image content enter the normal model-facing result.
 
-Source review for this chapter is pinned to Pi `0.84.3` at commit `4e58f324fae8ebfa98a3d45181fb248072a2afac`. Primary paths are `packages/ai/src/types.ts`, `packages/ai/src/utils/validation.ts`, `packages/agent/src/types.ts`, `packages/agent/src/agent-loop.ts`, `packages/agent/src/agent.ts`, `packages/coding-agent/src/core/extensions/types.ts`, `packages/coding-agent/src/core/extensions/runner.ts`, `packages/coding-agent/src/core/extensions/wrapper.ts`, `packages/coding-agent/src/core/extensions/loader.ts`, `packages/coding-agent/src/core/agent-session.ts`, and the Tool implementations under `packages/coding-agent/src/core/tools/`.
+Source review for this chapter is pinned to Pi `0.85.0` at commit `107d79f11072bbc8a3a757ed7fd69596bee7d68c`. Primary paths are `packages/ai/src/types.ts`, `packages/ai/src/utils/validation.ts`, `packages/agent/src/types.ts`, `packages/agent/src/agent-loop.ts`, `packages/agent/src/agent.ts`, `packages/coding-agent/src/core/extensions/types.ts`, `packages/coding-agent/src/core/extensions/runner.ts`, `packages/coding-agent/src/core/extensions/wrapper.ts`, `packages/coding-agent/src/core/extensions/loader.ts`, `packages/coding-agent/src/core/agent-session.ts`, and the Tool implementations under `packages/coding-agent/src/core/tools/`.
 
 [Chapter 6: Message system](ch06-messages.md)

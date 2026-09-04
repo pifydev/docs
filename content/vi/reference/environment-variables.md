@@ -5,7 +5,7 @@ translation_key: reference-environment-variables
 language: vi
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-08-25'
+last_updated: '2026-09-04'
 ---
 
 Pi dùng environment variable ở ba nơi riêng biệt: cấu hình process của chính Pi, authentication cho provider đã chọn và environment của command do các LLM-callable tool `bash` và `powershell` khởi chạy. Scope rất quan trọng: một variable được một provider nhận diện không tự động trở thành setting dùng trên toàn Pi.
@@ -20,7 +20,7 @@ Phần lớn process flag có hiệu lực khi khởi động. Provider authenti
 
 Với built-in provider của Pi, thứ tự credential là CLI `--api-key` hoặc runtime override tường minh, API key hoặc OAuth credential khớp được lưu trong `auth.json`, `apiKey` đã cấu hình trong `models.json` (literal hoặc tham chiếu `$ENV` theo contract của file này), rồi ambient environment của built-in provider. Provider do extension định nghĩa có thể triển khai contract khác. Hãy dùng `/login` để ghi vào credential store được bảo vệ thay vì đưa secret vào file của project.
 
-| Provider | Environment credential được 0.84.3 nhận diện |
+| Provider | Environment credential được 0.85.0 nhận diện |
 |---|---|
 | Anthropic | `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_OAUTH_TOKEN`, `ANTHROPIC_API_KEY` |
 | Ant Ling, OpenAI, Azure OpenAI | `ANT_LING_API_KEY`, `OPENAI_API_KEY`, `AZURE_OPENAI_API_KEY` |
@@ -66,11 +66,23 @@ pi
 | `PI_SKIP_VERSION_CHECK` | Đặt thành `1` để chỉ bỏ qua request lấy phiên bản mới nhất |
 | `PI_TELEMETRY` | `1`/`true`/`yes` bật install/update telemetry và Pi provider-attribution header; `0`/`false`/`no` tắt chúng |
 
-Hãy dùng `--offline` hoặc giá trị truthy được hỗ trợ cho `PI_OFFLINE`. Muốn bật lại network work, hãy unset variable: một số path phía sau trong 0.84.3 chỉ kiểm tra `PI_OFFLINE` có tồn tại hay không, vì vậy `PI_OFFLINE=0` không an toàn và có thể vẫn hoạt động như offline. `PI_SKIP_VERSION_CHECK` có scope hẹp hơn offline mode. Đừng dựa vào cách viết không được tài liệu hóa cho `PI_TELEMETRY`.
+Hãy dùng `--offline` hoặc giá trị truthy được hỗ trợ cho `PI_OFFLINE`. Muốn bật lại network work, hãy unset variable: một số path phía sau trong 0.85.0 chỉ kiểm tra `PI_OFFLINE` có tồn tại hay không, vì vậy `PI_OFFLINE=0` không an toàn và có thể vẫn hoạt động như offline. `PI_SKIP_VERSION_CHECK` có scope hẹp hơn offline mode. Đừng dựa vào cách viết không được tài liệu hóa cho `PI_TELEMETRY`.
 
 ### Hành vi terminal và editor
 
 `PI_HARDWARE_CURSOR=1` làm hardware cursor của TUI hiện ra. `PI_TUI_ESC_TIMEOUT` nhận số mili giây hữu hạn dương để phân biệt một phím Escape đơn với Alt-key sequence bị chia nhỏ; mặc định là 100 ms khi có `SSH_CONNECTION` hoặc `SSH_TTY`, và 10 ms trong trường hợp khác.
+
+Pi tự động phát hiện OSC 8 hyperlink, inline image protocol và truecolor. Pi 0.85.0 cung cấp chính xác các advanced override sau:
+
+| Capability | Giá trị environment | JSON setting tương ứng |
+|---|---|---|
+| OSC 8 hyperlink | `PI_HYPERLINKS=1\|0\|auto` | `terminal.hyperlinks: true\|false\|"auto"` |
+| Inline image | `PI_IMAGE_PROTOCOL=kitty\|iterm2\|none\|auto` | `terminal.images: "kitty"\|"iterm2"\|false\|"auto"` |
+| Truecolor | `PI_TRUE_COLOR=1\|0\|auto` | `terminal.trueColor: true\|false\|"auto"` |
+
+JSON setting tường minh được ưu tiên hơn environment variable tương ứng. Nếu setting chưa được đặt hoặc là `auto`, Pi tiếp tục dùng giá trị environment tường minh; khi environment value chưa được đặt hoặc cũng là `auto`, cơ chế tự động detect sẽ quyết định. Chỉ force capability khi toàn bộ đường đi qua terminal, proxy và multiplexer hỗ trợ nó, vì escape sequence không được hỗ trợ có thể làm hỏng rendering.
+
+Cơ chế tự động detect nhận diện integrated terminal của Zed là có truecolor và hyperlink nhưng không chọn inline image protocol tại đó. Với `auto`, Zed vì vậy dùng image text fallback; đừng force sequence của Kitty hay iTerm2 nếu terminal path thực tế không hỗ trợ.
 
 Với Ctrl+G, setting `externalEditor` được ưu tiên, sau đó là `VISUAL`, `EDITOR` rồi fallback theo platform. Các variable này chứa editor command, không chứa nội dung file.
 
@@ -80,7 +92,7 @@ Với Ctrl+G, setting `externalEditor` được ưu tiên, sau đó là `VISUAL`
 
 ### `PI_EXPERIMENTAL`
 
-`PI_EXPERIMENTAL=1` bật preferred strict JSON-schema sampling của 0.84.3 cho managed tool khi model/API hỗ trợ. Phép so sánh chính xác là `1`; `true` không được chấp nhận. Hành vi experimental có thể thay đổi giữa các release và không thay đổi project trust hay tool set đã chọn.
+`PI_EXPERIMENTAL=1` bật preferred strict JSON-schema sampling của 0.85.0 cho managed tool khi model/API hỗ trợ. Phép so sánh chính xác là `1`; `true` không được chấp nhận. Hành vi experimental có thể thay đổi giữa các release và không thay đổi project trust hay tool set đã chọn.
 
 ### Quy tắc về giá trị
 
@@ -88,7 +100,7 @@ Environment variable là chuỗi, nhưng Pi không coi mọi chuỗi khác rỗn
 
 ## Proxy và TLS
 
-Pi 0.84.3 cấu hình Undici `EnvHttpProxyAgent` cho traffic dùng fetch do Pi quản lý.
+Pi 0.85.0 cấu hình Undici `EnvHttpProxyAgent` cho traffic dùng fetch do Pi quản lý.
 
 | Variable | Hành vi |
 |---|---|
@@ -98,13 +110,13 @@ Pi 0.84.3 cấu hình Undici `EnvHttpProxyAgent` cho traffic dùng fetch do Pi q
 
 Undici cũng nhận dạng dạng chữ thường và ưu tiên dạng đó hơn dạng chữ hoa. Setting global `httpProxy` chỉ điền `HTTP_PROXY` và `HTTPS_PROXY` khi chúng chưa được đặt. Provider SDK như AWS hoặc Google có thể sở hữu transport riêng, vì vậy các variable này không bảo đảm cho mọi extension hoặc cloud client.
 
-`SSL_CERT_FILE` không được transport trong bản Pi 0.84.3 đã publish đọc hoặc cài đặt. Hãy cấu hình custom certificate trust qua Node runtime hoặc provider SDK đã chọn rồi kiểm tra riêng route đó; đừng giả định variable từ baseline này thay đổi TLS do Pi quản lý.
+`SSL_CERT_FILE` không được transport trong bản Pi 0.85.0 đã publish đọc hoặc cài đặt. Hãy cấu hình custom certificate trust qua Node runtime hoặc provider SDK đã chọn rồi kiểm tra riêng route đó; đừng giả định variable từ baseline này thay đổi TLS do Pi quản lý.
 
 ## Variable riêng cho provider
 
 ### Azure OpenAI
 
-Azure OpenAI Responses yêu cầu `AZURE_OPENAI_API_KEY` cùng `AZURE_OPENAI_BASE_URL` hoặc `AZURE_OPENAI_RESOURCE_NAME`. Control tùy chọn gồm `AZURE_OPENAI_API_VERSION` và `AZURE_OPENAI_DEPLOYMENT_NAME_MAP` phân tách bằng dấu phẩy. Variable `OPENAI_ORG_ID` chung trong baseline không được OpenAI provider của 0.84.3 sử dụng.
+Azure OpenAI Responses yêu cầu `AZURE_OPENAI_API_KEY` cùng `AZURE_OPENAI_BASE_URL` hoặc `AZURE_OPENAI_RESOURCE_NAME`. Control tùy chọn gồm `AZURE_OPENAI_API_VERSION` và `AZURE_OPENAI_DEPLOYMENT_NAME_MAP` phân tách bằng dấu phẩy. Variable `OPENAI_ORG_ID` chung trong baseline không được OpenAI provider của 0.85.0 sử dụng.
 
 ### Amazon Bedrock
 
@@ -129,7 +141,7 @@ Variable cũ `ANTHROPIC_BASE_URL` cũng không phải built-in override hiện t
 
 ## Process marker và shell-tool metadata
 
-CLI và RPC entry point đặt `AI_AGENT=pi` cùng `PI_CODING_AGENT=true`. Child process kế thừa chúng, nhưng đây không phải session identifier và bản nhúng SDK không tự động đặt chúng. Bản publish 0.84.3 không phát marker cũ `PI_PARENT_SESSION`.
+CLI và RPC entry point đặt `AI_AGENT=pi` cùng `PI_CODING_AGENT=true`. Child process kế thừa chúng, nhưng đây không phải session identifier và bản nhúng SDK không tự động đặt chúng. Bản publish 0.85.0 không phát marker cũ `PI_PARENT_SESSION`.
 
 Pi có thể expose session context hiện tại sau cho command do các LLM-callable tool `bash` và `powershell` chạy:
 
@@ -183,7 +195,7 @@ export const isolatedBashTool = createBashTool(process.cwd(), {
 ## Lỗi thường gặp và bảo mật
 
 - Không đưa API key vào shell file được commit, `settings.json`, mã nguồn extension, log, prompt hoặc transcript. Ưu tiên `/login`, secret manager hoặc process injection có scope hẹp; hãy nhớ child process kế thừa giá trị được export.
-- Tên hiện tại phải chính xác. `PI_HOME`, `PI_LOG_LEVEL`, `PI_PARENT_SESSION`, `GOOGLE_API_KEY`, `GOOGLE_VERTEX_API_KEY`, `GITHUB_TOKEN`, `OPENAI_ORG_ID`, `ANTHROPIC_BASE_URL` và tên `CLOUDflare_*` viết sai không phải compatibility alias trong bản publish 0.84.3.
+- Tên hiện tại phải chính xác. `PI_HOME`, `PI_LOG_LEVEL`, `PI_PARENT_SESSION`, `GOOGLE_API_KEY`, `GOOGLE_VERTEX_API_KEY`, `GITHUB_TOKEN`, `OPENAI_ORG_ID`, `ANTHROPIC_BASE_URL` và tên `CLOUDflare_*` viết sai không phải compatibility alias trong bản publish 0.85.0.
 - Stored provider credential và `apiKey` đã cấu hình trong `models.json` đều được ưu tiên hơn ambient variable. Hãy logout hoặc cập nhật stored entry, đồng thời xóa hoặc đổi configured key, trước khi mong shell key vừa rotate được chọn.
 - `PI_EXPERIMENTAL` không liên quan đến provider authentication và không phải switch permission hay “yolo”.
 - Không in toàn bộ environment dump khi debug. Chỉ kiểm tra non-secret marker hoặc từng metadata field, đồng thời coi `PI_SESSION_FILE` là local data nhạy cảm.

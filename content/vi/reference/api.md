@@ -6,6 +6,7 @@ language: vi
 official_refs:
   - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/src/types.ts'
   - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/settings-manager.ts'
+  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/utils/mime.ts'
   - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/client/src/index.ts'
   - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/client/README.md'
   - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/protocol/src/index.ts'
@@ -438,6 +439,18 @@ declare class SettingsManager {
 Khi bật `showCacheMissNotices`, transcript còn có thể hiển thị chẩn đoán phục hồi provider như thinking block Anthropic bị loại, ngoài cache miss đáng kể và mức sử dụng summary.
 
 SDK host trực tiếp phải tự quản lý cwd, trust, storage và cleanup policy. Không sửa session JSONL khi manager đang active, và không giả định `SettingsManager.create()` tự tái hiện trust resolution của CLI nếu host chưa cung cấp quyết định đó.
+
+### Phát hiện MIME của image
+
+`detectSupportedImageMimeTypeFromFile()` được export từ gốc package `@earendil-works/pi-coding-agent` với đúng signature đã publish sau:
+
+```ts
+declare function detectSupportedImageMimeTypeFromFile(
+  filePath: string,
+): Promise<string | null>;
+```
+
+Function này mở filename do `filePath` chỉ định, đọc tối đa 4.100 byte đầu rồi kiểm tra signature trong file header cùng các field cấu trúc tối thiểu cần để nhận diện input JPEG, PNG không animation, GIF, WebP hoặc BMP mà Pi hỗ trợ. Nó trả MIME string được hỗ trợ hoặc `null` khi các bước kiểm tra không nhận diện được image hợp lệ; lỗi mở hay đọc filesystem vẫn làm promise reject. Cơ chế này dựa trên nội dung file, không dựa trên extension của filename, và không decode, resize hay validate mọi pixel của image. Hãy dùng kết quả như một input-format gate, không phải bằng chứng rằng image có thể decode hoàn toàn hoặc an toàn.
 
 ### Extension và managed tool
 

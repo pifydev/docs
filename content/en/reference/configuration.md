@@ -45,7 +45,7 @@ The public root exports `SettingsManager` and selected setting types, not a full
 | --- | --- |
 | Model | `defaultProvider`, `defaultModel`, `defaultThinkingLevel`, `modelThinkingLevels`, `thinkingBudgets`, `enabledModels` |
 | Interaction | `steeringMode`, `followUpMode`, `defaultTools`, `doubleEscapeAction`, `treeFilterMode` |
-| Display | `theme`, `tuiMode`, `fullscreenExitOutput`, `fullscreenScrollbar`, `terminal`, `images`, `markdown` |
+| Display | `theme`, `tuiMode`, `fullscreenExitOutput`, `fullscreenScrollbar`, `fullscreenCopyOnSelect`, `terminal`, `images`, `markdown` |
 | Lifecycle | `compaction`, `branchSummary`, `retry`, `sessionDir` |
 | Network | `transport`, `httpProxy`, `httpIdleTimeoutMs`, `websocketConnectTimeoutMs` |
 | Resources | `packages`, `extensions`, `skills`, `prompts`, `themes`, `enableSkillCommands` |
@@ -184,6 +184,16 @@ There are no built-in `sessions.retention` or `sessions.redactSecrets` settings.
 
 `terminal.showImages` (`true`) controls inline display, `imageWidthCells` (`60`) sets preferred width, `clearOnShrink` (`false`) clears vacated rows, and `showTerminalProgress` (`false`) emits supported terminal progress indicators. `images.autoResize` (`true`) resizes model-bound images to at most 2000 × 2000; `images.blockImages` (`false`) blocks all images from reaching providers. Hiding terminal images does not block upload.
 
+Pi auto-detects terminal capabilities, with these exact environment and setting values:
+
+| Capability | Environment value | JSON setting |
+|---|---|---|
+| OSC 8 hyperlinks | `PI_HYPERLINKS=1\|0\|auto` | `terminal.hyperlinks: true\|false\|"auto"` |
+| Inline images | `PI_IMAGE_PROTOCOL=kitty\|iterm2\|none\|auto` | `terminal.images: "kitty"\|"iterm2"\|false\|"auto"` |
+| Truecolor | `PI_TRUE_COLOR=1\|0\|auto` | `terminal.trueColor: true\|false\|"auto"` |
+
+An explicit setting takes precedence over its environment variable. An unset or `auto` setting leaves the environment override in play, and an unset or `auto` environment value falls through to automatic detection. Forcing a capability unsupported anywhere along the terminal, proxy, or multiplexer path may emit unsupported escape sequences and corrupt rendering. Detection recognizes the Zed integrated terminal as supporting truecolor and hyperlinks but no inline image protocol, so `auto` uses the image text fallback there.
+
 `shellPath` selects the executable for the `bash` Tool, `shellCommandPrefix` prefixes every `bash` command, and `npmCommand` is an argv array for package operations. These Bash settings do not activate, configure, or replace the `powershell` Tool; PowerShell selection belongs in `defaultTools`, `--tools`, or the SDK `tools` option. Windows JSON paths need forward slashes or escaped backslashes.
 
 ```json title="terminal-and-shell-settings.json"
@@ -192,7 +202,10 @@ There are no built-in `sessions.retention` or `sessions.redactSecrets` settings.
     "showImages": true,
     "imageWidthCells": 60,
     "clearOnShrink": false,
-    "showTerminalProgress": false
+    "showTerminalProgress": false,
+    "hyperlinks": "auto",
+    "images": "auto",
+    "trueColor": "auto"
   },
   "images": {
     "autoResize": true,
@@ -212,6 +225,10 @@ There are no built-in `sessions.retention` or `sessions.redactSecrets` settings.
 `theme`, `externalEditor`, `quietStartup`, and `collapseChangelog` control startup and presentation. `externalEditor` overrides `VISUAL`, then `EDITOR`; use `code --wait` when Pi must wait for VS Code. `doubleEscapeAction` is `tree`, `fork`, or `none`, and `treeFilterMode` chooses the default `/tree` filter.
 
 `editorPaddingX` is clamped from 0 to 3, `outputPad` is 0 or 1, and `autocompleteMaxVisible` is clamped from 3 to 20. `showHardwareCursor` helps IME input. `tuiMode` is `regular` or experimental `fullscreen`; the related flat keys are `fullscreenExitOutput` (`transcript` or `resume-hint`) and `fullscreenScrollbar` (`auto`, `always`, or `hidden`). The old nested `tui.*` and `fullscreen.*` shapes are not current. Escape-key timing is an environment control documented in <a href="/en/reference/environment-variables">Environment variables</a>.
+
+`fullscreenCopyOnSelect` defaults to `true`, which copies a fullscreen drag selection automatically. When it is disabled, the selection remains active and highlighted; `Ctrl+X` copies that active selection before falling back to the last assistant message. This setting affects fullscreen text selection, while `/tree` keeps its own selected-message copy behavior.
+
+When the fullscreen transcript is scrolled up, the clickable `Jump to latest message` control appears on its bottom row and shows the `tui.altScreen.bottom` shortcut. For `fullscreenScrollbar: "auto"`, the scrollbar becomes visible while scrolling or when the pointer enters its rightmost-column track. Clicking that track jumps through the transcript; `always` reserves and displays the column continuously, while `hidden` removes it.
 
 ### Markdown and warnings
 
@@ -272,6 +289,7 @@ This global file covers the common families without provider credentials:
   "theme": "dark",
   "quietStartup": true,
   "tuiMode": "regular",
+  "fullscreenCopyOnSelect": true,
   "markdown": {
     "codeBlockIndent": "  ",
     "mermaid": "final"
@@ -301,7 +319,10 @@ This global file covers the common families without provider credentials:
   "websocketConnectTimeoutMs": 15000,
   "sessionDir": ".pi/sessions",
   "terminal": {
-    "showImages": true
+    "showImages": true,
+    "hyperlinks": "auto",
+    "images": "auto",
+    "trueColor": "auto"
   },
   "images": {
     "autoResize": true,

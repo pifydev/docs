@@ -692,6 +692,53 @@ function assertParagraphContainsAll(source, patterns, context) {
   );
 }
 
+const liveCwdBuiltins = ["bash", "edit", "find", "grep", "ls", "read", "write"];
+
+function assertLiveInvocationCwdBinding(source, context) {
+  const paragraph = source.split(/\n\s*\n/).find(
+    (candidate) =>
+      /`ctx\.cwd`/.test(candidate) &&
+      /live|current|hiện tại/i.test(candidate) &&
+      /invocation|execution|lời gọi|thực thi/i.test(candidate),
+  );
+  assert.ok(
+    paragraph,
+    `${context} must bind built-in path resolution to live invocation ctx.cwd in one paragraph`,
+  );
+
+  const namedBuiltins = [
+    ...paragraph.matchAll(/`(bash|edit|find|grep|ls|powershell|read|write)`/g),
+  ].map((match) => match[1]);
+  assert.deepEqual(
+    [...new Set(namedBuiltins)].sort(),
+    liveCwdBuiltins,
+    `${context} must bind exactly the affected built-in Tool set to ctx.cwd`,
+  );
+  assert.match(
+    paragraph,
+    /fallback|fall back|dự phòng/i,
+    `${context} must explain the factory cwd fallback`,
+  );
+  assert.match(
+    paragraph,
+    /not[^.]*permanent|not[^.]*load-time|không[^.]*cố định|không[^.]*thời điểm load/i,
+    `${context} must reject permanent load-time cwd capture`,
+  );
+}
+
+function assertNoMisleadingWriteByteCount(source, context) {
+  const suspectSegments = markdownSemanticSegments(source).filter(
+    ({ text }) => /\bwrite\b/i.test(text) && /UTF-16/i.test(text) && /byte/i.test(text),
+  );
+  for (const { text } of suspectSegments) {
+    assert.match(
+      text,
+      /does not|no longer|remov(?:e|ed|es|ing)|không|đã bỏ/i,
+      `${context} must not claim that write reports UTF-16 code units as bytes`,
+    );
+  }
+}
+
 function markdownSemanticSegments(source) {
   const lines = source.replaceAll("\r\n", "\n").split("\n");
   const segments = [];
@@ -2154,6 +2201,196 @@ test("both Chapter 5 locales explain the optional PowerShell tool contract", asy
     structures.push(sectionStructure(section));
   }
   assert.deepEqual(structures[0], structures[1]);
+});
+
+test("Pi 0.85 Tool cwd contracts bind the exact affected built-ins at invocation time", async () => {
+  const chapters = await readLocalizedContent("ch05-tool-system.md");
+  const headings = {
+    en: "### The eight built-ins declare only the operations they consume",
+    vi: "### Tám Tool dựng sẵn chỉ khai báo thao tác mà chúng dùng",
+  };
+  const structures = [];
+
+  for (const { locale, source } of chapters) {
+    const section = extractMarkdownSection(
+      source,
+      headings[locale],
+      `${locale} Chapter 5 live cwd guidance`,
+    );
+    assertLiveInvocationCwdBinding(
+      section.body,
+      `${locale} Chapter 5 live cwd guidance`,
+    );
+    assertNoMisleadingWriteByteCount(source, `${locale} Chapter 5`);
+    structures.push(sectionStructure(section));
+  }
+  assert.deepEqual(structures[0], structures[1]);
+
+  assert.throws(
+    () =>
+      assertNoMisleadingWriteByteCount(
+        "The write Tool reports its UTF-16 code-unit count as a byte count.",
+        "synthetic write result",
+      ),
+    /must not claim that write reports UTF-16 code units as bytes/,
+  );
+  assert.doesNotThrow(() =>
+    assertNoMisleadingWriteByteCount(
+      "The write Tool no longer reports its UTF-16 code-unit count as bytes.",
+      "synthetic corrected write result",
+    ),
+  );
+});
+
+test("Pi 0.85 terminal override contracts preserve exact values and precedence", async () => {
+  const documentContracts = [
+    {
+      path: "reference/environment-variables.md",
+      headings: {
+        en: "### Terminal and editor behavior",
+        vi: "### Hành vi terminal và editor",
+      },
+    },
+    {
+      path: "reference/configuration.md",
+      headings: {
+        en: "### Terminal, images, shell, and npm",
+        vi: "### Terminal, image, shell và npm",
+      },
+    },
+  ];
+
+  for (const documentContract of documentContracts) {
+    const references = await readLocalizedContent(documentContract.path);
+    const structures = [];
+    for (const { locale, source } of references) {
+      const section = assertContainsAll(
+        source,
+        [
+          /PI_HYPERLINKS=1(?:\\?\|)0(?:\\?\|)auto/,
+          /PI_IMAGE_PROTOCOL=kitty(?:\\?\|)iterm2(?:\\?\|)none(?:\\?\|)auto/,
+          /PI_TRUE_COLOR=1(?:\\?\|)0(?:\\?\|)auto/,
+          /terminal\.hyperlinks/,
+          /terminal\.images/,
+          /terminal\.trueColor/,
+          /Zed/,
+          /escape sequence/i,
+        ],
+        `${locale} ${documentContract.path} terminal override guidance`,
+        {
+          heading: documentContract.headings[locale],
+          minWords: 125,
+        },
+      );
+      assertParagraphContainsAll(
+        section.body,
+        [
+          /setting/i,
+          /precedence|ưu tiên/i,
+          /environment variable/i,
+          /auto/i,
+          /detect/i,
+        ],
+        `${locale} ${documentContract.path} terminal capability precedence`,
+      );
+      structures.push(sectionStructure(section));
+    }
+    assert.deepEqual(structures[0], structures[1]);
+  }
+});
+
+test("Pi 0.85 fullscreen controls are documented in both configuration locales", async () => {
+  const references = await readLocalizedContent("reference/configuration.md");
+  const headings = {
+    en: "### UI and display",
+    vi: "### UI và display",
+  };
+  const structures = [];
+
+  for (const { locale, source } of references) {
+    const section = assertContainsAll(
+      source,
+      [
+        /fullscreenCopyOnSelect/,
+        /Ctrl\+X/,
+        /selection/i,
+        /disabled|tắt/i,
+        /Jump to latest message/,
+        /tui\.altScreen\.bottom/,
+        /fullscreenScrollbar/,
+        /`auto`/,
+        /pointer/i,
+        /track/i,
+      ],
+      `${locale} configuration fullscreen controls`,
+      { heading: headings[locale], minWords: 115 },
+    );
+    structures.push(sectionStructure(section));
+  }
+  assert.deepEqual(structures[0], structures[1]);
+});
+
+test("Pi 0.85 API locales expose file-based supported image MIME detection", async () => {
+  const references = await readLocalizedContent("reference/api.md");
+  const headings = {
+    en: "### Image MIME detection",
+    vi: "### Phát hiện MIME của image",
+  };
+  const structures = [];
+
+  for (const { locale, source } of references) {
+    const section = assertContainsAll(
+      source,
+      [
+        /detectSupportedImageMimeTypeFromFile/,
+        /filePath: string/,
+        /Promise<string \| null>/,
+        /package root|gốc package/i,
+        /signature|header/i,
+        /null/,
+        /does not decode|không decode/i,
+        /not[^.]*filename extension|không[^.]*extension của filename/i,
+      ],
+      `${locale} API image MIME detection`,
+      { heading: headings[locale], minWords: 70, fenceLanguages: ["ts"] },
+    );
+    structures.push(sectionStructure(section));
+  }
+  assert.deepEqual(structures[0], structures[1]);
+});
+
+test("Pi 0.85 Tool and terminal pages use the current baseline metadata", async () => {
+  const paths = [
+    "ch05-tool-system.md",
+    "how-to/add-custom-tool.md",
+    "reference/api.md",
+    "reference/configuration.md",
+    "reference/environment-variables.md",
+  ];
+  const release = await readReleaseFixture();
+
+  for (const relativePath of paths) {
+    for (const { locale, source } of await readLocalizedContent(relativePath)) {
+      assertNoMisleadingWriteByteCount(source, `${locale} ${relativePath}`);
+      assert.doesNotMatch(
+        source,
+        /0\.84\.3|4e58f324fae8ebfa98a3d45181fb248072a2afac/,
+        `${locale} ${relativePath} must not retain the previous baseline`,
+      );
+      assert.match(
+        source,
+        /last_updated:\s*["']2026-09-04["']/,
+        `${locale} ${relativePath} must record the Pi 0.85 review date`,
+      );
+      const links = piSourceLinks([{ filename: relativePath, source }]);
+      for (const { link } of links) {
+        assert.ok(
+          isPublishedReleaseSourceLink(link, release),
+          `${locale} ${relativePath} must pin Pi source links to 0.85.0`,
+        );
+      }
+    }
+  }
 });
 
 test("both API locales document the public PowerShell factory and operations signature", async () => {
