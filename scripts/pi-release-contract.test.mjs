@@ -1298,6 +1298,71 @@ test("release fixture identifies published Pi 0.85.0 authority", async () => {
   assert.equal(release.sourceStatus, "published");
 });
 
+const rollupAccuracyContracts = {
+  en: {
+    capabilitiesHeading: "### New capabilities",
+    reliabilityHeading: "### Reliability/provider fixes",
+    claudeThinking:
+      /supported Anthropic transports[^.]*preserve[^.]*per-turn[^.]*effort[^.]*recover[^.]*signed-thinking mismatches/i,
+    midConvoMechanism:
+      /`supportsMidConvoEffort`[^.]*mechanism[^.]*Anthropic transport/i,
+    compatibilityFields:
+      /Added model compatibility fields[^.]*`vllmPriority`[^.]*`supportsMaxOutputTokens`/i,
+    latexAdded:
+      /Added relational-algebra LaTeX[^.]*join-symbol rendering support/i,
+    latexFixed:
+      /fix(?:ed|es)?[^.]*relational-algebra LaTeX|relational-algebra LaTeX[^.]*fix/i,
+    imageResilience:
+      /resilient rendering[^.]*image-heavy output[^.]*V8 string-length-limit crash/i,
+  },
+  vi: {
+    capabilitiesHeading: "### Khả năng mới",
+    reliabilityHeading: "### Bản sửa lỗi độ tin cậy/provider",
+    claudeThinking:
+      /transport Anthropic được hỗ trợ[^.]*giữ[^.]*effort theo từng lượt[^.]*phục hồi[^.]*signed-thinking không khớp/i,
+    midConvoMechanism:
+      /`supportsMidConvoEffort`[^.]*cơ chế[^.]*transport Anthropic/i,
+    compatibilityFields:
+      /Bổ sung các field tương thích model[^.]*`vllmPriority`[^.]*`supportsMaxOutputTokens`/i,
+    latexAdded: /Bổ sung hỗ trợ render[^.]*join[^.]*LaTeX[^.]*đại số quan hệ/i,
+    latexFixed: /sửa[^.]*LaTeX[^.]*đại số quan hệ/i,
+    imageResilience:
+      /render bền vững[^.]*output nhiều image[^.]*crash[^.]*giới hạn độ dài string của V8/i,
+  },
+};
+
+function assertReleaseRollupAccuracy(entryBody, locale, context) {
+  const contract = rollupAccuracyContracts[locale];
+  assertContainsAll(
+    entryBody,
+    [
+      contract.claudeThinking,
+      contract.midConvoMechanism,
+      contract.compatibilityFields,
+      contract.latexAdded,
+    ],
+    `${context} exact additions`,
+    { heading: contract.capabilitiesHeading },
+  );
+  assert.doesNotMatch(
+    entryBody,
+    contract.latexFixed,
+    `${context} must not classify relational-algebra LaTeX support as a fix`,
+  );
+
+  assertContainsAll(
+    entryBody,
+    [contract.imageResilience],
+    `${context} image-rendering resilience`,
+    { heading: contract.reliabilityHeading },
+  );
+  assert.doesNotMatch(
+    entryBody,
+    /safe image rendering|render image an toàn/i,
+    `${context} must not overclaim image-rendering safety`,
+  );
+}
+
 test("the first bilingual changelog entry is the structured Pi 0.85.0 documentation rollup", async () => {
   const references = await readLocalizedContent("changelog.md");
   const release0850 =
@@ -1313,11 +1378,9 @@ test("the first bilingual changelog entry is the structured Pi 0.85.0 documentat
         "### Documentation and verification scope",
       ],
       externalSession: /external session (?:restoration|restore)/i,
-      persistentThinking: /persist(?:ent|ed)[^.]*thinking/i,
       promptRpc: /prompt[^.]*RPC|RPC[^.]*prompt/i,
       terminalFullscreen: /terminal[^.]*fullscreen|fullscreen[^.]*terminal/i,
       bashOnlySkills: /Bash-only Skills/i,
-      relationalLatex: /relational-algebra LaTeX/i,
       architecture: /experimental service architecture/i,
       providerFixes: [
         /incompatible event sequences[^.]*custom Tool-call deltas/i,
@@ -1335,8 +1398,7 @@ test("the first bilingual changelog entry is the structured Pi 0.85.0 documentat
       ],
       integrity:
         /JSONL[^.]*share[^.]*import[^.]*fork[^.]*compaction[^.]*manual abort/i,
-      networkImage:
-        /NO_PROXY[^.]*proxy HTTP[^.]*seccomp[^.]*EXIF[^.]*image rendering/i,
+      network: /NO_PROXY[^.]*proxy HTTP[^.]*seccomp[^.]*EXIF/i,
       experimentalBoundary: /experimental[^.]*not[^.]*stable/i,
       documentation: /documentation/i,
     },
@@ -1348,11 +1410,9 @@ test("the first bilingual changelog entry is the structured Pi 0.85.0 documentat
         "### Phạm vi tài liệu và kiểm chứng",
       ],
       externalSession: /khôi phục external session/i,
-      persistentThinking: /thinking[^.]*được lưu|lưu[^.]*thinking/i,
       promptRpc: /prompt[^.]*RPC|RPC[^.]*prompt/i,
       terminalFullscreen: /terminal[^.]*fullscreen|fullscreen[^.]*terminal/i,
       bashOnlySkills: /Skills[^.]*chỉ bật Bash/i,
-      relationalLatex: /LaTeX[^.]*đại số quan hệ/i,
       architecture: /kiến trúc service thử nghiệm/i,
       providerFixes: [
         /event sequence không tương thích[^.]*custom Tool-call delta/i,
@@ -1370,8 +1430,7 @@ test("the first bilingual changelog entry is the structured Pi 0.85.0 documentat
       ],
       integrity:
         /JSONL[^.]*share[^.]*import[^.]*fork[^.]*compaction[^.]*manual abort/i,
-      networkImage:
-        /NO_PROXY[^.]*proxy HTTP[^.]*seccomp[^.]*EXIF[^.]*render image/i,
+      network: /NO_PROXY[^.]*proxy HTTP[^.]*seccomp[^.]*EXIF/i,
       experimentalBoundary: /thử nghiệm[^.]*không[^.]*ổn định/i,
       documentation: /tài liệu/i,
     },
@@ -1405,7 +1464,6 @@ test("the first bilingual changelog entry is the structured Pi 0.85.0 documentat
         /`SessionManager\.inMemory\(\)`/,
         contract.externalSession,
         /`supportsMidConvoEffort`/,
-        contract.persistentThinking,
         /`@earendil-works\/pi-client`/,
         /`@earendil-works\/pi-protocol`/,
         /`@earendil-works\/pi-server`/,
@@ -1424,7 +1482,6 @@ test("the first bilingual changelog entry is the structured Pi 0.85.0 documentat
         contract.promptRpc,
         contract.terminalFullscreen,
         contract.bashOnlySkills,
-        contract.relationalLatex,
       ],
       `${context} behavior and interfaces`,
       { heading: contract.headings[1] },
@@ -1436,7 +1493,7 @@ test("the first bilingual changelog entry is the structured Pi 0.85.0 documentat
         /`@earendil-works\/pi-coding-agent\/client`[^.]*compatibility entry point/i,
         ...contract.providerFixes,
         contract.integrity,
-        contract.networkImage,
+        contract.network,
       ],
       `${context} reliability and providers`,
       { heading: contract.headings[2] },
@@ -1452,12 +1509,54 @@ test("the first bilingual changelog entry is the structured Pi 0.85.0 documentat
       `${context} documentation scope`,
       { heading: contract.headings[3] },
     );
+    assertReleaseRollupAccuracy(entry.body, locale, context);
     structures.push(
       [capabilities, interfaces, reliability, scope].map(sectionStructure),
     );
   }
 
   assert.deepEqual(structures[0], structures[1]);
+});
+
+test("first-entry rollup accuracy guard rejects attribution and resilience regressions", async () => {
+  const [{ source }] = await readLocalizedContent("changelog.md");
+  const entry = extractMarkdownSection(
+    source,
+    "## 2026-09-04",
+    "EN changelog mutation baseline",
+  );
+  assertReleaseRollupAccuracy(
+    entry.body,
+    "en",
+    "EN changelog mutation baseline",
+  );
+
+  const mutations = [
+    {
+      label: "compatibility fields presented as pre-existing documentation",
+      pattern: "Added model compatibility fields",
+      replacement: "Documented model compatibility fields",
+    },
+    {
+      label: "relational-algebra LaTeX presented as a fix",
+      pattern: "Added relational-algebra LaTeX join-symbol rendering support",
+      replacement: "Fixed relational-algebra LaTeX join-symbol rendering",
+    },
+    {
+      label: "image resilience presented as a safety guarantee",
+      pattern:
+        "resilient rendering of image-heavy output avoids the V8 string-length-limit crash",
+      replacement: "safe image rendering for large output",
+    },
+  ];
+
+  for (const { label, pattern, replacement } of mutations) {
+    assert.ok(entry.body.includes(pattern), `${label} mutation must apply`);
+    const mutated = entry.body.replace(pattern, replacement);
+    assert.throws(() => assertReleaseRollupAccuracy(mutated, "en", label), {
+      name: "AssertionError",
+    });
+  }
 });
 
 test("both Chapter 2 locales document the Pi 0.85.0 experimental service architecture", async () => {

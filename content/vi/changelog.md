@@ -15,14 +15,17 @@ Baseline của tài liệu Pify nay theo [release Pi `0.85.0` chính thức](htt
 
 ### Khả năng mới
 
-- Ghi lại cách khôi phục external session qua `SessionManager.inMemory()` và ranh giới ownership đối với entry do bên ngoài lưu trữ, cùng setting thinking được lưu bền vững và compatibility flag kế thừa `supportsMidConvoEffort`.
+- Ghi lại cách khôi phục external session qua `SessionManager.inMemory()` và ranh giới ownership đối với entry do bên ngoài lưu trữ.
+- Ghi lại persistent Claude thinking effort: các transport Anthropic được hỗ trợ giữ nguyên effort theo từng lượt và phục hồi an toàn khi signed-thinking không khớp; `supportsMidConvoEffort` là cơ chế docs/API để nhận diện transport Anthropic phù hợp với hành vi này.
+- Bổ sung các field tương thích model `vllmPriority` và `supportsMaxOutputTokens` cho capability kế thừa của transport tương thích OpenAI.
+- Bổ sung hỗ trợ render join symbol bằng LaTeX cho đại số quan hệ.
 - Bổ sung kiến trúc service thử nghiệm gồm `@earendil-works/pi-client`, `@earendil-works/pi-protocol` và `@earendil-works/pi-server`, bao gồm trách nhiệm của routed session, transport và protocol.
 
 ### Thay đổi hành vi và interface
 
 - Bổ sung vòng đời prompt và RPC: `ui_prompt_start`/`ui_prompt_end` đánh dấu thời gian chờ UI của extension, còn `clear_queue` trả về rồi xóa steering message và follow-up message trước luồng abort.
 - Làm rõ các Tool xử lý path dùng `ctx.cwd` tại đúng invocation hiện tại, đồng thời ghi lại hành vi terminal/fullscreen gồm `PI_HYPERLINKS`, capability override, search nhanh hơn, điều khiển copy selection và working indicator được nhúng.
-- Ghi nhận bản sửa cho Skills khi chỉ bật Bash và render LaTeX cho đại số quan hệ.
+- Ghi nhận bản sửa giúp Skills hoạt động khi chỉ bật Bash.
 
 ### Bản sửa lỗi độ tin cậy/provider
 
@@ -30,7 +33,7 @@ Baseline của tài liệu Pify nay theo [release Pi `0.85.0` chính thức](htt
 - Codex SSE nay xử lý terminal event không có blank line theo sau; Mistral giữ đúng tool call phân mảnh khi chunk tiếp nối thiếu tool-call ID; OpenAI reasoning replay gộp các delta text và summary; model Grok không còn khả dụng đã được loại bỏ.
 - Các bản sửa catalog và request giúp catalog Qwen bổ sung Qwen3.8 Flash, Fable gửi reasoning đã chọn, Baseten sửa metadata image input, Fireworks chọn đúng API adapter, Vertex hoạt động với proxy, Cloudflare bổ sung model vào gateway catalog và ngăn model OpenRouter bắt buộc reasoning nhận effort `none`.
 - Ghi nhận các bản sửa tính toàn vẹn cho JSONL append, share đồng thời, import tránh collision, fork in-memory và file-backed, compaction và manual abort.
-- Ghi lại cách khớp `NO_PROXY`, tunnel proxy HTTP, khởi động terminal dưới seccomp hạn chế, đọc orientation từ EXIF và render image an toàn khi output lớn.
+- Ghi lại cách khớp `NO_PROXY`, tunnel proxy HTTP, khởi động terminal dưới seccomp hạn chế và đọc orientation từ EXIF; render bền vững cho output nhiều image tránh crash do giới hạn độ dài string của V8.
 
 ### Phạm vi tài liệu và kiểm chứng
 

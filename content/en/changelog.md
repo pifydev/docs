@@ -15,14 +15,17 @@ Pify's documentation baseline now follows the official [Pi `0.85.0` release](htt
 
 ### New capabilities
 
-- Documented external session restoration through `SessionManager.inMemory()` and the ownership boundary for externally stored entries, plus persistent thinking settings and the inherited `supportsMidConvoEffort` compatibility flag.
+- Documented external session restoration through `SessionManager.inMemory()` and the ownership boundary for externally stored entries.
+- Documented persistent Claude thinking effort: supported Anthropic transports preserve per-turn effort and recover safely from signed-thinking mismatches; `supportsMidConvoEffort` is the docs/API mechanism that identifies the Anthropic transports aligned with that behavior.
+- Added model compatibility fields `vllmPriority` and `supportsMaxOutputTokens` for inherited OpenAI-compatible transport capabilities.
+- Added relational-algebra LaTeX join-symbol rendering support.
 - Added the experimental service architecture formed by `@earendil-works/pi-client`, `@earendil-works/pi-protocol`, and `@earendil-works/pi-server`, including routed sessions, transport, and protocol responsibilities.
 
 ### Behavior and interface changes
 
 - Added the prompt and RPC lifecycle: `ui_prompt_start`/`ui_prompt_end` identify waits for extension UI, while `clear_queue` returns and removes steering and follow-up messages before abort flows.
 - Clarified that built-in path tools resolve the live invocation `ctx.cwd`, and documented terminal/fullscreen behavior including `PI_HYPERLINKS`, capability overrides, faster search, selection-copy controls, and the embedded working indicator.
-- Recorded fixes for Bash-only Skills and relational-algebra LaTeX rendering.
+- Recorded the fix for Bash-only Skills.
 
 ### Reliability/provider fixes
 
@@ -30,7 +33,7 @@ Pify's documentation baseline now follows the official [Pi `0.85.0` release](htt
 - Codex SSE now processes terminal events without a trailing blank line; fragmented Mistral tool calls retain continuations that omit the tool-call ID; OpenAI reasoning replay merges streamed text and summary deltas; the unavailable Grok model was removed.
 - Provider catalog and request fixes make the Qwen catalog include Qwen3.8 Flash, send selected reasoning for Fable, correct Baseten image input metadata, select the Fireworks API adapter, repair Vertex proxy use, include Cloudflare gateway catalog models, and keep OpenRouter models that require reasoning from receiving `none` effort.
 - Recorded JSONL append, concurrent share, collision-safe import, in-memory and file-backed fork, compaction, and manual abort integrity fixes.
-- Documented `NO_PROXY` matching, proxy HTTP tunneling, restricted-seccomp terminal startup, EXIF orientation scanning, and safe image rendering for large output.
+- Documented `NO_PROXY` matching, proxy HTTP tunneling, restricted-seccomp terminal startup, and EXIF orientation scanning; resilient rendering of image-heavy output avoids the V8 string-length-limit crash.
 
 ### Documentation and verification scope
 
