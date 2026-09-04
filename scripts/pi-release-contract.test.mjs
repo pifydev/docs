@@ -7,7 +7,7 @@ import ts from "typescript";
 
 const repositoryRoot = new URL("../", import.meta.url);
 const releaseFixtureURL = new URL(
-  "fixtures/pi-release-0843.json",
+  "fixtures/pi-release-0850.json",
   import.meta.url,
 );
 const compileFixturePackages = [
@@ -839,31 +839,29 @@ function invalidPiSourceLinks(sources, release) {
   );
 }
 
-test("release fixture identifies published Pi 0.84.3 authority", async () => {
+test("release fixture identifies published Pi 0.85.0 authority", async () => {
   const release = await readReleaseFixture();
-
-  assert.equal(release.packageVersion, "0.84.3");
-  assert.equal(release.tag, "v0.84.3");
-  assert.equal(release.commit, "4e58f324fae8ebfa98a3d45181fb248072a2afac");
-});
-
-test("release fixture keeps the audited upstream head explicitly unreleased", async () => {
-  const release = await readReleaseFixture();
-
+  assert.equal(release.packageVersion, "0.85.0");
+  assert.equal(release.tag, "v0.85.0");
   assert.equal(
-    release.upstreamAuditCommit,
-    "dcd461925db2edf69a43c8135db1180d418afd54",
+    release.commit,
+    "107d79f11072bbc8a3a757ed7fd69596bee7d68c",
   );
-  assert.equal(release.upstreamAuditStatus, "unreleased");
+  assert.equal(release.publishedAt, "2026-09-04T10:18:28Z");
+  assert.equal(release.nodeRequirement, ">=22.19.0");
+  assert.equal(release.previousDocumentationVersion, "0.84.3");
+  assert.deepEqual(release.includedReleaseTags, ["v0.84.4", "v0.85.0"]);
+  assert.equal(release.sourceStatus, "published");
 });
 
 test("compile fixture packages are exactly pinned to the published release", async () => {
+  const release = await readReleaseFixture();
   const packageJSON = JSON.parse(
     await readFile(new URL("package.json", repositoryRoot), "utf8"),
   );
 
   for (const packageName of compileFixturePackages) {
-    assert.equal(packageJSON.devDependencies[packageName], "0.84.3");
+    assert.equal(packageJSON.devDependencies[packageName], release.packageVersion);
   }
 });
 

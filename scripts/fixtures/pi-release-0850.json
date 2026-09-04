@@ -1,0 +1,10 @@
+{
+  "packageVersion": "0.85.0",
+  "tag": "v0.85.0",
+  "commit": "107d79f11072bbc8a3a757ed7fd69596bee7d68c",
+  "publishedAt": "2026-09-04T10:18:28Z",
+  "nodeRequirement": ">=22.19.0",
+  "previousDocumentationVersion": "0.84.3",
+  "includedReleaseTags": ["v0.84.4", "v0.85.0"],
+  "sourceStatus": "published"
+}
