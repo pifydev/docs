@@ -4,9 +4,9 @@ description: Add a model through models.json or a Provider, and implement a stre
 translation_key: how-to-plug-new-model
 language: en
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/docs/models.md"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/docs/custom-provider.md"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/ai/README.md#custom-providers"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/docs/models.md"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/docs/custom-provider.md"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/README.md#custom-providers"
 terms_used:
   - Models
   - Provider
@@ -16,7 +16,7 @@ terms_used:
   - AbortSignal
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: "2026-08-25"
+last_updated: "2026-09-04"
 ---
 
 Most model additions describe an endpoint Pi already knows how to call. Start with `~/.pi/agent/models.json` or an Extension `ProviderConfig`; build a native `Provider` when you need provider-owned authentication or discovery; implement `ProviderStreams` only for a genuinely new wire protocol.
@@ -42,12 +42,12 @@ Do not revive the old process-global model/translator registry. Current applicat
 
 ## Prerequisites
 
-Pi `0.84.3` requires Node.js `>=22.19.0`. For the TypeScript examples, use ESM and install each package you import:
+Pi `0.85.0` requires Node.js `>=22.19.0`. For the TypeScript examples, use ESM and install each package you import:
 
 ```bash
 npm init -y
 npm pkg set type=module
-npm install @earendil-works/pi-ai@0.84.3 @earendil-works/pi-coding-agent@0.84.3
+npm install @earendil-works/pi-ai@0.85.0 @earendil-works/pi-coding-agent@0.85.0
 npm install --save-dev typescript tsx @types/node
 ```
 
@@ -298,7 +298,7 @@ export default function nativeLocalProvider(pi: ExtensionAPI) {
 }
 ```
 
-`envApiKeyAuth()` checks a stored credential first, then the listed environment variables. For a custom resolver, implement the public `ApiKeyAuth.resolve({ ctx, credential, signal })` method and read environment values through `ctx.env()`. Its `AuthResult` can return request auth, provider-scoped `env`, and a source label. There is no public `AuthResolver` type in `0.84.3`; do not import or invent one. SDK callers can inspect resolved state with `Models.getAuth()`.
+`envApiKeyAuth()` checks a stored credential first, then the listed environment variables. For a custom resolver, implement the public `ApiKeyAuth.resolve({ ctx, credential, signal })` method and read environment values through `ctx.env()`. Its `AuthResult` can return request auth, provider-scoped `env`, and a source label. There is no public `AuthResolver` type in `0.85.0`; do not import or invent one. SDK callers can inspect resolved state with `Models.getAuth()`.
 
 Built-in factories follow the same contract. For example, `openaiProvider()` is exported from `@earendil-works/pi-ai/providers/openai`. Use a factory when its catalog, auth, and API mix already match your service; use `createProvider()` for your own composition.
 
@@ -315,7 +315,7 @@ interface ProviderStreams {
 }
 ```
 
-Source: pinned [`ProviderStreams`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/ai/src/types.ts#L262-L281). Parameter types are omitted in the excerpt; import the published interface for the exact signatures.
+Source: pinned [`ProviderStreams`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/src/types.ts). Parameter types are omitted in the excerpt; import the published interface for the exact signatures.
 
 `streamSimple()` is the provider-neutral entry point: it maps Pi reasoning levels, `toolChoice`, and optional thinking budgets before delegating to the adapter. A production adapter must preserve ordered `start`, indexed `text_*`, `thinking_*`, and `toolcall_*` events and finish with exactly one `done` or `error`. It must also report usage, classify context overflow, keep Tool-call IDs stable across replay, invoke request/response hooks, and stop network and parser work when `options.signal` aborts.
 
@@ -370,6 +370,14 @@ Run every check that applies before claiming support:
 | Failure | Local fixture | The terminal event and result both report `"error"`. |
 | One retry | Local fixture | One `429` produces exactly two attempts, then content and `"stop"`. |
 | Delayed abort | Local fixture | The result is `"aborted"` and the connection closes without hanging. |
+
+For the exact supported Claude model reached through a faithful Anthropic Messages transport, `supportsMidConvoEffort` belongs in `AnthropicMessagesCompat` and defaults to `false`. Enable it only for that exact transport/model combination, not for all Anthropic-compatible providers or APIs that merely imitate the Messages shape.
+
+With that flag enabled, Pi persists each response's native provider effort and reconstructs effort-only system messages when it replays the conversation. Pi also sends the thinking binding control `prefix_mismatch_behavior: "drop_block"`; on a prefix mismatch this safely drops the stale signed thinking block and prevents a persistent 400-response loop.
+
+For vLLM Chat Completions, `vllmPriority` is a member of `OpenAICompletionsCompat`. Lower values are handled earlier, and the setting is meaningful only with vLLM `--scheduling-policy priority`; the server default is `0`. It is off by default and not set on the generated model catalog, so configure it explicitly only when the server uses priority scheduling.
+
+For an OpenAI Responses endpoint, `supportsMaxOutputTokens` is a member of `OpenAIResponsesCompat` and defaults to `true`. Set it to `false` for a gateway that rejects `max_output_tokens`, causing Pi to omit the field. Do not put this flag on `OpenAICompletionsCompat`.
 
 The live probe uses the `Models.streamSimple()` path that applies auth and provider defaults. It prints incremental output and fails on the stream's terminal error message.
 

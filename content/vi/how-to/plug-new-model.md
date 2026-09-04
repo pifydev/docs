@@ -4,9 +4,9 @@ description: Thêm model qua models.json hoặc Provider, và chỉ viết strea
 translation_key: how-to-plug-new-model
 language: vi
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/docs/models.md"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/docs/custom-provider.md"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/ai/README.md#custom-providers"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/docs/models.md"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/docs/custom-provider.md"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/README.md#custom-providers"
 terms_used:
   - Models
   - Provider
@@ -16,7 +16,7 @@ terms_used:
   - AbortSignal
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: "2026-08-25"
+last_updated: "2026-09-04"
 ---
 
 Phần lớn trường hợp thêm model chỉ cần mô tả một endpoint mà Pi đã biết cách gọi. Hãy bắt đầu bằng `~/.pi/agent/models.json` hoặc `ProviderConfig` trong Extension; tạo native `Provider` khi cần cơ chế xác thực hoặc khám phá model do provider quản lý; chỉ triển khai `ProviderStreams` cho một wire protocol thật sự mới.
@@ -42,12 +42,12 @@ Chọn đúng một hướng: hoàn thành mục **1–2** cho catalog tĩnh, **
 
 ## Điều kiện cần
 
-Pi `0.84.3` yêu cầu Node.js `>=22.19.0`. Với các ví dụ TypeScript, hãy dùng ESM và cài từng package được import:
+Pi `0.85.0` yêu cầu Node.js `>=22.19.0`. Với các ví dụ TypeScript, hãy dùng ESM và cài từng package được import:
 
 ```bash
 npm init -y
 npm pkg set type=module
-npm install @earendil-works/pi-ai@0.84.3 @earendil-works/pi-coding-agent@0.84.3
+npm install @earendil-works/pi-ai@0.85.0 @earendil-works/pi-coding-agent@0.85.0
 npm install --save-dev typescript tsx @types/node
 ```
 
@@ -298,7 +298,7 @@ export default function nativeLocalProvider(pi: ExtensionAPI) {
 }
 ```
 
-`envApiKeyAuth()` kiểm tra credential đã lưu trước, rồi đến các biến môi trường được liệt kê. Với resolver tùy chỉnh, hãy triển khai method công khai `ApiKeyAuth.resolve({ ctx, credential, signal })` và đọc biến môi trường qua `ctx.env()`. `AuthResult` của method này có thể trả về request auth, `env` riêng của provider và nhãn nguồn. Phiên bản `0.84.3` không có type công khai tên `AuthResolver`; đừng import hoặc tự đặt ra type này. SDK caller có thể xem trạng thái đã resolve bằng `Models.getAuth()`.
+`envApiKeyAuth()` kiểm tra credential đã lưu trước, rồi đến các biến môi trường được liệt kê. Với resolver tùy chỉnh, hãy triển khai method công khai `ApiKeyAuth.resolve({ ctx, credential, signal })` và đọc biến môi trường qua `ctx.env()`. `AuthResult` của method này có thể trả về request auth, `env` riêng của provider và nhãn nguồn. Phiên bản `0.85.0` không có type công khai tên `AuthResolver`; đừng import hoặc tự đặt ra type này. SDK caller có thể xem trạng thái đã resolve bằng `Models.getAuth()`.
 
 Factory tích hợp cũng theo contract này. Ví dụ, `openaiProvider()` được export từ `@earendil-works/pi-ai/providers/openai`. Dùng factory khi catalog, auth và tổ hợp API của nó đã khớp dịch vụ; dùng `createProvider()` để tự kết hợp các phần.
 
@@ -315,7 +315,7 @@ interface ProviderStreams {
 }
 ```
 
-Nguồn: [`ProviderStreams`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/ai/src/types.ts#L262-L281) tại commit đã pin. Đoạn trích lược bỏ type của parameter; hãy import interface đã phát hành để lấy signature chính xác.
+Nguồn: [`ProviderStreams`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/src/types.ts) tại commit đã pin. Đoạn trích lược bỏ type của parameter; hãy import interface đã phát hành để lấy signature chính xác.
 
 `streamSimple()` là điểm vào trung lập với provider: nó ánh xạ reasoning level của Pi, `toolChoice` và thinking budget tùy chọn trước khi chuyển cho adapter. Adapter production phải giữ đúng thứ tự `start`, các event có index `text_*`, `thinking_*`, `toolcall_*`, rồi kết thúc bằng đúng một `done` hoặc `error`. Nó cũng phải báo usage, phân loại context overflow, giữ Tool-call ID ổn định khi replay, gọi các hook request/response, đồng thời dừng network và parser khi `options.signal` bị abort.
 
@@ -370,6 +370,14 @@ Hãy chạy mọi bước phù hợp trước khi tuyên bố hỗ trợ:
 | Lỗi | Fixture local | Event cuối và result đều báo `"error"`. |
 | Một lần retry | Fixture local | Một response `429` tạo đúng hai lần gọi, rồi trả content và `"stop"`. |
 | Abort có độ trễ | Fixture local | Result là `"aborted"` và connection đóng mà không bị treo. |
+
+Với chính xác Claude model được hỗ trợ qua transport Anthropic Messages trung thực, `supportsMidConvoEffort` thuộc `AnthropicMessagesCompat` và mặc định là `false`. Chỉ bật cờ cho đúng tổ hợp transport/model đó, không bật cho mọi provider tương thích Anthropic hoặc API chỉ bắt chước hình dạng Messages.
+
+Khi cờ này được bật, Pi lưu effort native của từng response và khôi phục các effort-only system messages lúc replay cuộc hội thoại. Pi cũng gửi thinking binding control `prefix_mismatch_behavior: "drop_block"`; khi prefix mismatch, control này loại an toàn signed thinking block cũ và ngăn vòng lặp response 400 kéo dài.
+
+Với vLLM Chat Completions, `vllmPriority` là member của `OpenAICompletionsCompat`. Giá trị thấp hơn được xử lý sớm hơn và setting chỉ có ý nghĩa khi vLLM chạy với `--scheduling-policy priority`; mặc định của server là `0`. Tính năng tắt theo mặc định và không được đặt trong generated model catalog, vì vậy chỉ cấu hình tường minh khi server dùng priority scheduling.
+
+Với endpoint OpenAI Responses, `supportsMaxOutputTokens` là member của `OpenAIResponsesCompat` và mặc định là `true`. Hãy đặt thành `false` cho gateway từ chối `max_output_tokens`; Pi sẽ bỏ field này. Không đặt cờ này trên `OpenAICompletionsCompat`.
 
 Chương trình kiểm tra endpoint thật dùng đường `Models.streamSimple()` để áp dụng auth và default của provider. Nó in output tăng dần và báo lỗi nếu stream kết thúc bằng error message.
 

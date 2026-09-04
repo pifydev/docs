@@ -6,14 +6,15 @@ language: vi
 chapter: 4
 source_url: "https://www.dgzhuya.com/modules/ch04-model-invocation"
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/ai/README.md"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/README.md"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/src/types.ts"
 terms_used:
   - Model
   - Provider
   - Provider Adapter
   - Stream
 status: reviewed
-last_updated: "2026-08-25"
+last_updated: "2026-09-04"
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -26,7 +27,7 @@ Pseudocode: `model`, `context` và `options` là input do caller sở hữu.
 const stream = models.streamSimple(model, context, options);
 ```
 
-Dòng này đi qua một boundary lớn. Pi AI phải tìm provider sở hữu model, resolve credential, chuyển message và Tool của Pi sang request format của provider, đọc streaming dialect của provider rồi trả về một event protocol ổn định. Ở revision Pi `0.84.3` được ghim, implementation chia công việc này cho `Models` collection, các object `Provider` và các API implementation. Global descriptor/translator registry cũ chỉ còn trong compatibility entry point; phần sau sẽ nhắc đến nó trong ngữ cảnh migration.
+Dòng này đi qua một boundary lớn. Pi AI phải tìm provider sở hữu model, resolve credential, chuyển message và Tool của Pi sang request format của provider, đọc streaming dialect của provider rồi trả về một event protocol ổn định. Ở revision Pi `0.85.0` được ghim, implementation chia công việc này cho `Models` collection, các object `Provider` và các API implementation. Global descriptor/translator registry cũ chỉ còn trong compatibility entry point; phần sau sẽ nhắc đến nó trong ngữ cảnh migration.
 
 Chương này mở đầy đủ boundary đó. Nội dung bắt đầu từ khác biệt giữa các provider, đi theo dispatch path hiện tại, rồi xem xét streaming, reasoning, cache, abort, retry và phần việc cần làm khi thêm provider.
 
@@ -112,7 +113,7 @@ Model call không thể chứa toàn bộ các nhánh này trong code của Agen
 
 ## 2. Ba boundary, mỗi boundary có một trách nhiệm
 
-Implementation lịch sử dùng global API registry và gọi các API file là translator. Pi `0.84.3` biểu diễn ownership rõ ràng hơn. Ứng dụng dựng `Models` collection từ provider factory. Mỗi `Provider` sở hữu model catalog, cơ chế auth và stream dispatch. API implementation sở hữu wire protocol cùng việc chuẩn hóa dữ liệu. Pseudocode: boundary map này mô tả architecture, không phải executable syntax.
+Implementation lịch sử dùng global API registry và gọi các API file là translator. Pi `0.85.0` biểu diễn ownership rõ ràng hơn. Ứng dụng dựng `Models` collection từ provider factory. Mỗi `Provider` sở hữu model catalog, cơ chế auth và stream dispatch. API implementation sở hữu wire protocol cùng việc chuẩn hóa dữ liệu. Pseudocode: boundary map này mô tả architecture, không phải executable syntax.
 
 ```text
 Agent Loop hoặc application
@@ -130,7 +131,7 @@ Phép so sánh với công ty phiên dịch vẫn hữu ích khi giới hạn c�
 
 Dispatch bắt đầu bằng `model.provider`, không phải `model.api`. Collection tìm provider đó, resolve auth, áp dụng `baseUrl` lấy từ auth nếu có, merge request option rồi gọi provider. Provider do `createProvider()` tạo tiếp tục chọn một API implementation duy nhất hoặc entry trong map có key bằng `model.api`.
 
-Đoạn source không self-contained sau được lấy từ `packages/ai/src/models.ts` tại commit `4e58f324fae8ebfa98a3d45181fb248072a2afac`. Đây là body chính xác của `ModelsImpl.streamSimple()` và nó phụ thuộc vào private method cùng type được import trong file đó.
+Đoạn source không self-contained sau được lấy từ `packages/ai/src/models.ts` tại commit `107d79f11072bbc8a3a757ed7fd69596bee7d68c`. Đây là body chính xác của `ModelsImpl.streamSimple()` và nó phụ thuộc vào private method cùng type được import trong file đó.
 
 ```typescript
 streamSimple(model: Model<Api>, context: Context, options?: ModelsSimpleStreamOptions): AssistantMessageEventStream {
@@ -210,7 +211,7 @@ Pi phát `start` trước khi bắt đầu iterate SSE body. `message_start` kh�
 
 ### Contract mà API implementation phải tuân theo
 
-Đoạn source-faithful abridgement không self-contained sau chứa chính xác các stream member bắt buộc từ `packages/ai/src/types.ts` tại commit `4e58f324fae8ebfa98a3d45181fb248072a2afac`. Type được import và các deferred method tùy chọn đã mô tả ở trên nằm ngoài excerpt này.
+Đoạn source-faithful abridgement không self-contained sau chứa chính xác các stream member bắt buộc từ `packages/ai/src/types.ts` tại commit `107d79f11072bbc8a3a757ed7fd69596bee7d68c`. Type được import và các deferred method tùy chọn đã mô tả ở trên nằm ngoài excerpt này.
 
 ```typescript
 export interface ProviderStreams {
@@ -248,7 +249,7 @@ Public API hỗ trợ hai công việc khác nhau. Phần lớn ứng dụng gh�
 
 ### Kịch bản 1: gọi một model hiện có
 
-Ví dụ này là application code self-contained cho `@earendil-works/pi-ai` `0.84.3`. Code dùng một provider factory có thể tree-shake và chỉ import public export.
+Ví dụ này là application code self-contained cho `@earendil-works/pi-ai` `0.85.0`. Code dùng một provider factory có thể tree-shake và chỉ import public export.
 
 ```typescript
 import { createModels, type Context } from "@earendil-works/pi-ai";
@@ -315,7 +316,7 @@ Một `Model` ghi cả hai routing key. `provider` đặt tên collection owner;
 
 ### Kịch bản 2: thêm provider hoặc wire protocol mới
 
-Với endpoint tương thích OpenAI, hãy dùng lại lazy API implementation hiện có và chỉ định nghĩa phần thuộc provider. Ví dụ construction self-contained này compile với public export của `0.84.3`; code tạo provider cùng catalog nhưng không gửi network request.
+Với endpoint tương thích OpenAI, hãy dùng lại lazy API implementation hiện có và chỉ định nghĩa phần thuộc provider. Ví dụ construction self-contained này compile với public export của `0.85.0`; code tạo provider cùng catalog nhưng không gửi network request.
 
 ```typescript
 import {
@@ -418,7 +419,7 @@ googleThinking.thinkingConfig = {
 };
 ```
 
-Pi 0.84.3 export hai type riêng cho Google từ package root không có side effect; kiểu chữ của chúng đánh dấu hai ranh giới semantics khác nhau. `GoogleApiThinkingLevel` là union kiểu enum hướng API `"THINKING_LEVEL_UNSPECIFIED" | "MINIMAL" | "LOW" | "MEDIUM" | "HIGH"`; type này dùng cho `GoogleOptions.thinking.level` và `GoogleVertexOptions.thinking.level`. `ResolvedGoogleThinkingLevel` là union đã chuẩn hóa trong adapter `"minimal" | "low" | "medium" | "high"`, được tạo sau khi Pi resolve `ModelThinkingLevel` mang semantics của model. Type này chủ động loại `off`, `xhigh` và `max` vì bước resolution ánh xạ hoặc từ chối chúng trước khi dựng request.
+Pi 0.85.0 export hai type riêng cho Google từ package root không có side effect; kiểu chữ của chúng đánh dấu hai ranh giới semantics khác nhau. `GoogleApiThinkingLevel` là union kiểu enum hướng API `"THINKING_LEVEL_UNSPECIFIED" | "MINIMAL" | "LOW" | "MEDIUM" | "HIGH"`; type này dùng cho `GoogleOptions.thinking.level` và `GoogleVertexOptions.thinking.level`. `ResolvedGoogleThinkingLevel` là union đã chuẩn hóa trong adapter `"minimal" | "low" | "medium" | "high"`, được tạo sau khi Pi resolve `ModelThinkingLevel` mang semantics của model. Type này chủ động loại `off`, `xhigh` và `max` vì bước resolution ánh xạ hoặc từ chối chúng trước khi dựng request.
 
 ```typescript
 import type {
@@ -435,6 +436,14 @@ const googleOptions = {
 const adapterLevel: ResolvedGoogleThinkingLevel = "high";
 void [googleOptions, adapterLevel];
 ```
+
+`supportsMidConvoEffort` thuộc `AnthropicMessagesCompat` và mặc định là `false`. Chỉ bật cờ này cho chính xác Claude model được hỗ trợ trên transport Anthropic Messages trung thực, không bật cho mọi provider tương thích Anthropic hoặc API chỉ bắt chước hình dạng Messages.
+
+Khi cờ này được bật, Pi lưu effort native của từng response và khôi phục các effort-only system messages trong request về sau. Pi cũng gửi thinking binding control `prefix_mismatch_behavior: "drop_block"`, nhờ đó prefix mismatch sẽ loại an toàn signed thinking block cũ thay vì gây lỗi 400 lặp lại.
+
+`vllmPriority` thuộc `OpenAICompletionsCompat`. Giá trị thấp hơn được xử lý sớm hơn, nhưng field này chỉ có ý nghĩa khi vLLM chạy với `--scheduling-policy priority`; mặc định của server là `0`. Tính năng tắt theo mặc định và không được đặt trong generated model catalog, vì vậy chỉ thêm nó vào metadata của model cho endpoint đã cấu hình scheduler đó.
+
+`supportsMaxOutputTokens` lại thuộc `OpenAIResponsesCompat` và mặc định là `true`. Hãy đặt thành `false` cho gateway tương thích Responses nhưng từ chối `max_output_tokens`; khi đó Pi bỏ request field này. Đây không phải compatibility switch của Chat Completions.
 
 Model Anthropic có adaptive thinking dùng effort; model cũ có reasoning capability dùng token budget. OpenAI API dùng reasoning-effort field với API-specific option name. Tùy họ model, Gemini dùng thinking level rời rạc hoặc token budget. Bedrock đi theo model family được chọn và có thể mang Anthropic reasoning content trong Converse block. `streamSimple()` sở hữu các phép ánh xạ này, còn `stream()` expose full option của từng API sau khi model được narrow.
 
@@ -461,7 +470,7 @@ Các turn của Agent thường gửi lại một conversation prefix ngày càn
 export type CacheRetention = "none" | "short" | "long";
 ```
 
-Declaration source-faithful này nằm trong `packages/ai/src/types.ts` tại commit `4e58f324fae8ebfa98a3d45181fb248072a2afac`. Resolution có ba bước: option `cacheRetention` tường minh có độ ưu tiên cao nhất; nếu thiếu option, compatibility override `PI_CACHE_RETENTION=long` chọn `long`; nếu cả hai đều thiếu, adapter dùng `short`. Giá trị provider-scoped trong `options.env` có độ ưu tiên cao hơn `process.env`. Preference `long` sau khi resolve chỉ được giữ khi model và API compatibility metadata hỗ trợ.
+Declaration source-faithful này nằm trong `packages/ai/src/types.ts` tại commit `107d79f11072bbc8a3a757ed7fd69596bee7d68c`. Resolution có ba bước: option `cacheRetention` tường minh có độ ưu tiên cao nhất; nếu thiếu option, compatibility override `PI_CACHE_RETENTION=long` chọn `long`; nếu cả hai đều thiếu, adapter dùng `short`. Giá trị provider-scoped trong `options.env` có độ ưu tiên cao hơn `process.env`. Preference `long` sau khi resolve chỉ được giữ khi model và API compatibility metadata hỗ trợ.
 
 | Adapter family                     | `none`                                                                      | `short`                                                                                                                                             | `long` và vị trí                                                                                                                 |
 | ---------------------------------- | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
@@ -476,7 +485,7 @@ Tỷ lệ giá cố định và ước tính tiết kiệm trong baseline không
 
 ### Error, retry boundary, abort và overflow
 
-Đoạn source không self-contained sau được lấy từ `packages/ai/src/api/lazy.ts` tại commit `4e58f324fae8ebfa98a3d45181fb248072a2afac`. Nó cho thấy setup-error path chính xác; `setup`, `forwardStream`, `createSetupErrorMessage` và `outer` được định nghĩa trong function bao quanh.
+Đoạn source không self-contained sau được lấy từ `packages/ai/src/api/lazy.ts` tại commit `107d79f11072bbc8a3a757ed7fd69596bee7d68c`. Nó cho thấy setup-error path chính xác; `setup`, `forwardStream`, `createSetupErrorMessage` và `outer` được định nghĩa trong function bao quanh.
 
 ```typescript
 setup()
@@ -532,6 +541,6 @@ Compatibility API có thể giữ call shape cũ trong giai đoạn migration, n
 
 Model boundary trả về normalized `ToolCall` block nhưng không thực thi chúng. Chương tiếp theo theo dõi một Tool call qua schema validation, scheduling, safety hook, execution, progress và `ToolResultMessage` được gửi lại cho model.
 
-Source review của chương này được ghim tại Pi `0.84.3`, commit `4e58f324fae8ebfa98a3d45181fb248072a2afac`. Các file chính gồm `packages/ai/src/models.ts`, `types.ts`, `api/lazy.ts`, `api/simple-options.ts`, API implementation cho Anthropic/OpenAI/Google/Bedrock, `utils/event-stream.ts`, `utils/provider-retry.ts`, `utils/overflow.ts` và các provider factory trong `packages/ai/src/providers/`.
+Source review của chương này được ghim tại Pi `0.85.0`, commit `107d79f11072bbc8a3a757ed7fd69596bee7d68c`. Các file chính gồm `packages/ai/src/models.ts`, `types.ts`, `api/lazy.ts`, `api/simple-options.ts`, API implementation cho Anthropic/OpenAI/Google/Bedrock, `utils/event-stream.ts`, `utils/provider-retry.ts`, `utils/overflow.ts` và các provider factory trong `packages/ai/src/providers/`.
 
 [Chương 5: Hệ thống Tool](ch05-tool-system.md)

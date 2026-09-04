@@ -2501,6 +2501,260 @@ test("provider, API, and configuration guidance distinguish Google API and norma
   }
 });
 
+test("both model guides bind Pi 0.85 compatibility flags to their exact interfaces and semantics", async () => {
+  const documentContracts = [
+    {
+      path: "ch04-model-invocation.md",
+      headings: {
+        en: "### Reasoning levels and provider translation",
+        vi: "### Reasoning level và phép chuyển đổi theo provider",
+      },
+    },
+    {
+      path: "how-to/plug-new-model.md",
+      headings: {
+        en: "## 7. Probe streaming, thinking, and Tools",
+        vi: "## 7. Kiểm tra streaming, thinking và Tool",
+      },
+    },
+  ];
+  const localeContract = {
+    en: {
+      persists: /persists?[^.]*native[^.]*effort/i,
+      reconstructs: /reconstructs?[^.]*effort-only system messages/i,
+      exactTransport: /exact supported[^.]*model[^.]*faithful Anthropic Messages transport/i,
+      notCompatible: /not[^.]*all Anthropic-compatible|not[^.]*merely imitate/i,
+      lowerEarlier: /lower[^.]*handled earlier/i,
+      serverDefault: /server default[^.]*`?0`?/i,
+      offByDefault: /off by default/i,
+      generatedCatalog: /not (?:set|generated)[^.]*generated (?:model )?catalog/i,
+      rejectMaxOutput: /rejects?[^.]*`max_output_tokens`/i,
+    },
+    vi: {
+      persists: /lưu[^.]*effort native|duy trì[^.]*effort native/i,
+      reconstructs: /khôi phục|dựng lại|tái tạo/i,
+      exactTransport: /chính xác[^.]*model[^.]*transport Anthropic Messages trung thực|đúng[^.]*model[^.]*transport Anthropic Messages trung thực/i,
+      notCompatible: /không[^.]*mọi provider tương thích Anthropic|không[^.]*chỉ bắt chước/i,
+      lowerEarlier: /giá trị thấp hơn[^.]*xử lý sớm hơn/i,
+      serverDefault: /mặc định[^.]*server[^.]*`?0`?/i,
+      offByDefault: /tắt theo mặc định/i,
+      generatedCatalog: /không[^.]*generated (?:model )?catalog/i,
+      rejectMaxOutput: /từ chối[^.]*`max_output_tokens`/i,
+    },
+  };
+
+  for (const documentContract of documentContracts) {
+    const documents = await readLocalizedContent(documentContract.path);
+    const structures = [];
+    for (const { locale, source } of documents) {
+      const section = assertContainsAll(
+        source,
+        [
+          /supportsMidConvoEffort/,
+          /supportsMaxOutputTokens/,
+          /vllmPriority/,
+          /prefix_mismatch_behavior/,
+          /"drop_block"/,
+          /OpenAICompletionsCompat/,
+          /OpenAIResponsesCompat/,
+          /AnthropicMessagesCompat/,
+          /--scheduling-policy priority/,
+        ],
+        `${locale} ${documentContract.path} Pi 0.85 compatibility guidance`,
+        { heading: documentContract.headings[locale] },
+      );
+      const contract = localeContract[locale];
+      assertParagraphContainsAll(
+        section.body,
+        [
+          /supportsMidConvoEffort/,
+          /AnthropicMessagesCompat/,
+          /false/,
+          contract.exactTransport,
+          contract.notCompatible,
+        ],
+        `${locale} ${documentContract.path} mid-conversation effort scope`,
+      );
+      assertParagraphContainsAll(
+        section.body,
+        [
+          contract.persists,
+          contract.reconstructs,
+          /prefix_mismatch_behavior/,
+          /"drop_block"/,
+          /signed thinking/i,
+        ],
+        `${locale} ${documentContract.path} persistent effort recovery`,
+      );
+      assertParagraphContainsAll(
+        section.body,
+        [
+          /vllmPriority/,
+          /OpenAICompletionsCompat/,
+          contract.lowerEarlier,
+          /--scheduling-policy priority/,
+          contract.serverDefault,
+          contract.offByDefault,
+          contract.generatedCatalog,
+        ],
+        `${locale} ${documentContract.path} vLLM priority semantics`,
+      );
+      assertParagraphContainsAll(
+        section.body,
+        [
+          /supportsMaxOutputTokens/,
+          /OpenAIResponsesCompat/,
+          /true/,
+          /false/,
+          contract.rejectMaxOutput,
+        ],
+        `${locale} ${documentContract.path} Responses output-token compatibility`,
+      );
+      structures.push(sectionStructure(section));
+    }
+    assert.deepEqual(structures[0], structures[1]);
+  }
+});
+
+test("both API locales publish the exact Pi 0.85 compatibility and settings declarations", async () => {
+  const references = await readLocalizedContent("reference/api.md");
+  const declarations = [
+    /interface OpenAICompletionsCompat \{[\s\S]*?vllmPriority\?: number;/,
+    /interface OpenAIResponsesCompat \{[\s\S]*?supportsMaxOutputTokens\?: boolean;/,
+    /interface AnthropicMessagesCompat \{[\s\S]*?supportsMidConvoEffort\?: boolean;/,
+  ];
+  const settingsSemantics = {
+    en: {
+      keyed: /keyed by `provider\/modelId`/i,
+      saved: /`defaultThinkingLevel`[^.]*Ctrl\+S[^.]*`\/thinking`/i,
+      distinct: /distinct from[^.]*provider request fields/i,
+      recovery: /showCacheMissNotices[^.]*dropped Anthropic thinking blocks/i,
+    },
+    vi: {
+      keyed: /khóa `provider\/modelId`|key `provider\/modelId`/i,
+      saved: /`defaultThinkingLevel`[^.]*Ctrl\+S[^.]*`\/thinking`/i,
+      distinct: /tách biệt với[^.]*request field của provider/i,
+      recovery: /showCacheMissNotices[^.]*thinking block Anthropic bị loại/i,
+    },
+  };
+  const structures = [];
+
+  for (const { locale, source } of references) {
+    const section = assertContainsAll(
+      source,
+      declarations,
+      `${locale} API compatibility declarations`,
+      {
+        heading: locale === "en" ? "### Model metadata" : "### Metadata của model",
+      },
+    );
+    assertParagraphContainsAll(
+      section.body,
+      [/vllmPriority/, /OpenAICompletionsCompat/, /lower|thấp hơn/i],
+      `${locale} API vLLM priority ownership`,
+    );
+    assertParagraphContainsAll(
+      section.body,
+      [
+        /supportsMaxOutputTokens/,
+        /OpenAIResponsesCompat/,
+        /default[^.]*true|mặc định[^.]*true/i,
+      ],
+      `${locale} API Responses output-token ownership`,
+    );
+    assertParagraphContainsAll(
+      section.body,
+      [
+        /supportsMidConvoEffort/,
+        /AnthropicMessagesCompat/,
+        /default[^.]*false|mặc định[^.]*false/i,
+      ],
+      `${locale} API Anthropic effort ownership`,
+    );
+    structures.push(sectionStructure(section));
+
+    const settingsSection = assertContainsAll(
+      source,
+      [
+        /interface Settings \{[\s\S]*?defaultThinkingLevel\?: ThinkingLevel;[\s\S]*?modelThinkingLevels\?: Record<string, ThinkingLevel>;[\s\S]*?showCacheMissNotices\?: boolean;/,
+        /class SettingsManager \{[\s\S]*?getDefaultThinkingLevel\(\): ThinkingLevel \| undefined;[\s\S]*?setDefaultThinkingLevel\(level: ThinkingLevel\): void;[\s\S]*?getModelThinkingLevel\(provider: string, modelId: string\): ThinkingLevel \| undefined;[\s\S]*?getAllModelThinkingLevels\(\): Record<string, ThinkingLevel>;[\s\S]*?setModelThinkingLevel\(provider: string, modelId: string, level: ThinkingLevel\): void;[\s\S]*?removeModelThinkingLevel\(provider: string, modelId: string\): void;/,
+      ],
+      `${locale} API settings declarations`,
+      {
+        heading:
+          locale === "en"
+            ? "### Persistence, settings, and resources"
+            : "### Persistence, setting và resource",
+      },
+    );
+    const semantics = settingsSemantics[locale];
+    assertParagraphContainsAll(
+      settingsSection.body,
+      [/modelThinkingLevels/, semantics.keyed, /startup|khởi động/i],
+      `${locale} API per-model thinking setting semantics`,
+    );
+    assertParagraphContainsAll(
+      settingsSection.body,
+      [/defaultThinkingLevel/, semantics.saved, semantics.distinct],
+      `${locale} API global thinking setting semantics`,
+    );
+    assertParagraphContainsAll(
+      settingsSection.body,
+      [/showCacheMissNotices/, semantics.recovery],
+      `${locale} API provider recovery notice semantics`,
+    );
+    structures.push(sectionStructure(settingsSection));
+  }
+  assert.deepEqual(structures[0], structures[2]);
+  assert.deepEqual(structures[1], structures[3]);
+});
+
+test("both settings references distinguish global and per-model thinking defaults and recovery notices", async () => {
+  const references = await readLocalizedContent("reference/configuration.md");
+  const localeContract = {
+    en: {
+      keyed: /keyed by `provider\/modelId`/i,
+      saved: /`defaultThinkingLevel`[^.]*saved[^.]*Ctrl\+S[^.]*`\/thinking`/i,
+      distinct: /distinct from[^.]*provider request fields/i,
+      recovery: /provider recovery diagnostics[^.]*dropped Anthropic thinking blocks/i,
+    },
+    vi: {
+      keyed: /khóa `provider\/modelId`|key `provider\/modelId`/i,
+      saved: /`defaultThinkingLevel`[^.]*lưu[^.]*Ctrl\+S[^.]*`\/thinking`/i,
+      distinct: /tách biệt với[^.]*request field của provider/i,
+      recovery: /chẩn đoán phục hồi provider[^.]*thinking block Anthropic bị loại/i,
+    },
+  };
+  const structures = [];
+
+  for (const { locale, source } of references) {
+    const contract = localeContract[locale];
+    const section = assertContainsAll(
+      source,
+      [
+        /modelThinkingLevels/,
+        /defaultThinkingLevel/,
+        /showCacheMissNotices/,
+        contract.keyed,
+        contract.saved,
+        contract.distinct,
+        contract.recovery,
+      ],
+      `${locale} configuration thinking persistence`,
+      {
+        heading: locale === "en" ? "### Model and thinking" : "### Model và thinking",
+      },
+    );
+    assertParagraphContainsAll(
+      section.body,
+      [/modelThinkingLevels/, contract.keyed, /startup|khởi động/i],
+      `${locale} per-model startup thinking levels`,
+    );
+    structures.push(sectionStructure(section));
+  }
+  assert.deepEqual(structures[0], structures[1]);
+});
+
 test("active docs do not present the renamed GoogleThinkingLevel identifier as current", async () => {
   const activeSources = await readActiveSources();
   const staleGoogleTypeMentions = activeSources

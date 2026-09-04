@@ -4,6 +4,8 @@ description: A curated map of core and experimental Pi package entry points at v
 translation_key: reference-api
 language: en
 official_refs:
+  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/src/types.ts'
+  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/settings-manager.ts'
   - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/client/src/index.ts'
   - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/client/README.md'
   - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/protocol/src/index.ts'
@@ -176,6 +178,26 @@ const normalizedBudgets: Record<ResolvedGoogleThinkingLevel, number> = {
 
 void [options, normalizedBudgets];
 ```
+
+The following selected declarations preserve the exact optional member signatures published by Pi 0.85.0; they do not reproduce the interfaces' other members:
+
+```ts title="compatibility-types.ts"
+export interface OpenAICompletionsCompat {
+  vllmPriority?: number;
+}
+
+export interface OpenAIResponsesCompat {
+  supportsMaxOutputTokens?: boolean;
+}
+
+export interface AnthropicMessagesCompat {
+  supportsMidConvoEffort?: boolean;
+}
+```
+
+`vllmPriority` belongs only to `OpenAICompletionsCompat`: lower values are handled earlier, the vLLM server default is `0`, and the field matters only with `--scheduling-policy priority`. It is off by default and is not set on the generated model catalog.
+
+`supportsMaxOutputTokens` belongs to `OpenAIResponsesCompat` and defaults to `true`; set it to `false` when a Responses-compatible gateway rejects `max_output_tokens`. `supportsMidConvoEffort` belongs to `AnthropicMessagesCompat` and defaults to `false`; enable it only for an exact supported Claude model on a faithful Anthropic Messages transport, never merely because a provider is Anthropic-compatible.
 
 Cost tiers, when present, compare `input + cacheRead + cacheWrite` with `inputTokensAbove`; the highest matching threshold prices the whole request.
 
@@ -391,6 +413,29 @@ An `AgentSession` adds synchronous subscriptions, persistence, compaction, retri
 - `SettingsManager.create(cwd, agentDir?)` merges global and trusted project settings; `SettingsManager.inMemory()` is useful for embedded hosts and tests.
 - `new DefaultResourceLoader({ cwd, agentDir, settingsManager? })` constructs a loader that discovers context files, system prompts, extensions, skills, prompt templates, and themes after `reload()`.
 - `ModelRuntime.create()` owns the provider catalog and synchronized credentials used by Coding Agent.
+
+These are the selected exact 0.85.0 settings declarations relevant to thinking persistence; omitted members remain part of the published interfaces:
+
+```ts title="thinking-settings-types.ts"
+interface Settings {
+  defaultThinkingLevel?: ThinkingLevel;
+  modelThinkingLevels?: Record<string, ThinkingLevel>;
+  showCacheMissNotices?: boolean;
+}
+
+declare class SettingsManager {
+  getDefaultThinkingLevel(): ThinkingLevel | undefined;
+  setDefaultThinkingLevel(level: ThinkingLevel): void;
+  getModelThinkingLevel(provider: string, modelId: string): ThinkingLevel | undefined;
+  getAllModelThinkingLevels(): Record<string, ThinkingLevel>;
+  setModelThinkingLevel(provider: string, modelId: string, level: ThinkingLevel): void;
+  removeModelThinkingLevel(provider: string, modelId: string): void;
+}
+```
+
+`modelThinkingLevels` stores per-model startup choices keyed by `provider/modelId`; the corresponding `SettingsManager` methods accept the provider and model ID separately. `defaultThinkingLevel` remains the global startup fallback, can be saved with Ctrl+S in `/thinking`, and is distinct from provider request fields.
+
+When `showCacheMissNotices` is enabled, the transcript can also surface provider recovery diagnostics such as dropped Anthropic thinking blocks, in addition to significant cache misses and summary usage.
 
 Direct SDK hosts own cwd, trust, storage, and cleanup policy. Do not mutate session JSONL while a manager is active, and do not assume that `SettingsManager.create()` reproduces CLI trust resolution without the host supplying that decision.
 

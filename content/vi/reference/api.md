@@ -4,6 +4,8 @@ description: Bản đồ chọn lọc các entry point của package Pi lõi và
 translation_key: reference-api
 language: vi
 official_refs:
+  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/src/types.ts'
+  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/settings-manager.ts'
   - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/client/src/index.ts'
   - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/client/README.md'
   - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/protocol/src/index.ts'
@@ -176,6 +178,26 @@ const normalizedBudgets: Record<ResolvedGoogleThinkingLevel, number> = {
 
 void [options, normalizedBudgets];
 ```
+
+Các declaration chọn lọc dưới đây giữ nguyên chữ ký member tùy chọn được Pi 0.85.0 phát hành; chúng không lặp lại những member khác của các interface:
+
+```ts title="compatibility-types.ts"
+export interface OpenAICompletionsCompat {
+  vllmPriority?: number;
+}
+
+export interface OpenAIResponsesCompat {
+  supportsMaxOutputTokens?: boolean;
+}
+
+export interface AnthropicMessagesCompat {
+  supportsMidConvoEffort?: boolean;
+}
+```
+
+`vllmPriority` chỉ thuộc `OpenAICompletionsCompat`: giá trị thấp hơn được xử lý sớm hơn, mặc định của vLLM server là `0`, và field chỉ có ý nghĩa với `--scheduling-policy priority`. Tính năng này tắt theo mặc định và không được đặt trong generated model catalog.
+
+`supportsMaxOutputTokens` thuộc `OpenAIResponsesCompat` và mặc định là `true`; đặt thành `false` khi gateway tương thích Responses từ chối `max_output_tokens`. `supportsMidConvoEffort` thuộc `AnthropicMessagesCompat` và mặc định là `false`; chỉ bật cho chính xác Claude model được hỗ trợ trên transport Anthropic Messages trung thực, không bật chỉ vì provider tương thích Anthropic.
 
 Khi có cost tier, hệ thống so sánh `input + cacheRead + cacheWrite` với `inputTokensAbove`; threshold khớp cao nhất định giá toàn bộ request.
 
@@ -391,6 +413,29 @@ try {
 - `SettingsManager.create(cwd, agentDir?)` merge global setting với project setting đã tin cậy; `SettingsManager.inMemory()` phù hợp với embedded host và test.
 - `new DefaultResourceLoader({ cwd, agentDir, settingsManager? })` tạo loader để discover context file, system prompt, extension, skill, prompt template và theme sau `reload()`.
 - `ModelRuntime.create()` sở hữu provider catalog và credential được đồng bộ mà Coding Agent sử dụng.
+
+Đây là các declaration 0.85.0 chính xác, được chọn lọc cho setting liên quan đến thinking persistence; những member bị lược vẫn thuộc các interface đã phát hành:
+
+```ts title="thinking-settings-types.ts"
+interface Settings {
+  defaultThinkingLevel?: ThinkingLevel;
+  modelThinkingLevels?: Record<string, ThinkingLevel>;
+  showCacheMissNotices?: boolean;
+}
+
+declare class SettingsManager {
+  getDefaultThinkingLevel(): ThinkingLevel | undefined;
+  setDefaultThinkingLevel(level: ThinkingLevel): void;
+  getModelThinkingLevel(provider: string, modelId: string): ThinkingLevel | undefined;
+  getAllModelThinkingLevels(): Record<string, ThinkingLevel>;
+  setModelThinkingLevel(provider: string, modelId: string, level: ThinkingLevel): void;
+  removeModelThinkingLevel(provider: string, modelId: string): void;
+}
+```
+
+`modelThinkingLevels` lưu lựa chọn khởi động theo từng model với khóa `provider/modelId`; các method tương ứng của `SettingsManager` nhận provider và model ID riêng. `defaultThinkingLevel` vẫn là global fallback lúc khởi động, có thể được lưu bằng Ctrl+S trong `/thinking`, và tách biệt với request field của provider.
+
+Khi bật `showCacheMissNotices`, transcript còn có thể hiển thị chẩn đoán phục hồi provider như thinking block Anthropic bị loại, ngoài cache miss đáng kể và mức sử dụng summary.
 
 SDK host trực tiếp phải tự quản lý cwd, trust, storage và cleanup policy. Không sửa session JSONL khi manager đang active, và không giả định `SettingsManager.create()` tự tái hiện trust resolution của CLI nếu host chưa cung cấp quyết định đó.
 

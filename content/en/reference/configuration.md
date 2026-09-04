@@ -3,12 +3,15 @@ title: Configuration reference
 description: Current Pi settings files, merge rules, trust boundary, settings families, and runtime overrides.
 translation_key: reference-configuration
 language: en
+official_refs:
+  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/docs/settings.md'
+  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/settings-manager.ts'
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-08-25'
+last_updated: '2026-09-04'
 ---
 
-Pi reads JSON settings at startup and when resources reload. This reference describes `@earendil-works/pi-coding-agent` 0.84.3 on Node.js 22.19 or newer.
+Pi reads JSON settings at startup and when resources reload. This reference describes `@earendil-works/pi-coding-agent` 0.85.0 on Node.js 22.19 or newer.
 
 ## Settings files and precedence
 
@@ -40,7 +43,7 @@ The public root exports `SettingsManager` and selected setting types, not a full
 
 | Family | Keys |
 | --- | --- |
-| Model | `defaultProvider`, `defaultModel`, `defaultThinkingLevel`, `thinkingBudgets`, `enabledModels` |
+| Model | `defaultProvider`, `defaultModel`, `defaultThinkingLevel`, `modelThinkingLevels`, `thinkingBudgets`, `enabledModels` |
 | Interaction | `steeringMode`, `followUpMode`, `defaultTools`, `doubleEscapeAction`, `treeFilterMode` |
 | Display | `theme`, `tuiMode`, `fullscreenExitOutput`, `fullscreenScrollbar`, `terminal`, `images`, `markdown` |
 | Lifecycle | `compaction`, `branchSummary`, `retry`, `sessionDir` |
@@ -73,7 +76,9 @@ console.log({
 
 ### Model and thinking
 
-`defaultProvider` and `defaultModel` identify the default model. `--model` takes precedence for a run; a resumed session can restore its recorded model when no explicit CLI model is supplied. `defaultThinkingLevel` accepts `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`. `thinkingBudgets` supplies token budgets for supported providers or compatible models.
+`defaultProvider` and `defaultModel` identify the default model. `--model` takes precedence for a run; a resumed session can restore its recorded model when no explicit CLI model is supplied. `defaultThinkingLevel` accepts `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`; it can be saved with Ctrl+S in `/thinking` or edited manually. This semantic global startup default is distinct from provider request fields.
+
+`modelThinkingLevels` stores per-model startup thinking levels keyed by `provider/modelId`; configure it from `/settings` → Default thinking level per model or edit the JSON manually. A matching per-model value selects that model's startup level, while `defaultThinkingLevel` remains the global fallback. `thinkingBudgets` separately supplies token budgets for supported providers or compatible models.
 
 Do not confuse those semantic settings with a direct Google API option. `GoogleApiThinkingLevel`, exported from `@earendil-works/pi-ai`, is the API-facing union `"THINKING_LEVEL_UNSPECIFIED" | "MINIMAL" | "LOW" | "MEDIUM" | "HIGH"` used by `GoogleOptions.thinking.level` and `GoogleVertexOptions.thinking.level`. `ResolvedGoogleThinkingLevel` is the normalized adapter union `"minimal" | "low" | "medium" | "high"` used after Pi resolves model capability mappings. Neither type expands the allowed values of `defaultThinkingLevel`; they describe provider-code boundaries.
 
@@ -88,7 +93,7 @@ const resolvedAdapterLevel: ResolvedGoogleThinkingLevel = "high";
 void [directRequestLevel, resolvedAdapterLevel];
 ```
 
-`hideThinkingBlock` hides thinking in the transcript. `showCacheMissNotices` shows transcript notices for significant prompt-cache misses. A model still decides which thinking levels and budgets it supports.
+`hideThinkingBlock` hides thinking in the transcript. `showCacheMissNotices` shows transcript notices for significant prompt-cache misses, compaction or branch-summary usage, and provider recovery diagnostics such as dropped Anthropic thinking blocks. A model still decides which thinking levels and budgets it supports.
 
 `enabledModels` supplies patterns for Ctrl+P model cycling; `--models` overrides that scope for one run. Provider endpoints and credentials do not belong in a `providers` settings object. Put supported endpoints in `~/.pi/agent/models.json` or a Provider configuration, and keep credentials in the supported authentication store or environment. See <a href="/en/how-to/plug-new-model">Add a model provider</a>.
 
@@ -97,6 +102,9 @@ void [directRequestLevel, resolvedAdapterLevel];
   "defaultProvider": "anthropic",
   "defaultModel": "claude-sonnet-4-6",
   "defaultThinkingLevel": "medium",
+  "modelThinkingLevels": {
+    "anthropic/claude-sonnet-4-6": "high"
+  },
   "thinkingBudgets": {
     "minimal": 1024,
     "low": 4096,

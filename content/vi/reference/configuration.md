@@ -3,12 +3,15 @@ title: Tham chiếu cấu hình
 description: File setting, quy tắc merge, ranh giới trust, các nhóm setting và runtime override của Pi hiện tại.
 translation_key: reference-configuration
 language: vi
+official_refs:
+  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/docs/settings.md'
+  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/settings-manager.ts'
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-08-25'
+last_updated: '2026-09-04'
 ---
 
-Pi đọc setting JSON khi khởi động và khi reload resource. Reference này mô tả `@earendil-works/pi-coding-agent` 0.84.3 trên Node.js 22.19 trở lên.
+Pi đọc setting JSON khi khởi động và khi reload resource. Reference này mô tả `@earendil-works/pi-coding-agent` 0.85.0 trên Node.js 22.19 trở lên.
 
 ## File setting và thứ tự ưu tiên
 
@@ -40,7 +43,7 @@ Package root public export `SettingsManager` và một số setting type, không
 
 | Nhóm | Key |
 | --- | --- |
-| Model | `defaultProvider`, `defaultModel`, `defaultThinkingLevel`, `thinkingBudgets`, `enabledModels` |
+| Model | `defaultProvider`, `defaultModel`, `defaultThinkingLevel`, `modelThinkingLevels`, `thinkingBudgets`, `enabledModels` |
 | Tương tác | `steeringMode`, `followUpMode`, `defaultTools`, `doubleEscapeAction`, `treeFilterMode` |
 | Hiển thị | `theme`, `tuiMode`, `fullscreenExitOutput`, `fullscreenScrollbar`, `terminal`, `images`, `markdown` |
 | Vòng đời | `compaction`, `branchSummary`, `retry`, `sessionDir` |
@@ -73,7 +76,9 @@ console.log({
 
 ### Model và thinking
 
-`defaultProvider` và `defaultModel` xác định model mặc định. `--model` được ưu tiên cho một lần chạy; session được resume có thể khôi phục model đã ghi khi không truyền model tường minh qua CLI. `defaultThinkingLevel` nhận `off`, `minimal`, `low`, `medium`, `high`, `xhigh` hoặc `max`. `thinkingBudgets` cung cấp token budget cho provider hoặc compatible model có hỗ trợ.
+`defaultProvider` và `defaultModel` xác định model mặc định. `--model` được ưu tiên cho một lần chạy; session được resume có thể khôi phục model đã ghi khi không truyền model tường minh qua CLI. `defaultThinkingLevel` nhận `off`, `minimal`, `low`, `medium`, `high`, `xhigh` hoặc `max`; setting này có thể được lưu bằng Ctrl+S trong `/thinking` hoặc sửa thủ công. Global default mang semantics cho lúc khởi động này tách biệt với request field của provider.
+
+`modelThinkingLevels` lưu thinking level khởi động theo từng model với khóa `provider/modelId`; hãy cấu hình qua `/settings` → Default thinking level per model hoặc sửa JSON thủ công. Giá trị khớp theo model chọn level khởi động của model đó, còn `defaultThinkingLevel` vẫn là global fallback. `thinkingBudgets` là setting riêng để cung cấp token budget cho provider hoặc compatible model có hỗ trợ.
 
 Đừng nhầm các setting mang semantics đó với option gửi trực tiếp tới Google API. `GoogleApiThinkingLevel`, được export từ `@earendil-works/pi-ai`, là union kiểu enum hướng API `"THINKING_LEVEL_UNSPECIFIED" | "MINIMAL" | "LOW" | "MEDIUM" | "HIGH"` dùng cho `GoogleOptions.thinking.level` và `GoogleVertexOptions.thinking.level`. `ResolvedGoogleThinkingLevel` là union đã chuẩn hóa trong adapter `"minimal" | "low" | "medium" | "high"`, dùng sau khi Pi resolve capability mapping của model. Cả hai type đều không mở rộng tập giá trị của `defaultThinkingLevel`; chúng mô tả các ranh giới trong mã provider.
 
@@ -88,7 +93,7 @@ const resolvedAdapterLevel: ResolvedGoogleThinkingLevel = "high";
 void [directRequestLevel, resolvedAdapterLevel];
 ```
 
-`hideThinkingBlock` ẩn thinking khỏi transcript. `showCacheMissNotices` hiện thông báo trong transcript cho prompt-cache miss đáng kể. Model vẫn quyết định thinking level và budget nào được hỗ trợ.
+`hideThinkingBlock` ẩn thinking khỏi transcript. `showCacheMissNotices` hiện thông báo trong transcript cho prompt-cache miss đáng kể, mức sử dụng compaction hoặc branch summary, và chẩn đoán phục hồi provider như thinking block Anthropic bị loại. Model vẫn quyết định thinking level và budget nào được hỗ trợ.
 
 `enabledModels` cung cấp pattern cho thao tác chuyển model bằng Ctrl+P; `--models` override scope đó trong một lần chạy. Provider endpoint và credential không nằm trong object setting `providers`. Hãy đặt endpoint được hỗ trợ trong `~/.pi/agent/models.json` hoặc Provider configuration, đồng thời giữ credential trong authentication store hoặc environment được hỗ trợ. Xem <a href="/vi/how-to/plug-new-model">Thêm một nhà cung cấp mô hình</a>.
 
@@ -97,6 +102,9 @@ void [directRequestLevel, resolvedAdapterLevel];
   "defaultProvider": "anthropic",
   "defaultModel": "claude-sonnet-4-6",
   "defaultThinkingLevel": "medium",
+  "modelThinkingLevels": {
+    "anthropic/claude-sonnet-4-6": "high"
+  },
   "thinkingBudgets": {
     "minimal": 1024,
     "low": 4096,
