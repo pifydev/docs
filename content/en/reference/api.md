@@ -510,7 +510,7 @@ The following package-root exports are the current `0.85.0` boundary, not a stab
 
 The root exports `Client` and `createClientServiceTransport`; `ClientDisposedError`, `DisconnectedError`, and `ServerError`; the transport contracts `ByteTransport`, `ByteTransportFactory`, and `ByteTransportHandlers`; and the client types `AttachmentChangeListener`, `ClientOptions`, `ConnectionState`, `ConnectionStateChange`, `ListenerErrorHandler`, `ServiceSubscription`, and `Unsubscribe`.
 
-`Client` is transport-neutral and operates on explicit `RpcTarget` values. `createClientServiceTransport(client, getTarget)` adapts a lazily resolved target to Chord's `RemoteServiceTransport`. It does not manufacture typed services. On disconnect, pending requests reject locally and the live attachment is cleared; the client does not reconnect or replay requests automatically, even though accepted work may finish remotely.
+`Client` is transport-neutral and operates on explicit `RpcTarget` values. `createClientServiceTransport(client, getTarget)` adapts a lazily resolved target to Chord's `RemoteServiceTransport`. It does not manufacture typed services. On disconnect or disposal, pending requests reject locally and the live attachment is cleared; the client does not reconnect or replay requests automatically, even though accepted work may finish remotely.
 
 ### `@earendil-works/pi-protocol`
 

@@ -182,7 +182,7 @@ Boundary về ngữ nghĩa đó thuộc về Chord và ứng dụng. Chord sở 
 
 `@earendil-works/pi-server` route service phạm vi server qua `RoutedServerServiceHost` do ứng dụng cung cấp và route service phạm vi Session qua `RoutedSessionHandle` được lấy cho một presentation attachment. Server validate route trước khi forward opaque invocation. `Session` thật và Agent Harness vẫn ở trong process: không JavaScript object nào đi qua protocol boundary, còn host giữ policy vòng đời cho Session, worker và Harness.
 
-Policy về disconnect và retry được để lộ có chủ đích. Disconnect làm pending work reject ở phía local và xóa live attachment route, nhưng công việc đã được chấp nhận vẫn có thể hoàn tất ở remote trước khi server giải phóng attachment đó. Không có automatic reconnect hay request replay; ứng dụng phải reconnect, attach lại qua management service và chỉ lặp những thao tác mà nó biết là an toàn.
+Policy về disconnect, dispose và retry được để lộ có chủ đích. Disconnect hoặc dispose làm pending work reject ở phía local và xóa live attachment route, nhưng công việc đã được chấp nhận vẫn có thể hoàn tất ở remote trước khi server giải phóng attachment đó. Không có automatic reconnect hay request replay; ứng dụng phải reconnect, attach lại qua management service và chỉ lặp những thao tác mà nó biết là an toàn.
 
 > **Boundary thử nghiệm:** Các package này đang thử nghiệm và không bảo đảm tương thích. Đây là integration boundary tùy chọn nằm ngang hàng, không phải layer SDK bắt buộc thứ tư, không phải sản phẩm server end-to-end ổn định và không phải multi-Agent orchestrator cũ.
 
@@ -289,9 +289,11 @@ Các mũi tên dependency bên dưới đi từ dependency tái sử dụng đư
 @earendil-works/pi-protocol ──→ @earendil-works/pi-client
 @earendil-works/pi-protocol ──→ @earendil-works/pi-server
 @earendil-works/pi-agent-core ─→ @earendil-works/pi-server
+@earendil-works/pi-client ─────→ @earendil-works/pi-coding-agent
+@earendil-works/pi-protocol ───→ @earendil-works/pi-coding-agent
 ```
 
-Sơ đồ cho thấy hai giới hạn. Thứ nhất, ba lớp mô tả hướng dependency của các trách nhiệm model, runtime và coding product; chúng không phân loại mọi package trong monorepo. Thứ hai, các package client/protocol/server thử nghiệm không nằm trên Coding Agent như một layer nữa. Chúng route traffic của Chord service dưới dạng opaque tới capability ở trong process và do ứng dụng sở hữu.
+Sơ đồ cho thấy hai giới hạn. Thứ nhất, ba lớp mô tả hướng dependency của các trách nhiệm model, runtime và coding product; chúng không phân loại mọi package trong monorepo. Thứ hai, các dependency trực tiếp từ client và protocol phục vụ phần tích hợp service thử nghiệm của Coding Agent; các package client/protocol/server thử nghiệm không nằm trên Coding Agent như một layer nữa. Chúng route traffic của Chord service dưới dạng opaque tới capability ở trong process và do ứng dụng sở hữu.
 
 ---
 

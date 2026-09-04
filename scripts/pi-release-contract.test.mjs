@@ -869,23 +869,227 @@ test("release fixture identifies published Pi 0.85.0 authority", async () => {
 });
 
 test("both Chapter 2 locales document the Pi 0.85.0 experimental service architecture", async () => {
-  const chapters = await readLocalizedContent("ch02-three-layer-arch.md");
+  const [chapters, references] = await Promise.all([
+    readLocalizedContent("ch02-three-layer-arch.md"),
+    readLocalizedContent("reference/api.md"),
+  ]);
+  const referencesByLocale = new Map(
+    references.map(({ locale, source }) => [locale, source]),
+  );
   const localeContract = {
     en: {
-      heading: "### 2.5 pi-server: an experimental service boundary",
+      chapterHeading: "### 2.5 pi-server: an experimental service boundary",
+      dependencyHeading: "## 4. Open package.json, things are not so simple",
+      client: [
+        /`Client`/,
+        /transport-neutral/i,
+        /`createClientServiceTransport\(\)`/,
+        /Chord transport/,
+        /does not build typed service proxies/,
+      ],
+      protocol: [
+        /`PROTOCOL_VERSION`/,
+        /strict routed envelopes/,
+        /CBOR/,
+        /\{ serverId \}/,
+        /\{ serverId, sessionId, attachmentId \}/,
+        /opaque payloads/,
+        /strict JSON/,
+      ],
+      chord: [
+        /Chord owns/,
+        /control parsing/,
+        /bindings/,
+        /subscriptions/,
+        /replicated state/,
+        /`pi-protocol`/,
+        /opaque strict JSON/,
+      ],
+      server: [
+        /server-scoped services/,
+        /Session-scoped services/,
+        /`RoutedServerServiceHost`/,
+        /`RoutedSessionHandle`/,
+        /presentation attachment/,
+      ],
+      local: [
+        /actual `Session`/,
+        /Agent Harness/,
+        /process-local/,
+        /neither JavaScript object crosses/,
+      ],
+      disconnect: [
+        /disconnect/i,
+        /disposal/i,
+        /pending work locally/,
+        /clears the live attachment route/,
+        /accepted may still finish remotely/,
+        /no automatic reconnect/,
+        /no request replay/,
+      ],
       warning: [
         /^> \*\*Experimental boundary:\*\*/m,
         /experimental/i,
         /no compatibility guarantee/i,
       ],
+      apiHeading: "## Experimental routed-service packages",
+      apiClientHeading: "### `@earendil-works/pi-client`",
+      apiProtocolHeading: "### `@earendil-works/pi-protocol`",
+      apiServerHeading: "### `@earendil-works/pi-server`",
+      apiClientExports: [
+        /root exports/i,
+        /`Client`/,
+        /`createClientServiceTransport`/,
+        /`ByteTransportFactory`/,
+        /`ClientOptions`/,
+        /`ServiceSubscription`/,
+      ],
+      apiClientBoundary: [
+        /transport-neutral/i,
+        /`RpcTarget`/,
+        /Chord's `RemoteServiceTransport`/,
+        /does not manufacture typed services/,
+      ],
+      apiDisconnect: [
+        /disconnect/i,
+        /disposal/i,
+        /pending requests reject locally/,
+        /live attachment is cleared/,
+        /does not reconnect or replay requests automatically/,
+        /accepted work may finish remotely/,
+      ],
+      apiProtocolBoundary: [
+        /CBOR/,
+        /strict envelopes/,
+        /opaque strict-JSON values/,
+        /Chord owns/,
+        /service-control parsing/,
+        /replicated-state semantics/,
+      ],
+      apiServerExports: [
+        /root exports/i,
+        /`Server`/,
+        /`ServerHost`/,
+        /`RoutedServerServiceHost`/,
+        /`RoutedSessionHandle`/,
+      ],
+      apiServerBoundary: [
+        /server-scoped/,
+        /Session services/,
+        /does not.*open `Session` or Agent Harness over the wire/,
+        /\{ serverId \}/,
+        /\{ serverId, sessionId, attachmentId \}/,
+        /application responsibilities/,
+        /does not present an end-to-end launch recipe as stable/,
+      ],
+      apiWarning: [/experimental/i, /no compatibility guarantee/i],
     },
     vi: {
-      heading: "### 2.5 pi-server: một service boundary thử nghiệm",
+      chapterHeading: "### 2.5 pi-server: một service boundary thử nghiệm",
+      dependencyHeading:
+        "## 4. Mở package.json ra, mọi thứ không đơn giản như vậy",
+      client: [
+        /`Client` trung lập với transport/,
+        /`createClientServiceTransport\(\)`/,
+        /Chord transport/,
+        /không dựng typed service proxy/,
+      ],
+      protocol: [
+        /`PROTOCOL_VERSION`/,
+        /routed envelope nghiêm ngặt/,
+        /CBOR/,
+        /\{ serverId \}/,
+        /\{ serverId, sessionId, attachmentId \}/,
+        /opaque payload/,
+        /strict JSON/,
+      ],
+      chord: [
+        /Chord sở hữu/,
+        /control parsing/,
+        /binding/,
+        /subscription/,
+        /replicated state/,
+        /`pi-protocol`/,
+        /strict JSON opaque/,
+      ],
+      server: [
+        /service phạm vi server/,
+        /service phạm vi Session/,
+        /`RoutedServerServiceHost`/,
+        /`RoutedSessionHandle`/,
+        /presentation attachment/,
+      ],
+      local: [
+        /`Session` thật/,
+        /Agent Harness/,
+        /trong process/,
+        /không JavaScript object nào đi qua protocol boundary/,
+      ],
+      disconnect: [
+        /Disconnect/,
+        /dispose/,
+        /pending work reject ở phía local/,
+        /xóa live attachment route/,
+        /đã được chấp nhận.*hoàn tất ở remote/,
+        /Không có automatic reconnect/,
+        /request replay/,
+      ],
       warning: [
         /^> \*\*Boundary thử nghiệm:\*\*/m,
         /thử nghiệm/i,
         /không bảo đảm tương thích/i,
       ],
+      apiHeading: "## Các package routed-service thử nghiệm",
+      apiClientHeading: "### `@earendil-works/pi-client`",
+      apiProtocolHeading: "### `@earendil-works/pi-protocol`",
+      apiServerHeading: "### `@earendil-works/pi-server`",
+      apiClientExports: [
+        /Root export/,
+        /`Client`/,
+        /`createClientServiceTransport`/,
+        /`ByteTransportFactory`/,
+        /`ClientOptions`/,
+        /`ServiceSubscription`/,
+      ],
+      apiClientBoundary: [
+        /`Client` trung lập với transport/,
+        /`RpcTarget`/,
+        /`RemoteServiceTransport` của Chord/,
+        /không tự dựng typed service/,
+      ],
+      apiDisconnect: [
+        /mất kết nối/,
+        /dispose/,
+        /pending request reject ở local/,
+        /live attachment bị xóa/,
+        /không tự reconnect hoặc replay request/,
+        /đã được chấp nhận.*hoàn tất ở remote/,
+      ],
+      apiProtocolBoundary: [
+        /CBOR/,
+        /envelope nghiêm ngặt/,
+        /strict JSON opaque/,
+        /Chord sở hữu/,
+        /control parsing/,
+        /ngữ nghĩa replicated state/,
+      ],
+      apiServerExports: [
+        /Root export/,
+        /`Server`/,
+        /`ServerHost`/,
+        /`RoutedServerServiceHost`/,
+        /`RoutedSessionHandle`/,
+      ],
+      apiServerBoundary: [
+        /service phạm vi server/,
+        /service phạm vi Session attachment/,
+        /không.*`Session`.*Agent Harness qua wire/,
+        /\{ serverId \}/,
+        /\{ serverId, sessionId, attachmentId \}/,
+        /Ứng dụng có trách nhiệm/,
+        /không trình bày.*recipe end-to-end.*ổn định/,
+      ],
+      apiWarning: [/thử nghiệm/i, /không bảo đảm tương thích/i],
     },
   };
   const structures = [];
@@ -894,7 +1098,7 @@ test("both Chapter 2 locales document the Pi 0.85.0 experimental service archite
     const contract = localeContract[locale];
     const section = extractMarkdownSection(
       source,
-      contract.heading,
+      contract.chapterHeading,
       `${locale} Chapter 2 experimental service architecture`,
     );
 
@@ -902,6 +1106,20 @@ test("both Chapter 2 locales document the Pi 0.85.0 experimental service archite
       assert.ok(
         section.body.includes(term),
         `${locale} Chapter 2 experimental service architecture must name ${term}`,
+      );
+    }
+    for (const [claim, patterns] of [
+      ["transport-neutral client boundary", contract.client],
+      ["routed protocol boundary", contract.protocol],
+      ["Chord semantic ownership", contract.chord],
+      ["routed server boundary", contract.server],
+      ["process-local Session and Harness", contract.local],
+      ["disconnect and replay semantics", contract.disconnect],
+    ]) {
+      assertParagraphContainsAll(
+        section.body,
+        patterns,
+        `${locale} Chapter 2 ${claim}`,
       );
     }
     assert.doesNotMatch(
@@ -914,7 +1132,86 @@ test("both Chapter 2 locales document the Pi 0.85.0 experimental service archite
       contract.warning,
       `${locale} Chapter 2 experimental compatibility warning`,
     );
-    structures.push(sectionStructure(section));
+
+    const dependencySection = extractMarkdownSection(
+      source,
+      contract.dependencyHeading,
+      `${locale} Chapter 2 dependency graph`,
+    );
+    assert.match(
+      dependencySection.body,
+      /@earendil-works\/pi-client\s+─+→ @earendil-works\/pi-coding-agent/,
+      `${locale} Chapter 2 dependency graph must show the direct pi-client to pi-coding-agent edge`,
+    );
+    assert.match(
+      dependencySection.body,
+      /@earendil-works\/pi-protocol\s+─+→ @earendil-works\/pi-coding-agent/,
+      `${locale} Chapter 2 dependency graph must show the direct pi-protocol to pi-coding-agent edge`,
+    );
+
+    const referenceSource = referencesByLocale.get(locale);
+    assert.ok(referenceSource, `${locale} API reference must be available`);
+    const apiSection = extractMarkdownSection(
+      referenceSource,
+      contract.apiHeading,
+      `${locale} API experimental service packages`,
+    );
+    const apiClient = extractMarkdownSection(
+      referenceSource,
+      contract.apiClientHeading,
+      `${locale} API client exports`,
+    );
+    const apiProtocol = extractMarkdownSection(
+      referenceSource,
+      contract.apiProtocolHeading,
+      `${locale} API protocol exports`,
+    );
+    const apiServer = extractMarkdownSection(
+      referenceSource,
+      contract.apiServerHeading,
+      `${locale} API server exports`,
+    );
+    assertParagraphContainsAll(
+      apiClient.body,
+      contract.apiClientExports,
+      `${locale} API current client exports`,
+    );
+    assertParagraphContainsAll(
+      apiClient.body,
+      contract.apiClientBoundary,
+      `${locale} API client service boundary`,
+    );
+    assertParagraphContainsAll(
+      apiClient.body,
+      contract.apiDisconnect,
+      `${locale} API disconnect and replay semantics`,
+    );
+    assertParagraphContainsAll(
+      apiProtocol.body,
+      contract.apiProtocolBoundary,
+      `${locale} API protocol and Chord ownership`,
+    );
+    assertParagraphContainsAll(
+      apiServer.body,
+      contract.apiServerExports,
+      `${locale} API current server exports`,
+    );
+    assertParagraphContainsAll(
+      apiServer.body,
+      contract.apiServerBoundary,
+      `${locale} API routed server boundary`,
+    );
+    assertParagraphContainsAll(
+      apiSection.body,
+      contract.apiWarning,
+      `${locale} API experimental compatibility warning`,
+    );
+
+    structures.push({
+      chapter: sectionStructure(section),
+      dependency: sectionStructure(dependencySection),
+      api: sectionStructure(apiSection),
+    });
   }
 
   assert.deepEqual(structures[0], structures[1]);

@@ -510,7 +510,7 @@ Các package-root export dưới đây là boundary hiện hành của `0.85.0`,
 
 Root export `Client` và `createClientServiceTransport`; các error `ClientDisposedError`, `DisconnectedError`, `ServerError`; contract transport `ByteTransport`, `ByteTransportFactory`, `ByteTransportHandlers`; cùng các client type `AttachmentChangeListener`, `ClientOptions`, `ConnectionState`, `ConnectionStateChange`, `ListenerErrorHandler`, `ServiceSubscription` và `Unsubscribe`.
 
-`Client` trung lập với transport và làm việc trên `RpcTarget` tường minh. `createClientServiceTransport(client, getTarget)` chuyển một target được resolve lười thành `RemoteServiceTransport` của Chord; nó không tự dựng typed service. Khi mất kết nối, pending request reject ở local và live attachment bị xóa; client không tự reconnect hoặc replay request, dù công việc đã được chấp nhận vẫn có thể hoàn tất ở remote.
+`Client` trung lập với transport và làm việc trên `RpcTarget` tường minh. `createClientServiceTransport(client, getTarget)` chuyển một target được resolve lười thành `RemoteServiceTransport` của Chord; nó không tự dựng typed service. Khi mất kết nối hoặc dispose, pending request reject ở local và live attachment bị xóa; client không tự reconnect hoặc replay request, dù công việc đã được chấp nhận vẫn có thể hoàn tất ở remote.
 
 ### `@earendil-works/pi-protocol`
 

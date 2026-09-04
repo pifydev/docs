@@ -182,7 +182,7 @@ That semantic boundary belongs to Chord and the application. Chord owns service 
 
 `@earendil-works/pi-server` routes server-scoped services through an application-supplied `RoutedServerServiceHost` and Session-scoped services through a `RoutedSessionHandle` acquired for a presentation attachment. The server validates the route before forwarding an opaque invocation. The actual `Session` and Agent Harness stay process-local: neither JavaScript object crosses the protocol boundary, and the host retains Session, worker, and Harness lifecycle policy.
 
-Disconnect and retry policy are deliberately visible. A disconnect rejects pending work locally and clears the live attachment route, but work already accepted may still finish remotely before the server releases that attachment. There is no automatic reconnect and no request replay; the application must reconnect, attach again through its management service, and repeat only operations it knows are safe.
+Disconnect, disposal, and retry policy are deliberately visible. A disconnect or disposal rejects pending work locally and clears the live attachment route, but work already accepted may still finish remotely before the server releases that attachment. There is no automatic reconnect and no request replay; the application must reconnect, attach again through its management service, and repeat only operations it knows are safe.
 
 > **Experimental boundary:** These packages are experimental and carry no compatibility guarantee. They are an optional sibling integration boundary, not a fourth mandatory SDK layer, not a stable end-to-end server product, and not the retired multi-Agent orchestrator.
 
@@ -289,9 +289,11 @@ The dependency arrows below point from a reusable dependency toward its consumer
 @earendil-works/pi-protocol ──→ @earendil-works/pi-client
 @earendil-works/pi-protocol ──→ @earendil-works/pi-server
 @earendil-works/pi-agent-core ─→ @earendil-works/pi-server
+@earendil-works/pi-client ─────→ @earendil-works/pi-coding-agent
+@earendil-works/pi-protocol ───→ @earendil-works/pi-coding-agent
 ```
 
-The diagram makes two limits visible. First, the three layers describe dependency direction for the model, runtime, and coding-product responsibilities; they do not classify every monorepo package. Second, the experimental client/protocol/server packages do not sit above Coding Agent as another layer. They route opaque Chord service traffic to application-owned, process-local capabilities.
+The diagram makes two limits visible. First, the three layers describe dependency direction for the model, runtime, and coding-product responsibilities; they do not classify every monorepo package. Second, Coding Agent's direct client and protocol dependencies support its experimental service integration; the experimental client/protocol/server packages do not sit above Coding Agent as another layer. They route opaque Chord service traffic to application-owned, process-local capabilities.
 
 ---
 
