@@ -2616,6 +2616,26 @@ test("both model guides bind Pi 0.85 compatibility flags to their exact interfac
   }
 });
 
+test("both model guides record the Pi 0.85 review date in frontmatter", async () => {
+  const guides = await readLocalizedContent("how-to/plug-new-model.md");
+
+  for (const { locale, source } of guides) {
+    const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(source);
+    assert.ok(frontmatter, `${locale} model guide must contain frontmatter`);
+    const reviewDates = [
+      ...frontmatter[1].matchAll(
+        /^last_updated:\s*["']?([^"'\r\n]+?)["']?\s*$/gm,
+      ),
+    ].map((match) => match[1]);
+
+    assert.deepEqual(
+      reviewDates,
+      ["2026-09-04"],
+      `${locale} model guide must record exactly one Pi 0.85 review date`,
+    );
+  }
+});
+
 test("both API locales publish the exact Pi 0.85 compatibility and settings declarations", async () => {
   const references = await readLocalizedContent("reference/api.md");
   const declarations = [

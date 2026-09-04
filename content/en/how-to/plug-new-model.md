@@ -16,7 +16,7 @@ terms_used:
   - AbortSignal
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: "2026-09-04"
+last_updated: '2026-09-04'
 ---
 
 Most model additions describe an endpoint Pi already knows how to call. Start with `~/.pi/agent/models.json` or an Extension `ProviderConfig`; build a native `Provider` when you need provider-owned authentication or discovery; implement `ProviderStreams` only for a genuinely new wire protocol.

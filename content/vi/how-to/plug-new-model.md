@@ -16,7 +16,7 @@ terms_used:
   - AbortSignal
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: "2026-09-04"
+last_updated: '2026-09-04'
 ---
 
 Phần lớn trường hợp thêm model chỉ cần mô tả một endpoint mà Pi đã biết cách gọi. Hãy bắt đầu bằng `~/.pi/agent/models.json` hoặc `ProviderConfig` trong Extension; tạo native `Provider` khi cần cơ chế xác thực hoặc khám phá model do provider quản lý; chỉ triển khai `ProviderStreams` cho một wire protocol thật sự mới.
