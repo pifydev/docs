@@ -649,6 +649,139 @@ async function readActiveSources() {
   );
 }
 
+function findStaleContentFiles(
+  activeSources,
+  { previousVersion, previousCommit, historicalChangelogHeading },
+) {
+  return activeSources
+    .filter(({ filename, source }) => {
+      const activeSource = filename.endsWith("changelog.md")
+        ? source.replace(
+            new RegExp(
+              `^${historicalChangelogHeading}\\r?\\n[\\s\\S]*?(?=^## |(?![\\s\\S]))`,
+              "m",
+            ),
+            "",
+          )
+        : source;
+      return (
+        activeSource.includes(previousVersion) ||
+        source.includes(previousCommit)
+      );
+    })
+    .map(({ filename }) => filename)
+    .sort();
+}
+
+function findStaleReleaseSurfaceFiles(
+  releaseSurfaces,
+  { previousCommit, previousReleaseFixture, previousSdkFixture },
+) {
+  return releaseSurfaces
+    .filter(({ filename, source }) => {
+      const activeSource = withoutAllowedStaleBaselineSelfTestLiterals(
+        filename,
+        source,
+        previousCommit,
+      );
+      return (
+        filename.includes(previousReleaseFixture) ||
+        filename.includes(previousSdkFixture) ||
+        activeSource.includes(previousCommit) ||
+        activeSource.includes(previousReleaseFixture) ||
+        activeSource.includes(previousSdkFixture)
+      );
+    })
+    .map(({ filename }) => filename)
+    .sort();
+}
+
+function withoutAllowedStaleBaselineSelfTestLiterals(
+  filename,
+  source,
+  previousCommit,
+) {
+  if (
+    filename.replaceAll("\\", "/") !== "scripts/pi-release-contract.test.mjs"
+  ) {
+    return source;
+  }
+
+  const previousBaselinePattern = `/0\\.84\\.3|${previousCommit}/`;
+  const allowedLiteralsByTest = new Map([
+    [
+      "Pi 0.85 Tool and terminal pages use the current baseline metadata",
+      [{ kind: "regex", value: previousBaselinePattern }],
+    ],
+    [
+      "Pi 0.85 prompt and RPC pages use current source pins and review date",
+      [{ kind: "regex", value: previousBaselinePattern }],
+    ],
+    [
+      "parses the exact GitHub source ref for published Pi release links",
+      [
+        {
+          kind: "string",
+          value: `https://github.com/earendil-works/pi/blob/${previousCommit}/file.ts`,
+        },
+        { kind: "string", value: previousCommit },
+      ],
+    ],
+  ]);
+  const sourceFile = ts.createSourceFile(
+    filename,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.JS,
+  );
+  const allowedSpans = [];
+
+  for (const statement of sourceFile.statements) {
+    if (
+      !ts.isExpressionStatement(statement) ||
+      !ts.isCallExpression(statement.expression) ||
+      !ts.isIdentifier(statement.expression.expression) ||
+      statement.expression.expression.text !== "test"
+    ) {
+      continue;
+    }
+    const titleNode = statement.expression.arguments[0];
+    if (!ts.isStringLiteral(titleNode)) continue;
+    const remainingLiterals = allowedLiteralsByTest
+      .get(titleNode.text)
+      ?.slice();
+    if (!remainingLiterals) continue;
+
+    const visit = (node) => {
+      const kind = ts.isRegularExpressionLiteral(node)
+        ? "regex"
+        : ts.isStringLiteral(node)
+          ? "string"
+          : undefined;
+      if (kind) {
+        const matchIndex = remainingLiterals.findIndex(
+          (literal) => literal.kind === kind && literal.value === node.text,
+        );
+        if (matchIndex !== -1) {
+          remainingLiterals.splice(matchIndex, 1);
+          allowedSpans.push([node.getStart(sourceFile), node.end]);
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(statement);
+  }
+
+  return allowedSpans
+    .sort(([left], [right]) => right - left)
+    .reduce(
+      (activeSource, [start, end]) =>
+        `${activeSource.slice(0, start)}${" ".repeat(end - start)}${activeSource.slice(end)}`,
+      source,
+    );
+}
+
 async function readLocalizedContent(relativePath) {
   return Promise.all(
     ["en", "vi"].map(async (locale) => ({
@@ -3552,7 +3685,7 @@ test("Pi 0.85 Tool and terminal pages use the current baseline metadata", async 
       assertNoMisleadingWriteByteCount(source, `${locale} ${relativePath}`);
       assert.doesNotMatch(
         source,
-        /0\.84\.3|4e58f324fae8ebfa98a3d45181fb248072a2afac/, // stale-baseline-allow: rejected pattern
+        /0\.84\.3|4e58f324fae8ebfa98a3d45181fb248072a2afac/,
         `${locale} ${relativePath} must not retain the previous baseline`,
       );
       assert.match(
@@ -3987,7 +4120,7 @@ test("Pi 0.85 prompt and RPC pages use current source pins and review date", asy
     for (const { locale, source } of await readLocalizedContent(relativePath)) {
       assert.doesNotMatch(
         source,
-        /0\.84\.3|4e58f324fae8ebfa98a3d45181fb248072a2afac/, // stale-baseline-allow: rejected pattern
+        /0\.84\.3|4e58f324fae8ebfa98a3d45181fb248072a2afac/,
         `${locale} ${relativePath} must not retain the previous baseline`,
       );
       assert.match(
@@ -4753,6 +4886,111 @@ test("Chapter 3 preserves the Pi 0.85.0 post-turn steering order", async () => {
   }
 });
 
+test("stale baseline scanner permits its exact rejection-test literals", async () => {
+  const previousCommit = [
+    "4e58f324",
+    "fae8ebfa",
+    "98a3d451",
+    "81fb2480",
+    "72a2afac",
+  ].join("");
+  const previousReleaseFixture = ["pi-release-", "0843"].join("");
+  const previousSdkFixture = ["pi-sdk-", "0843"].join("");
+  const source = await readFile(new URL(import.meta.url), "utf8");
+
+  assert.deepEqual(
+    findStaleReleaseSurfaceFiles(
+      [{ filename: "scripts/pi-release-contract.test.mjs", source }],
+      {
+        previousCommit,
+        previousReleaseFixture,
+        previousSdkFixture,
+      },
+    ),
+    [],
+  );
+});
+
+test("stale baseline scanner rejects marker-tagged values outside its allowlist", () => {
+  const previousCommit = [
+    "4e58f324",
+    "fae8ebfa",
+    "98a3d451",
+    "81fb2480",
+    "72a2afac",
+  ].join("");
+  const previousReleaseFixture = ["pi-release-", "0843"].join("");
+  const previousSdkFixture = ["pi-sdk-", "0843"].join("");
+  const legacyRejectionMarker = "stale-baseline-allow: rejected";
+
+  assert.deepEqual(
+    findStaleReleaseSurfaceFiles(
+      [
+        {
+          filename: "scripts/unrelated-commit.mjs",
+          source: `const pin = "${previousCommit}"; // ${legacyRejectionMarker}`,
+        },
+        {
+          filename: "scripts/unrelated-release-fixture.mjs",
+          source: `const fixture = "${previousReleaseFixture}.json"; // ${legacyRejectionMarker}`,
+        },
+        {
+          filename: "scripts/unrelated-sdk-fixture.mjs",
+          source: `const fixture = "${previousSdkFixture}.json"; // ${legacyRejectionMarker}`,
+        },
+        {
+          filename: "scripts/pi-release-contract.test.mjs",
+          source: `test("unrelated", () => { const pin = "${previousCommit}"; // ${legacyRejectionMarker}\n});`,
+        },
+      ],
+      {
+        previousCommit,
+        previousReleaseFixture,
+        previousSdkFixture,
+      },
+    ),
+    [
+      "scripts/pi-release-contract.test.mjs",
+      "scripts/unrelated-commit.mjs",
+      "scripts/unrelated-release-fixture.mjs",
+      "scripts/unrelated-sdk-fixture.mjs",
+    ],
+  );
+});
+
+test("stale content scanner reports repository and Course README paths exactly", () => {
+  const previousVersion = ["0", "84", "3"].join(".");
+  const previousCommit = [
+    "4e58f324",
+    "fae8ebfa",
+    "98a3d451",
+    "81fb2480",
+    "72a2afac",
+  ].join("");
+
+  assert.deepEqual(
+    findStaleContentFiles(
+      [
+        { filename: "README.md", source: `Pi SDK ${previousVersion}` },
+        {
+          filename: "course/README.md",
+          source: `Pi SDK ${previousVersion}`,
+        },
+        {
+          filename: "content/en/guide.md",
+          source: `Source commit: ${previousCommit}`,
+        },
+      ],
+      {
+        previousVersion,
+        previousCommit,
+        historicalChangelogHeading: "## 2026-08-26",
+      },
+    ),
+    ["README.md", "content/en/guide.md", "course/README.md"],
+  );
+});
+
 test("active documentation and release surfaces contain no stale Pi baseline", async () => {
   const previousVersion = ["0", "84", "3"].join(".");
   const previousCommit = [
@@ -4764,27 +5002,13 @@ test("active documentation and release surfaces contain no stale Pi baseline", a
   ].join("");
   const previousReleaseFixture = ["pi-release-", "0843"].join("");
   const previousSdkFixture = ["pi-sdk-", "0843"].join("");
-  const legacyRejectionMarker = "stale-baseline-allow: rejected";
   const historicalChangelogHeading = "## 2026-08-26";
   const activeSources = await readActiveSources();
-  const staleContentFiles = activeSources
-    .filter(({ filename, source }) => {
-      const activeSource = filename.endsWith("changelog.md")
-        ? source.replace(
-            new RegExp(
-              `^${historicalChangelogHeading}\\r?\\n[\\s\\S]*?(?=^## |(?![\\s\\S]))`,
-              "m",
-            ),
-            "",
-          )
-        : source;
-      return (
-        activeSource.includes(previousVersion) ||
-        source.includes(previousCommit)
-      );
-    })
-    .map(({ filename }) => filename)
-    .sort();
+  const staleContentFiles = findStaleContentFiles(activeSources, {
+    previousVersion,
+    previousCommit,
+    historicalChangelogHeading,
+  });
 
   const releaseSurfaceURLs = [
     new URL("package.json", repositoryRoot),
@@ -4794,23 +5018,17 @@ test("active documentation and release surfaces contain no stale Pi baseline", a
   const releaseSurfaces = await Promise.all(
     releaseSurfaceURLs.map(async (fileURL) => ({
       filename: path.relative(repositoryRoot.pathname, fileURL.pathname),
-      source: (await readFile(fileURL, "utf8"))
-        .split(/\r?\n/)
-        .filter((line) => !line.includes(legacyRejectionMarker))
-        .join("\n"),
+      source: await readFile(fileURL, "utf8"),
     })),
   );
-  const staleReleaseSurfaceFiles = releaseSurfaces
-    .filter(
-      ({ filename, source }) =>
-        filename.includes(previousReleaseFixture) ||
-        filename.includes(previousSdkFixture) ||
-        source.includes(previousCommit) ||
-        source.includes(previousReleaseFixture) ||
-        source.includes(previousSdkFixture),
-    )
-    .map(({ filename }) => filename)
-    .sort();
+  const staleReleaseSurfaceFiles = findStaleReleaseSurfaceFiles(
+    releaseSurfaces,
+    {
+      previousCommit,
+      previousReleaseFixture,
+      previousSdkFixture,
+    },
+  );
 
   assert.deepEqual(
     { staleContentFiles, staleReleaseSurfaceFiles },
@@ -4841,7 +5059,7 @@ test("parses the exact GitHub source ref for published Pi release links", () => 
   const rejectedLinks = [
     "https://github.com/earendil-works/pi/blob/main/docs/v0.84.3-notes.md",
     "https://github.com/earendil-works/pi/blob/v0.84.3/file.ts",
-    "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/file.ts", // stale-baseline-allow: rejected value
+    "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/file.ts",
     "https://github.com/earendil-works/pi/blob/v0.85.00/file.ts",
     `https://github.com/earendil-works/pi/blob/${release.upstreamAuditCommit}/file.ts`,
   ];
@@ -4854,7 +5072,7 @@ test("parses the exact GitHub source ref for published Pi release links", () => 
   assert.deepEqual(rejectedLinks.map(releaseSourceRef), [
     "main",
     "v0.84.3",
-    "4e58f324fae8ebfa98a3d45181fb248072a2afac", // stale-baseline-allow: rejected value
+    "4e58f324fae8ebfa98a3d45181fb248072a2afac",
     "v0.85.00",
     release.upstreamAuditCommit,
   ]);
