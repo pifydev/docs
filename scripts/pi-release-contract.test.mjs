@@ -2522,24 +2522,28 @@ test("both model guides bind Pi 0.85 compatibility flags to their exact interfac
     en: {
       persists: /persists?[^.]*native[^.]*effort/i,
       reconstructs: /reconstructs?[^.]*effort-only system messages/i,
+      midConvoDefault: /supportsMidConvoEffort[^.]*defaults? to `false`/i,
       exactTransport: /exact supported[^.]*model[^.]*faithful Anthropic Messages transport/i,
       notCompatible: /not[^.]*all Anthropic-compatible|not[^.]*merely imitate/i,
       lowerEarlier: /lower[^.]*handled earlier/i,
       serverDefault: /server default[^.]*`?0`?/i,
       offByDefault: /off by default/i,
       generatedCatalog: /not (?:set|generated)[^.]*generated (?:model )?catalog/i,
-      rejectMaxOutput: /rejects?[^.]*`max_output_tokens`/i,
+      maxOutputDefault: /supportsMaxOutputTokens[^.]*defaults? to `true`/i,
+      disableMaxOutput: /set it to `false`[^.]*rejects?[^.]*`max_output_tokens`[^.]*omit/i,
     },
     vi: {
       persists: /lưu[^.]*effort native|duy trì[^.]*effort native/i,
       reconstructs: /khôi phục|dựng lại|tái tạo/i,
+      midConvoDefault: /supportsMidConvoEffort[^.]*mặc định(?: là)? `false`/i,
       exactTransport: /chính xác[^.]*model[^.]*transport Anthropic Messages trung thực|đúng[^.]*model[^.]*transport Anthropic Messages trung thực/i,
       notCompatible: /không[^.]*mọi provider tương thích Anthropic|không[^.]*chỉ bắt chước/i,
       lowerEarlier: /giá trị thấp hơn[^.]*xử lý sớm hơn/i,
       serverDefault: /mặc định[^.]*server[^.]*`?0`?/i,
       offByDefault: /tắt theo mặc định/i,
       generatedCatalog: /không[^.]*generated (?:model )?catalog/i,
-      rejectMaxOutput: /từ chối[^.]*`max_output_tokens`/i,
+      maxOutputDefault: /supportsMaxOutputTokens[^.]*mặc định(?: là)? `true`/i,
+      disableMaxOutput: /đặt thành `false`[^.]*từ chối[^.]*`max_output_tokens`[^.]*Pi[^.]*bỏ/i,
     },
   };
 
@@ -2569,7 +2573,7 @@ test("both model guides bind Pi 0.85 compatibility flags to their exact interfac
         [
           /supportsMidConvoEffort/,
           /AnthropicMessagesCompat/,
-          /false/,
+          contract.midConvoDefault,
           contract.exactTransport,
           contract.notCompatible,
         ],
@@ -2604,9 +2608,8 @@ test("both model guides bind Pi 0.85 compatibility flags to their exact interfac
         [
           /supportsMaxOutputTokens/,
           /OpenAIResponsesCompat/,
-          /true/,
-          /false/,
-          contract.rejectMaxOutput,
+          contract.maxOutputDefault,
+          contract.disableMaxOutput,
         ],
         `${locale} ${documentContract.path} Responses output-token compatibility`,
       );
@@ -2636,7 +2639,7 @@ test("both model guides record the Pi 0.85 review date in frontmatter", async ()
   }
 });
 
-test("both API locales publish the exact Pi 0.85 compatibility and settings declarations", async () => {
+test("both API locales distinguish published compatibility declarations from the internal settings shape", async () => {
   const references = await readLocalizedContent("reference/api.md");
   const declarations = [
     /interface OpenAICompletionsCompat \{[\s\S]*?vllmPriority\?: number;/,
@@ -2649,12 +2652,18 @@ test("both API locales publish the exact Pi 0.85 compatibility and settings decl
       saved: /`defaultThinkingLevel`[^.]*Ctrl\+S[^.]*`\/thinking`/i,
       distinct: /distinct from[^.]*provider request fields/i,
       recovery: /showCacheMissNotices[^.]*dropped Anthropic thinking blocks/i,
+      maxOutputDefault: /supportsMaxOutputTokens[^.]*defaults? to `true`/i,
+      midConvoDefault: /supportsMidConvoEffort[^.]*defaults? to `false`/i,
+      internalSettings: /`Settings`[^.]*source-level[^.]*settings\.json[^.]*not (?:exported|importable)[^.]*`SettingsManager`[^.]*public/i,
     },
     vi: {
       keyed: /khóa `provider\/modelId`|key `provider\/modelId`/i,
       saved: /`defaultThinkingLevel`[^.]*Ctrl\+S[^.]*`\/thinking`/i,
       distinct: /tách biệt với[^.]*request field của provider/i,
       recovery: /showCacheMissNotices[^.]*thinking block Anthropic bị loại/i,
+      maxOutputDefault: /supportsMaxOutputTokens[^.]*mặc định(?: là)? `true`/i,
+      midConvoDefault: /supportsMidConvoEffort[^.]*mặc định(?: là)? `false`/i,
+      internalSettings: /`Settings`[^.]*source-level[^.]*settings\.json[^.]*không (?:được export|thể import)[^.]*`SettingsManager`[^.]*public/i,
     },
   };
   const structures = [];
@@ -2678,7 +2687,7 @@ test("both API locales publish the exact Pi 0.85 compatibility and settings decl
       [
         /supportsMaxOutputTokens/,
         /OpenAIResponsesCompat/,
-        /default[^.]*true|mặc định[^.]*true/i,
+        settingsSemantics[locale].maxOutputDefault,
       ],
       `${locale} API Responses output-token ownership`,
     );
@@ -2687,7 +2696,7 @@ test("both API locales publish the exact Pi 0.85 compatibility and settings decl
       [
         /supportsMidConvoEffort/,
         /AnthropicMessagesCompat/,
-        /default[^.]*false|mặc định[^.]*false/i,
+        settingsSemantics[locale].midConvoDefault,
       ],
       `${locale} API Anthropic effort ownership`,
     );
@@ -2708,6 +2717,20 @@ test("both API locales publish the exact Pi 0.85 compatibility and settings decl
       },
     );
     const semantics = settingsSemantics[locale];
+    const settingsProse = settingsSection.body.replace(
+      /^```[\s\S]*?^```/gm,
+      "",
+    );
+    assert.doesNotMatch(
+      settingsProse,
+      /omitted members remain part of the published interfaces|những member bị lược vẫn thuộc các interface đã phát hành/i,
+      `${locale} API must not present the source-level Settings shape as a published interface`,
+    );
+    assertParagraphContainsAll(
+      settingsProse,
+      [semantics.internalSettings],
+      `${locale} API internal Settings versus public SettingsManager boundary`,
+    );
     assertParagraphContainsAll(
       settingsSection.body,
       [/modelThinkingLevels/, semantics.keyed, /startup|khởi động/i],

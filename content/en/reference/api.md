@@ -414,7 +414,7 @@ An `AgentSession` adds synchronous subscriptions, persistence, compaction, retri
 - `new DefaultResourceLoader({ cwd, agentDir, settingsManager? })` constructs a loader that discovers context files, system prompts, extensions, skills, prompt templates, and themes after `reload()`.
 - `ModelRuntime.create()` owns the provider catalog and synchronized credentials used by Coding Agent.
 
-These are the selected exact 0.85.0 settings declarations relevant to thinking persistence; omitted members remain part of the published interfaces:
+The `Settings` fragment below is a selected exact source-level internal `settings.json` shape; it is not exported or importable public API, while `SettingsManager` and selected settings types are the public importable surface of `@earendil-works/pi-coding-agent` 0.85.0.
 
 ```ts title="thinking-settings-types.ts"
 interface Settings {

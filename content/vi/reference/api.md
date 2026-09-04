@@ -414,7 +414,7 @@ try {
 - `new DefaultResourceLoader({ cwd, agentDir, settingsManager? })` tạo loader để discover context file, system prompt, extension, skill, prompt template và theme sau `reload()`.
 - `ModelRuntime.create()` sở hữu provider catalog và credential được đồng bộ mà Coding Agent sử dụng.
 
-Đây là các declaration 0.85.0 chính xác, được chọn lọc cho setting liên quan đến thinking persistence; những member bị lược vẫn thuộc các interface đã phát hành:
+Fragment `Settings` dưới đây là shape source-level internal của `settings.json` được trích chính xác; nó không được export hay import như public API, còn `SettingsManager` và các settings type chọn lọc là public surface có thể import của `@earendil-works/pi-coding-agent` 0.85.0.
 
 ```ts title="thinking-settings-types.ts"
 interface Settings {
