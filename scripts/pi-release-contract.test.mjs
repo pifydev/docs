@@ -639,9 +639,10 @@ async function readActiveSources() {
     ])
   ).flat();
   const readmeURL = new URL("README.md", repositoryRoot);
+  const courseReadmeURL = new URL("course/README.md", repositoryRoot);
 
   return Promise.all(
-    [...contentFiles, readmeURL].map(async (fileURL) => ({
+    [...contentFiles, readmeURL, courseReadmeURL].map(async (fileURL) => ({
       filename: path.relative(repositoryRoot.pathname, fileURL.pathname),
       source: await readFile(fileURL, "utf8"),
     })),
