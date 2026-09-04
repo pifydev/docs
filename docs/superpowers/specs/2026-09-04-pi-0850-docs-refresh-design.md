@@ -1,7 +1,7 @@
 # Pi 0.85.0 Documentation Refresh — Design Spec
 
 - **Date:** 2026-09-04
-- **Status:** Draft (pending user review)
+- **Status:** Approved
 - **Owner:** Pify Docs maintainers
 - **Documentation baseline:** Pi `0.84.3`
 - **Target release:** Pi `0.85.0`
