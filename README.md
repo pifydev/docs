@@ -34,6 +34,13 @@ This is a community-maintained learning resource. For authoritative product
 behavior, cross-check the [official Pi documentation](https://pi.dev/docs/latest)
 and [Pi source code](https://github.com/earendil-works/pi).
 
+The current documentation baseline is Pi SDK `0.85.0`: see the
+[official release notes](https://github.com/earendil-works/pi/releases/tag/v0.85.0).
+Technical claims were reviewed against
+[`107d79f`](https://github.com/earendil-works/pi/commit/107d79f11072bbc8a3a757ed7fd69596bee7d68c)
+on 2026-09-04; the rollup also includes the intervening
+[`0.84.4` release](https://github.com/earendil-works/pi/releases/tag/v0.84.4).
+
 ## What is included
 
 - Eleven Pi SDK chapters covering architecture, runtime behavior, and the Agent

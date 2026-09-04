@@ -5,7 +5,7 @@ translation_key: faq
 language: vi
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-08-25'
+last_updated: '2026-09-04'
 ---
 Các câu trả lời dưới đây đề cập tới Pi và dự án tài liệu này. Hãy mở [GitHub issue](https://github.com/pifydev/docs/issues) nếu câu hỏi của bạn chưa có trong danh sách.
 
@@ -31,11 +31,11 @@ Mã nguồn và npm package của Pi dùng giấy phép mã nguồn mở. Model 
 
 ### Có nên đọc các chương theo thứ tự không?
 
-Hãy đọc chương 1 đến 3 theo thứ tự để nắm tổng quan dự án, kiến trúc package và vòng lặp Agent. Sau đó, có thể đọc độc lập từng chương 4 đến 10 theo subsystem bạn quan tâm.
+Hãy đọc chương 1 đến 3 theo thứ tự để nắm tổng quan dự án, kiến trúc package và vòng lặp Agent. Sau đó, có thể đọc độc lập từng chương 4 đến 11 theo subsystem bạn quan tâm.
 
 ### Tài liệu này mô tả revision nào của Pi?
 
-Review ledger ghi chính xác upstream commit dùng để đối chiếu. Lần review hiện tại được ghim tại [`4e58f324`](https://github.com/earendil-works/pi/commit/4e58f324fae8ebfa98a3d45181fb248072a2afac). Hãy kiểm tra lại upstream trước khi phụ thuộc vào API hoặc giá trị mặc định có thể thay đổi theo version.
+Baseline hiện tại của tài liệu là [release Pi `0.85.0` chính thức](https://github.com/earendil-works/pi/releases/tag/v0.85.0). Review ledger ghim việc kiểm chứng tại [`107d79f`](https://github.com/earendil-works/pi/commit/107d79f11072bbc8a3a757ed7fd69596bee7d68c). Hãy kiểm tra lại upstream trước khi phụ thuộc vào API hoặc giá trị mặc định có thể thay đổi theo version.
 
 ### Vì sao ví dụ dùng TypeScript?
 

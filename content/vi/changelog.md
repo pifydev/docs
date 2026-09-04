@@ -5,9 +5,37 @@ translation_key: changelog
 language: vi
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-08-26'
+last_updated: '2026-09-04'
 ---
 Trang này ghi các thay đổi của website tài liệu Pify. Để xem release của Pi, hãy dùng [lịch sử release upstream](https://github.com/earendil-works/pi/releases).
+
+## 2026-09-04
+
+Baseline của tài liệu Pify nay theo [release Pi `0.85.0` chính thức](https://github.com/earendil-works/pi/releases/tag/v0.85.0) và bao gồm rõ release trung gian [Pi `0.84.4`](https://github.com/earendil-works/pi/releases/tag/v0.84.4). Đây là phần tóm tắt các thay đổi ảnh hưởng tới người dùng mà đợt phát hành tài liệu ghi nhận, không phải bản sao changelog upstream của Pi.
+
+### Khả năng mới
+
+- Ghi lại cách khôi phục external session qua `SessionManager.inMemory()` và ranh giới ownership đối với entry do bên ngoài lưu trữ, cùng setting thinking được lưu bền vững và compatibility flag kế thừa `supportsMidConvoEffort`.
+- Bổ sung kiến trúc service thử nghiệm gồm `@earendil-works/pi-client`, `@earendil-works/pi-protocol` và `@earendil-works/pi-server`, bao gồm trách nhiệm của routed session, transport và protocol.
+
+### Thay đổi hành vi và interface
+
+- Bổ sung vòng đời prompt và RPC: `ui_prompt_start`/`ui_prompt_end` đánh dấu thời gian chờ UI của extension, còn `clear_queue` trả về rồi xóa steering message và follow-up message trước luồng abort.
+- Làm rõ các Tool xử lý path dùng `ctx.cwd` tại đúng invocation hiện tại, đồng thời ghi lại hành vi terminal/fullscreen gồm `PI_HYPERLINKS`, capability override, search nhanh hơn, điều khiển copy selection và working indicator được nhúng.
+- Ghi nhận bản sửa cho Skills khi chỉ bật Bash và render LaTeX cho đại số quan hệ.
+
+### Bản sửa lỗi độ tin cậy/provider
+
+- Ghi lại managed `fd`/`rg` download trên musl mà không cần GitHub Releases API, khôi phục `@earendil-works/pi-coding-agent/client` làm compatibility entry point và sửa event sequence không tương thích cùng custom Tool-call delta.
+- Codex SSE nay xử lý terminal event không có blank line theo sau; Mistral giữ đúng tool call phân mảnh khi chunk tiếp nối thiếu tool-call ID; OpenAI reasoning replay gộp các delta text và summary; model Grok không còn khả dụng đã được loại bỏ.
+- Các bản sửa catalog và request giúp catalog Qwen bổ sung Qwen3.8 Flash, Fable gửi reasoning đã chọn, Baseten sửa metadata image input, Fireworks chọn đúng API adapter, Vertex hoạt động với proxy, Cloudflare bổ sung model vào gateway catalog và ngăn model OpenRouter bắt buộc reasoning nhận effort `none`.
+- Ghi nhận các bản sửa tính toàn vẹn cho JSONL append, share đồng thời, import tránh collision, fork in-memory và file-backed, compaction và manual abort.
+- Ghi lại cách khớp `NO_PROXY`, tunnel proxy HTTP, khởi động terminal dưới seccomp hạn chế, đọc orientation từ EXIF và render image an toàn khi output lớn.
+
+### Phạm vi tài liệu và kiểm chứng
+
+- Cập nhật các chương, hướng dẫn How-to, trang tham khảo, FAQ, Hướng dẫn nhanh, example và compile fixture của Pify theo baseline package và source `0.85.0`, kèm kiểm chứng tập trung cho hành vi và cấu trúc song ngữ.
+- Các package service client/protocol/server vẫn ở trạng thái thử nghiệm; tài liệu này không trình bày những API đó là ổn định và không cam kết compatibility vượt quá release đã phát hành.
 
 ## 2026-08-26
 

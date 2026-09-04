@@ -1298,6 +1298,168 @@ test("release fixture identifies published Pi 0.85.0 authority", async () => {
   assert.equal(release.sourceStatus, "published");
 });
 
+test("the first bilingual changelog entry is the structured Pi 0.85.0 documentation rollup", async () => {
+  const references = await readLocalizedContent("changelog.md");
+  const release0850 =
+    "https://github.com/earendil-works/pi/releases/tag/v0.85.0";
+  const release0844 =
+    "https://github.com/earendil-works/pi/releases/tag/v0.84.4";
+  const contracts = {
+    en: {
+      headings: [
+        "### New capabilities",
+        "### Behavior and interface changes",
+        "### Reliability/provider fixes",
+        "### Documentation and verification scope",
+      ],
+      externalSession: /external session (?:restoration|restore)/i,
+      persistentThinking: /persist(?:ent|ed)[^.]*thinking/i,
+      promptRpc: /prompt[^.]*RPC|RPC[^.]*prompt/i,
+      terminalFullscreen: /terminal[^.]*fullscreen|fullscreen[^.]*terminal/i,
+      bashOnlySkills: /Bash-only Skills/i,
+      relationalLatex: /relational-algebra LaTeX/i,
+      architecture: /experimental service architecture/i,
+      providerFixes: [
+        /incompatible event sequences[^.]*custom Tool-call deltas/i,
+        /Codex SSE[^.]*terminal events[^.]*blank line/i,
+        /fragmented Mistral tool calls[^.]*tool-call ID/i,
+        /OpenAI reasoning[^.]*merge[^.]*text[^.]*summary/i,
+        /Grok[^.]*remov/i,
+        /Qwen[^.]*Qwen3\.8 Flash/i,
+        /Fable[^.]*reasoning/i,
+        /Baseten[^.]*image input/i,
+        /Fireworks[^.]*API adapter/i,
+        /Vertex[^.]*proxy/i,
+        /Cloudflare[^.]*catalog/i,
+        /OpenRouter[^.]*reasoning[^.]*`none`/i,
+      ],
+      integrity:
+        /JSONL[^.]*share[^.]*import[^.]*fork[^.]*compaction[^.]*manual abort/i,
+      networkImage:
+        /NO_PROXY[^.]*proxy HTTP[^.]*seccomp[^.]*EXIF[^.]*image rendering/i,
+      experimentalBoundary: /experimental[^.]*not[^.]*stable/i,
+      documentation: /documentation/i,
+    },
+    vi: {
+      headings: [
+        "### Khả năng mới",
+        "### Thay đổi hành vi và interface",
+        "### Bản sửa lỗi độ tin cậy/provider",
+        "### Phạm vi tài liệu và kiểm chứng",
+      ],
+      externalSession: /khôi phục external session/i,
+      persistentThinking: /thinking[^.]*được lưu|lưu[^.]*thinking/i,
+      promptRpc: /prompt[^.]*RPC|RPC[^.]*prompt/i,
+      terminalFullscreen: /terminal[^.]*fullscreen|fullscreen[^.]*terminal/i,
+      bashOnlySkills: /Skills[^.]*chỉ bật Bash/i,
+      relationalLatex: /LaTeX[^.]*đại số quan hệ/i,
+      architecture: /kiến trúc service thử nghiệm/i,
+      providerFixes: [
+        /event sequence không tương thích[^.]*custom Tool-call delta/i,
+        /Codex SSE[^.]*terminal event[^.]*blank line/i,
+        /Mistral[^.]*tool call phân mảnh[^.]*tool-call ID/i,
+        /OpenAI reasoning[^.]*gộp[^.]*text[^.]*summary/i,
+        /Grok[^.]*loại bỏ/i,
+        /Qwen[^.]*Qwen3\.8 Flash/i,
+        /Fable[^.]*reasoning/i,
+        /Baseten[^.]*image input/i,
+        /Fireworks[^.]*API adapter/i,
+        /Vertex[^.]*proxy/i,
+        /Cloudflare[^.]*catalog/i,
+        /OpenRouter[^.]*reasoning[^.]*`none`/i,
+      ],
+      integrity:
+        /JSONL[^.]*share[^.]*import[^.]*fork[^.]*compaction[^.]*manual abort/i,
+      networkImage:
+        /NO_PROXY[^.]*proxy HTTP[^.]*seccomp[^.]*EXIF[^.]*render image/i,
+      experimentalBoundary: /thử nghiệm[^.]*không[^.]*ổn định/i,
+      documentation: /tài liệu/i,
+    },
+  };
+  const structures = [];
+
+  for (const { locale, source } of references) {
+    const context = `${locale} first changelog entry`;
+    const firstH2 = source.match(/^## ([^\r\n]+)$/m);
+    assert.equal(
+      firstH2?.[1],
+      "2026-09-04",
+      `${context} must be dated 2026-09-04`,
+    );
+    const entry = extractMarkdownSection(source, "## 2026-09-04", context);
+    const contract = contracts[locale];
+
+    assert.match(entry.body, /Pi `0\.85\.0`/);
+    assert.ok(entry.body.includes(release0850));
+    assert.match(entry.body, /(?:intervening|trung gian)[^\r\n]*`0\.84\.4`/i);
+    assert.ok(entry.body.includes(release0844));
+
+    const actualHeadings = [...entry.body.matchAll(/^### ([^\r\n]+)$/gm)].map(
+      (match) => `### ${match[1]}`,
+    );
+    assert.deepEqual(actualHeadings, contract.headings);
+
+    const capabilities = assertContainsAll(
+      entry.body,
+      [
+        /`SessionManager\.inMemory\(\)`/,
+        contract.externalSession,
+        /`supportsMidConvoEffort`/,
+        contract.persistentThinking,
+        /`@earendil-works\/pi-client`/,
+        /`@earendil-works\/pi-protocol`/,
+        /`@earendil-works\/pi-server`/,
+        contract.architecture,
+      ],
+      `${context} new capabilities`,
+      { heading: contract.headings[0] },
+    );
+    const interfaces = assertContainsAll(
+      entry.body,
+      [
+        /`ui_prompt_start`/,
+        /`clear_queue`/,
+        /`ctx\.cwd`/,
+        /`PI_HYPERLINKS`/,
+        contract.promptRpc,
+        contract.terminalFullscreen,
+        contract.bashOnlySkills,
+        contract.relationalLatex,
+      ],
+      `${context} behavior and interfaces`,
+      { heading: contract.headings[1] },
+    );
+    const reliability = assertContainsAll(
+      entry.body,
+      [
+        /managed `fd`\/`rg`[^.]*musl[^.]*API/i,
+        /`@earendil-works\/pi-coding-agent\/client`[^.]*compatibility entry point/i,
+        ...contract.providerFixes,
+        contract.integrity,
+        contract.networkImage,
+      ],
+      `${context} reliability and providers`,
+      { heading: contract.headings[2] },
+    );
+    const scope = assertContainsAll(
+      entry.body,
+      [
+        /Pify/i,
+        contract.documentation,
+        /verification|kiểm chứng/i,
+        contract.experimentalBoundary,
+      ],
+      `${context} documentation scope`,
+      { heading: contract.headings[3] },
+    );
+    structures.push(
+      [capabilities, interfaces, reliability, scope].map(sectionStructure),
+    );
+  }
+
+  assert.deepEqual(structures[0], structures[1]);
+});
+
 test("both Chapter 2 locales document the Pi 0.85.0 experimental service architecture", async () => {
   const [chapters, references] = await Promise.all([
     readLocalizedContent("ch02-three-layer-arch.md"),

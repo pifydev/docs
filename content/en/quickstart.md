@@ -7,9 +7,9 @@ translation_key: quickstart
 language: en
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-08-24'
+last_updated: '2026-09-04'
 ---
-This guide creates a small TypeScript program that streams a model response. You will install `@earendil-works/pi-ai`, register the built-in providers, resolve one model, and consume its event stream. No prior Pi knowledge is required.
+This guide targets the official [Pi `0.85.0` release](https://github.com/earendil-works/pi/releases/tag/v0.85.0) and creates a small TypeScript program that streams a model response. You will install `@earendil-works/pi-ai`, register the built-in providers, resolve one model, and consume its event stream. No prior Pi knowledge is required.
 
 :::tip[What you will have at the end]
 
@@ -37,7 +37,7 @@ This guide makes real API calls. Set a low spending limit on your provider accou
 mkdir pi-quickstart && cd pi-quickstart
 npm init -y
 npm pkg set type=module
-npm install @earendil-works/pi-ai
+npm install @earendil-works/pi-ai@0.85.0
 npm install --save-dev tsx
 ```
 

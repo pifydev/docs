@@ -5,7 +5,7 @@ translation_key: faq
 language: en
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-08-25'
+last_updated: '2026-09-04'
 ---
 These answers cover Pi and this documentation project. Open a [GitHub issue](https://github.com/pifydev/docs/issues) if your question is not listed.
 
@@ -31,11 +31,11 @@ The Pi source and npm packages use open-source licenses. Model providers may cha
 
 ### Should I read the chapters in order?
 
-Read chapters 1 through 3 in order for the project overview, package architecture, and agent loop. Chapters 4 through 10 each focus on one subsystem and can be read independently after that foundation.
+Read chapters 1 through 3 in order for the project overview, package architecture, and agent loop. Chapters 4 through 11 each focus on one subsystem and can be read independently after that foundation.
 
 ### Which Pi revision does this documentation describe?
 
-The editorial review ledger records the exact upstream commit used for verification. The current review is pinned to [`4e58f324`](https://github.com/earendil-works/pi/commit/4e58f324fae8ebfa98a3d45181fb248072a2afac). Recheck the upstream source before relying on a version-sensitive API or default.
+The current documentation baseline is the official [Pi `0.85.0` release](https://github.com/earendil-works/pi/releases/tag/v0.85.0). The editorial review ledger pins verification to [`107d79f`](https://github.com/earendil-works/pi/commit/107d79f11072bbc8a3a757ed7fd69596bee7d68c). Recheck the upstream source before relying on a version-sensitive API or default.
 
 ### Why do examples use TypeScript?
 

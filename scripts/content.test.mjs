@@ -324,6 +324,64 @@ test("README and bilingual changelog describe the complete SDK and course releas
   assert.match(changelog.vi, /workshop TypeScript offline/i);
 });
 
+test("release entry points publish the Pi 0.85.0 baseline and exact review authority", async () => {
+  const releaseURL =
+    "https://github.com/earendil-works/pi/releases/tag/v0.85.0";
+  const commit = "107d79f11072bbc8a3a757ed7fd69596bee7d68c";
+  const pages = await Promise.all(
+    [
+      "content/en/index.mdx",
+      "content/vi/index.mdx",
+      "content/en/quickstart.md",
+      "content/vi/quickstart.md",
+      "content/en/help/faq.md",
+      "content/vi/help/faq.md",
+    ].map(async (relativePath) => ({
+      relativePath,
+      source: await readFile(new URL(relativePath, repositoryRoot), "utf8"),
+    })),
+  );
+  const readme = await readFile(new URL("README.md", repositoryRoot), "utf8");
+
+  for (const { relativePath, source } of pages) {
+    assert.match(
+      source,
+      /last_updated: '2026-09-04'/,
+      `${relativePath} must carry the publication baseline date`,
+    );
+    assert.ok(
+      source.includes(releaseURL),
+      `${relativePath} must link the official Pi 0.85.0 release`,
+    );
+  }
+
+  for (const { relativePath, source } of pages.filter(({ relativePath }) =>
+    /(?:index\.mdx|faq\.md)$/.test(relativePath),
+  )) {
+    assert.ok(
+      source.includes(`https://github.com/earendil-works/pi/commit/${commit}`),
+      `${relativePath} must link the exact reviewed Pi commit`,
+    );
+  }
+
+  for (const { relativePath, source } of pages.filter(({ relativePath }) =>
+    relativePath.endsWith("quickstart.md"),
+  )) {
+    assert.match(
+      source,
+      /npm install @earendil-works\/pi-ai@0\.85\.0/,
+      `${relativePath} must pin its SDK install command`,
+    );
+  }
+
+  assert.match(readme, /Pi SDK `0\.85\.0`/);
+  assert.ok(readme.includes(releaseURL));
+  assert.ok(
+    readme.includes(`https://github.com/earendil-works/pi/commit/${commit}`),
+  );
+  assert.match(readme, /reviewed[\s\S]{0,160}2026-09-04/i);
+});
+
 test("Chinese references remain internal provenance only", async () => {
   const manifest = JSON.parse(await readFile(manifestURL, "utf8"));
   const chinese = manifest.pages
