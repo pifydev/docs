@@ -742,6 +742,21 @@ function assertExtensionPromptLifecycle(source, context) {
     ],
     `${context} prompt delivery and coalescing relationship`,
   );
+  assertParagraphContainsAll(
+    source,
+    [
+      /schedul|xếp lịch/i,
+      /around[^.]*outer[^.]*prompt span|quanh[^.]*khoảng prompt ngoài cùng/i,
+      /not[^.]*ordering barrier|không phải[^.]*rào cản thứ tự/i,
+      /observer[^.]*may run after[^.]*UI state transition|observer[^.]*có thể chạy sau[^.]*chuyển trạng thái UI/i,
+    ],
+    `${context} prompt notification timing`,
+  );
+  assert.doesNotMatch(
+    source,
+    /`ui_prompt_start`[^.]*before Pi starts waiting|`ui_prompt_end`[^.]*when Pi stops waiting|`ui_prompt_start`[^.]*trước khi Pi bắt đầu chờ|`ui_prompt_end`[^.]*khi Pi thôi chờ/i,
+    `${context} must not present prompt notifications as ordering barriers`,
+  );
 }
 
 function assertRpcQueueLifecycle(source, context) {
@@ -781,6 +796,22 @@ function assertRpcQueueLifecycle(source, context) {
       /followUp/,
     ],
     `${context} interactive Escape ordering`,
+  );
+}
+
+function assertThinkingLevelSessionPersistence(source, contract, context) {
+  assertParagraphContainsAll(
+    source,
+    [
+      /`pi\.setThinkingLevel\(\)`/,
+      contract.effective,
+      contract.differs,
+      contract.records,
+      contract.notEveryRequest,
+      contract.persisted,
+      contract.newSessionDefault,
+    ],
+    `${context} effective thinking-level persistence`,
   );
 }
 
@@ -2905,7 +2936,9 @@ interface UIPromptEndEvent { type: "ui_prompt_end"; reason: "ui_prompt"; kind: U
 
 \`ctx.ui.select()\`, \`ctx.ui.confirm()\`, \`ctx.ui.input()\`, \`ctx.ui.editor()\`, and \`ctx.ui.custom()\` emit \`ui_prompt_start\` and \`ui_prompt_end\` around the time Pi is waiting for the user.
 
-Delivery is best-effort and not awaited. Nested or overlapping prompts are coalesced into one outer waiting span.`;
+Delivery is best-effort and not awaited. Nested or overlapping prompts are coalesced into one outer waiting span.
+
+Notifications are scheduled around the outer blocking prompt span, but they are not an ordering barrier: an observer may run after the corresponding UI state transition.`;
   assert.doesNotThrow(() =>
     assertExtensionPromptLifecycle(promptFixture, "synthetic prompt fixture"),
   );
@@ -2914,6 +2947,13 @@ Delivery is best-effort and not awaited. Nested or overlapping prompts are coale
     ["wrong reason", promptFixture.replaceAll('"ui_prompt"', '"prompt"')],
     ["awaited", promptFixture.replace("not awaited", "awaited")],
     ["uncoalesced", promptFixture.replace("are coalesced", "remain separate")],
+    [
+      "ordering barrier",
+      promptFixture.replace(
+        "Notifications are scheduled around the outer blocking prompt span",
+        "`ui_prompt_start` fires before Pi starts waiting and `ui_prompt_end` fires when Pi stops waiting",
+      ),
+    ],
   ]) {
     assert.throws(
       () =>
@@ -2921,7 +2961,7 @@ Delivery is best-effort and not awaited. Nested or overlapping prompts are coale
           mutation,
           `mutated prompt lifecycle ${label}`,
         ),
-      /UIPromptKind|UIPromptStartEvent|UIPromptEndEvent|prompt delivery and coalescing/,
+      /UIPromptKind|UIPromptStartEvent|UIPromptEndEvent|prompt delivery and coalescing|prompt notification timing|ordering barriers/,
     );
   }
 });
@@ -3022,7 +3062,12 @@ test("Pi 0.85 API Extension guidance preserves session-scoped controls and edito
       restored: /recorded[^.]*session history[^.]*restored[^.]*resumed/i,
       modelDefault:
         /does not change[^.]*`defaultProvider`[^.]*`defaultModel`[^.]*new sessions/i,
-      thinkingDefault:
+      effective: /effective[^.]*capability-clamped/i,
+      differs: /only when[^.]*differs[^.]*current/i,
+      records: /records|appends/i,
+      notEveryRequest: /not every requested choice/i,
+      persisted: /persists[^.]*restores[^.]*effective change/i,
+      newSessionDefault:
         /does not change[^.]*configured default[^.]*new sessions/i,
       defaultEditor: /default editor[^.]*embeds[^.]*working indicator/i,
       customEditor: /custom editors[^.]*standalone[^.]*unless[^.]*opt in/i,
@@ -3031,7 +3076,12 @@ test("Pi 0.85 API Extension guidance preserves session-scoped controls and edito
       restored: /ghi[^.]*lịch sử session[^.]*khôi phục[^.]*resume/i,
       modelDefault:
         /không thay đổi[^.]*`defaultProvider`[^.]*`defaultModel`[^.]*session mới/i,
-      thinkingDefault:
+      effective: /mức hiệu lực[^.]*giới hạn[^.]*capability/i,
+      differs: /chỉ khi[^.]*khác[^.]*hiện tại/i,
+      records: /ghi|append/i,
+      notEveryRequest: /không phải mọi lựa chọn được yêu cầu/i,
+      persisted: /lưu[^.]*khôi phục[^.]*thay đổi có hiệu lực/i,
+      newSessionDefault:
         /không thay đổi[^.]*default đã cấu hình[^.]*session mới/i,
       defaultEditor: /editor mặc định[^.]*nhúng[^.]*working indicator/i,
       customEditor: /custom editor[^.]*độc lập[^.]*trừ khi[^.]*opt in/i,
@@ -3057,13 +3107,9 @@ test("Pi 0.85 API Extension guidance preserves session-scoped controls and edito
       [/`pi\.setModel\(\)`/, contract.restored, contract.modelDefault],
       `${locale} API setModel session-default boundary`,
     );
-    assertParagraphContainsAll(
+    assertThinkingLevelSessionPersistence(
       section.body,
-      [
-        /`pi\.setThinkingLevel\(\)`/,
-        contract.restored,
-        contract.thinkingDefault,
-      ],
+      contract,
       `${locale} API setThinkingLevel session-default boundary`,
     );
     assertParagraphContainsAll(
@@ -3079,6 +3125,43 @@ test("Pi 0.85 API Extension guidance preserves session-scoped controls and edito
     structures.push(sectionStructure(section));
   }
   assert.deepEqual(structures[0], structures[1]);
+
+  const thinkingFixture =
+    "`pi.setThinkingLevel()` computes the effective capability-clamped level and records a session-history change only when it differs from the current value; not every requested choice produces a history entry. Pi persists and restores that effective change for this session, but does not change the configured default used by new sessions.";
+  const fixtureContract = localeContract.en;
+  assert.doesNotThrow(() =>
+    assertThinkingLevelSessionPersistence(
+      thinkingFixture,
+      fixtureContract,
+      "synthetic thinking-level fixture",
+    ),
+  );
+  for (const [label, mutation] of [
+    [
+      "unchanged request",
+      thinkingFixture.replace(
+        "only when it differs from the current value",
+        "for every request, even when it equals the current value",
+      ),
+    ],
+    [
+      "requested choice",
+      thinkingFixture.replace(
+        "persists and restores that effective change",
+        "persists and restores every requested choice",
+      ),
+    ],
+  ]) {
+    assert.throws(
+      () =>
+        assertThinkingLevelSessionPersistence(
+          mutation,
+          fixtureContract,
+          `mutated thinking-level persistence ${label}`,
+        ),
+      /effective thinking-level persistence/,
+    );
+  }
 });
 
 test("Pi 0.85 API reference records exact RPC clear_queue shapes and lifecycle", async () => {

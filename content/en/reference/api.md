@@ -485,7 +485,7 @@ export default extension;
 
 `pi.setModel()` changes the current session's model. A successful selection is recorded in session history and restored when that session is resumed, but it does not change the configured `defaultProvider` or `defaultModel` used by new sessions. The Promise resolves to `false` when the selected provider lacks authentication.
 
-`pi.setThinkingLevel()` similarly changes only the current session. The choice is recorded in session history and restored when that session is resumed, but it does not change the configured default used by new sessions; Pi also clamps the requested level to the active model's capabilities.
+`pi.setThinkingLevel()` computes the effective capability-clamped level and records a session-history change only when it differs from the current value; not every requested choice produces a history entry. Pi persists and restores that effective change for the current session, but it does not change the configured default used by new sessions.
 
 The default editor automatically embeds its working indicator in the editor border. Custom editors built from `CustomEditor` keep the standalone working indicator unless they opt in: pass `{ embedWorkingStatus: true }` as the fourth constructor argument to embed the same status in the border. The option changes status placement, not Agent settlement or Tool execution.
 

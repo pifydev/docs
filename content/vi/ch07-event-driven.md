@@ -270,9 +270,9 @@ interface UIPromptEndEvent {
 }
 ```
 
-Các lời gọi hướng tới người dùng và có tính chặn gồm `ctx.ui.select()`, `ctx.ui.confirm()`, `ctx.ui.input()`, `ctx.ui.editor()` và `ctx.ui.custom()` phát `ui_prompt_start` trước khi Pi bắt đầu chờ, rồi phát `ui_prompt_end` khi Pi thôi chờ. Cả hai payload luôn mang `reason: "ui_prompt"` cùng `kind` chính xác; `title` chỉ có mặt khi prompt cung cấp tiêu đề. Nhờ vậy, host phân biệt được trạng thái “đang chờ người dùng” với công việc Agent đang chạy mà không xem notification này như hook điều khiển.
+Các lời gọi hướng tới người dùng và có tính chặn gồm `ctx.ui.select()`, `ctx.ui.confirm()`, `ctx.ui.input()`, `ctx.ui.editor()` và `ctx.ui.custom()` tạo cặp notification trạng thái `ui_prompt_start` và `ui_prompt_end` cho thời gian Pi chờ prompt. Cả hai payload luôn mang `reason: "ui_prompt"` cùng `kind` chính xác; `title` chỉ có mặt khi prompt cung cấp tiêu đề. Nhờ vậy, host phân biệt được trạng thái “đang chờ người dùng” với công việc Agent đang chạy mà không xem notification này như hook điều khiển.
 
-Việc phân phối là best-effort và không được chờ trước khi prompt mở hoặc đóng. Các prompt lồng nhau hoặc chồng lấp được gộp thành một khoảng chờ ngoài cùng: chỉ lúc khoảng này mở mới phát `ui_prompt_start`, và chỉ lúc nó đóng mới phát `ui_prompt_end` tương ứng. Vì thế observer chậm hoặc lỗi không thể trì hoãn dialog; integration nên dùng cặp sự kiện làm gợi ý trạng thái, không phải ranh giới audit bền vững.
+Việc phân phối là best-effort và không được chờ. Các prompt lồng nhau hoặc chồng lấp được gộp thành một khoảng chờ ngoài cùng; Pi dùng `queueMicrotask` để xếp lịch một `ui_prompt_start` và một `ui_prompt_end` tương ứng quanh khoảng prompt ngoài cùng có tính chặn. Các notification này không phải rào cản thứ tự: observer có thể chạy sau lần chuyển trạng thái UI tương ứng. Vì thế observer chậm hoặc lỗi không thể trì hoãn dialog; integration nên dùng cặp sự kiện làm gợi ý trạng thái, không phải ranh giới audit bền vững.
 
 Payload lỗi chính xác không chỉ là một tên trong danh mục:
 

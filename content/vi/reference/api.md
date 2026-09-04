@@ -485,7 +485,7 @@ export default extension;
 
 `pi.setModel()` đổi model của session hiện tại. Lựa chọn thành công được ghi vào lịch sử session và được khôi phục khi session đó được resume, nhưng không thay đổi `defaultProvider` hoặc `defaultModel` đã cấu hình cho session mới. Promise trả về `false` khi provider được chọn chưa có authentication.
 
-Tương tự, `pi.setThinkingLevel()` chỉ đổi mức thinking của session hiện tại. Lựa chọn được ghi vào lịch sử session và được khôi phục khi session đó được resume, nhưng không thay đổi default đã cấu hình cho session mới; Pi cũng giới hạn mức yêu cầu theo capability của model đang hoạt động.
+`pi.setThinkingLevel()` tính mức hiệu lực đã được giới hạn theo capability, và chỉ khi mức này khác giá trị hiện tại thì Pi mới ghi thay đổi vào lịch sử session; không phải mọi lựa chọn được yêu cầu đều được ghi. Pi lưu và khôi phục thay đổi có hiệu lực đó cho session hiện tại, nhưng không thay đổi default đã cấu hình cho session mới.
 
 Editor mặc định tự động nhúng working indicator vào viền editor. Các custom editor dựng từ `CustomEditor` giữ working indicator độc lập trừ khi chủ động opt in: truyền `{ embedWorkingStatus: true }` làm đối số thứ tư của constructor để nhúng cùng trạng thái đó vào viền. Option này chỉ đổi vị trí trạng thái, không đổi thời điểm Agent settle hoặc cách Tool chạy.
 

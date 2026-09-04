@@ -270,9 +270,9 @@ interface UIPromptEndEvent {
 }
 ```
 
-Blocking user-facing calls to `ctx.ui.select()`, `ctx.ui.confirm()`, `ctx.ui.input()`, `ctx.ui.editor()`, and `ctx.ui.custom()` produce `ui_prompt_start` before Pi starts waiting and `ui_prompt_end` when Pi stops waiting. Both payloads always carry `reason: "ui_prompt"` and the exact `kind`; `title` is present only when the prompt supplies one. This lets a host distinguish “waiting for user” from active agent work without treating the notification as a control hook.
+Blocking user-facing calls to `ctx.ui.select()`, `ctx.ui.confirm()`, `ctx.ui.input()`, `ctx.ui.editor()`, and `ctx.ui.custom()` produce paired `ui_prompt_start` and `ui_prompt_end` status notifications for time Pi spends waiting on the prompt. Both payloads always carry `reason: "ui_prompt"` and the exact `kind`; `title` is present only when the prompt supplies one. This lets a host distinguish “waiting for user” from active agent work without treating the notification as a control hook.
 
-Delivery is best-effort and not awaited before the prompt opens or closes. Nested or overlapping prompts are coalesced into one outer waiting span: only its opening produces `ui_prompt_start`, and only its closing produces the matching `ui_prompt_end`. A slow or failed observer therefore cannot delay the dialog, and integrations should use the pair as status hints rather than a durable audit barrier.
+Delivery is best-effort and not awaited. Nested or overlapping prompts are coalesced into one outer waiting span, for which Pi schedules one `ui_prompt_start` and one matching `ui_prompt_end` with `queueMicrotask` around the outer blocking prompt span. These notifications are not ordering barriers: an observer may run after the corresponding UI state transition. A slow or failed observer therefore cannot delay the dialog, and integrations should use the pair as status hints rather than a durable audit barrier.
 
 The exact failure payload is not a token-only catalog entry:
 
