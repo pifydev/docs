@@ -10,10 +10,11 @@ const releaseFixtureURL = new URL(
   "fixtures/pi-release-0850.json",
   import.meta.url,
 );
-const compileFixturePackages = [
+const releaseContractPackages = [
   "@earendil-works/pi-ai",
   "@earendil-works/pi-agent-core",
   "@earendil-works/pi-coding-agent",
+  "@earendil-works/pi-server",
 ];
 const chapter11ExampleFunction = "verifyDeterministicAgentRoundTrip";
 const deterministicGuideFunction = "verifyDeterministicAgentTestingGuide";
@@ -2171,13 +2172,13 @@ test("both Chapter 2 locales document the Pi 0.85.0 experimental service archite
   assert.deepEqual(structures[0], structures[1]);
 });
 
-test("compile fixture packages are exactly pinned to the published release", async () => {
+test("Pi direct dependencies are exactly pinned to the published release", async () => {
   const release = await readReleaseFixture();
   const packageJSON = JSON.parse(
     await readFile(new URL("package.json", repositoryRoot), "utf8"),
   );
 
-  for (const packageName of compileFixturePackages) {
+  for (const packageName of releaseContractPackages) {
     assert.equal(
       packageJSON.devDependencies[packageName],
       release.packageVersion,
@@ -2218,12 +2219,7 @@ test("external-session fixture helper restores an in-memory tree at runtime", as
       new URL("tests/fixtures/pi-sdk-0850.contract.ts", repositoryRoot),
       "utf8",
     ),
-    import(
-      new URL(
-        "node_modules/@earendil-works/pi-coding-agent/dist/core/session-manager.js",
-        repositoryRoot,
-      )
-    ),
+    import("@earendil-works/pi-coding-agent"),
   ]);
   const { restoreExternalSessionEntries } = await importCompileFixtureFunctions(
     compileFixture,
@@ -4610,7 +4606,7 @@ test("both model guides bind Pi 0.85 compatibility flags to their exact interfac
   }
 });
 
-test("all model docs limit mid-conversation effort to the exact Pi 0.85 provider and ID patterns", async () => {
+test("all model docs separate generated-catalog detection from verified custom-model configuration", async () => {
   const documentContracts = [
     {
       path: "ch04-model-invocation.md",
@@ -4636,18 +4632,40 @@ test("all model docs limit mid-conversation effort to the exact Pi 0.85 provider
   ];
   const localeContracts = {
     en: {
+      automaticDetection: [
+        /built-in models?[^.]*Pi 0\.85\.0 generated catalog/i,
+        /automatic detection[^.]*lowercases `modelId` first[^.]*then strips/i,
+        /only when `provider` is exactly `anthropic` or `openrouter`\./,
+      ],
+      customConfiguration: [
+        /custom `Model`[^.]*`anthropic-messages`/i,
+        /`compat\.supportsMidConvoEffort: true`/,
+        /only after verifying[^.]*faithful Anthropic Messages transport[^.]*same exact compatible Claude model family/i,
+        /provider name[^.]*outside[^.]*generated-catalog allowlist[^.]*does not by itself forbid manual configuration/i,
+        /never generalize[^.]*arbitrary Anthropic-compatible providers or models/i,
+      ],
       exactProviders:
         /only when `provider` is exactly `anthropic` or `openrouter`\./,
-      outsideBoundary:
-        /Outside that Pi 0\.85\.0 provider\/ID set[^.]*default `false`[^.]*do not manually opt in/i,
-      broad: /only for (?:an?|the) exact supported Claude model/i,
+      overbroadProhibition:
+        /Outside that Pi 0\.85\.0 provider\/ID set[^.]*do not manually opt in/i,
     },
     vi: {
+      automaticDetection: [
+        /model tích hợp sẵn[^.]*generated catalog của Pi 0\.85\.0/i,
+        /automatic detection[^.]*chuyển `modelId` thành chữ thường trước[^.]*sau đó bỏ/i,
+        /chỉ tự động bật[^.]*`provider` chính xác là `anthropic` hoặc `openrouter`\./i,
+      ],
+      customConfiguration: [
+        /custom `Model`[^.]*`anthropic-messages`/i,
+        /`compat\.supportsMidConvoEffort: true`/,
+        /chỉ sau khi xác minh[^.]*transport Anthropic Messages trung thực[^.]*đúng cùng Claude model family tương thích/i,
+        /provider name[^.]*nằm ngoài[^.]*allowlist của generated catalog[^.]*không tự nó cấm manual configuration/i,
+        /không bao giờ khái quát[^.]*provider hoặc model tương thích Anthropic tùy ý/i,
+      ],
       exactProviders:
-        /chỉ đủ điều kiện khi `provider` chính xác là `anthropic` hoặc `openrouter`\./i,
-      outsideBoundary:
-        /Ngoài tập provider\/ID của Pi 0\.85\.0[^.]*mặc định `false`[^.]*không bật thủ công/i,
-      broad: /chỉ bật[^.]*chính xác Claude model được hỗ trợ/i,
+        /chỉ tự động bật[^.]*`provider` chính xác là `anthropic` hoặc `openrouter`\./i,
+      overbroadProhibition:
+        /Ngoài tập provider\/ID của Pi 0\.85\.0[^.]*không bật thủ công/i,
     },
   };
   const exactIdPatterns = [
@@ -4672,22 +4690,33 @@ test("all model docs limit mid-conversation effort to the exact Pi 0.85 provider
         documentContract.headings[locale],
         context,
       );
-      const boundary = section.body
-        .split(/\n\s*\n/)
-        .find((paragraph) =>
-          exactIdPatterns.every((fragment) => paragraph.includes(fragment)),
-        );
-      assert.ok(
-        boundary,
-        `${context} must keep both released ID regexes and every named variant in one paragraph`,
-      );
       const contract = localeContracts[locale];
-      assert.match(boundary, contract.exactProviders, context);
-      assert.match(boundary, contract.outsideBoundary, context);
+      const automaticDetection = assertParagraphContainsAll(
+        section.body,
+        contract.automaticDetection,
+        `${context} generated-catalog automatic detection`,
+      );
+      const customConfiguration = assertParagraphContainsAll(
+        section.body,
+        contract.customConfiguration,
+        `${context} custom Model configuration`,
+      );
+      assert.notEqual(
+        automaticDetection,
+        customConfiguration,
+        `${context} must keep automatic detection and manual configuration readable as separate blocks`,
+      );
+      assert.match(automaticDetection, contract.exactProviders, context);
+      for (const fragment of exactIdPatterns) {
+        assert.ok(
+          section.body.includes(fragment),
+          `${context} must include ${fragment}`,
+        );
+      }
       assert.doesNotMatch(
         section.body,
-        contract.broad,
-        `${context} must not replace the released allowlist with a generic Claude claim`,
+        contract.overbroadProhibition,
+        `${context} must not treat the generated-catalog provider allowlist as a blanket manual-config prohibition`,
       );
     }
   }
@@ -5317,7 +5346,7 @@ test("detects invalid Pi source refs without a release version claim", () => {
 });
 
 test("bilingual semantic source links pin the exact Pi 0.85 implementation ranges", async () => {
-  const commit = "107d79f11072bbc8a3a757ed7fd69596bee7d68c";
+  const { commit } = await readReleaseFixture();
   const sourceBase = `https://github.com/earendil-works/pi/blob/${commit}/`;
   const contracts = [
     {
