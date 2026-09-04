@@ -363,7 +363,7 @@ Thứ tự này tạo ra các điểm chờ cụ thể. Việc phân phối `mes
 
 Tài liệu Pi cũ nói listener của `tool_execution_update` không bao giờ được chờ. Pi 0.85.0 xử lý theo hai giai đoạn. Callback đồng bộ `onUpdate` của Tool khởi chạy việc phân phối nhưng không chờ, nên Tool có thể báo cập nhật tiếp theo khi bên đăng ký còn xử lý cập nhật trước. Pi giữ lại mọi promise phân phối và chờ tất cả hoàn tất trước khi hậu xử lý kết quả.
 
-Đoạn dưới là pseudocode theo đúng thứ tự trong [`executePreparedToolCall()`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/agent-loop.ts#L670):
+Đoạn dưới là pseudocode theo đúng thứ tự trong [`executePreparedToolCall()`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/agent-loop.ts#L677-L718):
 
 ```typescript
 // Pseudocode: exact ordering, abbreviated payload construction.
@@ -531,7 +531,7 @@ export default function protectProduction(pi: ExtensionAPI) {
 }
 ```
 
-Ở đây, `terminate` áp dụng cho lời gọi bị chặn. Theo [`shouldTerminateToolBatch()`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/agent-loop.ts#L582-L584) ở bản mã nguồn đã pin, Pi chỉ quyết định kết thúc sau khi đã hoàn tất mọi kết quả của nhóm hiện tại. Nếu nhóm có kết quả và mọi kết quả đều có `terminate: true`, quyết định `terminate` cho nhóm nhận giá trị `true`; cờ này không dừng sớm công việc đang chạy trong nhóm.
+Ở đây, `terminate` áp dụng cho lời gọi bị chặn. Theo [`shouldTerminateToolBatch()`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/agent-loop.ts#L589-L590) ở bản mã nguồn đã pin, Pi chỉ quyết định kết thúc sau khi đã hoàn tất mọi kết quả của nhóm hiện tại. Nếu nhóm có kết quả và mọi kết quả đều có `terminate: true`, quyết định `terminate` cho nhóm nhận giá trị `true`; cờ này không dừng sớm công việc đang chạy trong nhóm.
 
 ### Tiền xử lý ngữ cảnh model mà không đổi lịch sử
 

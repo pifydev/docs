@@ -371,7 +371,7 @@ Hãy chạy mọi bước phù hợp trước khi tuyên bố hỗ trợ:
 | Một lần retry | Fixture local | Một response `429` tạo đúng hai lần gọi, rồi trả content và `"stop"`. |
 | Abort có độ trễ | Fixture local | Result là `"aborted"` và connection đóng mà không bị treo. |
 
-Với chính xác Claude model được hỗ trợ qua transport Anthropic Messages trung thực, `supportsMidConvoEffort` thuộc `AnthropicMessagesCompat` và mặc định là `false`. Chỉ bật cờ cho đúng tổ hợp transport/model đó, không bật cho mọi provider tương thích Anthropic hoặc API chỉ bắt chước hình dạng Messages.
+`supportsMidConvoEffort` thuộc `AnthropicMessagesCompat` và mặc định là `false`. Trong generated catalog của Pi 0.85.0, cờ này chỉ đủ điều kiện khi `provider` chính xác là `anthropic` hoặc `openrouter`. Sau khi bỏ prefix tùy chọn khớp `^~?anthropic/` (`anthropic/` hoặc `~anthropic/`), các ID được chấp nhận khớp chính xác `^claude-opus-5(?:-\d{8})?$` hoặc `^claude-(?:fable|mythos)-5(?:[.-]1)(?:-\d{8})?$`: `claude-opus-5` có thể kèm `-YYYYMMDD`; `claude-fable-5.1` hoặc `claude-fable-5-1`, mỗi ID có thể kèm ngày; và `claude-mythos-5.1` hoặc `claude-mythos-5-1`, mỗi ID có thể kèm ngày. Ngoài tập provider/ID của Pi 0.85.0, hãy giữ mặc định `false` và không bật thủ công. Đúng model trong tập này vẫn phải chạy trên transport Anthropic Messages trung thực; không dùng cờ cho mọi provider tương thích Anthropic hoặc API chỉ bắt chước hình dạng Messages.
 
 Khi cờ này được bật, Pi lưu effort native của từng response và khôi phục các effort-only system messages lúc replay cuộc hội thoại. Pi cũng gửi thinking binding control `prefix_mismatch_behavior: "drop_block"`; khi prefix mismatch, control này loại an toàn signed thinking block cũ và ngăn vòng lặp response 400 kéo dài.
 

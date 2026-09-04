@@ -437,7 +437,7 @@ const adapterLevel: ResolvedGoogleThinkingLevel = "high";
 void [googleOptions, adapterLevel];
 ```
 
-`supportsMidConvoEffort` belongs to `AnthropicMessagesCompat` and defaults to `false`. Enable it only for the exact supported Claude model on a faithful Anthropic Messages transport, not for all Anthropic-compatible providers or an API that merely imitates the Messages shape.
+`supportsMidConvoEffort` belongs to `AnthropicMessagesCompat` and defaults to `false`. In the Pi 0.85.0 generated catalog, it is enabled only when `provider` is exactly `anthropic` or `openrouter`. After stripping an optional prefix matching `^~?anthropic/` (`anthropic/` or `~anthropic/`), accepted IDs match exactly `^claude-opus-5(?:-\d{8})?$` or `^claude-(?:fable|mythos)-5(?:[.-]1)(?:-\d{8})?$`: `claude-opus-5`, optionally followed by `-YYYYMMDD`; `claude-fable-5.1` or `claude-fable-5-1`, each optionally dated; and `claude-mythos-5.1` or `claude-mythos-5-1`, each optionally dated. Outside that Pi 0.85.0 provider/ID set, keep the default `false` and do not manually opt in. This exact supported model set is valid only on a faithful Anthropic Messages transport, not for all Anthropic-compatible providers or an API that merely imitates the Messages shape.
 
 When that flag is enabled, Pi persists each response's native provider effort and reconstructs effort-only system messages on later requests. It also sends the thinking binding control `prefix_mismatch_behavior: "drop_block"`, so a prefix mismatch safely drops a stale signed thinking block instead of turning it into a persistent 400 response.
 

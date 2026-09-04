@@ -384,7 +384,13 @@ function assertExternalSessionGuideExampleParity(
   );
 }
 
-async function importCompileFixtureFunctions(source, functionNames) {
+let compileFixtureBindingSequence = 0;
+
+async function importCompileFixtureFunctions(
+  source,
+  functionNames,
+  injectedBindings = {},
+) {
   const normalized = source.replaceAll("\r\n", "\n");
   const executableSource = functionNames
     .map(
@@ -402,8 +408,40 @@ async function importCompileFixtureFunctions(source, functionNames) {
       target: ts.ScriptTarget.ES2022,
     },
   });
-  const moduleURL = `data:text/javascript;base64,${Buffer.from(compiled.outputText).toString("base64")}`;
-  return import(moduleURL);
+  const bindingEntries = Object.entries(injectedBindings);
+  if (bindingEntries.length === 0) {
+    const moduleURL = `data:text/javascript;base64,${Buffer.from(compiled.outputText).toString("base64")}`;
+    return import(moduleURL);
+  }
+
+  for (const [name] of bindingEntries) {
+    assert.match(
+      name,
+      /^[A-Za-z_$][A-Za-z0-9_$]*$/,
+      `fixture binding ${name} must be a JavaScript identifier`,
+    );
+    assert.match(
+      executableSource,
+      new RegExp(`\\b${name}\\b`),
+      `fixture binding ${name} must be referenced by an extracted function`,
+    );
+  }
+
+  const bindingKey = `pi-release-fixture:${process.pid}:${compileFixtureBindingSequence++}`;
+  const bindingSymbol = Symbol.for(bindingKey);
+  globalThis[bindingSymbol] = Object.freeze({ ...injectedBindings });
+  const bindingPrelude = bindingEntries
+    .map(
+      ([name]) =>
+        `const ${name} = globalThis[Symbol.for(${JSON.stringify(bindingKey)})][${JSON.stringify(name)}];`,
+    )
+    .join("\n");
+  const moduleURL = `data:text/javascript;base64,${Buffer.from(`${bindingPrelude}\n${compiled.outputText}`).toString("base64")}`;
+  try {
+    return await import(moduleURL);
+  } finally {
+    delete globalThis[bindingSymbol];
+  }
 }
 
 async function importCompileFixtureFunction(source, functionName) {
@@ -2172,6 +2210,94 @@ test("external-session restoration examples stay synchronized with the compile f
     displayedExamples[1],
     "external-session restoration code must be identical across locales",
   );
+});
+
+test("external-session fixture helper restores an in-memory tree at runtime", async () => {
+  const [compileFixture, { SessionManager }] = await Promise.all([
+    readFile(
+      new URL("tests/fixtures/pi-sdk-0850.contract.ts", repositoryRoot),
+      "utf8",
+    ),
+    import(
+      new URL(
+        "node_modules/@earendil-works/pi-coding-agent/dist/core/session-manager.js",
+        repositoryRoot,
+      )
+    ),
+  ]);
+  const { restoreExternalSessionEntries } = await importCompileFixtureFunctions(
+    compileFixture,
+    [externalSessionGuideFunction],
+    { SessionManager },
+  );
+  const cwd = process.cwd();
+  const sessionId = "external-session-0850";
+  const header = {
+    type: "session",
+    version: 3,
+    id: sessionId,
+    timestamp: "2026-09-04T10:18:28.000Z",
+    cwd,
+  };
+  const restoredEntries = [
+    {
+      type: "custom",
+      id: "root-entry",
+      parentId: null,
+      timestamp: "2026-09-04T10:18:29.000Z",
+      customType: "fixture",
+      data: { branch: "root" },
+    },
+    {
+      type: "custom",
+      id: "first-branch",
+      parentId: "root-entry",
+      timestamp: "2026-09-04T10:18:30.000Z",
+      customType: "fixture",
+      data: { branch: "first" },
+    },
+    {
+      type: "custom",
+      id: "active-branch",
+      parentId: "root-entry",
+      timestamp: "2026-09-04T10:18:31.000Z",
+      customType: "fixture",
+      data: { branch: "active" },
+    },
+  ];
+
+  const manager = restoreExternalSessionEntries(
+    sessionId,
+    [header, ...restoredEntries],
+    cwd,
+  );
+
+  assert.equal(manager.getSessionId(), sessionId);
+  assert.deepEqual(manager.getHeader(), header);
+  assert.deepEqual(manager.getEntries(), restoredEntries);
+  assert.equal(manager.getLeafId(), "active-branch");
+  assert.deepEqual(
+    manager.getBranch().map((entry) => entry.id),
+    ["root-entry", "active-branch"],
+  );
+  assert.deepEqual(
+    manager.getTree().map((root) => ({
+      id: root.entry.id,
+      children: root.children.map((child) => child.entry.id),
+    })),
+    [{ id: "root-entry", children: ["first-branch", "active-branch"] }],
+  );
+  assert.equal(manager.getSessionFile(), undefined);
+  assert.equal(manager.isPersisted(), false);
+
+  const appendedId = manager.appendCustomEntry("fixture", {
+    branch: "appended",
+  });
+  assert.equal(manager.getLeafId(), appendedId);
+  assert.equal(manager.getEntry(appendedId)?.parentId, "active-branch");
+  assert.equal(manager.getEntries().length, restoredEntries.length + 1);
+  assert.equal(manager.getSessionFile(), undefined);
+  assert.equal(manager.isPersisted(), false);
 });
 
 test("persistence guides define external ownership and the restoration input boundary", async () => {
@@ -4484,6 +4610,89 @@ test("both model guides bind Pi 0.85 compatibility flags to their exact interfac
   }
 });
 
+test("all model docs limit mid-conversation effort to the exact Pi 0.85 provider and ID patterns", async () => {
+  const documentContracts = [
+    {
+      path: "ch04-model-invocation.md",
+      headings: {
+        en: "### Reasoning levels and provider translation",
+        vi: "### Reasoning level và phép chuyển đổi theo provider",
+      },
+    },
+    {
+      path: "how-to/plug-new-model.md",
+      headings: {
+        en: "## 7. Probe streaming, thinking, and Tools",
+        vi: "## 7. Kiểm tra streaming, thinking và Tool",
+      },
+    },
+    {
+      path: "reference/api.md",
+      headings: {
+        en: "### Model metadata",
+        vi: "### Metadata của model",
+      },
+    },
+  ];
+  const localeContracts = {
+    en: {
+      exactProviders:
+        /only when `provider` is exactly `anthropic` or `openrouter`\./,
+      outsideBoundary:
+        /Outside that Pi 0\.85\.0 provider\/ID set[^.]*default `false`[^.]*do not manually opt in/i,
+      broad: /only for (?:an?|the) exact supported Claude model/i,
+    },
+    vi: {
+      exactProviders:
+        /chỉ đủ điều kiện khi `provider` chính xác là `anthropic` hoặc `openrouter`\./i,
+      outsideBoundary:
+        /Ngoài tập provider\/ID của Pi 0\.85\.0[^.]*mặc định `false`[^.]*không bật thủ công/i,
+      broad: /chỉ bật[^.]*chính xác Claude model được hỗ trợ/i,
+    },
+  };
+  const exactIdPatterns = [
+    "`^~?anthropic/`",
+    "`^claude-opus-5(?:-\\d{8})?$`",
+    "`^claude-(?:fable|mythos)-5(?:[.-]1)(?:-\\d{8})?$`",
+    "`claude-opus-5`",
+    "`claude-fable-5.1`",
+    "`claude-fable-5-1`",
+    "`claude-mythos-5.1`",
+    "`claude-mythos-5-1`",
+    "`-YYYYMMDD`",
+  ];
+
+  for (const documentContract of documentContracts) {
+    for (const { locale, source } of await readLocalizedContent(
+      documentContract.path,
+    )) {
+      const context = `${locale} ${documentContract.path} Claude effort support`;
+      const section = extractMarkdownSection(
+        source,
+        documentContract.headings[locale],
+        context,
+      );
+      const boundary = section.body
+        .split(/\n\s*\n/)
+        .find((paragraph) =>
+          exactIdPatterns.every((fragment) => paragraph.includes(fragment)),
+        );
+      assert.ok(
+        boundary,
+        `${context} must keep both released ID regexes and every named variant in one paragraph`,
+      );
+      const contract = localeContracts[locale];
+      assert.match(boundary, contract.exactProviders, context);
+      assert.match(boundary, contract.outsideBoundary, context);
+      assert.doesNotMatch(
+        section.body,
+        contract.broad,
+        `${context} must not replace the released allowlist with a generic Claude claim`,
+      );
+    }
+  }
+});
+
 test("both model guides record the Pi 0.85 review date in frontmatter", async () => {
   const guides = await readLocalizedContent("how-to/plug-new-model.md");
 
@@ -5105,6 +5314,77 @@ test("detects invalid Pi source refs without a release version claim", () => {
       link: "https://github.com/earendil-works/pi/blob/main/packages/ai/src/index.ts",
     },
   ]);
+});
+
+test("bilingual semantic source links pin the exact Pi 0.85 implementation ranges", async () => {
+  const commit = "107d79f11072bbc8a3a757ed7fd69596bee7d68c";
+  const sourceBase = `https://github.com/earendil-works/pi/blob/${commit}/`;
+  const contracts = [
+    {
+      path: "ch07-event-driven.md",
+      links: [
+        {
+          label: /executePreparedToolCall/,
+          target: `${sourceBase}packages/agent/src/agent-loop.ts#L677-L718`,
+        },
+        {
+          label: /shouldTerminateToolBatch/,
+          target: `${sourceBase}packages/agent/src/agent-loop.ts#L589-L590`,
+        },
+      ],
+      staleFragments: ["#L670", "#L582-L584"],
+    },
+    {
+      path: "ch08-context-engineering.md",
+      links: [
+        {
+          label: /`read`/,
+          target: `${sourceBase}packages/coding-agent/src/core/tools/read.ts#L151-L176`,
+        },
+        {
+          label: /`grep`/,
+          target: `${sourceBase}packages/coding-agent/src/core/tools/grep.ts#L285-L303`,
+        },
+      ],
+      staleFragments: ["#L271-L317", "#L321-L361"],
+    },
+    {
+      path: "ch09-compaction.md",
+      links: [
+        {
+          label: /SDK|ghi đè/,
+          target: `${sourceBase}packages/coding-agent/src/core/settings-manager.ts#L550-L553`,
+        },
+      ],
+      staleFragments: ["#L546-L549"],
+    },
+  ];
+
+  for (const contract of contracts) {
+    for (const { locale, source } of await readLocalizedContent(
+      contract.path,
+    )) {
+      const markdownLinks = [
+        ...source.matchAll(/\[([^\]]+)]\((https:\/\/github\.com\/[^)]+)\)/g),
+      ].map((match) => ({ label: match[1], target: match[2] }));
+      for (const expected of contract.links) {
+        assert.ok(
+          markdownLinks.some(
+            (link) =>
+              expected.label.test(link.label) &&
+              link.target === expected.target,
+          ),
+          `${locale} ${contract.path} must pin ${expected.target}`,
+        );
+      }
+      for (const staleFragment of contract.staleFragments) {
+        assert.ok(
+          !source.includes(staleFragment),
+          `${locale} ${contract.path} must not retain ${staleFragment}`,
+        );
+      }
+    }
+  }
 });
 
 test("0.85.0 source links point to the published tag or release commit", async () => {

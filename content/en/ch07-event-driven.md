@@ -363,7 +363,7 @@ This ordering creates concrete barriers. Assistant `message_end` delivery finish
 
 Historical Pi documentation described `tool_execution_update` listeners as never awaited. Pi 0.85.0 uses a two-part rule. The Tool's synchronous `onUpdate` callback starts delivery without awaiting it, so a Tool may report another update while subscribers process the previous one. Every delivery promise is collected, and all of them must settle before result postprocessing continues.
 
-The following is source-faithful pseudocode derived from [`executePreparedToolCall()`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/agent-loop.ts#L670):
+The following is source-faithful pseudocode derived from [`executePreparedToolCall()`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/agent-loop.ts#L677-L718):
 
 ```typescript
 // Pseudocode: exact ordering, abbreviated payload construction.
@@ -531,7 +531,7 @@ export default function protectProduction(pi: ExtensionAPI) {
 }
 ```
 
-`terminate` applies to the blocked call here. Pinned [`shouldTerminateToolBatch()`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/agent-loop.ts#L582-L584) evaluates termination only after the current batch has produced all of its finalized results. A non-empty result set in which every result has `terminate: true` sets the batch's termination decision; the flag never stops the current batch early.
+`terminate` applies to the blocked call here. Pinned [`shouldTerminateToolBatch()`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/agent-loop.ts#L589-L590) evaluates termination only after the current batch has produced all of its finalized results. A non-empty result set in which every result has `terminate: true` sets the batch's termination decision; the flag never stops the current batch early.
 
 ### Preprocess model context without changing history
 

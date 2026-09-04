@@ -437,7 +437,7 @@ const adapterLevel: ResolvedGoogleThinkingLevel = "high";
 void [googleOptions, adapterLevel];
 ```
 
-`supportsMidConvoEffort` thuộc `AnthropicMessagesCompat` và mặc định là `false`. Chỉ bật cờ này cho chính xác Claude model được hỗ trợ trên transport Anthropic Messages trung thực, không bật cho mọi provider tương thích Anthropic hoặc API chỉ bắt chước hình dạng Messages.
+`supportsMidConvoEffort` thuộc `AnthropicMessagesCompat` và mặc định là `false`. Trong generated catalog của Pi 0.85.0, cờ này chỉ đủ điều kiện khi `provider` chính xác là `anthropic` hoặc `openrouter`. Sau khi bỏ prefix tùy chọn khớp `^~?anthropic/` (`anthropic/` hoặc `~anthropic/`), các ID được chấp nhận khớp chính xác `^claude-opus-5(?:-\d{8})?$` hoặc `^claude-(?:fable|mythos)-5(?:[.-]1)(?:-\d{8})?$`: `claude-opus-5` có thể kèm `-YYYYMMDD`; `claude-fable-5.1` hoặc `claude-fable-5-1`, mỗi ID có thể kèm ngày; và `claude-mythos-5.1` hoặc `claude-mythos-5-1`, mỗi ID có thể kèm ngày. Ngoài tập provider/ID của Pi 0.85.0, hãy giữ mặc định `false` và không bật thủ công. Đúng model trong tập này vẫn phải chạy trên transport Anthropic Messages trung thực; không dùng cờ cho mọi provider tương thích Anthropic hoặc API chỉ bắt chước hình dạng Messages.
 
 Khi cờ này được bật, Pi lưu effort native của từng response và khôi phục các effort-only system messages trong request về sau. Pi cũng gửi thinking binding control `prefix_mismatch_behavior: "drop_block"`, nhờ đó prefix mismatch sẽ loại an toàn signed thinking block cũ thay vì gây lỗi 400 lặp lại.
 
