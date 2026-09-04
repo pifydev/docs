@@ -6,7 +6,10 @@ language: en
 chapter: 2
 source_url: 'https://www.dgzhuya.com/modules/ch02-three-layer-arch'
 official_refs:
-  - 'https://github.com/earendil-works/pi/tree/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages'
+  - 'https://github.com/earendil-works/pi/tree/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages'
+  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/client/README.md'
+  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/protocol/README.md'
+  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/server/README.md'
 terms_used:
   - Model
   - Provider
@@ -27,7 +30,7 @@ terms_used:
   - TypeBox
   - TSchema
 status: reviewed
-last_updated: '2026-08-25'
+last_updated: '2026-09-04'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -37,7 +40,7 @@ reviewed_by: Pify maintainers
 
 ## 1. You just opened an Agent codebase
 
-Suppose you cloned the Pi repository at revision `4e58f324` and opened `packages/`. The relevant part of the tree looks like this:
+Suppose you cloned the Pi repository at revision `107d79f1` and opened `packages/`. The relevant part of the tree looks like this:
 
 ```text
 repo/
@@ -46,9 +49,9 @@ repo/
 │   ├── agent/              ← @earendil-works/pi-agent-core
 │   ├── coding-agent/       ← @earendil-works/pi-coding-agent
 │   ├── tui/                ← @earendil-works/pi-tui
-│   ├── server/             ← @earendil-works/pi-server (experimental)
-│   ├── client/
-│   ├── protocol/
+│   ├── server/             ← experimental service boundary
+│   ├── client/             ← @earendil-works/pi-client (experimental)
+│   ├── protocol/           ← @earendil-works/pi-protocol (experimental)
 │   ├── telemetry/
 │   ├── evals/
 │   └── session-backends/
@@ -56,9 +59,9 @@ repo/
 └── tsconfig.json
 ```
 
-The first three packages form the dependency-direction model taught in this chapter. `pi-tui` is an orthogonal UI library, and `pi-server` is a current experimental service boundary. The remaining directories are support packages for wire protocols, clients, telemetry, evaluations, and session backends. The monorepo therefore contains more than five packages, even though five roles are useful for the first architectural tour.
+The first three packages form the dependency-direction model taught in this chapter. `pi-tui` is an orthogonal UI library. The client, protocol, and server packages form an optional experimental sibling boundary; the remaining directories support telemetry, evaluations, and session backends. The monorepo therefore contains more than five packages, even though five roles are useful for the first architectural tour.
 
-Older Pi material may mention `pi-web-ui` or `pi-orchestrator`. Neither is a workspace at the pinned revision. In particular, the old claim that an experimental `pi-orchestrator` sits above coding-agent cannot describe this tree. Section 2.5 replaces that slot with the current `pi-server` boundary and keeps its experimental status explicit.
+Older Pi material may mention `pi-web-ui` or `pi-orchestrator`. Neither is a workspace at the pinned revision. In particular, the old claim that an experimental `pi-orchestrator` sits above coding-agent cannot describe this tree. Section 2.5 instead maps the optional client/protocol/server boundary and keeps its experimental status explicit.
 
 Pi uses npm workspaces. The root manifest includes `packages/*`, the session backend subpackages, and a few coding-agent Extension examples that have their own dependencies. A workspace makes local packages build together; it does not make them one architectural layer.
 
@@ -74,7 +77,7 @@ Set dependency arrows aside for a moment. Read each package from its own public 
 
 `@earendil-works/pi-ai`, in `packages/ai/`, answers: how can one application call models from different providers through shared types and streaming contracts?
 
-Its manifest describes a “Unified LLM API with automatic model discovery and provider configuration.” At revision `4e58f324`, the package owns four related concepts:
+Its manifest describes a “Unified LLM API with automatic model discovery and provider configuration.” At revision `107d79f1`, the package owns four related concepts:
 
 1. `Model<TApi>` describes a concrete model, including its provider, API protocol, input modes, context window, token limit, costs, headers, and compatibility settings.
 2. `Provider<TApi>` owns a provider ID, authentication behavior, a synchronous model catalog, optional refresh behavior, and its `stream()` and `streamSimple()` implementations.
@@ -84,7 +87,7 @@ Its manifest describes a “Unified LLM API with automatic model discovery and p
 The root entry is intentionally side-effect free. Provider factories live behind package subpaths, while `createModels()` and the shared domain types stay at the root:
 
 ```typescript
-// packages/ai/src/index.ts (selected exports at 4e58f324)
+// packages/ai/src/index.ts (selected exports at 107d79f1)
 export type { Static, TSchema } from "typebox";
 export { Type } from "typebox";
 export * from "./models.ts";
@@ -114,7 +117,7 @@ Its manifest calls it a “General-purpose agent with transport abstraction, sta
 The public entry point reflects that split:
 
 ```typescript
-// packages/agent/src/index.ts (selected exports at 4e58f324)
+// packages/agent/src/index.ts (selected exports at 107d79f1)
 export * from "./agent.ts";
 export * from "./agent-loop.ts";
 export * from "./harness/compaction/compaction.ts";
@@ -171,13 +174,19 @@ Its runtime dependencies at the pinned revision are `marked` and `get-east-asian
 
 ### 2.5 pi-server: an experimental service boundary
 
-The fifth current boundary worth recognizing is `@earendil-works/pi-server`, in `packages/server/`. Its manifest calls it an “experimental server package for pi,” and its README says that its APIs may change or disappear.
+The fifth role is an optional service boundary spread across three packages. `@earendil-works/pi-client` exports the transport-neutral `Client`: the application supplies an ordered byte transport, while the client performs the version handshake, tracks the live route, and correlates requests. `createClientServiceTransport()` adapts a lazily resolved server or Session target to a Chord transport; `Client` itself does not build typed service proxies or interpret application contracts.
 
-`PiServer` accepts an application-supplied `PiServerService`, composes authenticated transport listeners, and exchanges length-prefixed CBOR messages defined by `@earendil-works/pi-protocol`. The package also owns adapters between `pi-ai` domain objects and protocol DTOs. Its manifest depends on `pi-ai` and `pi-protocol`; it does not depend on `pi-coding-agent`.
+`@earendil-works/pi-protocol` defines `PROTOCOL_VERSION`, strict routed envelopes, definite-length CBOR encoding, and four-byte length-prefixed byte-stream framing. A server request targets `{ serverId }`; a Session request targets the durable identity plus the live presentation capability `{ serverId, sessionId, attachmentId }`. Envelope schemas reject unknown fields and require opaque payloads to be strict JSON. They intentionally do not understand the payload grammar.
 
-> **Experimental boundary:** `pi-server` supplies neither a standalone CLI nor a coding-agent service. An application must implement session and model operations behind `PiServerService`. It is a sibling integration boundary, not the old multi-Agent orchestrator and not a fourth step in the core stack.
+That semantic boundary belongs to Chord and the application. Chord owns service calls, control parsing, bindings, catalogues, subscriptions, snapshots and updates, and the Delta codecs used for replicated state. The application decides what those services mean—for example management, a transcript, or a model catalogue—while `pi-protocol` only carries their values as opaque strict JSON.
 
-Protocol, client, telemetry, evaluation, and SQLite session-backend packages make other boundaries explicit. They matter when their contracts enter a design, but they do not erase the three-layer teaching model.
+`@earendil-works/pi-server` routes server-scoped services through an application-supplied `RoutedServerServiceHost` and Session-scoped services through a `RoutedSessionHandle` acquired for a presentation attachment. The server validates the route before forwarding an opaque invocation. The actual `Session` and Agent Harness stay process-local: neither JavaScript object crosses the protocol boundary, and the host retains Session, worker, and Harness lifecycle policy.
+
+Disconnect and retry policy are deliberately visible. A disconnect rejects pending work locally and clears the live attachment route, but work already accepted may still finish remotely before the server releases that attachment. There is no automatic reconnect and no request replay; the application must reconnect, attach again through its management service, and repeat only operations it knows are safe.
+
+> **Experimental boundary:** These packages are experimental and carry no compatibility guarantee. They are an optional sibling integration boundary, not a fourth mandatory SDK layer, not a stable end-to-end server product, and not the retired multi-Agent orchestrator.
+
+Telemetry, evaluation, and SQLite session-backend packages make still other boundaries explicit. They matter when their contracts enter a design, but they do not erase the three-layer teaching model.
 
 ---
 
@@ -199,7 +208,7 @@ The core stack now has a recognizable shape:
 
 Beside the stack:
   @earendil-works/pi-tui       reusable terminal UI
-  @earendil-works/pi-server    experimental service/protocol bridge
+  pi-client/protocol/server    optional experimental service boundary
 ```
 
 A normal request makes the division concrete. Coding Agent reads input and project resources, then asks Agent Core to prompt. Agent Core applies `transformContext`, converts its `AgentMessage[]` to model `Message[]`, and calls the injected `StreamFn`. Pi AI finds the provider that owns the selected `Model`, resolves auth, and opens the stream. Agent Core consumes events and executes requested `AgentTool`s. Coding Agent renders the events and records session entries. Provider payloads remain inside Pi AI; UI and storage policy remain inside Coding Agent.
@@ -217,10 +226,10 @@ The coding package depends directly on all three foundational packages in the te
 ```jsonc
 {
   "dependencies": {
-    // Selected foundational dependencies from package.json at 4e58f324.
-    "@earendil-works/pi-agent-core": "^0.84.3",
-    "@earendil-works/pi-ai": "^0.84.3",
-    "@earendil-works/pi-tui": "^0.84.3"
+    // Selected foundational dependencies from package.json at 107d79f1.
+    "@earendil-works/pi-agent-core": "^0.85.0",
+    "@earendil-works/pi-ai": "^0.85.0",
+    "@earendil-works/pi-tui": "^0.85.0"
   }
 }
 ```
@@ -233,12 +242,12 @@ The full manifest also lists `@earendil-works/pi-client` and `@earendil-works/pi
 
 Some direct imports exist because public product APIs mention `Model`, `Provider`, `Usage`, `Context`, `ImageContent`, and other Pi AI types. TypeScript must resolve those types even when a given import disappears from emitted JavaScript.
 
-The dependency is also present at runtime. Coding Agent compares models, extracts message content, creates IDs, retries assistant calls, and implements `ModelRuntime` and `ModelRegistry` over Pi AI contracts. Describing the edge as “only a type re-export” would be inaccurate at `4e58f324`.
+The dependency is also present at runtime. Coding Agent compares models, extracts message content, creates IDs, retries assistant calls, and implements `ModelRuntime` and `ModelRegistry` over Pi AI contracts. Describing the edge as “only a type re-export” would be inaccurate at `107d79f1`.
 
 Agent Core shows the progressive foundation most clearly:
 
 ```typescript
-// packages/agent/src/types.ts (imports abridged, 4e58f324)
+// packages/agent/src/types.ts (imports abridged, 107d79f1)
 import type {
   Api,
   AssistantMessageEventStream,
@@ -277,11 +286,12 @@ The dependency arrows below point from a reusable dependency toward its consumer
                                            │
 @earendil-works/pi-tui ────────────────────┘
 
-@earendil-works/pi-ai ───────→ @earendil-works/pi-server
+@earendil-works/pi-protocol ──→ @earendil-works/pi-client
 @earendil-works/pi-protocol ──→ @earendil-works/pi-server
+@earendil-works/pi-agent-core ─→ @earendil-works/pi-server
 ```
 
-The diagram makes two limits visible. First, the three layers describe dependency direction for the model, runtime, and coding-product responsibilities; they do not classify every monorepo package. Second, `pi-server` does not sit above Coding Agent in this revision. It bridges Pi AI objects to a protocol behind an application-supplied service.
+The diagram makes two limits visible. First, the three layers describe dependency direction for the model, runtime, and coding-product responsibilities; they do not classify every monorepo package. Second, the experimental client/protocol/server packages do not sit above Coding Agent as another layer. They route opaque Chord service traffic to application-owned, process-local capabilities.
 
 ---
 
@@ -352,7 +362,7 @@ Coding Agent assembles types around a complete user workflow. `AgentSession` coo
 For Tools, the product-facing `ToolDefinition` is deliberately separate from `AgentTool`. Their model-facing metadata overlaps, but their execution signatures do not: `ToolDefinition.execute` requires a fifth `ctx: ExtensionContext` parameter. A `ToolDefinition` therefore cannot be passed directly to Agent Core as an `AgentTool`.
 
 ```typescript
-// Selected exact fields and signatures from extensions/types.ts at 4e58f324.
+// Selected exact fields and signatures from extensions/types.ts at 107d79f1.
 export interface ToolDefinition<
   TParams extends TSchema = TSchema,
   TDetails = unknown,
@@ -390,7 +400,7 @@ export interface ToolDefinition<
 The product boundary becomes a runtime Tool through an explicit adapter in `packages/coding-agent/src/core/tools/tool-definition-wrapper.ts`:
 
 ```typescript
-// Selected from tool-definition-wrapper.ts at 4e58f324.
+// Selected from tool-definition-wrapper.ts at 107d79f1.
 export function wrapToolDefinition<TDetails = unknown>(
   definition: ToolDefinition<any, TDetails>,
   ctxFactory?: () => ExtensionContext,
@@ -425,7 +435,7 @@ The adapter copies the `AgentTool` fields and replaces `execute` with a function
 The loader also preserves the registrations from each loaded Extension as one aggregate. This is the current interface, with no fields omitted:
 
 ```typescript
-// packages/coding-agent/src/core/extensions/types.ts at 4e58f324.
+// packages/coding-agent/src/core/extensions/types.ts at 107d79f1.
 export interface Extension {
   path: string;
   resolvedPath: string;
@@ -619,12 +629,12 @@ Use the package manifest and source-import graph as evidence. A passing applicat
 
 ## 8. Next step: drill into the Agent's heart
 
-This map gives you the coordinates for the next source tour. Pi AI owns `Models`, `Provider`, `Model`, `Message`, and provider streams. Agent Core owns `Agent`, `AgentMessage`, `AgentTool`, state, queues, events, and the loop. Coding Agent owns sessions, Extensions, coding Tools, resources, and the product UI. Pi TUI remains reusable beside the stack, while the experimental Pi Server bridges Pi AI objects and the wire protocol behind an application service.
+This map gives you the coordinates for the next source tour. Pi AI owns `Models`, `Provider`, `Model`, `Message`, and provider streams. Agent Core owns `Agent`, `AgentMessage`, `AgentTool`, state, queues, events, and the loop. Coding Agent owns sessions, Extensions, coding Tools, resources, and the product UI. Pi TUI remains reusable beside the stack, while the experimental client/protocol/server siblings carry opaque Chord services to application-owned, process-local capabilities.
 
 Chapter 3 follows one prompt through the Agent Loop: why a loop is needed, how streaming events update state, how Tool calls become results, how queued messages enter the next turn, and how the run terminates.
 
 > **Reading order:** Chapters 1–6 build the core mechanism in sequence. Chapters 7 onward isolate advanced engineering concerns and can be read as focused references.
 
-> **Version note:** This chapter describes Pi `0.84.3` at commit `4e58f324fae8ebfa98a3d45181fb248072a2afac`. Package names, exports, dependencies, and experimental labels were checked against that revision.
+> **Version note:** This chapter describes Pi `0.85.0` at commit `107d79f11072bbc8a3a757ed7fd69596bee7d68c`. Package names, exports, dependencies, and experimental labels were checked against that revision.
 
 > **Next up:** [Chapter 3: Agent Loop](ch03-agent-loop.md)

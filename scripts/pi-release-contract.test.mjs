@@ -20,6 +20,20 @@ const deterministicGuideFunction = "verifyDeterministicAgentTestingGuide";
 const runtimeGuideFunction = "createSerializedSessionRuntimeHost";
 const runtimeHostAdapterFunction = "bindSerializedSessionRuntimeHost";
 const runtimeBindingFailureFunction = "throwSessionBindingFailure";
+const requiredArchitectureTerms = [
+  "@earendil-works/pi-client",
+  "Client",
+  "createClientServiceTransport",
+  "@earendil-works/pi-protocol",
+  "PROTOCOL_VERSION",
+  "@earendil-works/pi-server",
+  "RoutedServerServiceHost",
+  "RoutedSessionHandle",
+  "serverId",
+  "sessionId",
+  "attachmentId",
+  "Chord",
+];
 
 function chapter11ExampleFence(markdown) {
   const matches = [
@@ -852,6 +866,58 @@ test("release fixture identifies published Pi 0.85.0 authority", async () => {
   assert.equal(release.previousDocumentationVersion, "0.84.3");
   assert.deepEqual(release.includedReleaseTags, ["v0.84.4", "v0.85.0"]);
   assert.equal(release.sourceStatus, "published");
+});
+
+test("both Chapter 2 locales document the Pi 0.85.0 experimental service architecture", async () => {
+  const chapters = await readLocalizedContent("ch02-three-layer-arch.md");
+  const localeContract = {
+    en: {
+      heading: "### 2.5 pi-server: an experimental service boundary",
+      warning: [
+        /^> \*\*Experimental boundary:\*\*/m,
+        /experimental/i,
+        /no compatibility guarantee/i,
+      ],
+    },
+    vi: {
+      heading: "### 2.5 pi-server: một service boundary thử nghiệm",
+      warning: [
+        /^> \*\*Boundary thử nghiệm:\*\*/m,
+        /thử nghiệm/i,
+        /không bảo đảm tương thích/i,
+      ],
+    },
+  };
+  const structures = [];
+
+  for (const { locale, source } of chapters) {
+    const contract = localeContract[locale];
+    const section = extractMarkdownSection(
+      source,
+      contract.heading,
+      `${locale} Chapter 2 experimental service architecture`,
+    );
+
+    for (const term of requiredArchitectureTerms) {
+      assert.ok(
+        section.body.includes(term),
+        `${locale} Chapter 2 experimental service architecture must name ${term}`,
+      );
+    }
+    assert.doesNotMatch(
+      source,
+      /\b(?:PiClient|PiServerService)\b/,
+      `${locale} Chapter 2 must not present obsolete client or server identifiers`,
+    );
+    assertParagraphContainsAll(
+      section.body,
+      contract.warning,
+      `${locale} Chapter 2 experimental compatibility warning`,
+    );
+    structures.push(sectionStructure(section));
+  }
+
+  assert.deepEqual(structures[0], structures[1]);
 });
 
 test("compile fixture packages are exactly pinned to the published release", async () => {

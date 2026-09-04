@@ -1,18 +1,26 @@
 ---
 title: API reference
-description: A curated map of public Pi AI, Agent Core, and Coding Agent entry points at version 0.84.3.
+description: A curated map of core and experimental Pi package entry points at version 0.85.0.
 translation_key: reference-api
 language: en
+official_refs:
+  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/client/src/index.ts'
+  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/client/README.md'
+  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/protocol/src/index.ts'
+  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/protocol/README.md'
+  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/server/src/index.ts'
+  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/server/README.md'
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-08-25'
+last_updated: '2026-09-04'
 ---
 
-This curated integration reference omits specialist and UI exports. It targets upstream commit `4e58f324fae8ebfa98a3d45181fb248072a2afac`, the three `@earendil-works/*` packages at `0.84.3`, and Node.js `22.19` or newer.
+This curated integration reference omits exhaustive specialist and UI exports. It targets upstream commit `107d79f11072bbc8a3a757ed7fd69596bee7d68c`, the package roots at `0.85.0`, and Node.js `22.19` or newer.
 
 - `@earendil-works/pi-ai` owns provider collections, model metadata, authentication, messages, and LLM streams.
 - `@earendil-works/pi-agent-core` adds the agent loop, tool execution, state, queues, and lifecycle events.
 - `@earendil-works/pi-coding-agent` assembles sessions, settings, resources, extensions, coding tools, and CLI or SDK runtimes.
+- `@earendil-works/pi-client`, `@earendil-works/pi-protocol`, and `@earendil-works/pi-server` expose the optional experimental routed-service boundary.
 
 The root of `pi-ai` is side-effect free. Provider factories live under `providers/*`, wire-protocol implementations under `api/*`, and the retired global catalog helpers under `compat`. New integrations should not use `compat`.
 
@@ -493,6 +501,34 @@ For one fixed session, use `createAgentSession()`. For new, switch, fork, clone,
 | `--mode text|json|rpc`, `--print` | Select the host protocol or non-interactive output |
 
 Extensions can register additional flags, so `parseArgs()` retains unknown flags for extension resolution. Use `--help` from the installed `pi` binary as the complete CLI inventory for that exact version.
+
+## Experimental routed-service packages
+
+The following package-root exports are the current `0.85.0` boundary, not a stable remote-Agent recipe. Applications still own service contracts, transport authentication, Session discovery, worker lifecycle, and retry policy. Subpath exports such as `@earendil-works/pi-client/unix`, `@earendil-works/pi-server/unix`, and `@earendil-works/pi-server/testing` are separate from the roots summarized here.
+
+### `@earendil-works/pi-client`
+
+The root exports `Client` and `createClientServiceTransport`; `ClientDisposedError`, `DisconnectedError`, and `ServerError`; the transport contracts `ByteTransport`, `ByteTransportFactory`, and `ByteTransportHandlers`; and the client types `AttachmentChangeListener`, `ClientOptions`, `ConnectionState`, `ConnectionStateChange`, `ListenerErrorHandler`, `ServiceSubscription`, and `Unsubscribe`.
+
+`Client` is transport-neutral and operates on explicit `RpcTarget` values. `createClientServiceTransport(client, getTarget)` adapts a lazily resolved target to Chord's `RemoteServiceTransport`. It does not manufacture typed services. On disconnect, pending requests reject locally and the live attachment is cleared; the client does not reconnect or replay requests automatically, even though accepted work may finish remotely.
+
+### `@earendil-works/pi-protocol`
+
+The root exports `PROTOCOL_VERSION` (value `8`), `isServerId`, the message and target types `ClientMessage`, `ServerMessage`, `RpcTarget`, `ServerId`, and `SessionTarget`, plus the individual hello, request, cancellation, response, service-event, attachment, and protocol-error types. Encoding and validation entry points include `parseClientMessage`, `parseServerMessage`, `encodeClientMessage`, `encodeServerMessage`, `ClientMessageDecoder`, `ServerMessageDecoder`, `isSupportedProtocolVersion`, and `ProtocolValidationError`.
+
+The same root re-exports CBOR and framing primitives: `encodeCbor`, `decodeCbor`, `CborError`, CBOR limit constants and options, `encodeFrame`, `FrameDecoder`, `FrameError`, `FrameDecoderOptions`, and `DEFAULT_MAX_FRAME_LENGTH`. These APIs validate strict envelopes, framing, and opaque strict-JSON values; Chord owns service-control parsing, subscriptions, bindings, and replicated-state semantics.
+
+### `@earendil-works/pi-server`
+
+The root exports `Server`, `ServerListener`, `ServerOptions`, `ServerHost`, `RoutedServerPresentation`, `RoutedServerServiceAttachment`, `RoutedServerServiceHost`, `RoutedSessionAttachment`, `RoutedSessionHandle`, and `MaybePromise`. It also exports `ServerError`, `WrongServerError`, `SessionNotFoundError`, `SessionAmbiguousError`, `SessionNotAttachedError`, `ServerDrainingError`, and `INTERNAL_SERVER_ERROR_MESSAGE`.
+
+The server routes server-scoped and attachment-scoped Session services; it does not export the application's service catalogue or move an open `Session` or Agent Harness over the wire. A server target is `{ serverId }`, whereas a live Session target is `{ serverId, sessionId, attachmentId }`. Constructing listeners and providing routed service hosts are application responsibilities, so this reference intentionally does not present an end-to-end launch recipe as stable.
+
+:::warning[Experimental compatibility]
+
+The client, protocol, and server packages are experimental and have no compatibility guarantee. Pin their versions together and treat reconnect, replay, authentication, and lifecycle behavior as explicit application policy.
+
+:::
 
 ## Next
 

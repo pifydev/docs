@@ -6,7 +6,10 @@ language: vi
 chapter: 2
 source_url: 'https://www.dgzhuya.com/modules/ch02-three-layer-arch'
 official_refs:
-  - 'https://github.com/earendil-works/pi/tree/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages'
+  - 'https://github.com/earendil-works/pi/tree/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages'
+  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/client/README.md'
+  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/protocol/README.md'
+  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/server/README.md'
 terms_used:
   - Model
   - Provider
@@ -27,7 +30,7 @@ terms_used:
   - TypeBox
   - TSchema
 status: reviewed
-last_updated: '2026-08-25'
+last_updated: '2026-09-04'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -37,7 +40,7 @@ reviewed_by: Pify maintainers
 
 ## 1. Bạn vừa mở một codebase Agent
 
-Giả sử bạn vừa clone repository Pi tại revision `4e58f324` rồi mở thư mục `packages/`. Phần cây thư mục liên quan trông như sau:
+Giả sử bạn vừa clone repository Pi tại revision `107d79f1` rồi mở thư mục `packages/`. Phần cây thư mục liên quan trông như sau:
 
 ```text
 repo/
@@ -46,9 +49,9 @@ repo/
 │   ├── agent/              ← @earendil-works/pi-agent-core
 │   ├── coding-agent/       ← @earendil-works/pi-coding-agent
 │   ├── tui/                ← @earendil-works/pi-tui
-│   ├── server/             ← @earendil-works/pi-server (thử nghiệm)
-│   ├── client/
-│   ├── protocol/
+│   ├── server/             ← boundary service thử nghiệm
+│   ├── client/             ← @earendil-works/pi-client (thử nghiệm)
+│   ├── protocol/           ← @earendil-works/pi-protocol (thử nghiệm)
 │   ├── telemetry/
 │   ├── evals/
 │   └── session-backends/
@@ -56,9 +59,9 @@ repo/
 └── tsconfig.json
 ```
 
-Ba package đầu tạo thành mô hình hướng dependency được trình bày trong chương này. `pi-tui` là thư viện UI trực giao, còn `pi-server` là một service boundary thử nghiệm ở revision hiện tại. Những thư mục còn lại là package hỗ trợ cho wire protocol, client, telemetry, evaluation và session backend. Vì vậy monorepo có nhiều hơn năm package, dù năm vai trò vẫn là một cách vào bài dễ hiểu cho chuyến tham quan kiến trúc đầu tiên.
+Ba package đầu tạo thành mô hình hướng dependency được trình bày trong chương này. `pi-tui` là thư viện UI trực giao. Các package client, protocol và server tạo thành một boundary thử nghiệm, tùy chọn và nằm ngang hàng; những thư mục còn lại hỗ trợ telemetry, evaluation và session backend. Vì vậy monorepo có nhiều hơn năm package, dù năm vai trò vẫn là một cách vào bài dễ hiểu cho chuyến tham quan kiến trúc đầu tiên.
 
-Tài liệu Pi cũ có thể nhắc tới `pi-web-ui` hoặc `pi-orchestrator`. Cả hai đều không phải workspace tại revision đã ghim. Cụ thể, nhận định cũ rằng một `pi-orchestrator` thử nghiệm nằm trên coding-agent không còn mô tả đúng cây source này. Mục 2.5 thay vị trí đó bằng boundary `pi-server` hiện hành và ghi rõ trạng thái thử nghiệm của nó.
+Tài liệu Pi cũ có thể nhắc tới `pi-web-ui` hoặc `pi-orchestrator`. Cả hai đều không phải workspace tại revision đã ghim. Cụ thể, nhận định cũ rằng một `pi-orchestrator` thử nghiệm nằm trên coding-agent không còn mô tả đúng cây source này. Thay vào đó, Mục 2.5 lập bản đồ boundary client/protocol/server tùy chọn và ghi rõ trạng thái thử nghiệm của nó.
 
 Pi dùng npm workspaces. Manifest gốc bao gồm `packages/*`, các subpackage session backend và một số ví dụ Extension của coding-agent có dependency riêng. Workspace giúp các package local build cùng nhau; việc cùng nằm trong workspace không biến chúng thành một lớp kiến trúc duy nhất.
 
@@ -74,7 +77,7 @@ Tạm gác mũi tên dependency sang một bên. Hãy đọc từng package từ
 
 `@earendil-works/pi-ai`, nằm trong `packages/ai/`, trả lời câu hỏi: làm sao một ứng dụng có thể gọi model từ nhiều provider qua các type và streaming contract dùng chung?
 
-Manifest mô tả package này là “Unified LLM API with automatic model discovery and provider configuration”. Tại revision `4e58f324`, package sở hữu bốn nhóm khái niệm liên quan:
+Manifest mô tả package này là “Unified LLM API with automatic model discovery and provider configuration”. Tại revision `107d79f1`, package sở hữu bốn nhóm khái niệm liên quan:
 
 1. `Model<TApi>` mô tả một model cụ thể, gồm provider, API protocol, input mode, context window, token limit, chi phí, header và thiết lập tương thích.
 2. `Provider<TApi>` sở hữu provider ID, cách xác thực, model catalog đồng bộ, hành vi refresh tùy chọn cùng implementation của `stream()` và `streamSimple()`.
@@ -84,7 +87,7 @@ Manifest mô tả package này là “Unified LLM API with automatic model disco
 Root entry được giữ side-effect free có chủ đích. Provider factory nằm sau package subpath, còn `createModels()` và các domain type dùng chung nằm ở root:
 
 ```typescript
-// packages/ai/src/index.ts (một số export tại 4e58f324)
+// packages/ai/src/index.ts (một số export tại 107d79f1)
 export type { Static, TSchema } from "typebox";
 export { Type } from "typebox";
 export * from "./models.ts";
@@ -114,7 +117,7 @@ Manifest gọi đây là “General-purpose agent with transport abstraction, st
 Public entry point phản ánh sự phân chia đó:
 
 ```typescript
-// packages/agent/src/index.ts (một số export tại 4e58f324)
+// packages/agent/src/index.ts (một số export tại 107d79f1)
 export * from "./agent.ts";
 export * from "./agent-loop.ts";
 export * from "./harness/compaction/compaction.ts";
@@ -171,13 +174,19 @@ Runtime dependency tại revision đã ghim chỉ gồm `marked` và `get-east-a
 
 ### 2.5 pi-server: một service boundary thử nghiệm
 
-Boundary hiện hành thứ năm đáng nhận diện là `@earendil-works/pi-server`, nằm trong `packages/server/`. Manifest gọi nó là “experimental server package for pi”, còn README cảnh báo API có thể thay đổi hoặc bị gỡ bỏ.
+Vai trò thứ năm là một service boundary tùy chọn trải trên ba package. `@earendil-works/pi-client` export `Client` trung lập với transport: ứng dụng cung cấp một byte transport có thứ tự, còn client thực hiện version handshake, theo dõi live route và ghép request với response. `createClientServiceTransport()` chuyển server target hoặc Session target được resolve lười thành Chord transport; bản thân `Client` không dựng typed service proxy và không diễn giải contract của ứng dụng.
 
-`PiServer` nhận một `PiServerService` do ứng dụng cung cấp, kết hợp các transport listener đã xác thực và trao đổi message CBOR có length prefix do `@earendil-works/pi-protocol` định nghĩa. Package cũng sở hữu adapter giữa domain object của `pi-ai` và protocol DTO. Manifest phụ thuộc `pi-ai` cùng `pi-protocol`; nó không phụ thuộc `pi-coding-agent`.
+`@earendil-works/pi-protocol` định nghĩa `PROTOCOL_VERSION`, routed envelope nghiêm ngặt, definite-length CBOR encoding và byte-stream framing với length prefix bốn byte. Server request nhắm tới `{ serverId }`; Session request nhắm tới durable identity kèm live presentation capability `{ serverId, sessionId, attachmentId }`. Envelope schema từ chối field không biết và yêu cầu opaque payload là strict JSON. Chúng cố ý không hiểu grammar bên trong payload.
 
-> **Boundary thử nghiệm:** `pi-server` không cung cấp standalone CLI hay coding-agent service. Ứng dụng phải hiện thực các thao tác session và model phía sau `PiServerService`. Đây là integration boundary ngang hàng, không phải multi-Agent orchestrator cũ và cũng không phải bước thứ tư của core stack.
+Boundary về ngữ nghĩa đó thuộc về Chord và ứng dụng. Chord sở hữu service call, control parsing, binding, catalogue, subscription, snapshot và update, cùng Delta codec dùng cho replicated state. Ứng dụng quyết định ý nghĩa của service—chẳng hạn management, transcript hoặc model catalogue—còn `pi-protocol` chỉ vận chuyển value dưới dạng strict JSON opaque.
 
-Các package protocol, client, telemetry, evaluation và SQLite session backend làm những boundary khác trở nên tường minh. Chúng có ý nghĩa khi contract tương ứng đi vào thiết kế, nhưng không xóa bỏ mô hình học ba lớp.
+`@earendil-works/pi-server` route service phạm vi server qua `RoutedServerServiceHost` do ứng dụng cung cấp và route service phạm vi Session qua `RoutedSessionHandle` được lấy cho một presentation attachment. Server validate route trước khi forward opaque invocation. `Session` thật và Agent Harness vẫn ở trong process: không JavaScript object nào đi qua protocol boundary, còn host giữ policy vòng đời cho Session, worker và Harness.
+
+Policy về disconnect và retry được để lộ có chủ đích. Disconnect làm pending work reject ở phía local và xóa live attachment route, nhưng công việc đã được chấp nhận vẫn có thể hoàn tất ở remote trước khi server giải phóng attachment đó. Không có automatic reconnect hay request replay; ứng dụng phải reconnect, attach lại qua management service và chỉ lặp những thao tác mà nó biết là an toàn.
+
+> **Boundary thử nghiệm:** Các package này đang thử nghiệm và không bảo đảm tương thích. Đây là integration boundary tùy chọn nằm ngang hàng, không phải layer SDK bắt buộc thứ tư, không phải sản phẩm server end-to-end ổn định và không phải multi-Agent orchestrator cũ.
+
+Các package telemetry, evaluation và SQLite session backend còn làm rõ những boundary khác. Chúng có ý nghĩa khi contract tương ứng đi vào thiết kế, nhưng không xóa bỏ mô hình học ba lớp.
 
 ---
 
@@ -199,7 +208,7 @@ Core stack giờ có hình dạng dễ nhận ra:
 
 Nằm cạnh stack:
   @earendil-works/pi-tui       terminal UI tái sử dụng được
-  @earendil-works/pi-server    service/protocol bridge thử nghiệm
+  pi-client/protocol/server    service boundary thử nghiệm, tùy chọn
 ```
 
 Một request thông thường giúp ranh giới trở nên cụ thể. Coding Agent đọc input và project resource, sau đó yêu cầu Agent Core chạy prompt. Agent Core áp dụng `transformContext`, chuyển `AgentMessage[]` thành `Message[]` cho model rồi gọi `StreamFn` đã được inject. Pi AI tìm provider sở hữu `Model` được chọn, giải quyết auth và mở stream. Agent Core nhận event rồi thực thi `AgentTool` mà model yêu cầu. Coding Agent render event và ghi session entry. Payload riêng của provider dừng trong Pi AI; policy UI cùng storage dừng trong Coding Agent.
@@ -217,10 +226,10 @@ Coding package phụ thuộc trực tiếp vào cả ba package nền tảng tro
 ```jsonc
 {
   "dependencies": {
-    // Các dependency nền tảng được chọn từ package.json tại 4e58f324.
-    "@earendil-works/pi-agent-core": "^0.84.3",
-    "@earendil-works/pi-ai": "^0.84.3",
-    "@earendil-works/pi-tui": "^0.84.3"
+    // Các dependency nền tảng được chọn từ package.json tại 107d79f1.
+    "@earendil-works/pi-agent-core": "^0.85.0",
+    "@earendil-works/pi-ai": "^0.85.0",
+    "@earendil-works/pi-tui": "^0.85.0"
   }
 }
 ```
@@ -233,12 +242,12 @@ Manifest đầy đủ còn liệt kê `@earendil-works/pi-client` và `@earendil
 
 Một số direct import tồn tại vì public API của sản phẩm nhắc đến `Model`, `Provider`, `Usage`, `Context`, `ImageContent` và các type Pi AI khác. TypeScript vẫn phải resolve những type đó ngay cả khi import cụ thể biến mất khỏi JavaScript được emit.
 
-Dependency cũng tồn tại lúc runtime. Coding Agent so sánh model, lấy text từ nội dung message, tạo ID, retry assistant call và hiện thực `ModelRuntime` cùng `ModelRegistry` trên contract của Pi AI. Mô tả cạnh này là “chỉ re-export type” sẽ sai ở revision `4e58f324`.
+Dependency cũng tồn tại lúc runtime. Coding Agent so sánh model, lấy text từ nội dung message, tạo ID, retry assistant call và hiện thực `ModelRuntime` cùng `ModelRegistry` trên contract của Pi AI. Mô tả cạnh này là “chỉ re-export type” sẽ sai ở revision `107d79f1`.
 
 Agent Core cho thấy nền tảng được mở rộng dần rõ nhất:
 
 ```typescript
-// packages/agent/src/types.ts (lược bớt import, 4e58f324)
+// packages/agent/src/types.ts (lược bớt import, 107d79f1)
 import type {
   Api,
   AssistantMessageEventStream,
@@ -277,11 +286,12 @@ Các mũi tên dependency bên dưới đi từ dependency tái sử dụng đư
                                            │
 @earendil-works/pi-tui ────────────────────┘
 
-@earendil-works/pi-ai ───────→ @earendil-works/pi-server
+@earendil-works/pi-protocol ──→ @earendil-works/pi-client
 @earendil-works/pi-protocol ──→ @earendil-works/pi-server
+@earendil-works/pi-agent-core ─→ @earendil-works/pi-server
 ```
 
-Sơ đồ cho thấy hai giới hạn. Thứ nhất, ba lớp mô tả hướng dependency của các trách nhiệm model, runtime và coding product; chúng không phân loại mọi package trong monorepo. Thứ hai, `pi-server` không nằm trên Coding Agent ở revision này. Nó nối object Pi AI với protocol phía sau service do ứng dụng cung cấp.
+Sơ đồ cho thấy hai giới hạn. Thứ nhất, ba lớp mô tả hướng dependency của các trách nhiệm model, runtime và coding product; chúng không phân loại mọi package trong monorepo. Thứ hai, các package client/protocol/server thử nghiệm không nằm trên Coding Agent như một layer nữa. Chúng route traffic của Chord service dưới dạng opaque tới capability ở trong process và do ứng dụng sở hữu.
 
 ---
 
@@ -352,7 +362,7 @@ Coding Agent lắp các type quanh một workflow hoàn chỉnh cho người dù
 Với Tool, `ToolDefinition` hướng sản phẩm được tách hẳn khỏi `AgentTool`. Metadata dành cho model của hai type có phần trùng nhau, nhưng execution signature thì khác: `ToolDefinition.execute` bắt buộc có tham số thứ năm `ctx: ExtensionContext`. Vì vậy không thể truyền trực tiếp một `ToolDefinition` cho Agent Core dưới dạng `AgentTool`.
 
 ```typescript
-// Các field và signature được trích chính xác từ extensions/types.ts tại 4e58f324.
+// Các field và signature được trích chính xác từ extensions/types.ts tại 107d79f1.
 export interface ToolDefinition<
   TParams extends TSchema = TSchema,
   TDetails = unknown,
@@ -390,7 +400,7 @@ export interface ToolDefinition<
 Product boundary trở thành runtime Tool qua adapter tường minh trong `packages/coding-agent/src/core/tools/tool-definition-wrapper.ts`:
 
 ```typescript
-// Trích từ tool-definition-wrapper.ts tại 4e58f324.
+// Trích từ tool-definition-wrapper.ts tại 107d79f1.
 export function wrapToolDefinition<TDetails = unknown>(
   definition: ToolDefinition<any, TDetails>,
   ctxFactory?: () => ExtensionContext,
@@ -425,7 +435,7 @@ Adapter sao chép các field của `AgentTool` rồi thay `execute` bằng funct
 Loader còn giữ các registration của từng Extension đã nạp trong một aggregate. Đây là interface hiện hành, không lược bỏ field nào:
 
 ```typescript
-// packages/coding-agent/src/core/extensions/types.ts tại 4e58f324.
+// packages/coding-agent/src/core/extensions/types.ts tại 107d79f1.
 export interface Extension {
   path: string;
   resolvedPath: string;
@@ -619,12 +629,12 @@ Hãy dùng package manifest và source-import graph làm bằng chứng. Applica
 
 ## 8. Bước tiếp theo: đi vào trung tâm của Agent
 
-Tấm bản đồ này cho bạn tọa độ của chuyến đọc source kế tiếp. Pi AI sở hữu `Models`, `Provider`, `Model`, `Message` và provider stream. Agent Core sở hữu `Agent`, `AgentMessage`, `AgentTool`, state, queue, event và vòng lặp. Coding Agent sở hữu session, Extension, coding Tool, resource và UI sản phẩm. Pi TUI vẫn tái sử dụng được ở cạnh stack, còn Pi Server thử nghiệm nối object Pi AI với wire protocol phía sau application service.
+Tấm bản đồ này cho bạn tọa độ của chuyến đọc source kế tiếp. Pi AI sở hữu `Models`, `Provider`, `Model`, `Message` và provider stream. Agent Core sở hữu `Agent`, `AgentMessage`, `AgentTool`, state, queue, event và vòng lặp. Coding Agent sở hữu session, Extension, coding Tool, resource và UI sản phẩm. Pi TUI vẫn tái sử dụng được ở cạnh stack, còn các sibling client/protocol/server thử nghiệm vận chuyển Chord service opaque tới capability trong process do ứng dụng sở hữu.
 
 Chương 3 theo dõi một prompt đi qua Agent Loop: vì sao cần vòng lặp, streaming event cập nhật state thế nào, Tool call trở thành result ra sao, message trong queue đi vào turn tiếp theo khi nào và run kết thúc bằng cách nào.
 
 > **Thứ tự đọc:** Chương 1–6 xây cơ chế lõi theo trình tự. Từ Chương 7 trở đi, mỗi chương tách một vấn đề kỹ thuật nâng cao và có thể dùng như tài liệu tra cứu theo chủ đề.
 
-> **Ghi chú phiên bản:** Chương này mô tả Pi `0.84.3` tại commit `4e58f324fae8ebfa98a3d45181fb248072a2afac`. Tên package, export, dependency và nhãn thử nghiệm đều đã được kiểm tra theo revision đó.
+> **Ghi chú phiên bản:** Chương này mô tả Pi `0.85.0` tại commit `107d79f11072bbc8a3a757ed7fd69596bee7d68c`. Tên package, export, dependency và nhãn thử nghiệm đều đã được kiểm tra theo revision đó.
 
 > **Chương tiếp theo:** [Chương 3: Agent Loop](ch03-agent-loop.md)

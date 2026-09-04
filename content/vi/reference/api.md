@@ -1,18 +1,26 @@
 ---
 title: Tham chiếu API
-description: Bản đồ chọn lọc các entry point công khai của Pi AI, Agent Core và Coding Agent ở phiên bản 0.84.3.
+description: Bản đồ chọn lọc các entry point của package Pi lõi và thử nghiệm ở phiên bản 0.85.0.
 translation_key: reference-api
 language: vi
+official_refs:
+  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/client/src/index.ts'
+  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/client/README.md'
+  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/protocol/src/index.ts'
+  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/protocol/README.md'
+  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/server/src/index.ts'
+  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/server/README.md'
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-08-25'
+last_updated: '2026-09-04'
 ---
 
-Tài liệu tham chiếu tích hợp có chọn lọc này lược bỏ các export chuyên biệt và UI. Nội dung áp dụng cho upstream commit `4e58f324fae8ebfa98a3d45181fb248072a2afac`, ba package `@earendil-works/*` phiên bản `0.84.3` và Node.js `22.19` trở lên.
+Tài liệu tham chiếu tích hợp có chọn lọc này không liệt kê toàn bộ export chuyên biệt và UI. Nội dung áp dụng cho upstream commit `107d79f11072bbc8a3a757ed7fd69596bee7d68c`, các package root ở phiên bản `0.85.0` và Node.js `22.19` trở lên.
 
 - `@earendil-works/pi-ai` quản lý provider collection, metadata của model, authentication, message và LLM stream.
 - `@earendil-works/pi-agent-core` bổ sung agent loop, thực thi tool, state, queue và lifecycle event.
 - `@earendil-works/pi-coding-agent` kết hợp session, setting, resource, extension, coding tool cùng runtime CLI hoặc SDK.
+- `@earendil-works/pi-client`, `@earendil-works/pi-protocol` và `@earendil-works/pi-server` expose boundary thử nghiệm, tùy chọn cho routed service.
 
 Root của `pi-ai` không có side effect. Provider factory nằm dưới `providers/*`, implementation của wire protocol nằm dưới `api/*`, còn các global catalog helper đã ngừng dùng nằm dưới `compat`. Tích hợp mới không nên dùng `compat`.
 
@@ -493,6 +501,34 @@ Với một session cố định, dùng `createAgentSession()`. Với flow new, 
 | `--mode text|json|rpc`, `--print` | Chọn host protocol hoặc output non-interactive |
 
 Extension có thể đăng ký thêm flag, vì vậy `parseArgs()` giữ unknown flag cho bước extension resolution. Dùng `--help` từ binary `pi` đã cài để xem toàn bộ CLI inventory của đúng phiên bản đó.
+
+## Các package routed-service thử nghiệm
+
+Các package-root export dưới đây là boundary hiện hành của `0.85.0`, không phải công thức remote Agent ổn định. Ứng dụng vẫn sở hữu service contract, authentication cho transport, Session discovery, vòng đời worker và retry policy. Những subpath export như `@earendil-works/pi-client/unix`, `@earendil-works/pi-server/unix` và `@earendil-works/pi-server/testing` tách khỏi các root được tóm tắt ở đây.
+
+### `@earendil-works/pi-client`
+
+Root export `Client` và `createClientServiceTransport`; các error `ClientDisposedError`, `DisconnectedError`, `ServerError`; contract transport `ByteTransport`, `ByteTransportFactory`, `ByteTransportHandlers`; cùng các client type `AttachmentChangeListener`, `ClientOptions`, `ConnectionState`, `ConnectionStateChange`, `ListenerErrorHandler`, `ServiceSubscription` và `Unsubscribe`.
+
+`Client` trung lập với transport và làm việc trên `RpcTarget` tường minh. `createClientServiceTransport(client, getTarget)` chuyển một target được resolve lười thành `RemoteServiceTransport` của Chord; nó không tự dựng typed service. Khi mất kết nối, pending request reject ở local và live attachment bị xóa; client không tự reconnect hoặc replay request, dù công việc đã được chấp nhận vẫn có thể hoàn tất ở remote.
+
+### `@earendil-works/pi-protocol`
+
+Root export `PROTOCOL_VERSION` (giá trị `8`), `isServerId`, các message và target type `ClientMessage`, `ServerMessage`, `RpcTarget`, `ServerId`, `SessionTarget`, cùng từng type hello, request, cancellation, response, service event, attachment và protocol error. Các entry point cho encoding và validation gồm `parseClientMessage`, `parseServerMessage`, `encodeClientMessage`, `encodeServerMessage`, `ClientMessageDecoder`, `ServerMessageDecoder`, `isSupportedProtocolVersion` và `ProtocolValidationError`.
+
+Cũng từ root đó, package re-export primitive cho CBOR và framing: `encodeCbor`, `decodeCbor`, `CborError`, các hằng số giới hạn cùng option CBOR, `encodeFrame`, `FrameDecoder`, `FrameError`, `FrameDecoderOptions` và `DEFAULT_MAX_FRAME_LENGTH`. Những API này validate envelope nghiêm ngặt, framing và value strict JSON opaque; Chord sở hữu control parsing, subscription, binding và ngữ nghĩa replicated state của service.
+
+### `@earendil-works/pi-server`
+
+Root export `Server`, `ServerListener`, `ServerOptions`, `ServerHost`, `RoutedServerPresentation`, `RoutedServerServiceAttachment`, `RoutedServerServiceHost`, `RoutedSessionAttachment`, `RoutedSessionHandle` và `MaybePromise`. Nó cũng export `ServerError`, `WrongServerError`, `SessionNotFoundError`, `SessionAmbiguousError`, `SessionNotAttachedError`, `ServerDrainingError` cùng `INTERNAL_SERVER_ERROR_MESSAGE`.
+
+Server route service phạm vi server và service phạm vi Session attachment; nó không export service catalogue của ứng dụng, cũng không đưa một `Session` đang mở hoặc Agent Harness qua wire. Server target là `{ serverId }`, còn live Session target là `{ serverId, sessionId, attachmentId }`. Ứng dụng có trách nhiệm dựng listener và cung cấp routed service host, vì vậy reference này chủ ý không trình bày một launch recipe end-to-end như API ổn định.
+
+:::warning[Tương thích thử nghiệm]
+
+Các package client, protocol và server đang thử nghiệm và không bảo đảm tương thích. Hãy pin version của chúng cùng nhau, đồng thời coi reconnect, replay, authentication và lifecycle behavior là policy tường minh của ứng dụng.
+
+:::
 
 ## Tiếp theo
 
