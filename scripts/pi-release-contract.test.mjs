@@ -1304,8 +1304,30 @@ const rollupAccuracyContracts = {
     reliabilityHeading: "### Reliability/provider fixes",
     claudeThinking:
       /supported Anthropic transports[^.]*preserve[^.]*per-turn[^.]*effort[^.]*recover[^.]*signed-thinking mismatches/i,
-    midConvoMechanism:
-      /`supportsMidConvoEffort`[^.]*mechanism[^.]*Anthropic transport/i,
+    midConvoRelationship: [
+      /`supportsMidConvoEffort`/,
+      /`AnthropicMessagesCompat`/,
+      /defaults? to `false`/i,
+      /exact supported Claude model/i,
+      /faithful Anthropic Messages transport/i,
+      /per-turn effort/i,
+      /signed-thinking mismatch/i,
+    ],
+    vllmRelationship: [
+      /`vllmPriority`/,
+      /`OpenAICompletionsCompat`/,
+      /vLLM priority scheduling/i,
+      /not set in generated model metadata by default/i,
+      /vLLM server priority defaults? to `0`/i,
+    ],
+    maxOutputRelationship: [
+      /`supportsMaxOutputTokens`/,
+      /`OpenAIResponsesCompat`/,
+      /defaults? to `true`/i,
+      /controls? whether/i,
+      /Responses-compatible gateways/i,
+      /`max_output_tokens`/,
+    ],
     compatibilityFields:
       /Added model compatibility fields[^.]*`vllmPriority`[^.]*`supportsMaxOutputTokens`/i,
     latexAdded:
@@ -1320,8 +1342,30 @@ const rollupAccuracyContracts = {
     reliabilityHeading: "### Bản sửa lỗi độ tin cậy/provider",
     claudeThinking:
       /transport Anthropic được hỗ trợ[^.]*giữ[^.]*effort theo từng lượt[^.]*phục hồi[^.]*signed-thinking không khớp/i,
-    midConvoMechanism:
-      /`supportsMidConvoEffort`[^.]*cơ chế[^.]*transport Anthropic/i,
+    midConvoRelationship: [
+      /`supportsMidConvoEffort`/,
+      /`AnthropicMessagesCompat`/,
+      /mặc định(?: là)? `false`/i,
+      /đúng model Claude được hỗ trợ/i,
+      /transport[^.]*trung thực[^.]*Anthropic Messages/i,
+      /effort theo từng lượt/i,
+      /signed-thinking không khớp/i,
+    ],
+    vllmRelationship: [
+      /`vllmPriority`/,
+      /`OpenAICompletionsCompat`/,
+      /lập lịch ưu tiên vLLM/i,
+      /mặc định không được đặt trong model metadata được tạo/i,
+      /priority mặc định của vLLM server là `0`/i,
+    ],
+    maxOutputRelationship: [
+      /`supportsMaxOutputTokens`/,
+      /`OpenAIResponsesCompat`/,
+      /mặc định(?: là)? `true`/i,
+      /kiểm soát/i,
+      /gateway tương thích Responses/i,
+      /`max_output_tokens`/,
+    ],
     compatibilityFields:
       /Bổ sung các field tương thích model[^.]*`vllmPriority`[^.]*`supportsMaxOutputTokens`/i,
     latexAdded: /Bổ sung hỗ trợ render[^.]*join[^.]*LaTeX[^.]*đại số quan hệ/i,
@@ -1333,16 +1377,30 @@ const rollupAccuracyContracts = {
 
 function assertReleaseRollupAccuracy(entryBody, locale, context) {
   const contract = rollupAccuracyContracts[locale];
-  assertContainsAll(
+  const capabilities = assertContainsAll(
     entryBody,
     [
       contract.claudeThinking,
-      contract.midConvoMechanism,
       contract.compatibilityFields,
       contract.latexAdded,
     ],
     `${context} exact additions`,
     { heading: contract.capabilitiesHeading },
+  );
+  assertParagraphContainsAll(
+    capabilities.body,
+    contract.midConvoRelationship,
+    `${context} Claude effort compatibility boundary`,
+  );
+  assertParagraphContainsAll(
+    capabilities.body,
+    contract.vllmRelationship,
+    `${context} vLLM priority compatibility owner`,
+  );
+  assertParagraphContainsAll(
+    capabilities.body,
+    contract.maxOutputRelationship,
+    `${context} Responses output-token compatibility owner`,
   );
   assert.doesNotMatch(
     entryBody,
@@ -1536,6 +1594,39 @@ test("first-entry rollup accuracy guard rejects attribution and resilience regre
       label: "compatibility fields presented as pre-existing documentation",
       pattern: "Added model compatibility fields",
       replacement: "Documented model compatibility fields",
+    },
+    {
+      label: "vLLM priority owner blurred",
+      pattern: "`vllmPriority` belongs to `OpenAICompletionsCompat`",
+      replacement:
+        "`vllmPriority` belongs to an OpenAI compatibility interface",
+    },
+    {
+      label: "Responses output-token owner blurred",
+      pattern: "`supportsMaxOutputTokens` belongs to `OpenAIResponsesCompat`",
+      replacement:
+        "`supportsMaxOutputTokens` belongs to an OpenAI compatibility interface",
+    },
+    {
+      label: "vLLM metadata default blurred",
+      pattern: "is not set in generated model metadata by default",
+      replacement: "defaults to priority `0` in generated model metadata",
+    },
+    {
+      label: "Responses output-token default inverted",
+      pattern: "defaults to `true`",
+      replacement: "defaults to `false`",
+    },
+    {
+      label: "Claude model and transport boundary blurred",
+      pattern:
+        "an exact supported Claude model on a faithful Anthropic Messages transport",
+      replacement: "an Anthropic transport",
+    },
+    {
+      label: "Claude effort flag default inverted",
+      pattern: "defaults to `false`",
+      replacement: "defaults to `true`",
     },
     {
       label: "relational-algebra LaTeX presented as a fix",

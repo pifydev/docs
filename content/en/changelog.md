@@ -16,8 +16,8 @@ Pify's documentation baseline now follows the official [Pi `0.85.0` release](htt
 ### New capabilities
 
 - Documented external session restoration through `SessionManager.inMemory()` and the ownership boundary for externally stored entries.
-- Documented persistent Claude thinking effort: supported Anthropic transports preserve per-turn effort and recover safely from signed-thinking mismatches; `supportsMidConvoEffort` is the docs/API mechanism that identifies the Anthropic transports aligned with that behavior.
-- Added model compatibility fields `vllmPriority` and `supportsMaxOutputTokens` for inherited OpenAI-compatible transport capabilities.
+- Documented persistent Claude thinking effort: supported Anthropic transports preserve per-turn effort and recover safely from signed-thinking mismatches. `supportsMidConvoEffort` belongs to `AnthropicMessagesCompat`, defaults to `false`, and may be enabled only for an exact supported Claude model on a faithful Anthropic Messages transport; it is the mechanism used for per-turn effort and signed-thinking recovery.
+- Added model compatibility fields: `vllmPriority` belongs to `OpenAICompletionsCompat`, is relevant to vLLM priority scheduling, and is not set in generated model metadata by default, while vLLM server priority defaults to `0`; `supportsMaxOutputTokens` belongs to `OpenAIResponsesCompat`, defaults to `true`, and controls whether Responses-compatible gateways receive `max_output_tokens`.
 - Added relational-algebra LaTeX join-symbol rendering support.
 - Added the experimental service architecture formed by `@earendil-works/pi-client`, `@earendil-works/pi-protocol`, and `@earendil-works/pi-server`, including routed sessions, transport, and protocol responsibilities.
 

@@ -16,8 +16,8 @@ Baseline của tài liệu Pify nay theo [release Pi `0.85.0` chính thức](htt
 ### Khả năng mới
 
 - Ghi lại cách khôi phục external session qua `SessionManager.inMemory()` và ranh giới ownership đối với entry do bên ngoài lưu trữ.
-- Ghi lại persistent Claude thinking effort: các transport Anthropic được hỗ trợ giữ nguyên effort theo từng lượt và phục hồi an toàn khi signed-thinking không khớp; `supportsMidConvoEffort` là cơ chế docs/API để nhận diện transport Anthropic phù hợp với hành vi này.
-- Bổ sung các field tương thích model `vllmPriority` và `supportsMaxOutputTokens` cho capability kế thừa của transport tương thích OpenAI.
+- Ghi lại persistent Claude thinking effort: các transport Anthropic được hỗ trợ giữ nguyên effort theo từng lượt và phục hồi an toàn khi signed-thinking không khớp. `supportsMidConvoEffort` thuộc `AnthropicMessagesCompat`, mặc định là `false` và chỉ có thể bật cho đúng model Claude được hỗ trợ trên transport tuân thủ trung thực giao thức Anthropic Messages; đây là cơ chế dùng cho effort theo từng lượt và phục hồi signed-thinking.
+- Bổ sung các field tương thích model: `vllmPriority` thuộc `OpenAICompletionsCompat`, dùng cho lập lịch ưu tiên vLLM và mặc định không được đặt trong model metadata được tạo, trong khi priority mặc định của vLLM server là `0`; `supportsMaxOutputTokens` thuộc `OpenAIResponsesCompat`, mặc định là `true` và kiểm soát việc gateway tương thích Responses có nhận `max_output_tokens` hay không.
 - Bổ sung hỗ trợ render join symbol bằng LaTeX cho đại số quan hệ.
 - Bổ sung kiến trúc service thử nghiệm gồm `@earendil-works/pi-client`, `@earendil-works/pi-protocol` và `@earendil-works/pi-server`, bao gồm trách nhiệm của routed session, transport và protocol.
 
