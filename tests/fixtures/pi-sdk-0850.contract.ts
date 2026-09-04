@@ -7,9 +7,12 @@ import {
   fauxText,
   fauxToolCall,
   Type,
+  type AnthropicMessagesCompat,
   type Context,
   type GoogleApiThinkingLevel,
   type GoogleOptions,
+  type OpenAICompletionsCompat,
+  type OpenAIResponsesCompat,
   type ResolvedGoogleThinkingLevel,
 } from "@earendil-works/pi-ai";
 import {
@@ -28,8 +31,14 @@ import {
   createAgentSessionRuntime,
   createAgentSessionServices,
   createPowerShellTool,
+  detectSupportedImageMimeTypeFromFile,
+  type FileEntry,
   type PowerShellOperations,
   type PowerShellToolOptions,
+  SessionManager,
+  type UIPromptEndEvent,
+  type UIPromptKind,
+  type UIPromptStartEvent,
 } from "@earendil-works/pi-coding-agent";
 
 const agentConstructor = Agent satisfies typeof Agent;
@@ -76,6 +85,36 @@ const customizedPowerShellTool = createPowerShellTool(
   "C:\\workspace",
   powerShellToolOptions,
 );
+const anthropicCompat = {
+  supportsMidConvoEffort: true,
+} satisfies AnthropicMessagesCompat;
+const completionsCompat = {
+  vllmPriority: -1,
+} satisfies OpenAICompletionsCompat;
+const responsesCompat = {
+  supportsMaxOutputTokens: false,
+} satisfies OpenAIResponsesCompat;
+const promptKind: UIPromptKind = "custom";
+const promptStart: UIPromptStartEvent = {
+  type: "ui_prompt_start",
+  reason: "ui_prompt",
+  kind: promptKind,
+};
+const promptEnd: UIPromptEndEvent = {
+  type: "ui_prompt_end",
+  reason: "ui_prompt",
+  kind: promptKind,
+};
+const imageMimeDetector =
+  detectSupportedImageMimeTypeFromFile satisfies typeof detectSupportedImageMimeTypeFromFile;
+
+export function restoreExternalSessionEntries(
+  sessionId: string,
+  entries: FileEntry[],
+  cwd = process.cwd(),
+): SessionManager {
+  return SessionManager.inMemory(cwd, { id: sessionId }, entries);
+}
 
 async function verifyDeterministicAgentRoundTrip(): Promise<void> {
   const requests: Array<{
@@ -764,6 +803,14 @@ void [
   powerShellOperations,
   powerShellToolOptions,
   customizedPowerShellTool,
+  anthropicCompat,
+  completionsCompat,
+  responsesCompat,
+  promptKind,
+  promptStart,
+  promptEnd,
+  imageMimeDetector,
+  restoreExternalSessionEntries,
   verifyDeterministicAgentRoundTrip,
   verifyDeterministicAgentTestingGuide,
   createSerializedSessionRuntimeHost,

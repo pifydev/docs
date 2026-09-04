@@ -210,7 +210,7 @@ function assertDeterministicGuideExampleParity(
   );
   const compiled = parsedExampleContract(
     compileFixture.replaceAll("\r\n", "\n"),
-    "Pi 0.84.3 compile fixture",
+    "Pi 0.85.0 compile fixture",
     deterministicGuideFunction,
   );
   const testImport = {
@@ -269,7 +269,7 @@ function assertRuntimeGuideExampleParity(markdown, compileFixture, context) {
   );
   const compiled = parsedExampleContract(
     compileFixture.replaceAll("\r\n", "\n"),
-    "Pi 0.84.3 compile fixture",
+    "Pi 0.85.0 compile fixture",
     runtimeGuideFunction,
   );
   const displayedFailureHelper = parsedExampleContract(
@@ -279,7 +279,7 @@ function assertRuntimeGuideExampleParity(markdown, compileFixture, context) {
   );
   const compiledFailureHelper = parsedExampleContract(
     compileFixture.replaceAll("\r\n", "\n"),
-    "Pi 0.84.3 compile fixture binding failure helper",
+    "Pi 0.85.0 compile fixture binding failure helper",
     runtimeBindingFailureFunction,
   );
   const displayedHostAdapter = parsedExampleContract(
@@ -289,7 +289,7 @@ function assertRuntimeGuideExampleParity(markdown, compileFixture, context) {
   );
   const compiledHostAdapter = parsedExampleContract(
     compileFixture.replaceAll("\r\n", "\n"),
-    "Pi 0.84.3 compile fixture runtime host adapter",
+    "Pi 0.85.0 compile fixture runtime host adapter",
     runtimeHostAdapterFunction,
   );
 
@@ -327,7 +327,7 @@ async function importCompileFixtureFunctions(source, functionNames) {
       (functionName) =>
         parsedExampleContract(
           normalized,
-          `executable Pi 0.84.3 compile fixture ${functionName}`,
+          `executable Pi 0.85.0 compile fixture ${functionName}`,
           functionName,
         ).functionSource,
     )
@@ -416,7 +416,7 @@ function createRuntimePortHarness(events, options = {}) {
 
 async function loadRuntimeHostAdapter() {
   const compileFixture = await readFile(
-    new URL("tests/fixtures/pi-sdk-0843.contract.ts", repositoryRoot),
+    new URL("tests/fixtures/pi-sdk-0850.contract.ts", repositoryRoot),
     "utf8",
   );
   return importCompileFixtureFunctions(compileFixture, [
@@ -529,7 +529,7 @@ function assertChapter11ExampleParity(markdown, compileFixture) {
   );
   const compiled = parsedExampleContract(
     compileFixture.replaceAll("\r\n", "\n"),
-    "Pi 0.84.3 compile fixture",
+    "Pi 0.85.0 compile fixture",
   );
 
   assert.deepEqual(
@@ -888,7 +888,7 @@ test("replaceable session runtime guide examples stay synchronized with the comp
   const [guides, compileFixture] = await Promise.all([
     readLocalizedContent("how-to/host-session-runtime.md"),
     readFile(
-      new URL("tests/fixtures/pi-sdk-0843.contract.ts", repositoryRoot),
+      new URL("tests/fixtures/pi-sdk-0850.contract.ts", repositoryRoot),
       "utf8",
     ),
   ]);
@@ -920,7 +920,7 @@ test("replaceable session runtime parity rejects function and import drift", asy
       "utf8",
     ),
     readFile(
-      new URL("tests/fixtures/pi-sdk-0843.contract.ts", repositoryRoot),
+      new URL("tests/fixtures/pi-sdk-0850.contract.ts", repositoryRoot),
       "utf8",
     ),
   ]);
@@ -1066,7 +1066,7 @@ test("replaceable runtime cleanup guard rejects missing subscription cleanup and
 
 test("binding failure finalizer preserves one flat primary and staged cleanup order", async () => {
   const compileFixture = await readFile(
-    new URL("tests/fixtures/pi-sdk-0843.contract.ts", repositoryRoot),
+    new URL("tests/fixtures/pi-sdk-0850.contract.ts", repositoryRoot),
     "utf8",
   );
   const throwSessionBindingFailure = await importCompileFixtureFunction(
@@ -1380,7 +1380,7 @@ test("deterministic Agent guide examples stay synchronized with the compile fixt
   const [guides, compileFixture] = await Promise.all([
     readLocalizedContent("how-to/test-agent-deterministically.md"),
     readFile(
-      new URL("tests/fixtures/pi-sdk-0843.contract.ts", repositoryRoot),
+      new URL("tests/fixtures/pi-sdk-0850.contract.ts", repositoryRoot),
       "utf8",
     ),
   ]);
@@ -1415,7 +1415,7 @@ test("deterministic Agent guide parity rejects function, import, and runner drif
       "utf8",
     ),
     readFile(
-      new URL("tests/fixtures/pi-sdk-0843.contract.ts", repositoryRoot),
+      new URL("tests/fixtures/pi-sdk-0850.contract.ts", repositoryRoot),
       "utf8",
     ),
   ]);
@@ -1474,7 +1474,7 @@ test("deterministic Agent guide parser rejects malformed and unrelated top-level
       "utf8",
     ),
     readFile(
-      new URL("tests/fixtures/pi-sdk-0843.contract.ts", repositoryRoot),
+      new URL("tests/fixtures/pi-sdk-0850.contract.ts", repositoryRoot),
       "utf8",
     ),
   ]);
@@ -1528,7 +1528,7 @@ test("deterministic Agent guide guards event indexes and asynchronous waits", as
   const [guides, compileFixture] = await Promise.all([
     readLocalizedContent("how-to/test-agent-deterministically.md"),
     readFile(
-      new URL("tests/fixtures/pi-sdk-0843.contract.ts", repositoryRoot),
+      new URL("tests/fixtures/pi-sdk-0850.contract.ts", repositoryRoot),
       "utf8",
     ),
   ]);
@@ -1538,7 +1538,7 @@ test("deterministic Agent guide guards event indexes and asynchronous waits", as
       context: `${locale} deterministic Agent guide`,
       source,
     })),
-    { context: "Pi 0.84.3 compile fixture", source: compileFixture },
+    { context: "Pi 0.85.0 compile fixture", source: compileFixture },
   ]) {
     for (const pattern of [
       /const toolStartIndex = eventTypes\.indexOf\("tool_execution_start"\);/,
@@ -1580,7 +1580,7 @@ test("Chapter 11 deterministic example stays synchronized with the compile fixtu
       "utf8",
     ),
     readFile(
-      new URL("tests/fixtures/pi-sdk-0843.contract.ts", repositoryRoot),
+      new URL("tests/fixtures/pi-sdk-0850.contract.ts", repositoryRoot),
       "utf8",
     ),
   ]);
@@ -1597,7 +1597,7 @@ test("Chapter 11 parity guard rejects function and required-import drift", async
       "utf8",
     ),
     readFile(
-      new URL("tests/fixtures/pi-sdk-0843.contract.ts", repositoryRoot),
+      new URL("tests/fixtures/pi-sdk-0850.contract.ts", repositoryRoot),
       "utf8",
     ),
   ]);
