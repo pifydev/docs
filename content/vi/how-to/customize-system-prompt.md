@@ -150,7 +150,9 @@ Chạy bằng `npx tsx inspect-system-prompt.ts`; ví dụ chủ ý bỏ qua res
 
 Fixture tùy chọn dưới đây tạo các file độc lập, không gọi provider, đồng thời kiểm tra thứ tự context, override trong cùng directory, prompt file của project đã trust và chưa trust, cách chọn nguồn tường minh theo kiểu CLI, output thực tế của builder và `session.reload()`.
 
-Chạy bằng `npx tsx verify-system-prompt.ts` trên Node `>=22.19.0` sau khi cài `@earendil-works/pi-coding-agent@0.85.0`, `tsx` và TypeScript.
+Chạy bằng `npx tsx verify-system-prompt.ts` trên Node `>=22.19.0` sau khi cài SDK bằng `npm install @earendil-works/pi-coding-agent@0.85.0 @earendil-works/pi-server@0.85.0`; cài thêm `tsx` và TypeScript.
+
+Workaround cho lỗi đóng gói của Pi `0.85.0`: manifest Coding Agent đã phát hành thiếu runtime dependency này dù public root export có load nó. Workaround này chỉ áp dụng cho phiên bản này, không phải quy tắc dependency cố định cho các phiên bản Pi sau.
 
 <Accordions type="single">
 <Accordion title="Fixture DefaultResourceLoader xác định và không cần secret">

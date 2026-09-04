@@ -441,7 +441,7 @@ void [googleOptions, adapterLevel];
 
 Các biến thể ID đã chuẩn hóa được chấp nhận gồm `claude-opus-5`, có thể kèm `-YYYYMMDD`; `claude-fable-5.1` hoặc `claude-fable-5-1`, mỗi ID có thể kèm ngày; và `claude-mythos-5.1` hoặc `claude-mythos-5-1`, mỗi ID có thể kèm ngày.
 
-Với custom `Model` dùng `anthropic-messages`, hãy dùng cấu hình `compat.supportsMidConvoEffort: true` chỉ sau khi xác minh cả transport Anthropic Messages trung thực và đúng cùng Claude model family tương thích. Provider name nằm ngoài allowlist của generated catalog không tự nó cấm manual configuration; không bao giờ khái quát ngoại lệ này sang provider hoặc model tương thích Anthropic tùy ý.
+Với custom `Model` dùng `anthropic-messages`, hãy dùng cấu hình `compat.supportsMidConvoEffort: true` chỉ sau khi xác minh transport Anthropic Messages là trung thực và model thuộc đúng Claude family tương thích nói trên. Provider name nằm ngoài allowlist của generated catalog không tự nó cấm manual configuration; không bao giờ khái quát ngoại lệ này sang provider hoặc model tương thích Anthropic tùy ý.
 
 Khi cờ này được bật, Pi lưu effort native của từng response và khôi phục các effort-only system messages trong request về sau. Pi cũng gửi thinking binding control `prefix_mismatch_behavior: "drop_block"`, nhờ đó prefix mismatch sẽ loại an toàn signed thinking block cũ thay vì gây lỗi 400 lặp lại.
 

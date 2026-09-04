@@ -24,9 +24,11 @@ Subscribe to an `AgentSession` before calling `prompt()`. Its events let a CLI o
 The examples target Node.js `>=22.19.0`, ESM, and the published package at `0.85.0`:
 
 ```bash
-npm install @earendil-works/pi-coding-agent@0.85.0
+npm install @earendil-works/pi-coding-agent@0.85.0 @earendil-works/pi-server@0.85.0
 npm install --save-dev tsx typescript @types/node
 ```
+
+Pi `0.85.0` packaging workaround: the published Coding Agent manifest omits this runtime dependency even though its public root export loads it. This workaround is release-scoped, not a permanent dependency rule for later Pi versions.
 
 ## The event stream
 

@@ -47,9 +47,11 @@ Pi `0.85.0` yêu cầu Node.js `>=22.19.0`. Với các ví dụ TypeScript, hãy
 ```bash
 npm init -y
 npm pkg set type=module
-npm install @earendil-works/pi-ai@0.85.0 @earendil-works/pi-coding-agent@0.85.0
+npm install @earendil-works/pi-ai@0.85.0 @earendil-works/pi-coding-agent@0.85.0 @earendil-works/pi-server@0.85.0
 npm install --save-dev typescript tsx @types/node
 ```
+
+Workaround cho lỗi đóng gói của Pi `0.85.0`: manifest Coding Agent đã phát hành thiếu runtime dependency này dù public root export có load nó. Workaround này chỉ áp dụng cho phiên bản này, không phải quy tắc dependency cố định cho các phiên bản Pi sau.
 
 ```json title="tsconfig.json"
 {
@@ -375,7 +377,7 @@ Hãy chạy mọi bước phù hợp trước khi tuyên bố hỗ trợ:
 
 Các biến thể ID đã chuẩn hóa được chấp nhận gồm `claude-opus-5`, có thể kèm `-YYYYMMDD`; `claude-fable-5.1` hoặc `claude-fable-5-1`, mỗi ID có thể kèm ngày; và `claude-mythos-5.1` hoặc `claude-mythos-5-1`, mỗi ID có thể kèm ngày.
 
-Với custom `Model` dùng `anthropic-messages`, hãy dùng cấu hình `compat.supportsMidConvoEffort: true` chỉ sau khi xác minh cả transport Anthropic Messages trung thực và đúng cùng Claude model family tương thích. Provider name nằm ngoài allowlist của generated catalog không tự nó cấm manual configuration; không bao giờ khái quát ngoại lệ này sang provider hoặc model tương thích Anthropic tùy ý.
+Với custom `Model` dùng `anthropic-messages`, hãy dùng cấu hình `compat.supportsMidConvoEffort: true` chỉ sau khi xác minh transport Anthropic Messages là trung thực và model thuộc đúng Claude family tương thích nói trên. Provider name nằm ngoài allowlist của generated catalog không tự nó cấm manual configuration; không bao giờ khái quát ngoại lệ này sang provider hoặc model tương thích Anthropic tùy ý.
 
 Khi cờ này được bật, Pi lưu effort native của từng response và khôi phục các effort-only system messages lúc replay cuộc hội thoại. Pi cũng gửi thinking binding control `prefix_mismatch_behavior: "drop_block"`; khi prefix mismatch, control này loại an toàn signed thinking block cũ và ngăn vòng lặp response 400 kéo dài.
 

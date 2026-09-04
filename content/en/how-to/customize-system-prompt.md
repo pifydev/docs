@@ -150,7 +150,9 @@ Run it with `npx tsx inspect-system-prompt.ts`; the example deliberately ignores
 
 The optional fixture below creates isolated files, performs no provider request, and checks context order, the same-directory override, trusted and untrusted project prompt files, explicit CLI-style source selection, effective builder output, and `session.reload()`.
 
-Run it with `npx tsx verify-system-prompt.ts` on Node `>=22.19.0` after installing `@earendil-works/pi-coding-agent@0.85.0`, `tsx`, and TypeScript.
+Run it with `npx tsx verify-system-prompt.ts` on Node `>=22.19.0` after installing the SDK with `npm install @earendil-works/pi-coding-agent@0.85.0 @earendil-works/pi-server@0.85.0`, plus `tsx` and TypeScript.
+
+Pi `0.85.0` packaging workaround: the published Coding Agent manifest omits this runtime dependency even though its public root export loads it. This workaround is release-scoped, not a permanent dependency rule for later Pi versions.
 
 <Accordions type="single">
 <Accordion title="Optional deterministic resource-loader fixture">

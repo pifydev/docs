@@ -23,6 +23,8 @@ A long-running server, desktop shell, or RPC process cannot treat an `AgentSessi
 
 This guide builds that host boundary with only public exports from `@earendil-works/pi-coding-agent@0.85.0`. The complete TypeScript shape is compile-checked in this documentation repository. It accepts dependencies instead of constructing real resources during the check.
 
+Before importing that public root on Node.js `>=22.19.0`, install the SDK with `npm install @earendil-works/pi-coding-agent@0.85.0 @earendil-works/pi-server@0.85.0`. Pi `0.85.0` packaging workaround: the published Coding Agent manifest omits this runtime dependency even though its public root export loads it. This workaround is release-scoped, not a permanent dependency rule for later Pi versions.
+
 ## Outcome
 
 By the end, you will be able to:

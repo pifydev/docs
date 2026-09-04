@@ -18,7 +18,9 @@ Dùng `SessionManager` khi hội thoại phải tồn tại lâu hơn process hi
 
 :::
 
-Các ví dụ dùng Node.js `>=22.19.0`, ESM và `@earendil-works/pi-coding-agent@0.85.0`. Cài bằng `npm install @earendil-works/pi-coding-agent@0.85.0`; thêm `tsx`, TypeScript và Node types để chạy các lệnh bên dưới.
+Các ví dụ dùng Node.js `>=22.19.0` và ESM. Cài SDK bằng `npm install @earendil-works/pi-coding-agent@0.85.0 @earendil-works/pi-server@0.85.0`; thêm `tsx`, TypeScript và Node types để chạy các lệnh bên dưới.
+
+Workaround cho lỗi đóng gói của Pi `0.85.0`: manifest Coding Agent đã phát hành thiếu runtime dependency này dù public root export có load nó. Workaround này chỉ áp dụng cho phiên bản này, không phải quy tắc dependency cố định cho các phiên bản Pi sau.
 
 ## Mô hình session
 

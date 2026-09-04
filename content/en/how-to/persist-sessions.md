@@ -18,7 +18,9 @@ Use `SessionManager` when a conversation must outlive the current process. A per
 
 :::
 
-The examples target Node.js `>=22.19.0`, ESM, and `@earendil-works/pi-coding-agent@0.85.0`. Install it with `npm install @earendil-works/pi-coding-agent@0.85.0`, plus `tsx`, TypeScript, and Node types for the commands below.
+The examples target Node.js `>=22.19.0` and ESM. Install the SDK with `npm install @earendil-works/pi-coding-agent@0.85.0 @earendil-works/pi-server@0.85.0`, plus `tsx`, TypeScript, and Node types for the commands below.
+
+Pi `0.85.0` packaging workaround: the published Coding Agent manifest omits this runtime dependency even though its public root export loads it. This workaround is release-scoped, not a permanent dependency rule for later Pi versions.
 
 ## The session model
 

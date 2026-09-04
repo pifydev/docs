@@ -871,6 +871,25 @@ function extractMarkdownSection(source, heading, context) {
   };
 }
 
+function extractMarkdownPreamble(source, endHeading, context) {
+  const lines = source.replaceAll("\r\n", "\n").split("\n");
+  const end = lines.indexOf(endHeading);
+  assert.notEqual(end, -1, `${context} must contain section ${endHeading}`);
+
+  let start = 0;
+  if (lines[0] === "---") {
+    const frontmatterEnd = lines.indexOf("---", 1);
+    assert.notEqual(
+      frontmatterEnd,
+      -1,
+      `${context} must close its frontmatter`,
+    );
+    start = frontmatterEnd + 1;
+  }
+
+  return lines.slice(start, end).join("\n").trim();
+}
+
 function assertContainsAll(source, patterns, context, sectionContract) {
   const section = sectionContract
     ? extractMarkdownSection(source, sectionContract.heading, context)
@@ -2183,6 +2202,87 @@ test("Pi direct dependencies are exactly pinned to the published release", async
       packageJSON.devDependencies[packageName],
       release.packageVersion,
     );
+  }
+});
+
+test("Pi 0.85 SDK install recipes include the same-version pi-server packaging workaround", async () => {
+  const release = await readReleaseFixture();
+  const guideContracts = [
+    {
+      path: "how-to/add-custom-tool.md",
+      headings: { en: "## Prerequisites", vi: "## Điều kiện cần" },
+    },
+    {
+      path: "how-to/stream-output.md",
+      beforeHeadings: { en: "## The event stream", vi: "## Event stream" },
+    },
+    {
+      path: "how-to/plug-new-model.md",
+      headings: { en: "## Prerequisites", vi: "## Điều kiện cần" },
+    },
+    {
+      path: "how-to/persist-sessions.md",
+      beforeHeadings: {
+        en: "## The session model",
+        vi: "## Mô hình session",
+      },
+    },
+    {
+      path: "how-to/customize-system-prompt.md",
+      headings: {
+        en: "## 5. Inspect the effective prompt",
+        vi: "## 5. Kiểm tra prompt thực tế",
+      },
+    },
+    {
+      path: "how-to/host-session-runtime.md",
+      beforeHeadings: { en: "## Outcome", vi: "## Kết quả" },
+    },
+  ];
+  const localeContracts = {
+    en: [
+      /Pi `0\.85\.0` packaging workaround/i,
+      /published Coding Agent manifest[^.]*omits[^.]*runtime dependency/i,
+      /release-scoped[^.]*not a permanent dependency rule/i,
+    ],
+    vi: [
+      /workaround[^.]*đóng gói[^.]*Pi `0\.85\.0`/i,
+      /manifest Coding Agent[^.]*đã phát hành[^.]*thiếu[^.]*runtime dependency/i,
+      /chỉ áp dụng[^.]*phiên bản[^.]*không phải quy tắc dependency cố định/i,
+    ],
+  };
+  const exactInstallCommand =
+    /npm install[^\r\n`]*@earendil-works\/pi-coding-agent@0\.85\.0[^\r\n`]*@earendil-works\/pi-server@0\.85\.0/;
+
+  for (const guideContract of guideContracts) {
+    for (const { locale, source } of await readLocalizedContent(
+      guideContract.path,
+    )) {
+      const context = `${locale} ${guideContract.path} Pi 0.85.0 SDK install`;
+      const scope = guideContract.headings
+        ? extractMarkdownSection(
+            source,
+            guideContract.headings[locale],
+            context,
+          ).body
+        : extractMarkdownPreamble(
+            source,
+            guideContract.beforeHeadings[locale],
+            context,
+          );
+
+      assert.match(scope, exactInstallCommand, context);
+      assertParagraphContainsAll(scope, localeContracts[locale], context);
+
+      const serverVersions = [
+        ...scope.matchAll(/@earendil-works\/pi-server@([^\s`]+)/g),
+      ].map((match) => match[1]);
+      assert.ok(serverVersions.length > 0, `${context} must name pi-server`);
+      assert.ok(
+        serverVersions.every((version) => version === release.packageVersion),
+        `${context} must pin every pi-server workaround reference to ${release.packageVersion}`,
+      );
+    }
   }
 });
 
@@ -4658,7 +4758,7 @@ test("all model docs separate generated-catalog detection from verified custom-m
       customConfiguration: [
         /custom `Model`[^.]*`anthropic-messages`/i,
         /`compat\.supportsMidConvoEffort: true`/,
-        /chỉ sau khi xác minh[^.]*transport Anthropic Messages trung thực[^.]*đúng cùng Claude model family tương thích/i,
+        /chỉ sau khi xác minh[^.]*transport Anthropic Messages là trung thực[^.]*model thuộc đúng Claude family tương thích nói trên/i,
         /provider name[^.]*nằm ngoài[^.]*allowlist của generated catalog[^.]*không tự nó cấm manual configuration/i,
         /không bao giờ khái quát[^.]*provider hoặc model tương thích Anthropic tùy ý/i,
       ],
