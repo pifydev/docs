@@ -413,10 +413,37 @@ try {
 
 ### Persistence, setting và resource
 
-- `SessionManager.create(cwd, sessionDir?, options?)`, `continueRecent(cwd, sessionDir?)`, `open(path, sessionDir?, cwdOverride?)`, `inMemory(cwd?, options?)`, `forkFrom(sourcePath, targetCwd, sessionDir?, options?)` và `list(cwd, sessionDir?, onProgress?)` quản lý session JSONL append-only cùng cây session. Dùng `listAll(onProgress?)` hoặc `listAll(sessionDir?, onProgress?)` để liệt kê trên nhiều project.
+- `SessionManager.create(cwd, sessionDir?, options?)`, `continueRecent(cwd, sessionDir?)`, `open(path, sessionDir?, cwdOverride?)`, `inMemory(cwd?, options?, entries?)`, `forkFrom(sourcePath, targetCwd, sessionDir?, options?)` và `list(cwd, sessionDir?, onProgress?)` quản lý session JSONL append-only cùng cây session. Dùng `listAll(onProgress?)` hoặc `listAll(sessionDir?, onProgress?)` để liệt kê trên nhiều project.
 - `SettingsManager.create(cwd, agentDir?)` merge global setting với project setting đã tin cậy; `SettingsManager.inMemory()` phù hợp với embedded host và test.
 - `new DefaultResourceLoader({ cwd, agentDir, settingsManager? })` tạo loader để discover context file, system prompt, extension, skill, prompt template và theme sau `reload()`.
 - `ModelRuntime.create()` sở hữu provider catalog và credential được đồng bộ mà Coding Agent sử dụng.
+
+#### Khôi phục session bên ngoài
+
+`FileEntry`, `SessionHeader`, `SessionEntry` và `NewSessionOptions` là các type public ở package root. Các declaration liên quan đến việc khôi phục entry do application sở hữu có dạng chính xác sau:
+
+```ts
+export interface NewSessionOptions {
+  id?: string;
+  parentSession?: string;
+}
+
+export type FileEntry = SessionHeader | SessionEntry;
+
+export declare class SessionManager {
+  static inMemory(
+    cwd?: string,
+    options?: NewSessionOptions,
+    entries?: FileEntry[],
+  ): SessionManager;
+}
+```
+
+Truyền `entries` sẽ khôi phục parent-linked tree mà không bật cơ chế lưu Pi file. Caller sở hữu validation, durable write và việc đồng bộ với external store. `parseSessionEntries()` cùng `migrateSessionEntries()` cũng được export, nhưng parser bỏ qua dòng JSON lỗi còn migration thay đổi array; cả hai không phải schema validator tổng quát cho trust boundary.
+
+#### Export compaction và ranh giới failure
+
+Package root export `DEFAULT_COMPACTION_SETTINGS`, `shouldCompact()`, `compact()`, `generateSummary()`, `generateSummaryWithUsage()`, `generateBranchSummary()` cùng các type public liên quan đến result, setting, preparation và file operation. Package không export helper nội bộ `getSummarizationFailure()`. Tuy vậy, các đường generation tích hợp sẵn cho compaction, turn-prefix và branch summary đều áp dụng phép kiểm tra đó bên trong: response kết thúc bằng `stopReason: "length"` là chưa hoàn chỉnh và không được lưu thành summary checkpoint. Branch summary generation hiện yêu cầu tối đa 4.096 output token, đồng thời bị giới hạn thêm bởi model limit dương nhỏ hơn.
 
 Fragment `Settings` dưới đây là shape source-level internal của `settings.json` được trích chính xác; nó không được export hay import như public API, còn `SettingsManager` và các settings type chọn lọc là public surface có thể import của `@earendil-works/pi-coding-agent` 0.85.0.
 

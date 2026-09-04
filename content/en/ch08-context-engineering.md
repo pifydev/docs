@@ -6,9 +6,9 @@ language: en
 chapter: 8
 source_url: 'https://www.dgzhuya.com/modules/ch08-context-engineering'
 official_refs:
-  - 'https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/resource-loader.ts'
-  - 'https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/tools/truncate.ts'
-  - 'https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/compaction/compaction.ts'
+  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/resource-loader.ts'
+  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/tools/truncate.ts'
+  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/compaction/compaction.ts'
 terms_used:
   - Context
   - Context Engineering
@@ -16,7 +16,7 @@ terms_used:
   - transformContext
   - convertToLlm
 status: reviewed
-last_updated: '2026-08-25'
+last_updated: '2026-09-04'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -88,7 +88,7 @@ The shared utility belongs to `@earendil-works/pi-coding-agent`, not Agent core 
 
 ### Dual limits: lines and bytes
 
-[`tools/truncate.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/tools/truncate.ts#L11-L45) defines the defaults:
+[`tools/truncate.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/tools/truncate.ts#L11-L45) defines the defaults:
 
 - `DEFAULT_MAX_LINES = 2000`
 - `DEFAULT_MAX_BYTES = 50 * 1024`
@@ -160,7 +160,7 @@ This asymmetry prevents a file read from pretending that a partial first line is
 
 ### grep's 500-unit line rule
 
-[`truncateLine()`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/tools/truncate.ts) keeps the first 500 JavaScript string units and appends `... [truncated]`. `grep` applies it to matches and optional context lines. A notice tells the model to use `read` for the full line.
+[`truncateLine()`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/tools/truncate.ts) keeps the first 500 JavaScript string units and appends `... [truncated]`. `grep` applies it to matches and optional context lines. A notice tells the model to use `read` for the full line.
 
 That limit answers a narrower problem than the 50 KiB cap. A single minified line could dominate a list of otherwise useful matches even when the aggregate output remains below 50 KiB. The 100-match limit, 500-unit per-line limit, and 50 KiB aggregate limit each guard a different dimension.
 
@@ -238,7 +238,7 @@ Pi asks only when it finds trust-requiring resources and no current-or-parent sa
 
 ### `DefaultResourceLoader`: discovery, additions, and overrides
 
-[`DefaultResourceLoader`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/resource-loader.ts) coordinates `SettingsManager`, `DefaultPackageManager`, Extension loading, context files, skills, prompt templates, themes, and system-prompt inputs.
+[`DefaultResourceLoader`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/resource-loader.ts) coordinates `SettingsManager`, `DefaultPackageManager`, Extension loading, context files, skills, prompt templates, themes, and system-prompt inputs.
 
 Its `reload()` flow first loads an untrusted extension set when a trust resolver is present. That bootstrap contains user/global and temporary CLI extensions. After the resolver returns, the loader sets `SettingsManager.projectTrusted`, reloads settings for that state, resolves enabled package and local resources, loads each resource class, discovers context files, and resolves prompt inputs.
 
@@ -339,7 +339,7 @@ contextTokens > contextWindow - reserveTokens
 
 `contextTokens` comes from the latest valid assistant usage when possible: native `usage.totalTokens`, or `input + output + cacheRead + cacheWrite`. Messages after that usage are estimated. Error and all-zero-usage paths estimate enough trailing context to avoid losing accounting. This token estimate has no fixed conversion to the 50 KiB Tool limit.
 
-Automatic checks run after `agent_end` and before prompt submission. They cover three cases: recoverable overflow with one compact-and-retry attempt, successful overflow without retry, and threshold crossing without retry. `AgentSession.compact()` is the separate manual entry point. Both routes prepare the active path, allow the `session_before_compact` hook to cancel or replace the result, then call the shared lower-level compactor when needed.
+Automatic checks run at three boundaries: before another assistant response inside a low-level Agent run, after that run reaches `agent_end`, and before a later prompt is submitted. They cover recoverable overflow with one compact-and-retry attempt, successful overflow without retry, and threshold crossing without retry. `AgentSession.compact()` is the separate manual entry point. Both routes prepare the active path, allow the `session_before_compact` hook to cancel or replace the result, then call the shared lower-level compactor when needed.
 
 ```text
 active branch entries
@@ -359,6 +359,19 @@ next buildSessionContext()
 The cut point can be a user or assistant message, never a Tool-result entry. A mid-turn cut records a separate turn-prefix summary. Later compactions update the prior summary instead of blindly stacking all raw history again. [Chapter 9](ch09-compaction.md) derives those cut-point and structured-summary rules.
 
 The persisted `CompactionEntry` remains a session record. `buildSessionContext()` projects it to `CompactionSummaryMessage`, omits the older summarized entries, and includes the retained tail. `convertToLlm()` then turns that custom role into a user-shaped Pi AI message bounded by compaction-summary markers.
+
+### Mid-run compaction checkpoints
+
+Inside a Tool-using run, the lifecycle before another provider call is ordered:
+
+1. Every Tool result in the completed batch is appended to Agent and session history.
+2. Pi then performs the threshold check against that updated context.
+3. If the threshold is crossed, optional compaction finishes and rebuilds the Agent messages.
+4. Only then does Pi request the next assistant response.
+
+A terminating Tool batch with no steering or follow-up message skips mid-run compaction because there is no next assistant response to protect. If a queued message keeps the loop alive, the preparation hook still runs before that response and can compact the now-larger history.
+
+These are three complementary guards: the mid-run check prevents a large Tool result from reaching the next provider request, the check after the low-level Agent run catches terminal usage and overflow, and the check before submitting a new prompt includes an aborted last response. The post-run and pre-prompt checks remain part of the lifecycle; the new mid-run phase does not replace them.
 
 ## 6. History defense 2: optional branch summary
 
@@ -402,7 +415,13 @@ This is the lowest common ancestor (LCA) for the two selected paths. The LCA its
 
 The branch summarizer converts eligible records to `AgentMessage`, prepares a newest-first subset within `model.contextWindow - reserveTokens`, and restores chronological order. Plain Tool-result entries are skipped during entry-to-message conversion, while Tool calls and file-operation tracking retain useful evidence.
 
-The generator then uses `convertToLlm()`, `serializeConversation()`, and the shared `SUMMARIZATION_SYSTEM_PROMPT`. Serialization wraps the old dialogue as data so the summarizer does not continue it. The default branch reserve is 16,384 tokens, the fallback context window is 128,000 when the model reports none, and the summary response cap is 2,048 tokens.
+The generator then uses `convertToLlm()`, `serializeConversation()`, and the shared `SUMMARIZATION_SYSTEM_PROMPT`. Serialization wraps the old dialogue as data so the summarizer does not continue it. The default branch reserve is 16,384 tokens, the fallback context window is 128,000 when the model reports none, and the branch summary response cap is now 4,096 tokens (still bounded by a smaller positive `model.maxTokens`). This fixes the earlier 2,048-token cap, which could leave too little visible output after reasoning consumed part of the response budget.
+
+### Reject incomplete summaries
+
+Pi 0.85.0 applies `getSummarizationFailure` to the main history summary, a split turn-prefix summary, and a branch summary. When the provider returns `stopReason: "length"`, the generated text is incomplete: Pi reports failure and does not append or persist it as a compaction or branch-summary checkpoint. The helper is internal to the compaction module rather than a package-root export; applications observe the documented failure through the public compaction and navigation results or events.
+
+The branch summary request uses the new 4,096-token output cap instead of the previous 2,048-token cap. That larger ceiling accurately addresses the case where reasoning consumed the old allowance, but it is not proof of completeness: `stopReason: "length"` is still rejected on the history summary, turn-prefix summary, and branch summary paths.
 
 ### The branch template differs from compaction
 
@@ -456,7 +475,7 @@ BranchSummaryEntry                      BranchSummaryMessage
 | Recent context | retains about `keepRecentTokens` using valid cut points | retains the target branch normally |
 | Persisted record | `CompactionEntry` | `BranchSummaryEntry` |
 | Model projection | `CompactionSummaryMessage` | `BranchSummaryMessage` |
-| Default response budget | up to `min(0.8 × reserveTokens, model.maxTokens)` | 2,048 tokens |
+| Default response budget | up to `min(0.8 × reserveTokens, model.maxTokens)` | up to 4,096 tokens, bounded by a smaller positive `model.maxTokens` |
 | Primary purpose | make a long active history fit | carry useful abandoned-path work into a new branch |
 
 ## 7. Full pipeline: from resources to the next model call
@@ -488,12 +507,15 @@ The defenses appear at different times. The following flow includes both a norma
    └─ grep: match + line + aggregate-byte limits
 
 6. ToolResultMessage enters Agent and session history
-   └─ next Tool turn repeats steps 4–6
+   └─ completed Tool results are appended before any threshold decision
 
-7. After agent_end or before a later prompt
+7. Before the next assistant response in the same run
+   └─ threshold check may compact, rebuild context, then continue at step 4
+
+8. After agent_end or before a later prompt
    └─ threshold/overflow check may append a CompactionEntry
 
-8. On later tree navigation with summarize: true
+9. On later tree navigation with summarize: true
    └─ LCA selection may append a BranchSummaryEntry at the target
 ```
 
@@ -568,15 +590,15 @@ Mandatory rules still belong in context files or the system prompt. Optional kno
 
 [Chapter 9](ch09-compaction.md) opens the compaction box: token estimation, valid cut points, split turns, incremental summaries, file tracking, and `CompactionEntry` reconstruction. [Chapter 10](ch10-session.md) then follows the parent-linked session tree that makes active-path projection and LCA-based branch summaries possible.
 
-The implementation references for this chapter are pinned to Pi `0.84.3` at `4e58f324fae8ebfa98a3d45181fb248072a2afac`:
+The implementation references for this chapter are pinned to Pi `0.85.0` at `107d79f11072bbc8a3a757ed7fd69596bee7d68c`:
 
-- [Tool truncation and Unicode boundaries](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/tools/truncate.ts)
-- [`read` continuation markers](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/tools/read.ts#L271-L317) and [`grep` limits](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/tools/grep.ts#L321-L361)
-- [Context-file discovery and `DefaultResourceLoader`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/resource-loader.ts)
-- [Trust-gated resource roots](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/package-manager.ts) and [the trust boundary](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/docs/security.md)
-- [System-prompt assembly](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/system-prompt.ts) and [skill metadata formatting](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/skills.ts#L347-L380)
-- [Compaction defaults and threshold](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/compaction/compaction.ts#L126-L237)
-- [Branch collection and generation](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/compaction/branch-summarization.ts)
-- [Session-context projection](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/session-manager.ts#L380-L469)
+- [Tool truncation and Unicode boundaries](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/tools/truncate.ts)
+- [`read` continuation markers](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/tools/read.ts#L271-L317) and [`grep` limits](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/tools/grep.ts#L321-L361)
+- [Context-file discovery and `DefaultResourceLoader`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/resource-loader.ts)
+- [Trust-gated resource roots](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/package-manager.ts) and [the trust boundary](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/docs/security.md)
+- [System-prompt assembly](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/system-prompt.ts) and [skill metadata formatting](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/skills.ts#L347-L380)
+- [Compaction defaults and threshold](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/compaction/compaction.ts#L126-L237)
+- [Branch collection and generation](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/compaction/branch-summarization.ts)
+- [Session-context projection](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/session-manager.ts#L380-L469)
 
 > **Next up:** [Chapter 9: Context Compaction](ch09-compaction.md)

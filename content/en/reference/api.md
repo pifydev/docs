@@ -413,10 +413,37 @@ An `AgentSession` adds synchronous subscriptions, persistence, compaction, retri
 
 ### Persistence, settings, and resources
 
-- `SessionManager.create(cwd, sessionDir?, options?)`, `continueRecent(cwd, sessionDir?)`, `open(path, sessionDir?, cwdOverride?)`, `inMemory(cwd?, options?)`, `forkFrom(sourcePath, targetCwd, sessionDir?, options?)`, and `list(cwd, sessionDir?, onProgress?)` manage append-only JSONL sessions and their trees. Use `listAll(onProgress?)` or `listAll(sessionDir?, onProgress?)` across projects.
+- `SessionManager.create(cwd, sessionDir?, options?)`, `continueRecent(cwd, sessionDir?)`, `open(path, sessionDir?, cwdOverride?)`, `inMemory(cwd?, options?, entries?)`, `forkFrom(sourcePath, targetCwd, sessionDir?, options?)`, and `list(cwd, sessionDir?, onProgress?)` manage append-only JSONL sessions and their trees. Use `listAll(onProgress?)` or `listAll(sessionDir?, onProgress?)` across projects.
 - `SettingsManager.create(cwd, agentDir?)` merges global and trusted project settings; `SettingsManager.inMemory()` is useful for embedded hosts and tests.
 - `new DefaultResourceLoader({ cwd, agentDir, settingsManager? })` constructs a loader that discovers context files, system prompts, extensions, skills, prompt templates, and themes after `reload()`.
 - `ModelRuntime.create()` owns the provider catalog and synchronized credentials used by Coding Agent.
+
+#### External-session restoration
+
+`FileEntry`, `SessionHeader`, `SessionEntry`, and `NewSessionOptions` are public package-root types. The declarations relevant to restoring application-owned entries are exactly:
+
+```ts
+export interface NewSessionOptions {
+  id?: string;
+  parentSession?: string;
+}
+
+export type FileEntry = SessionHeader | SessionEntry;
+
+export declare class SessionManager {
+  static inMemory(
+    cwd?: string,
+    options?: NewSessionOptions,
+    entries?: FileEntry[],
+  ): SessionManager;
+}
+```
+
+Passing `entries` restores the parent-linked tree without enabling Pi file persistence. The caller owns validation, durable writes, and synchronization with its external store. `parseSessionEntries()` and `migrateSessionEntries()` are also exported, but parsing skips malformed JSON lines and migration mutates its array; neither is a general trust-boundary schema validator.
+
+#### Compaction exports and failure boundary
+
+The package root exports `DEFAULT_COMPACTION_SETTINGS`, `shouldCompact()`, `compact()`, `generateSummary()`, `generateSummaryWithUsage()`, `generateBranchSummary()`, and the related public result, settings, preparation, and file-operation types. It does not export the internal `getSummarizationFailure()` helper. Built-in compaction, turn-prefix, and branch-summary generation nevertheless apply that check internally: a response ending with `stopReason: "length"` is incomplete and is not persisted as a summary checkpoint. Branch summary generation now requests at most 4,096 output tokens, further bounded by a smaller positive model limit.
 
 The `Settings` fragment below is a selected exact source-level internal `settings.json` shape; it is not exported or importable public API, while `SettingsManager` and selected settings types are the public importable surface of `@earendil-works/pi-coding-agent` 0.85.0.
 

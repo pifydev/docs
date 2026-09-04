@@ -5,10 +5,10 @@ translation_key: how-to-persist-sessions
 language: en
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-08-25'
+last_updated: '2026-09-04'
 ---
 
-Use `SessionManager` when a conversation must outlive the current process. It owns the session file and appends state as an `AgentSession` runs.
+Use `SessionManager` when a conversation must outlive the current process. A persistent manager owns a Pi session file and appends state as an `AgentSession` runs; an in-memory manager can instead project entries whose durable storage is owned by your host.
 
 :::tip[When you need this]
 
@@ -18,7 +18,7 @@ Use `SessionManager` when a conversation must outlive the current process. It ow
 
 :::
 
-The examples target Node.js `>=22.19.0`, ESM, and `@earendil-works/pi-coding-agent@0.84.3`. Install it with `npm install @earendil-works/pi-coding-agent@0.84.3`, plus `tsx`, TypeScript, and Node types for the commands below.
+The examples target Node.js `>=22.19.0`, ESM, and `@earendil-works/pi-coding-agent@0.85.0`. Install it with `npm install @earendil-works/pi-coding-agent@0.85.0`, plus `tsx`, TypeScript, and Node types for the commands below.
 
 ## The session model
 
@@ -92,6 +92,31 @@ try {
 Always surface `modelFallbackMessage`. It explains that a saved provider/model could not be restored and, when possible, names the replacement. The current API restores model and thinking changes recorded on the active branch; there is no `pinModel` session option.
 
 To resume a chosen file, pass an absolute path from `SessionManager.list()` or `listAll()` to `SessionManager.open(path)`. `open()` normally restores the `cwd` stored in the header. Its third argument is an explicit `cwdOverride`; use it only when you intentionally relocate the worktree. Validate user-supplied paths against an allowed session root before opening them.
+
+## Restore externally stored entries
+
+Pi 0.85.0 can rebuild the Coding Agent tree from a `FileEntry[]` held in a database, object store, or another application-owned medium:
+
+```ts title="restore-external-session.ts"
+import {
+  type FileEntry,
+  SessionManager,
+} from "@earendil-works/pi-coding-agent";
+
+export function restoreExternalSessionEntries(
+  sessionId: string,
+  entries: FileEntry[],
+  cwd = process.cwd(),
+): SessionManager {
+  return SessionManager.inMemory(cwd, { id: sessionId }, entries);
+}
+```
+
+Here the host owns the external storage lifecycle. `SessionManager.inMemory(cwd, { id: sessionId }, entries)` restores the append-only tree and its active leaf in process, but it does not create or append a Pi session file. New entries stay in that manager until the host reads `getHeader()` plus `getEntries()` and writes its own snapshot or append log. This overload is restoration, not a `SessionStorage` adapter and not automatic synchronization back to the external store.
+
+The caller is responsible for supplying a well-formed `FileEntry[]`. A normal snapshot starts with one `SessionHeader` whose `type` is `"session"` and whose `id`, `timestamp`, `cwd`, and `version` have the published shapes; later `SessionEntry` records must have valid `id`, `parentId`, `timestamp`, discriminant, and payload fields. When a header is present its `id` becomes the restored manager ID; `{ id: sessionId }` supplies the identity for a headerless entry list. The `cwd` argument is the live manager cwd, so validate it independently of any externally supplied header.
+
+Do schema and authorization validation before construction. `parseSessionEntries()` is a permissive JSONL recovery helper: it skips malformed JSON lines and does not prove that parsed objects satisfy the `FileEntry` union. `migrateSessionEntries()` upgrades older versioned entries in place and therefore mutates the array; `inMemory()` also applies the supported v1-to-v2-to-v3 migration while loading a header. Copy data first if the external store needs the original representation, and treat unsupported or malformed shapes as an application migration error rather than relying on Pi for broad validation.
 
 ## 3. Branch a session
 
@@ -172,7 +197,7 @@ console.log({
 });
 ```
 
-Run it with `npx tsx extract-branch.ts /absolute/session.jsonl ENTRY_ID`. `forkFrom(sourcePath, targetCwd, sessionDir)` is the cross-project alternative: it creates a new file and copies the source file's full non-header history, while recording the source path as `parentSession`.
+Run it with `npx tsx extract-branch.ts /absolute/session.jsonl ENTRY_ID`. `forkFrom(sourcePath, targetCwd, sessionDir)` is the cross-project alternative: it creates a new file and copies the source file's full non-header history, while recording the source path as `parentSession`. Pi 0.85.0 also preserves the applicable compaction boundary when a session path is forked, so the extracted context does not accidentally expose history that the source projection had already summarized.
 
 ## 4. Walk the tree
 
@@ -354,6 +379,7 @@ Back up files before upgrades or bulk cleanup. The loader automatically migrates
 - **Confusing CLI and SDK storage rules:** the CLI resolves `--session-dir`, then `PI_CODING_AGENT_SESSION_DIR`, then `sessionDir` in `settings.json`. Direct SDK calls do not read that precedence chain; pass `sessionDir` explicitly or accept the default.
 - **Passing a project path to `listAll()`:** its first string argument is a storage directory. Use `list(cwd)` for one project or zero-argument `listAll()` for all default project directories.
 - **Overriding `cwd` accidentally:** prefer the absolute `SessionInfo.path` returned by the list methods and let `open()` restore the header's working directory.
+- **Reading collision fixes as a locking guarantee:** Pi 0.85.0 gives imported JSONL a suffixed destination when the same filename already exists, and concurrent session shares no longer overwrite one another. Neither fix adds inter-process locking to a live `SessionManager` file; retain the one-writer rule above.
 
 ## Next
 

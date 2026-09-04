@@ -6,14 +6,14 @@ language: en
 chapter: 9
 source_url: 'https://www.dgzhuya.com/modules/ch09-compaction'
 official_refs:
-  - 'https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/docs/compaction.md'
+  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/docs/compaction.md'
 terms_used:
   - Context Compaction
   - CompactionEntry
   - BranchSummaryEntry
   - Session
 status: reviewed
-last_updated: '2026-08-25'
+last_updated: '2026-09-04'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -45,15 +45,19 @@ The summary size varies with the conversation, model, and response. Pi caps the 
 
 ### The run boundary: automatic checks and manual interruption
 
-The baseline mental model was “between two turns.” Current Pi is more precise. After `agent.prompt()` finishes and `agent_end` has been delivered, `_handlePostAgentRun()` checks the last assistant message. Pi also checks the last assistant message before accepting a later prompt, which catches an aborted response that the normal post-run check skipped.
+The baseline mental model was “between two turns.” Current Pi is more precise. While a low-level Agent run is continuing, Coding Agent can check immediately before the next assistant response. After `agent.prompt()` finishes and `agent_end` has been delivered, `_handlePostAgentRun()` checks the last assistant message again. Pi also checks the last assistant message before accepting a later prompt, which catches an aborted response that the normal post-run check skipped.
 
 Manual compaction is separate. `AgentSession.compact(customInstructions?)` first calls `abort()` on the current Agent operation, then starts manual compaction. It never resumes that interrupted turn automatically.
 
 ```text
 automatic path
-Agent run → message_end persists messages → agent_end → _checkCompaction()
-                                             ├─ no action → settle
-                                             └─ compact → rebuild Agent messages
+assistant Tool call → Tool results appended → prepare next turn
+  → threshold check → optional compaction → next assistant response
+
+post-run path
+Agent run → agent_end → _handlePostAgentRun() → _checkCompaction()
+                                                  ├─ no action → settle
+                                                  └─ compact → rebuild Agent messages
 
 pre-prompt path
 next prompt → inspect last assistant, including aborted → maybe compact → send user message
@@ -102,7 +106,7 @@ Coding Agent loads global settings from `~/.pi/agent/settings.json`. A trusted p
 
 ### Current usage comes from provider data first
 
-The older implementation description treated `chars / 4` as the current context size. Pi `0.84.3` prefers the last valid assistant `usage`. `calculateContextTokens()` takes `usage.totalTokens` when it is nonzero; otherwise it adds `input + output + cacheRead + cacheWrite`.
+The older implementation description treated `chars / 4` as the current context size. Pi `0.85.0` prefers the last valid assistant `usage`. `calculateContextTokens()` takes `usage.totalTokens` when it is nonzero; otherwise it adds `input + output + cacheRead + cacheWrite`.
 
 For a normal assistant response with nonzero usage, `_checkCompaction()` tests that value directly. For an error response or all-zero usage, `estimateContextTokens()` finds the last non-error, non-aborted assistant usage in the active messages and adds estimates for messages after it. If no valid usage exists, it estimates every message.
 
@@ -136,6 +140,19 @@ The automatic dispatcher distinguishes more than “preventive” and “emergen
 Overflow recovery is limited to one compact-and-retry attempt. The failed or truncated assistant was already persisted on `message_end`; Pi removes it from the in-memory retry context, not from the session tree. After rebuilding, it removes that terminal assistant again if projection brought it back as the last message, because `agent.continue()` requires a continuable state.
 
 The same-model guard applies to overflow and recoverable-length detection. Threshold accounting remains the separate provider-usage or estimate path described above. This prevents a stale overflow from a smaller previous model from forcing recovery after a model switch.
+
+### Mid-run compaction checkpoints
+
+When the low-level loop has another provider turn to run, its ordering is explicit:
+
+1. Every Tool result from the completed batch is appended to Agent and session history.
+2. Pi then performs the threshold check over the updated context.
+3. If the threshold is crossed, optional compaction completes and replaces the active Agent projection.
+4. Only then does Pi request the next assistant response.
+
+A terminating Tool batch with no steering or follow-up message skips mid-run compaction because there is no next assistant response. A queued message keeps the loop alive, so the same preparation point can compact before delivery.
+
+Pi therefore retains three checks: the mid-run check above, the check after the low-level Agent run finishes at `agent_end`, and the check before submitting a new prompt. The last path deliberately includes aborted assistant messages; the normal post-run path skips them.
 
 ## 3. Where Pi cuts the active path
 
@@ -260,7 +277,13 @@ The prompt explicitly asks for exact file paths, function names, and error messa
 
 Each serialized Tool result keeps at most 2,000 characters, then receives a marker with the omitted character count. This bound applies to the summarization request only; it does not rewrite the stored Tool-result entry.
 
-The request uses `SUMMARIZATION_SYSTEM_PROMPT`, disables Tool calls with `toolChoice: "none"`, disables prompt-cache writes with `cacheRetention: "none"`, and uses a fresh routing session id when the caller does not supply one. Transient summary-stream failures follow the configured retry policy; deterministic errors and aborts return immediately. A main summary is one model request. A split turn may require a main-history request followed by a turn-prefix request; current Pi executes them sequentially.
+The request uses `SUMMARIZATION_SYSTEM_PROMPT`, supplies no Tool definitions, does not force `toolChoice: "none"`, disables prompt-cache writes with `cacheRetention: "none"`, and uses a fresh routing session id when the caller does not supply one. Transient summary-stream failures follow the configured retry policy; deterministic errors and aborts return immediately. A main summary is one model request. A split turn may require a main-history request followed by a turn-prefix request; current Pi executes them sequentially.
+
+### Reject incomplete summaries
+
+Pi 0.85.0 runs `getSummarizationFailure` after each built-in history summary and turn-prefix summary request, and branch summarization uses the same check. A response with `stopReason: "length"` is incomplete, so Pi reports a failure and does not append or persist its partial text as a `CompactionEntry` or `BranchSummaryEntry`. The main and prefix paths throw into the documented compaction-failure lifecycle; the branch path returns an error result. `getSummarizationFailure` is not exported from the package root.
+
+Branch summarization now permits a 4,096-token output cap, bounded by a smaller positive `model.maxTokens`, rather than the old 2,048-token cap. This fixes failures where reasoning consumed the prior allowance before enough final summary text could be emitted. The larger cap does not weaken validation: the history summary, turn-prefix summary, and branch summary all still reject `stopReason: "length"`.
 
 ### Incremental summaries have a precise input rule
 
@@ -531,13 +554,21 @@ No public `compaction_start` is emitted when automatic preparation returns `unde
 The complete automatic path crosses five representations: provider usage, session entries, summary-request messages, a persisted checkpoint, and the next provider request.
 
 ```text
-1. Agent response settles
-   message_end persists assistant → agent_end → _handlePostAgentRun()
+1. Assistant and Tool phase settles
+   message_end persists assistant and every Tool result in the completed batch
 
-2. Classify
+2. Mid-run gate, only when the low-level loop will continue
+   prepareNextTurnWithContext → threshold check
+   → optional compaction and projection rebuild → next assistant response
+   (a terminating Tool batch with no queued message skips this gate)
+
+3. Post-run gate
+   agent_end → _handlePostAgentRun() → _checkCompaction()
+
+4. Classify
    same-model overflow/recoverable length OR threshold from current usage
 
-3. Prepare
+5. Prepare
    build active branch path
    → recalculate tokensBefore from buildSessionContext(path).messages
    → find previous-summary boundary
@@ -545,35 +576,35 @@ The complete automatic path crosses five representations: provider usage, sessio
    → split messagesToSummarize / turnPrefixMessages / kept region
    → collect built-in file operations
 
-4. Intercept
+6. Intercept
    compaction_start → awaited session_before_compact
    → cancel, custom result, or built-in generation
 
-5. Summarize
+7. Summarize
    convertToLlm → serializeConversation (Tool results capped at 2,000 chars)
    → six-section initial/update request
    → optional sequential turn-prefix request
    → append sorted file lists and combine usage
 
-6. Persist
+8. Persist
    SessionManager.appendCompaction(...)
    → new parent-linked JSONL entry; old entries remain
 
-7. Project
+9. Project
    buildSessionContext()
    → CompactionSummaryMessage + entries from firstKeptEntryId + later entries
    → replace agent.state.messages
 
-8. Notify and continue
+10. Notify and continue
    session_compact → compaction_end
    → retry one overflow turn, deliver queued messages, or settle
 
-9. Next model call
+11. Next model call
    transformContext → convertToLlm
    → system prompt + <summary> user message + verbatim recent messages
 ```
 
-Manual compaction enters at step 4 after aborting the active Agent run and preparing the same regions. It never takes the automatic retry branch in step 8.
+Manual compaction enters at step 6 after aborting the active Agent run and preparing the same regions. It never takes the automatic retry branch in step 10.
 
 ## 8. Design principles and handoff checks
 
@@ -608,15 +639,15 @@ Before handing off a compaction integration, verify these cases:
 
 [Chapter 10](ch10-session.md) follows the parent-linked JSONL tree behind `getBranch()`, `appendCompaction()`, `buildContextEntries()`, rewind, and branch navigation. That storage model explains why compaction can omit old entries from the next model request without deleting them.
 
-The implementation references for this chapter are pinned to Pi `0.84.3` at `4e58f324fae8ebfa98a3d45181fb248072a2afac`:
+The implementation references for this chapter are pinned to Pi `0.85.0` at `107d79f11072bbc8a3a757ed7fd69596bee7d68c`:
 
-- [Compaction defaults, token accounting, cut points, templates, preparation, and generation](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/compaction/compaction.ts)
-- [Summary serialization and file-operation tracking](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/compaction/utils.ts)
-- [`CompactionEntry`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/session-manager.ts#L46-L80), [`appendCompaction()`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/session-manager.ts#L1096-L1119), and [`buildSessionContext()`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/session-manager.ts#L379-L469)
-- [Manual and automatic lifecycle, retry, abort, and failure paths](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/agent-session.ts#L1818-L2359)
-- [Extension context compaction contracts](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/extensions/types.ts#L290-L302) and [event hooks](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/extensions/types.ts#L593-L630)
-- [Compaction-summary message conversion](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/messages.ts#L109-L120) and [per-call transform order](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/agent-loop.ts#L277-L302)
-- [Global/project setting merge](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/settings-manager.ts#L148-L170), [SDK overrides](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/settings-manager.ts#L546-L549), and [effective compaction defaults](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/settings-manager.ts#L825-L852)
-- [Generic Agent `retainedTail` schema](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/harness/session/types.ts#L39-L51), which is distinct from Coding Agent `SessionManager`
+- [Compaction defaults, token accounting, cut points, templates, preparation, and generation](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/compaction/compaction.ts)
+- [Summary serialization and file-operation tracking](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/compaction/utils.ts)
+- [`CompactionEntry`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/session-manager.ts#L46-L80), [`appendCompaction()`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/session-manager.ts#L1096-L1119), and [`buildSessionContext()`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/session-manager.ts#L379-L469)
+- [Manual and automatic lifecycle, retry, abort, and failure paths](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/agent-session.ts#L1818-L2359)
+- [Extension context compaction contracts](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/extensions/types.ts#L290-L302) and [event hooks](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/extensions/types.ts#L593-L630)
+- [Compaction-summary message conversion](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/messages.ts#L109-L120) and [per-call transform order](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/agent-loop.ts#L277-L302)
+- [Global/project setting merge](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/settings-manager.ts#L148-L170), [SDK overrides](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/settings-manager.ts#L546-L549), and [effective compaction defaults](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/settings-manager.ts#L825-L852)
+- [Generic Agent `retainedTail` schema](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/harness/session/types.ts#L39-L51), which is distinct from Coding Agent `SessionManager`
 
 > **Next up:** [Chapter 10: Session Management](ch10-session.md)

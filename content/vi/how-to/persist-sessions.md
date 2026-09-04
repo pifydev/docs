@@ -5,10 +5,10 @@ translation_key: how-to-persist-sessions
 language: vi
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-08-25'
+last_updated: '2026-09-04'
 ---
 
-Dùng `SessionManager` khi hội thoại phải tồn tại lâu hơn process hiện tại. Manager này sở hữu session file và append trạng thái trong lúc `AgentSession` chạy.
+Dùng `SessionManager` khi hội thoại phải tồn tại lâu hơn process hiện tại. Persistent manager sở hữu một Pi session file và append trạng thái trong lúc `AgentSession` chạy; in-memory manager có thể chiếu các entry mà host của bạn lưu bền vững ở nơi khác.
 
 :::tip[Khi nào cần cách này]
 
@@ -18,7 +18,7 @@ Dùng `SessionManager` khi hội thoại phải tồn tại lâu hơn process hi
 
 :::
 
-Các ví dụ dùng Node.js `>=22.19.0`, ESM và `@earendil-works/pi-coding-agent@0.84.3`. Cài bằng `npm install @earendil-works/pi-coding-agent@0.84.3`; thêm `tsx`, TypeScript và Node types để chạy các lệnh bên dưới.
+Các ví dụ dùng Node.js `>=22.19.0`, ESM và `@earendil-works/pi-coding-agent@0.85.0`. Cài bằng `npm install @earendil-works/pi-coding-agent@0.85.0`; thêm `tsx`, TypeScript và Node types để chạy các lệnh bên dưới.
 
 ## Mô hình session
 
@@ -92,6 +92,31 @@ try {
 Luôn hiển thị `modelFallbackMessage`. Thông báo này cho biết provider/model đã lưu không thể được khôi phục và, khi có thể, nêu model thay thế. API hiện tại khôi phục thay đổi model và thinking được lưu trên active branch; session không có tùy chọn `pinModel`.
 
 Để resume một file đã chọn, truyền absolute path từ `SessionManager.list()` hoặc `listAll()` vào `SessionManager.open(path)`. `open()` thường khôi phục `cwd` trong header. Đối số thứ ba là `cwdOverride` tường minh; chỉ dùng khi bạn chủ động chuyển worktree. Hãy kiểm tra path do người dùng cung cấp nằm trong session root được phép trước khi mở.
+
+## Khôi phục entry do storage bên ngoài quản lý
+
+Pi 0.85.0 có thể dựng lại tree của Coding Agent từ `FileEntry[]` nằm trong database, object store hoặc medium khác do application sở hữu:
+
+```ts title="restore-external-session.ts"
+import {
+  type FileEntry,
+  SessionManager,
+} from "@earendil-works/pi-coding-agent";
+
+export function restoreExternalSessionEntries(
+  sessionId: string,
+  entries: FileEntry[],
+  cwd = process.cwd(),
+): SessionManager {
+  return SessionManager.inMemory(cwd, { id: sessionId }, entries);
+}
+```
+
+Ở đây host sở hữu vòng đời external storage. `SessionManager.inMemory(cwd, { id: sessionId }, entries)` khôi phục append-only tree cùng active leaf trong process, nhưng không tạo hay append Pi session file. Entry mới chỉ nằm trong manager đó cho đến khi host đọc `getHeader()` cùng `getEntries()` rồi ghi snapshot hoặc append log của riêng mình. Overload này dùng để restoration, không phải adapter `SessionStorage` và không tự đồng bộ ngược về external store.
+
+Caller chịu trách nhiệm cung cấp `FileEntry[]` đúng cấu trúc. Snapshot thông thường bắt đầu bằng một `SessionHeader` có `type` là `"session"`, còn `id`, `timestamp`, `cwd` và `version` theo public shape; các record `SessionEntry` sau đó phải có `id`, `parentId`, `timestamp`, discriminant và payload hợp lệ. Khi có header, `id` của header trở thành ID của manager được khôi phục; `{ id: sessionId }` cấp identity cho danh sách entry không có header. Đối số `cwd` là cwd đang hoạt động của manager, vì vậy hãy validate nó độc lập với header lấy từ bên ngoài.
+
+Hãy thực hiện schema validation và authorization validation trước khi dựng manager. `parseSessionEntries()` là helper phục hồi JSONL theo hướng dễ dãi: nó bỏ qua dòng JSON lỗi và không chứng minh object đã parse thỏa union `FileEntry`. `migrateSessionEntries()` nâng version cũ tại chỗ nên thay đổi chính array; `inMemory()` cũng áp dụng migration v1 lên v2 rồi v3 được hỗ trợ khi load header. Hãy copy dữ liệu trước nếu external store cần representation ban đầu, và xử lý shape không hỗ trợ hoặc lỗi như migration error của application thay vì dựa vào Pi để validate rộng.
 
 ## 3. Rẽ nhánh session
 
@@ -172,7 +197,7 @@ console.log({
 });
 ```
 
-Chạy bằng `npx tsx extract-branch.ts /absolute/session.jsonl ENTRY_ID`. `forkFrom(sourcePath, targetCwd, sessionDir)` là lựa chọn cho project khác: nó tạo file mới, chép toàn bộ lịch sử không phải header của source file và ghi source path vào `parentSession`.
+Chạy bằng `npx tsx extract-branch.ts /absolute/session.jsonl ENTRY_ID`. `forkFrom(sourcePath, targetCwd, sessionDir)` là lựa chọn cho project khác: nó tạo file mới, chép toàn bộ lịch sử không phải header của source file và ghi source path vào `parentSession`. Pi 0.85.0 còn giữ ranh giới compaction áp dụng cho path được fork, nên context đã tách không vô tình làm lộ lại lịch sử mà phép chiếu nguồn đã tóm tắt.
 
 ## 4. Duyệt cây
 
@@ -354,6 +379,7 @@ Hãy backup file trước khi nâng cấp hoặc cleanup hàng loạt. Loader t�
 - **Nhầm quy tắc lưu trữ của CLI và SDK:** CLI xét `--session-dir`, rồi `PI_CODING_AGENT_SESSION_DIR`, rồi `sessionDir` trong `settings.json`. Lời gọi SDK trực tiếp không đọc chuỗi ưu tiên này; hãy truyền `sessionDir` tường minh hoặc dùng mặc định.
 - **Truyền project path vào `listAll()`:** đối số string đầu tiên là storage directory. Dùng `list(cwd)` cho một project hoặc `listAll()` không đối số cho mọi thư mục project mặc định.
 - **Vô tình override `cwd`:** ưu tiên absolute `SessionInfo.path` do các hàm list trả về và để `open()` khôi phục working directory trong header.
+- **Hiểu collision fix thành bảo đảm locking:** Pi 0.85.0 chọn destination có suffix khi imported JSONL trùng filename, và các thao tác share session đồng thời không ghi đè nhau nữa. Hai fix này không thêm inter-process lock cho file đang được một `SessionManager` dùng; vẫn giữ quy tắc một writer ở trên.
 
 ## Tiếp theo
 

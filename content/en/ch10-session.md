@@ -6,7 +6,7 @@ language: en
 chapter: 10
 source_url: "https://www.dgzhuya.com/modules/ch10-session"
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/docs/sessions.md"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/docs/sessions.md"
 terms_used:
   - Session
   - Session Tree
@@ -15,7 +15,7 @@ terms_used:
   - CompactionEntry
   - BranchSummaryEntry
 status: reviewed
-last_updated: "2026-08-25"
+last_updated: "2026-09-04"
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -614,9 +614,15 @@ Coding Agent's manager uses synchronous file calls and has no file lock, `fsync`
 
 The generic Pi Agent Core `JsonlSessionStorage` has different safety code: it serializes writes through a per-instance promise tail and uses a temporary sibling plus rename for forks and torn-tail repair. Those v4 guarantees do not apply to Coding Agent's v3 `SessionManager`.
 
+### Pi 0.85.0 session corrections
+
+Four fixes tighten specific workflows without changing the storage model. Imported JSONL with the same filename as an existing destination now receives a numeric suffix instead of overwriting that file. Concurrent session shares do not overwrite one another. A fork now retains the applicable compaction boundary, so its reconstructed context respects the source checkpoint. An in-memory session fork requested before an active turn settles is handled only after runtime teardown has awaited the active response, preserving the completed or aborted turn before the manager is mutated.
+
+These are collision and ordering fixes, not a new transaction layer. Coding Agent `SessionManager` still has the rewrite, backup, and one-writer limits above; imported content still needs trust-boundary validation, and a share destination is not a general concurrent session store.
+
 ## 7. Separate the two persistence layers and use SessionManager
 
-Pi 0.84.3 contains two session systems with related ideas and incompatible contracts:
+Pi 0.85.0 contains two session systems with related ideas and incompatible contracts:
 
 | Property              | Pi Agent Core harness                                                          | Coding Agent `SessionManager`                                               |
 | --------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
@@ -636,7 +642,7 @@ The generic interface owns metadata, lanes, entry and record appends, queries, f
 | `create(cwd, sessionDir?, options?)`                          | Allocate a new persisted session and prospective file path                                   |
 | `open(path, sessionDir?, cwdOverride?)`                       | Load one file, migrate old versions, build indices, and use the header cwd unless overridden |
 | `continueRecent(cwd, sessionDir?)`                            | Open the most recent matching session or create a new one                                    |
-| `inMemory(cwd?, options?)`                                    | Use the same tree behavior without a file                                                    |
+| `inMemory(cwd?, options?, entries?)`                          | Use the same tree behavior without a file; optionally restore an external `FileEntry[]`      |
 | `forkFrom(sourcePath, targetCwd, sessionDir?, options?)`      | Copy the source file's non-header entries under a new v3 header and `parentSession`          |
 | `list(cwd, sessionDir?, onProgress?)`                         | Return project sessions asynchronously, newest derived activity first                        |
 | `listAll(onProgress?)` or `listAll(sessionDir?, onProgress?)` | Search all encoded project directories or one supplied directory                             |
@@ -685,6 +691,8 @@ console.log({
 
 Several exported functions expose the machinery without a manager instance: `buildContextEntries()`, `buildSessionContext()`, `sessionEntryToContextMessages()`, `parseSessionEntries()`, `migrateSessionEntries()`, and `getLatestCompactionEntry()`. Internal class helpers such as `_buildIndex()`, `_appendEntry()`, `_persist()`, and `_rewriteFile()` implement storage policy and should not be treated as stable application APIs.
 
+For externally owned persistence, call `SessionManager.inMemory(cwd, { id: sessionId }, entries)` with a well-formed `FileEntry[]`. This restores the append-only tree but never creates a Pi JSONL file or writes changes back to the external store. The host owns validation, migration policy, snapshots, concurrency, and durable writes; `parseSessionEntries()` skips malformed JSON and is not a full schema validator, while `migrateSessionEntries()` mutates its input array.
+
 Creation and opening carry details that affect callers. `create()` can return a manager whose `getSessionFile()` is only a prospective path, while `newSession()` can return that path directly, because writes are lazy. `open()` derives `sessionDir` from the file's parent unless one is supplied. `continueRecent()` filters by header `cwd` when a custom shared directory is used. `list()` and `listAll()` return `SessionInfo` metadata, not open managers; call `open(info.path)` to resume one.
 
 ## 8. Carry the design into another system
@@ -722,9 +730,9 @@ Chapters 3 through 10 now connect the full runtime path: the loop emits messages
 
 Pi's extension system sits on both sides of this boundary. Extensions can append `custom` state, inject `custom_message` context, provide compaction or branch summaries, label entries, and observe navigation. The source files to read next are:
 
-- Coding Agent [`schema`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/session-manager.ts#L30-L153), [`projection`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/session-manager.ts#L334-L469), and [`SessionManager`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/session-manager.ts) implementation;
-- branch-summary [`collection`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/compaction/branch-summarization.ts#L96-L145) and [`generation`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/compaction/branch-summarization.ts);
-- generic-harness [`entry and storage contracts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/harness/session/types.ts#L14-L326) and [`JSONL safety implementation`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/harness/session/jsonl/storage.ts#L23-L124);
-- [Current CLI behavior](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/docs/sessions.md).
+- Coding Agent [`schema`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/session-manager.ts#L30-L153), [`projection`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/session-manager.ts#L334-L469), and [`SessionManager`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/session-manager.ts) implementation;
+- branch-summary [`collection`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/compaction/branch-summarization.ts#L96-L145) and [`generation`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/compaction/branch-summarization.ts);
+- generic-harness [`entry and storage contracts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/harness/session/types.ts#L14-L326) and [`JSONL safety implementation`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/harness/session/jsonl/storage.ts#L23-L124);
+- [Current CLI behavior](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/docs/sessions.md).
 
-This chapter targets Pi `0.84.3` at commit `4e58f324fae8ebfa98a3d45181fb248072a2afac`.
+This chapter targets Pi `0.85.0` at commit `107d79f11072bbc8a3a757ed7fd69596bee7d68c`.

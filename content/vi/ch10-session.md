@@ -6,7 +6,7 @@ language: vi
 chapter: 10
 source_url: "https://www.dgzhuya.com/modules/ch10-session"
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/docs/sessions.md"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/docs/sessions.md"
 terms_used:
   - Session
   - Session Tree
@@ -15,7 +15,7 @@ terms_used:
   - CompactionEntry
   - BranchSummaryEntry
 status: reviewed
-last_updated: "2026-08-25"
+last_updated: "2026-09-04"
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -614,9 +614,15 @@ Manager của Coding Agent gọi API file đồng bộ và không có khóa file
 
 `JsonlSessionStorage` tổng quát của Pi Agent Core có cơ chế an toàn khác: nó tuần tự hóa thao tác ghi bằng một chuỗi Promise trên từng đối tượng và dùng file tạm cùng phép đổi tên khi fork hoặc sửa phần cuối bị ghi dở. Các bảo đảm v4 đó không áp dụng cho `SessionManager` v3 của Coding Agent.
 
+### Các chỉnh sửa session trong Pi 0.85.0
+
+Bốn fix làm chặt các workflow cụ thể mà không đổi storage model. Imported JSONL trùng filename với destination đã có giờ nhận suffix dạng số thay vì ghi đè file đó. Các thao tác share session đồng thời không ghi đè nhau nữa. Một fork nay giữ ranh giới compaction áp dụng, nên context dựng lại tôn trọng checkpoint của source. Một fork in-memory được yêu cầu trước khi active turn settle chỉ được xử lý sau khi runtime teardown đã await active response, nhờ đó giữ turn đã hoàn tất hoặc bị abort trước khi manager thay đổi.
+
+Đây là các collision fix và ordering fix, không phải transaction layer mới. `SessionManager` của Coding Agent vẫn có các giới hạn về rewrite, backup và một writer ở trên; content import vẫn cần trust-boundary validation, còn share destination không phải concurrent session store tổng quát.
+
 ## 7. Tách hai tầng lưu trữ và dùng SessionManager
 
-Pi 0.84.3 có hai hệ thống session cùng chia sẻ một số ý tưởng nhưng không tương thích về quy ước:
+Pi 0.85.0 có hai hệ thống session cùng chia sẻ một số ý tưởng nhưng không tương thích về quy ước:
 
 | Thuộc tính                  | Bộ khung Pi Agent Core                                               | `SessionManager` của Coding Agent                                        |
 | --------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------ |
@@ -636,7 +642,7 @@ Giao diện tổng quát quản lý siêu dữ liệu, lane, thao tác append en
 | `create(cwd, sessionDir?, options?)`                            | Tạo session lưu bền vững mới cùng đường dẫn file dự kiến                                  |
 | `open(path, sessionDir?, cwdOverride?)`                         | Đọc một file, nâng phiên bản cũ, dựng chỉ mục và dùng cwd trong header nếu không thay thế |
 | `continueRecent(cwd, sessionDir?)`                              | Mở session phù hợp gần nhất hoặc tạo session mới                                          |
-| `inMemory(cwd?, options?)`                                      | Dùng cùng hành vi cây nhưng không có file                                                 |
+| `inMemory(cwd?, options?, entries?)`                            | Dùng cùng hành vi tree mà không có file; có thể khôi phục `FileEntry[]` bên ngoài         |
 | `forkFrom(sourcePath, targetCwd, sessionDir?, options?)`        | Chép entry không phải header của nguồn dưới header v3 mới có `parentSession`              |
 | `list(cwd, sessionDir?, onProgress?)`                           | Trả siêu dữ liệu session của dự án theo thời điểm hoạt động mới nhất trước                |
 | `listAll(onProgress?)` hoặc `listAll(sessionDir?, onProgress?)` | Tìm qua mọi thư mục dự án đã mã hóa hoặc một thư mục được cấp                             |
@@ -685,6 +691,8 @@ console.log({
 
 Một số hàm đã xuất cho phép dùng trực tiếp cơ chế này mà không cần đối tượng `SessionManager`: `buildContextEntries()`, `buildSessionContext()`, `sessionEntryToContextMessages()`, `parseSessionEntries()`, `migrateSessionEntries()` và `getLatestCompactionEntry()`. Các hàm hỗ trợ nội bộ của lớp như `_buildIndex()`, `_appendEntry()`, `_persist()` và `_rewriteFile()` triển khai chính sách lưu trữ, không nên được xem là API ổn định cho ứng dụng.
 
+Với persistence do bên ngoài sở hữu, gọi `SessionManager.inMemory(cwd, { id: sessionId }, entries)` bằng `FileEntry[]` đúng cấu trúc. Cách này khôi phục append-only tree nhưng không bao giờ tạo Pi JSONL file hay ghi thay đổi ngược về external store. Host sở hữu validation, migration policy, snapshot, concurrency và durable write; `parseSessionEntries()` bỏ qua JSON lỗi nên không phải schema validator đầy đủ, còn `migrateSessionEntries()` thay đổi input array.
+
 Chi tiết khi tạo và mở session có ảnh hưởng trực tiếp đến mã gọi. `create()` có thể trả một manager mà `getSessionFile()` mới chỉ là đường dẫn dự kiến, còn `newSession()` có thể trả trực tiếp đường dẫn đó, vì cơ chế ghi tạo file muộn. `open()` lấy `sessionDir` từ thư mục cha của file nếu mã gọi không cấp. `continueRecent()` lọc theo `cwd` trong header khi dùng thư mục tùy chỉnh dùng chung. `list()` và `listAll()` trả siêu dữ liệu `SessionInfo`, không trả manager đang mở; hãy gọi `open(info.path)` để tiếp tục.
 
 ## 8. Mang thiết kế sang hệ thống khác
@@ -722,9 +730,9 @@ Từ Chương 3 đến Chương 10, đường chạy đã nối liền: vòng l�
 
 Hệ thống Extension của Pi nằm ở cả hai phía ranh giới này. Extension có thể append trạng thái `custom`, đưa context `custom_message` vào, cung cấp bản tóm tắt compaction hoặc branch, gắn label cho entry và quan sát điều hướng. Các file mã nguồn nên đọc tiếp gồm:
 
-- [`lược đồ`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/session-manager.ts#L30-L153), [`phép chiếu`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/session-manager.ts#L334-L469) và phần triển khai [`SessionManager`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/session-manager.ts) của Coding Agent;
-- phần [`thu thập entry`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/compaction/branch-summarization.ts#L96-L145) và [`sinh bản tóm tắt`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/compaction/branch-summarization.ts);
-- [`quy ước entry và lưu trữ`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/harness/session/types.ts#L14-L326) cùng [`cơ chế an toàn JSONL`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/harness/session/jsonl/storage.ts#L23-L124) của bộ khung tổng quát;
-- [Hành vi CLI hiện tại](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/docs/sessions.md).
+- [`lược đồ`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/session-manager.ts#L30-L153), [`phép chiếu`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/session-manager.ts#L334-L469) và phần triển khai [`SessionManager`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/session-manager.ts) của Coding Agent;
+- phần [`thu thập entry`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/compaction/branch-summarization.ts#L96-L145) và [`sinh bản tóm tắt`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/compaction/branch-summarization.ts);
+- [`quy ước entry và lưu trữ`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/harness/session/types.ts#L14-L326) cùng [`cơ chế an toàn JSONL`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/harness/session/jsonl/storage.ts#L23-L124) của bộ khung tổng quát;
+- [Hành vi CLI hiện tại](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/docs/sessions.md).
 
-Chương này bám theo Pi `0.84.3` tại commit `4e58f324fae8ebfa98a3d45181fb248072a2afac`.
+Chương này bám theo Pi `0.85.0` tại commit `107d79f11072bbc8a3a757ed7fd69596bee7d68c`.

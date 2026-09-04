@@ -6,9 +6,9 @@ language: vi
 chapter: 8
 source_url: 'https://www.dgzhuya.com/modules/ch08-context-engineering'
 official_refs:
-  - 'https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/resource-loader.ts'
-  - 'https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/tools/truncate.ts'
-  - 'https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/compaction/compaction.ts'
+  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/resource-loader.ts'
+  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/tools/truncate.ts'
+  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/compaction/compaction.ts'
 terms_used:
   - Context
   - Context Engineering
@@ -16,7 +16,7 @@ terms_used:
   - transformContext
   - convertToLlm
 status: reviewed
-last_updated: '2026-08-25'
+last_updated: '2026-09-04'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -88,7 +88,7 @@ Tiện ích dùng chung thuộc `@earendil-works/pi-coding-agent`, không thuộ
 
 ### Hai giới hạn: dòng và byte
 
-[`tools/truncate.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/tools/truncate.ts#L11-L45) định nghĩa các giá trị mặc định:
+[`tools/truncate.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/tools/truncate.ts#L11-L45) định nghĩa các giá trị mặc định:
 
 - `DEFAULT_MAX_LINES = 2000`
 - `DEFAULT_MAX_BYTES = 50 * 1024`
@@ -160,7 +160,7 @@ Sự bất đối xứng này giúp `read` không trình bày dòng đầu bị 
 
 ### Quy tắc 500 đơn vị của grep
 
-[`truncateLine()`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/tools/truncate.ts) giữ 500 code unit JavaScript đầu tiên rồi nối `... [truncated]`. `grep` áp dụng hàm này cho dòng khớp và dòng ngữ cảnh tùy chọn. Một thông báo yêu cầu model dùng `read` để xem dòng đầy đủ.
+[`truncateLine()`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/tools/truncate.ts) giữ 500 code unit JavaScript đầu tiên rồi nối `... [truncated]`. `grep` áp dụng hàm này cho dòng khớp và dòng ngữ cảnh tùy chọn. Một thông báo yêu cầu model dùng `read` để xem dòng đầy đủ.
 
 Giới hạn này xử lý vấn đề hẹp hơn giới hạn 50 KiB. Một dòng đã minify có thể lấn át danh sách kết quả khớp hữu ích ngay cả khi tổng đầu ra vẫn dưới 50 KiB. Giới hạn 100 kết quả khớp, 500 code unit trên mỗi dòng và 50 KiB tổng thể bảo vệ ba chiều khác nhau.
 
@@ -238,7 +238,7 @@ Pi chỉ hỏi khi tìm thấy tài nguyên chỉ được nạp nếu project t
 
 ### `DefaultResourceLoader`: tìm kiếm, bổ sung và thay thế
 
-[`DefaultResourceLoader`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/resource-loader.ts) phối hợp `SettingsManager`, `DefaultPackageManager` và việc nạp Extension, file ngữ cảnh, skill, mẫu prompt, theme cùng đầu vào system prompt.
+[`DefaultResourceLoader`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/resource-loader.ts) phối hợp `SettingsManager`, `DefaultPackageManager` và việc nạp Extension, file ngữ cảnh, skill, mẫu prompt, theme cùng đầu vào system prompt.
 
 Khi có bộ phân giải project trust, luồng `reload()` trước hết nạp tập extension ở trạng thái không tin cậy. Bước khởi tạo này gồm extension người dùng/toàn cục và extension CLI tạm thời. Sau khi bộ phân giải trả về, bộ nạp đặt `SettingsManager.projectTrusted`, nạp lại cài đặt theo trạng thái đó, phân giải package cùng tài nguyên cục bộ đã bật, nạp từng loại tài nguyên, tìm file ngữ cảnh rồi phân giải đầu vào prompt.
 
@@ -339,7 +339,7 @@ contextTokens > contextWindow - reserveTokens
 
 Khi có thể, `contextTokens` lấy từ số liệu `usage` hợp lệ mới nhất của assistant: `usage.totalTokens` gốc, hoặc `input + output + cacheRead + cacheWrite`. Các thông điệp sau lần đo `usage` đó được ước lượng. Đường xử lý lỗi và trường hợp mọi số liệu `usage` đều bằng 0 vẫn ước lượng phần context theo sau để không bỏ sót token. Không có phép đổi cố định từ ước lượng token này sang giới hạn Tool 50 KiB.
 
-Kiểm tra tự động chạy sau `agent_end` và trước khi gửi prompt. Có ba trường hợp: tràn ngữ cảnh có thể khôi phục bằng một lần chạy compaction rồi thử lại; phản hồi thành công nhưng vẫn tràn nên chạy compaction mà không thử lại; hoặc vượt ngưỡng và chạy compaction mà không thử lại. `AgentSession.compact()` là điểm vào thủ công riêng. Cả hai đường đều chuẩn bị đường dẫn hiện hành, cho hook `session_before_compact` quyền hủy hoặc thay kết quả, rồi mới gọi hàm compaction cấp thấp dùng chung nếu cần.
+Kiểm tra tự động chạy tại ba ranh giới: trước một phản hồi assistant khác trong low-level Agent run, sau khi run đó đến `agent_end`, và trước khi gửi prompt mới. Có ba trường hợp: tràn ngữ cảnh có thể khôi phục bằng một lần chạy compaction rồi thử lại; phản hồi thành công nhưng vẫn tràn nên chạy compaction mà không thử lại; hoặc vượt ngưỡng và chạy compaction mà không thử lại. `AgentSession.compact()` là điểm vào thủ công riêng. Cả hai đường đều chuẩn bị đường dẫn hiện hành, cho hook `session_before_compact` quyền hủy hoặc thay kết quả, rồi mới gọi hàm compaction cấp thấp dùng chung nếu cần.
 
 ```text
 các bản ghi trên nhánh hiện hành
@@ -359,6 +359,19 @@ lần buildSessionContext() kế tiếp
 Điểm cắt có thể là thông điệp của user hoặc assistant, nhưng không bao giờ là bản ghi kết quả Tool. Nếu cắt giữa một lượt, Pi ghi bản tóm tắt riêng cho phần đầu lượt. Các lần compaction sau cập nhật bản tóm tắt trước thay vì chồng lại toàn bộ lịch sử thô. [Chương 9](ch09-compaction.md) sẽ phân tích quy tắc chọn điểm cắt và bản tóm tắt có cấu trúc.
 
 `CompactionEntry` đã được ghi bền vẫn là bản ghi phiên. `buildSessionContext()` chiếu nó thành `CompactionSummaryMessage`, bỏ các bản ghi cũ đã được tóm tắt và đưa phần đuôi gần đây vào. Sau đó `convertToLlm()` đổi role tùy chỉnh này thành thông điệp Pi AI có dạng user, nằm giữa các dấu báo dành cho bản tóm tắt compaction.
+
+### Các điểm kiểm tra compaction giữa lượt chạy
+
+Bên trong run có dùng Tool, vòng đời trước lần gọi provider kế tiếp có thứ tự sau:
+
+1. Mọi Tool result trong batch đã hoàn tất được append vào lịch sử Agent và session.
+2. Sau đó Pi kiểm tra ngưỡng trên context đã cập nhật.
+3. Nếu vượt ngưỡng, compaction tùy chọn hoàn tất và dựng lại message của Agent.
+4. Chỉ sau đó Pi mới yêu cầu phản hồi assistant kế tiếp.
+
+Một Tool batch kết thúc mà không có message steering hoặc follow-up trong queue sẽ bỏ qua compaction giữa lượt chạy vì không có phản hồi assistant kế tiếp cần bảo vệ. Nếu message trong queue giữ loop tiếp tục, preparation hook vẫn chạy trước response đó và có thể compact lịch sử vừa lớn lên.
+
+Đây là ba lớp bảo vệ bổ sung cho nhau: kiểm tra giữa lượt chạy ngăn Tool result lớn đi vào provider request kế tiếp, kiểm tra sau khi low-level Agent run kết thúc bắt usage cùng overflow ở cuối, còn kiểm tra trước khi gửi prompt mới bao gồm last response đã abort. Hai điểm kiểm tra sau run và trước prompt vẫn được giữ; phase mới giữa lượt chạy không thay thế chúng.
 
 ## 6. Phòng thủ lịch sử 2: bản tóm tắt nhánh tùy chọn
 
@@ -402,7 +415,13 @@ while current tồn tại và current != common:
 
 Bộ tóm tắt nhánh đổi các bản ghi đủ điều kiện thành `AgentMessage`, chọn các bản ghi mới nhất trước trong hạn mức `model.contextWindow - reserveTokens`, rồi khôi phục thứ tự thời gian. Bản ghi chỉ chứa kết quả Tool bị bỏ qua khi đổi thành thông điệp, còn lời gọi Tool và dữ liệu theo dõi thao tác file giữ lại bằng chứng hữu ích.
 
-Sau đó bộ sinh dùng `convertToLlm()`, `serializeConversation()` cùng `SUMMARIZATION_SYSTEM_PROMPT` dùng chung. Phép tuần tự hóa bọc hội thoại cũ như dữ liệu để bộ tóm tắt không tiếp tục cuộc hội thoại đó. Phần dự trữ mặc định cho nhánh là 16.384 token, cửa sổ context dự phòng là 128.000 khi model không báo, và giới hạn phản hồi tóm tắt là 2.048 token.
+Sau đó bộ sinh dùng `convertToLlm()`, `serializeConversation()` cùng `SUMMARIZATION_SYSTEM_PROMPT` dùng chung. Phép tuần tự hóa bọc hội thoại cũ như dữ liệu để bộ tóm tắt không tiếp tục cuộc hội thoại đó. Phần dự trữ mặc định cho nhánh là 16.384 token, cửa sổ context dự phòng là 128.000 khi model không báo, và giới hạn phản hồi branch summary hiện là 4.096 token (vẫn bị chặn bởi `model.maxTokens` dương nhỏ hơn). Thay đổi này sửa giới hạn 2.048 token trước đây, vốn có thể để lại quá ít output hiển thị sau khi reasoning dùng một phần response budget.
+
+### Từ chối summary chưa hoàn chỉnh
+
+Pi 0.85.0 áp dụng `getSummarizationFailure` cho history summary chính, turn-prefix summary của turn bị tách và branch summary. Khi provider trả `stopReason: "length"`, text sinh ra chưa hoàn chỉnh: Pi báo lỗi và không append hay lưu nó thành checkpoint compaction hoặc branch summary. Helper này thuộc module compaction nội bộ chứ không phải export ở package root; application quan sát failure qua result hoặc event public của compaction và navigation.
+
+Request branch summary dùng output cap 4.096 token mới thay cho cap 2.048 token cũ. Trần lớn hơn xử lý chính xác trường hợp reasoning dùng hết allowance cũ, nhưng không chứng minh summary hoàn chỉnh: `stopReason: "length"` vẫn bị từ chối trên các đường history summary, turn-prefix summary và branch summary.
 
 ### Mẫu của nhánh khác mẫu compaction
 
@@ -456,7 +475,7 @@ BranchSummaryEntry                      BranchSummaryMessage
 | Context gần đây | giữ khoảng `keepRecentTokens` theo điểm cắt hợp lệ | giữ nhánh đích theo cách bình thường |
 | Bản ghi lưu bền | `CompactionEntry` | `BranchSummaryEntry` |
 | Bản chiếu gửi model | `CompactionSummaryMessage` | `BranchSummaryMessage` |
-| Hạn mức phản hồi mặc định | tối đa `min(0.8 × reserveTokens, model.maxTokens)` | 2.048 token |
+| Hạn mức phản hồi mặc định | tối đa `min(0.8 × reserveTokens, model.maxTokens)` | tối đa 4.096 token, bị chặn bởi `model.maxTokens` dương nhỏ hơn |
 | Mục đích chính | giúp lịch sử hiện hành vừa cửa sổ | mang công việc hữu ích từ đường dẫn bị bỏ sang nhánh mới |
 
 ## 7. Luồng xử lý đầy đủ: từ tài nguyên tới lần gọi model kế tiếp
@@ -488,12 +507,15 @@ Các lớp phòng thủ xuất hiện vào những thời điểm khác nhau. Lu
    └─ grep: giới hạn kết quả khớp + dòng + tổng byte
 
 6. ToolResultMessage đi vào Agent và lịch sử phiên
-   └─ lượt Tool kế tiếp lặp lại bước 4–6
+   └─ Tool result hoàn tất được append trước mọi quyết định theo ngưỡng
 
-7. Sau agent_end hoặc trước prompt tiếp theo
+7. Trước phản hồi assistant kế tiếp trong cùng run
+   └─ kiểm tra ngưỡng có thể compact, dựng lại context rồi quay lại bước 4
+
+8. Sau agent_end hoặc trước prompt về sau
    └─ kiểm tra ngưỡng/tràn ngữ cảnh có thể thêm CompactionEntry
 
-8. Khi thao tác điều hướng cây về sau có summarize: true
+9. Khi thao tác điều hướng cây về sau có summarize: true
    └─ phép chọn theo LCA có thể thêm BranchSummaryEntry tại đích
 ```
 
@@ -568,15 +590,15 @@ Quy tắc bắt buộc vẫn nên nằm trong file ngữ cảnh hoặc system pr
 
 [Chương 9](ch09-compaction.md) mở hộp đen compaction: ước lượng token, điểm cắt hợp lệ, lượt bị chia, bản tóm tắt tăng dần, theo dõi file và cách dựng lại từ `CompactionEntry`. Sau đó [Chương 10](ch10-session.md) đi theo cây phiên nối bằng quan hệ cha, nền tảng của bản chiếu đường dẫn hiện hành và bản tóm tắt nhánh dựa trên LCA.
 
-Các tham chiếu phần triển khai của chương này được ghim theo Pi `0.84.3` tại `4e58f324fae8ebfa98a3d45181fb248072a2afac`:
+Các tham chiếu phần triển khai của chương này được ghim theo Pi `0.85.0` tại `107d79f11072bbc8a3a757ed7fd69596bee7d68c`:
 
-- [Phép cắt đầu ra Tool và ranh giới Unicode](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/tools/truncate.ts)
-- [Dấu tiếp tục của `read`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/tools/read.ts#L271-L317) và [giới hạn của `grep`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/tools/grep.ts#L321-L361)
-- [Cách tìm file ngữ cảnh và `DefaultResourceLoader`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/resource-loader.ts)
-- [Thư mục tài nguyên được kiểm soát theo mức tin cậy của dự án](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/package-manager.ts) và [ranh giới trust](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/docs/security.md)
-- [Cách ghép system prompt](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/system-prompt.ts) và [định dạng metadata của skill](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/skills.ts#L347-L380)
-- [Giá trị mặc định và ngưỡng compaction](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/compaction/compaction.ts#L126-L237)
-- [Cách thu thập và sinh bản tóm tắt nhánh](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/compaction/branch-summarization.ts)
-- [Bản chiếu ngữ cảnh của phiên](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/session-manager.ts#L380-L469)
+- [Phép cắt đầu ra Tool và ranh giới Unicode](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/tools/truncate.ts)
+- [Dấu tiếp tục của `read`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/tools/read.ts#L271-L317) và [giới hạn của `grep`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/tools/grep.ts#L321-L361)
+- [Cách tìm file ngữ cảnh và `DefaultResourceLoader`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/resource-loader.ts)
+- [Thư mục tài nguyên được kiểm soát theo mức tin cậy của dự án](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/package-manager.ts) và [ranh giới trust](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/docs/security.md)
+- [Cách ghép system prompt](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/system-prompt.ts) và [định dạng metadata của skill](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/skills.ts#L347-L380)
+- [Giá trị mặc định và ngưỡng compaction](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/compaction/compaction.ts#L126-L237)
+- [Cách thu thập và sinh bản tóm tắt nhánh](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/compaction/branch-summarization.ts)
+- [Bản chiếu ngữ cảnh của phiên](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/session-manager.ts#L380-L469)
 
 > **Đọc tiếp:** [Chương 9: Nén ngữ cảnh](ch09-compaction.md)

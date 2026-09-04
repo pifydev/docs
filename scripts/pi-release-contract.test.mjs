@@ -20,6 +20,7 @@ const deterministicGuideFunction = "verifyDeterministicAgentTestingGuide";
 const runtimeGuideFunction = "createSerializedSessionRuntimeHost";
 const runtimeHostAdapterFunction = "bindSerializedSessionRuntimeHost";
 const runtimeBindingFailureFunction = "throwSessionBindingFailure";
+const externalSessionGuideFunction = "restoreExternalSessionEntries";
 const requiredArchitectureTerms = [
   "@earendil-works/pi-client",
   "Client",
@@ -331,6 +332,55 @@ function assertRuntimeGuideExampleParity(markdown, compileFixture, context) {
     displayedHostAdapter.functionSource,
     compiledHostAdapter.functionSource,
     `${context} runtime host adapter must match the compile fixture`,
+  );
+}
+
+function externalSessionGuideExampleFence(markdown, context) {
+  const matches = [
+    ...markdown.matchAll(
+      /^```(?:ts|typescript)(?:[ \t]+[^\r\n]*)?[ \t]*\r?\n([\s\S]*?)\r?\n```\s*$/gm,
+    ),
+  ].filter((match) =>
+    match[1].includes(`function ${externalSessionGuideFunction}`),
+  );
+  assert.equal(
+    matches.length,
+    1,
+    `${context} must contain exactly one TypeScript fence for ${externalSessionGuideFunction}`,
+  );
+  return matches[0][1].replaceAll("\r\n", "\n");
+}
+
+function assertExternalSessionGuideExampleParity(
+  markdown,
+  compileFixture,
+  context,
+) {
+  const displayed = parsedExampleContract(
+    externalSessionGuideExampleFence(markdown, context),
+    `${context} displayed example`,
+    externalSessionGuideFunction,
+  );
+  const compiled = parsedExampleContract(
+    compileFixture.replaceAll("\r\n", "\n"),
+    "Pi 0.85.0 compile fixture",
+    externalSessionGuideFunction,
+  );
+
+  assert.deepEqual(
+    displayed.allImports,
+    displayed.requiredImports,
+    `${context} displayed example must not carry unused imports`,
+  );
+  assert.equal(
+    displayed.functionSource,
+    compiled.functionSource,
+    `${context} displayed function must match the compile fixture`,
+  );
+  assert.deepEqual(
+    displayed.requiredImports,
+    compiled.requiredImports,
+    `${context} required imports must match the compile fixture`,
   );
 }
 
@@ -693,6 +743,122 @@ function assertParagraphContainsAll(source, patterns, context) {
   return matchingParagraph;
 }
 
+function assertMidRunCompactionLifecycle(source, locale, context) {
+  const contract =
+    locale === "en"
+      ? {
+          heading: "### Mid-run compaction checkpoints",
+          ordered: [
+            /Tool results?[^\n]*append/i,
+            /threshold[^\n]*check|check[^\n]*threshold/i,
+            /optional[^\n]*compaction|compact[^\n]*if[^\n]*threshold/i,
+            /next assistant response/i,
+          ],
+          terminating: /terminating Tool batch/i,
+          noQueue: /no (?:steering or follow-up|queued) message/i,
+          skip: /skip[^.]*mid-run compaction|does not run[^.]*mid-run compaction/i,
+          nextResponse: /no next assistant response/i,
+          beforePrompt: /before (?:submitting|sending) a new prompt/i,
+          afterRun: /after the low-level Agent run/i,
+        }
+      : {
+          heading: "### Các điểm kiểm tra compaction giữa lượt chạy",
+          ordered: [
+            /Tool result[^\n]*(?:được )?(?:append|ghi thêm)/i,
+            /kiểm tra[^\n]*ngưỡng|ngưỡng[^\n]*được kiểm tra/i,
+            /compaction[^\n]*(?:tùy chọn|nếu[^\n]*vượt ngưỡng)/i,
+            /phản hồi assistant kế tiếp/i,
+          ],
+          terminating: /Tool batch kết thúc/i,
+          noQueue: /không có message[^.]*queue/i,
+          skip: /bỏ qua[^.]*compaction giữa lượt chạy|không chạy[^.]*compaction giữa lượt chạy/i,
+          nextResponse: /không có phản hồi assistant kế tiếp/i,
+          beforePrompt: /trước khi (?:gửi|submit) prompt mới/i,
+          afterRun: /sau khi low-level Agent run kết thúc/i,
+        };
+  const section = extractMarkdownSection(source, contract.heading, context);
+  const orderedOffsets = contract.ordered.map((pattern) => {
+    const match = pattern.exec(section.body);
+    assert.ok(match, `${context} lifecycle must cover ${pattern}`);
+    return match.index;
+  });
+  assert.deepEqual(
+    [...orderedOffsets].sort((left, right) => left - right),
+    orderedOffsets,
+    `${context} must order append, threshold check, optional compaction, then the next assistant response`,
+  );
+  assertParagraphContainsAll(
+    section.body,
+    [
+      contract.terminating,
+      contract.noQueue,
+      contract.skip,
+      contract.nextResponse,
+    ],
+    `${context} terminating-batch skip`,
+  );
+  assertParagraphContainsAll(
+    section.body,
+    [/mid-run|giữa lượt chạy/i, contract.beforePrompt, contract.afterRun],
+    `${context} three compaction check points`,
+  );
+  return section;
+}
+
+function assertReleasedSummarizationFailure(source, locale, context) {
+  const contract =
+    locale === "en"
+      ? {
+          heading: "### Reject incomplete summaries",
+          incomplete: /incomplete/i,
+          persistence: /not (?:append|persist|write)/i,
+          history: /history summary/i,
+          prefix: /turn-prefix summary/i,
+          branch: /branch summary/i,
+          cap: /4,096-token/i,
+          oldCap: /2,048-token/i,
+          reasoning: /reasoning/i,
+        }
+      : {
+          heading: "### Từ chối summary chưa hoàn chỉnh",
+          incomplete: /chưa hoàn chỉnh/i,
+          persistence: /không (?:append|lưu|ghi)/i,
+          history: /history summary/i,
+          prefix: /turn-prefix summary/i,
+          branch: /branch summary/i,
+          cap: /4\.096 token/i,
+          oldCap: /2\.048 token/i,
+          reasoning: /reasoning/i,
+        };
+  const section = assertContainsAll(
+    source,
+    [
+      /`getSummarizationFailure`/,
+      /`stopReason: "length"`/,
+      contract.incomplete,
+      contract.history,
+      contract.prefix,
+      contract.branch,
+      contract.cap,
+      contract.oldCap,
+      contract.reasoning,
+    ],
+    context,
+    { heading: contract.heading },
+  );
+  assertParagraphContainsAll(
+    section.body,
+    [
+      /`getSummarizationFailure`/,
+      /`stopReason: "length"`/,
+      contract.incomplete,
+      contract.persistence,
+    ],
+    `${context} incomplete-summary persistence rule`,
+  );
+  return section;
+}
+
 function assertExtensionPromptLifecycle(source, context) {
   assert.match(
     source,
@@ -818,12 +984,14 @@ function assertThinkingLevelSessionPersistence(source, contract, context) {
 const liveCwdBuiltins = ["bash", "edit", "find", "grep", "ls", "read", "write"];
 
 function assertLiveInvocationCwdBinding(source, context) {
-  const paragraph = source.split(/\n\s*\n/).find(
-    (candidate) =>
-      /`ctx\.cwd`/.test(candidate) &&
-      /live|current|hiện tại/i.test(candidate) &&
-      /invocation|execution|lời gọi|thực thi/i.test(candidate),
-  );
+  const paragraph = source
+    .split(/\n\s*\n/)
+    .find(
+      (candidate) =>
+        /`ctx\.cwd`/.test(candidate) &&
+        /live|current|hiện tại/i.test(candidate) &&
+        /invocation|execution|lời gọi|thực thi/i.test(candidate),
+    );
   assert.ok(
     paragraph,
     `${context} must bind built-in path resolution to live invocation ctx.cwd in one paragraph`,
@@ -851,7 +1019,8 @@ function assertLiveInvocationCwdBinding(source, context) {
 
 function assertNoMisleadingWriteByteCount(source, context) {
   const suspectSegments = markdownSemanticSegments(source).filter(
-    ({ text }) => /\bwrite\b/i.test(text) && /UTF-16/i.test(text) && /byte/i.test(text),
+    ({ text }) =>
+      /\bwrite\b/i.test(text) && /UTF-16/i.test(text) && /byte/i.test(text),
   );
   for (const { text } of suspectSegments) {
     assert.match(
@@ -951,7 +1120,9 @@ function assertImageMimeDetectionSemantics(source, context) {
     ],
     `${context} file MIME detector behavior`,
   );
-  const mimeTypes = [...paragraph.matchAll(/`(image\/(?:bmp|gif|jpeg|png|webp))`/g)]
+  const mimeTypes = [
+    ...paragraph.matchAll(/`(image\/(?:bmp|gif|jpeg|png|webp))`/g),
+  ]
     .map((match) => match[1])
     .sort();
   assert.deepEqual(
@@ -1055,7 +1226,7 @@ function markdownSemanticSegments(source) {
   return segments;
 }
 
-function hasKnownUnreleasedTruncatedSummarySignature(segment) {
+function hasReleasedTruncatedSummarySignature(segment) {
   const normalized = segment.text.replace(/\s+/g, " ").trim();
   const mentionsCompactionOrBranchSummary =
     /(?:compaction|branch)\s+summar(?:y|ies|ization)|(?:summar(?:y|ies|ization)|bản tóm tắt)\s+(?:compaction|branch|nhánh)/i.test(
@@ -1085,37 +1256,6 @@ function hasKnownUnreleasedTruncatedSummarySignature(segment) {
     auditedSourceSignature ||
     reviewedPhrases.some((signature) => signature.test(normalized))
   );
-}
-
-function assertTruncatedSummaryClaimsAreUnreleased(source, locale, context) {
-  // This deliberately recognizes audited source signatures and a small reviewed
-  // phrase list, not arbitrary natural language. Free-form paraphrases remain a
-  // release-source review responsibility.
-  const claims = markdownSemanticSegments(source).filter(
-    hasKnownUnreleasedTruncatedSummarySignature,
-  );
-  const warning =
-    locale === "en" ? /\*\*Unreleased:\*\*/ : /\*\*Chưa phát hành:\*\*/;
-
-  for (const claim of claims) {
-    assert.match(
-      claim.text,
-      /\{% hint style="warning" %\}/,
-      `${context} must put truncated-summary rejection in a warning callout`,
-    );
-    assert.match(
-      claim.text,
-      warning,
-      `${context} must visibly label truncated-summary rejection as unreleased`,
-    );
-  }
-}
-
-function assertActiveTruncatedSummaryClaimsAreUnreleased(sources) {
-  for (const { filename, source } of sources) {
-    const locale = filename.startsWith("content/vi/") ? "vi" : "en";
-    assertTruncatedSummaryClaimsAreUnreleased(source, locale, filename);
-  }
 }
 
 function releaseSourceRef(link) {
@@ -1150,10 +1290,7 @@ test("release fixture identifies published Pi 0.85.0 authority", async () => {
   const release = await readReleaseFixture();
   assert.equal(release.packageVersion, "0.85.0");
   assert.equal(release.tag, "v0.85.0");
-  assert.equal(
-    release.commit,
-    "107d79f11072bbc8a3a757ed7fd69596bee7d68c",
-  );
+  assert.equal(release.commit, "107d79f11072bbc8a3a757ed7fd69596bee7d68c");
   assert.equal(release.publishedAt, "2026-09-04T10:18:28Z");
   assert.equal(release.nodeRequirement, ">=22.19.0");
   assert.equal(release.previousDocumentationVersion, "0.84.3");
@@ -1517,11 +1654,296 @@ test("compile fixture packages are exactly pinned to the published release", asy
   );
 
   for (const packageName of compileFixturePackages) {
-    assert.equal(packageJSON.devDependencies[packageName], release.packageVersion);
+    assert.equal(
+      packageJSON.devDependencies[packageName],
+      release.packageVersion,
+    );
   }
 });
 
-test("both replaceable session runtime guides name the public 0.84.3 contracts", async () => {
+test("external-session restoration examples stay synchronized with the compile fixture", async () => {
+  const [guides, compileFixture] = await Promise.all([
+    readLocalizedContent("how-to/persist-sessions.md"),
+    readFile(
+      new URL("tests/fixtures/pi-sdk-0850.contract.ts", repositoryRoot),
+      "utf8",
+    ),
+  ]);
+
+  const displayedExamples = guides.map(({ locale, source }) => {
+    assertExternalSessionGuideExampleParity(
+      source,
+      compileFixture,
+      `${locale} persistence guide`,
+    );
+    return externalSessionGuideExampleFence(
+      source,
+      `${locale} persistence guide`,
+    );
+  });
+  assert.equal(
+    displayedExamples[0],
+    displayedExamples[1],
+    "external-session restoration code must be identical across locales",
+  );
+});
+
+test("persistence guides define external ownership and the restoration input boundary", async () => {
+  const guides = await readLocalizedContent("how-to/persist-sessions.md");
+  const localeContract = {
+    en: {
+      heading: "## Restore externally stored entries",
+      ownership: /host[^.]*owns[^.]*external storage/i,
+      noFile: /does not[^.]*Pi session file/i,
+      caller: /caller[^.]*responsible/i,
+      wellFormed: /well-formed `FileEntry\[\]`/i,
+      header: /header[^.]*`id`[^.]*`cwd`[^.]*`version`/i,
+      validate: /validat(?:e|ion)[^.]*before/i,
+      migration: /`migrateSessionEntries\(\)`[^.]*mutates/i,
+      parser: /`parseSessionEntries\(\)`[^.]*skip/i,
+      appendOnly: /append-only tree/i,
+    },
+    vi: {
+      heading: "## Khôi phục entry do storage bên ngoài quản lý",
+      ownership: /host[^.]*sở hữu[^.]*external storage/i,
+      noFile: /không[^.]*Pi session file/i,
+      caller: /caller[^.]*chịu trách nhiệm/i,
+      wellFormed: /`FileEntry\[\]` đúng cấu trúc/i,
+      header: /header[^.]*`id`[^.]*`cwd`[^.]*`version`/i,
+      validate: /validat(?:e|ion)[^.]*trước/i,
+      migration: /`migrateSessionEntries\(\)`[^.]*thay đổi/i,
+      parser: /`parseSessionEntries\(\)`[^.]*bỏ qua/i,
+      appendOnly: /append-only tree/i,
+    },
+  };
+
+  const structures = guides.map(({ locale, source }) => {
+    const contract = localeContract[locale];
+    const section = assertContainsAll(
+      source,
+      [
+        /`FileEntry\[\]`/,
+        /`SessionManager\.inMemory\(cwd, \{ id: sessionId \}, entries\)`/,
+        contract.ownership,
+        contract.noFile,
+        contract.caller,
+        contract.wellFormed,
+        contract.header,
+        contract.validate,
+        contract.migration,
+        contract.parser,
+        contract.appendOnly,
+      ],
+      `${locale} external-session restoration`,
+      { heading: contract.heading },
+    );
+    return sectionStructure(section);
+  });
+  assert.deepEqual(structures[0], structures[1]);
+});
+
+test("session docs integrate the Pi 0.85.0 collision and fork fixes without broad guarantees", async () => {
+  const pages = [
+    ...(await readLocalizedContent("ch10-session.md")),
+    ...(await readLocalizedContent("how-to/host-session-runtime.md")),
+  ];
+  for (const { locale, source } of pages) {
+    assert.match(
+      source,
+      /import(?:ed| JSONL)[^.]*same filename|import[^.]*trùng filename/i,
+    );
+    assert.match(
+      source,
+      /concurrent session shares?[^.]*not overwrite|share session đồng thời[^.]*không ghi đè/i,
+    );
+    assert.match(
+      source,
+      /fork[^.]*compaction boundary|fork[^.]*ranh giới compaction/i,
+    );
+    assert.match(
+      source,
+      /in-memory[^.]*fork[^.]*active turn[^.]*settle|fork in-memory[^.]*active turn[^.]*settle/i,
+    );
+    assert.doesNotMatch(
+      source,
+      /all session writes are atomic|mọi thao tác ghi session đều atomic/i,
+      `${locale} session docs must not overclaim atomicity`,
+    );
+  }
+});
+
+test("API references publish the exact external-session overload and types", async () => {
+  const references = await readLocalizedContent("reference/api.md");
+  const exactDeclarations = `export interface NewSessionOptions {
+  id?: string;
+  parentSession?: string;
+}
+
+export type FileEntry = SessionHeader | SessionEntry;
+
+export declare class SessionManager {
+  static inMemory(
+    cwd?: string,
+    options?: NewSessionOptions,
+    entries?: FileEntry[],
+  ): SessionManager;
+}`;
+  const structures = references.map(({ locale, source }) => {
+    const heading =
+      locale === "en"
+        ? "#### External-session restoration"
+        : "#### Khôi phục session bên ngoài";
+    const section = extractMarkdownSection(
+      source,
+      heading,
+      `${locale} API external session surface`,
+    );
+    assert.match(section.body, /```ts[\s\S]*```/);
+    assert.ok(
+      section.body.includes(exactDeclarations),
+      `${locale} API must preserve exact FileEntry, NewSessionOptions, and inMemory declarations`,
+    );
+    assert.doesNotMatch(
+      section.body,
+      /getSummarizationFailure[^.]*package root|package root[^.]*getSummarizationFailure/i,
+      `${locale} API must not claim getSummarizationFailure is a package-root export`,
+    );
+    return sectionStructure(section);
+  });
+  assert.deepEqual(structures[0], structures[1]);
+});
+
+test("external-session restoration parity rejects call-shape and FileEntry drift", async () => {
+  const compileFixture = await readFile(
+    new URL("tests/fixtures/pi-sdk-0850.contract.ts", repositoryRoot),
+    "utf8",
+  );
+  const exactExample = `\`\`\`ts\nimport {\n  type FileEntry,\n  SessionManager,\n} from "@earendil-works/pi-coding-agent";\n\n${
+    parsedExampleContract(
+      compileFixture,
+      "Pi 0.85.0 compile fixture",
+      externalSessionGuideFunction,
+    ).functionSource
+  }\n\`\`\``;
+  const changedCall = exactExample.replace(
+    "SessionManager.inMemory(cwd, { id: sessionId }, entries)",
+    "SessionManager.inMemory(cwd, entries)",
+  );
+  const changedType = exactExample.replace(
+    "entries: FileEntry[]",
+    "entries: unknown[]",
+  );
+  assert.notEqual(changedCall, exactExample);
+  assert.notEqual(changedType, exactExample);
+
+  assert.throws(
+    () =>
+      assertExternalSessionGuideExampleParity(
+        changedCall,
+        compileFixture,
+        "synthetic restoration guide",
+      ),
+    /displayed function must match the compile fixture/,
+  );
+  assert.throws(
+    () =>
+      assertExternalSessionGuideExampleParity(
+        changedType,
+        compileFixture,
+        "synthetic restoration guide",
+      ),
+    /displayed example must not carry unused imports|displayed function must match the compile fixture/,
+  );
+});
+
+test("Chapters 8 and 9 document the three automatic compaction checkpoints", async () => {
+  for (const relativePath of [
+    "ch08-context-engineering.md",
+    "ch09-compaction.md",
+  ]) {
+    const chapters = await readLocalizedContent(relativePath);
+    const structures = chapters.map(({ locale, source }) =>
+      sectionStructure(
+        assertMidRunCompactionLifecycle(
+          source,
+          locale,
+          `${locale} ${relativePath}`,
+        ),
+      ),
+    );
+    assert.deepEqual(
+      structures[0],
+      structures[1],
+      `${relativePath} mid-run lifecycle structure must match across locales`,
+    );
+  }
+});
+
+test("mid-run lifecycle guard rejects reordered phases and an inverted terminating-batch rule", () => {
+  const valid = `### Mid-run compaction checkpoints
+
+1. Tool results are appended to the session first.
+2. Pi then performs the threshold check.
+3. If the threshold is crossed, optional compaction completes.
+4. Only then does Pi request the next assistant response.
+
+A terminating Tool batch with no steering or follow-up message skips mid-run compaction because there is no next assistant response.
+
+The three guards are the mid-run check, the check before submitting a new prompt, and the check after the low-level Agent run finishes.`;
+  assert.doesNotThrow(() =>
+    assertMidRunCompactionLifecycle(valid, "en", "synthetic lifecycle"),
+  );
+
+  const reordered = valid
+    .replace("1. Tool results are appended to the session first.\n", "")
+    .replace(
+      "3. If the threshold is crossed, optional compaction completes.\n",
+      "3. If the threshold is crossed, optional compaction completes.\n4. Tool results are appended to the session first.\n",
+    );
+  const invertedSkip = valid.replace(
+    "skips mid-run compaction",
+    "always runs mid-run compaction",
+  );
+  assert.throws(
+    () =>
+      assertMidRunCompactionLifecycle(reordered, "en", "reordered lifecycle"),
+    /must order append, threshold check, optional compaction/,
+  );
+  assert.throws(
+    () =>
+      assertMidRunCompactionLifecycle(
+        invertedSkip,
+        "en",
+        "inverted terminating lifecycle",
+      ),
+    /terminating-batch skip/,
+  );
+});
+
+test("Chapters 8 and 9 document released incomplete-summary rejection", async () => {
+  for (const relativePath of [
+    "ch08-context-engineering.md",
+    "ch09-compaction.md",
+  ]) {
+    const chapters = await readLocalizedContent(relativePath);
+    const structures = chapters.map(({ locale, source }) =>
+      sectionStructure(
+        assertReleasedSummarizationFailure(
+          source,
+          locale,
+          `${locale} ${relativePath}`,
+        ),
+      ),
+    );
+    assert.deepEqual(
+      structures[0],
+      structures[1],
+      `${relativePath} incomplete-summary structure must match across locales`,
+    );
+  }
+});
+
+test("both replaceable session runtime guides name the public 0.85.0 contracts", async () => {
   const guides = await readLocalizedContent("how-to/host-session-runtime.md");
 
   for (const { locale, source } of guides) {
@@ -2543,12 +2965,18 @@ test("Pi 0.85 terminal override contracts preserve exact values and precedence",
     "`PI_TRUE_COLOR`: `1` force-enables truecolor, `0` force-disables it, and `auto` falls back to automatic detection. The explicit `terminal.trueColor` setting overrides `PI_TRUE_COLOR` and detection.",
   ].join("\n\n");
   assert.doesNotThrow(() =>
-    assertTerminalCapabilitySemantics(terminalFixture, "synthetic terminal fixture"),
+    assertTerminalCapabilitySemantics(
+      terminalFixture,
+      "synthetic terminal fixture",
+    ),
   );
   assert.throws(
     () =>
       assertTerminalCapabilitySemantics(
-        terminalFixture.replace("`1` force-enables hyperlinks", "`1` force-disables hyperlinks"),
+        terminalFixture.replace(
+          "`1` force-enables hyperlinks",
+          "`1` force-disables hyperlinks",
+        ),
         "mutated terminal enable semantics",
       ),
     /PI_HYPERLINKS\/terminal\.hyperlinks/,
@@ -2603,12 +3031,18 @@ test("Pi 0.85 fullscreen controls are documented in both configuration locales",
   const fullscreenFixture =
     "`fullscreenCopyOnSelect` defaults to `true`. When disabled, `Ctrl+X` attempts to copy the eligible active selection and returns whether that copy succeeds or fails; it falls back to the last assistant message only when no eligible active selection exists.\n\nThe `Jump to latest message` label appears only while the transcript is scrolled above the latest message.";
   assert.doesNotThrow(() =>
-    assertFullscreenControlSemantics(fullscreenFixture, "synthetic fullscreen fixture"),
+    assertFullscreenControlSemantics(
+      fullscreenFixture,
+      "synthetic fullscreen fixture",
+    ),
   );
   assert.throws(
     () =>
       assertFullscreenControlSemantics(
-        fullscreenFixture.replace("only when no eligible active selection exists", "when selection copying fails"),
+        fullscreenFixture.replace(
+          "only when no eligible active selection exists",
+          "when selection copying fails",
+        ),
         "mutated fullscreen fallback",
       ),
     /selection-copy precedence/,
@@ -2676,7 +3110,8 @@ test("Pi 0.85 API locales expose file-based supported image MIME detection", asy
     ],
   ]) {
     assert.throws(
-      () => assertImageMimeDetectionSemantics(mutation, `mutated MIME ${label}`),
+      () =>
+        assertImageMimeDetectionSemantics(mutation, `mutated MIME ${label}`),
       /file MIME detector behavior|published supported MIME set|must use null/,
     );
   }
@@ -2723,7 +3158,10 @@ test("Pi 0.85 custom Tool guidance preserves live cwd and authorization boundari
   const customToolFixture =
     "At each live invocation, `bash`, `edit`, `find`, `grep`, `ls`, `read`, and `write` use `ctx.cwd`; the factory cwd is a fallback, so they are not permanently load-time bound. A custom Tool still owns authorization, and `ctx.cwd` does not make arbitrary paths safe.";
   assert.doesNotThrow(() =>
-    assertCustomToolLiveCwdGuidance(customToolFixture, "synthetic custom Tool fixture"),
+    assertCustomToolLiveCwdGuidance(
+      customToolFixture,
+      "synthetic custom Tool fixture",
+    ),
   );
   assert.throws(
     () =>
@@ -3458,27 +3896,33 @@ test("both model guides bind Pi 0.85 compatibility flags to their exact interfac
       persists: /persists?[^.]*native[^.]*effort/i,
       reconstructs: /reconstructs?[^.]*effort-only system messages/i,
       midConvoDefault: /supportsMidConvoEffort[^.]*defaults? to `false`/i,
-      exactTransport: /exact supported[^.]*model[^.]*faithful Anthropic Messages transport/i,
+      exactTransport:
+        /exact supported[^.]*model[^.]*faithful Anthropic Messages transport/i,
       notCompatible: /not[^.]*all Anthropic-compatible|not[^.]*merely imitate/i,
       lowerEarlier: /lower[^.]*handled earlier/i,
       serverDefault: /server default[^.]*`?0`?/i,
       offByDefault: /off by default/i,
-      generatedCatalog: /not (?:set|generated)[^.]*generated (?:model )?catalog/i,
+      generatedCatalog:
+        /not (?:set|generated)[^.]*generated (?:model )?catalog/i,
       maxOutputDefault: /supportsMaxOutputTokens[^.]*defaults? to `true`/i,
-      disableMaxOutput: /set it to `false`[^.]*rejects?[^.]*`max_output_tokens`[^.]*omit/i,
+      disableMaxOutput:
+        /set it to `false`[^.]*rejects?[^.]*`max_output_tokens`[^.]*omit/i,
     },
     vi: {
       persists: /lưu[^.]*effort native|duy trì[^.]*effort native/i,
       reconstructs: /khôi phục|dựng lại|tái tạo/i,
       midConvoDefault: /supportsMidConvoEffort[^.]*mặc định(?: là)? `false`/i,
-      exactTransport: /chính xác[^.]*model[^.]*transport Anthropic Messages trung thực|đúng[^.]*model[^.]*transport Anthropic Messages trung thực/i,
-      notCompatible: /không[^.]*mọi provider tương thích Anthropic|không[^.]*chỉ bắt chước/i,
+      exactTransport:
+        /chính xác[^.]*model[^.]*transport Anthropic Messages trung thực|đúng[^.]*model[^.]*transport Anthropic Messages trung thực/i,
+      notCompatible:
+        /không[^.]*mọi provider tương thích Anthropic|không[^.]*chỉ bắt chước/i,
       lowerEarlier: /giá trị thấp hơn[^.]*xử lý sớm hơn/i,
       serverDefault: /mặc định[^.]*server[^.]*`?0`?/i,
       offByDefault: /tắt theo mặc định/i,
       generatedCatalog: /không[^.]*generated (?:model )?catalog/i,
       maxOutputDefault: /supportsMaxOutputTokens[^.]*mặc định(?: là)? `true`/i,
-      disableMaxOutput: /đặt thành `false`[^.]*từ chối[^.]*`max_output_tokens`[^.]*Pi[^.]*bỏ/i,
+      disableMaxOutput:
+        /đặt thành `false`[^.]*từ chối[^.]*`max_output_tokens`[^.]*Pi[^.]*bỏ/i,
     },
   };
 
@@ -3589,7 +4033,8 @@ test("both API locales distinguish published compatibility declarations from the
       recovery: /showCacheMissNotices[^.]*dropped Anthropic thinking blocks/i,
       maxOutputDefault: /supportsMaxOutputTokens[^.]*defaults? to `true`/i,
       midConvoDefault: /supportsMidConvoEffort[^.]*defaults? to `false`/i,
-      internalSettings: /`Settings`[^.]*source-level[^.]*settings\.json[^.]*not (?:exported|importable)[^.]*`SettingsManager`[^.]*public/i,
+      internalSettings:
+        /`Settings`[^.]*source-level[^.]*settings\.json[^.]*not (?:exported|importable)[^.]*`SettingsManager`[^.]*public/i,
     },
     vi: {
       keyed: /khóa `provider\/modelId`|key `provider\/modelId`/i,
@@ -3598,7 +4043,8 @@ test("both API locales distinguish published compatibility declarations from the
       recovery: /showCacheMissNotices[^.]*thinking block Anthropic bị loại/i,
       maxOutputDefault: /supportsMaxOutputTokens[^.]*mặc định(?: là)? `true`/i,
       midConvoDefault: /supportsMidConvoEffort[^.]*mặc định(?: là)? `false`/i,
-      internalSettings: /`Settings`[^.]*source-level[^.]*settings\.json[^.]*không (?:được export|thể import)[^.]*`SettingsManager`[^.]*public/i,
+      internalSettings:
+        /`Settings`[^.]*source-level[^.]*settings\.json[^.]*không (?:được export|thể import)[^.]*`SettingsManager`[^.]*public/i,
     },
   };
   const structures = [];
@@ -3609,7 +4055,8 @@ test("both API locales distinguish published compatibility declarations from the
       declarations,
       `${locale} API compatibility declarations`,
       {
-        heading: locale === "en" ? "### Model metadata" : "### Metadata của model",
+        heading:
+          locale === "en" ? "### Model metadata" : "### Metadata của model",
       },
     );
     assertParagraphContainsAll(
@@ -3694,13 +4141,15 @@ test("both settings references distinguish global and per-model thinking default
       keyed: /keyed by `provider\/modelId`/i,
       saved: /`defaultThinkingLevel`[^.]*saved[^.]*Ctrl\+S[^.]*`\/thinking`/i,
       distinct: /distinct from[^.]*provider request fields/i,
-      recovery: /provider recovery diagnostics[^.]*dropped Anthropic thinking blocks/i,
+      recovery:
+        /provider recovery diagnostics[^.]*dropped Anthropic thinking blocks/i,
     },
     vi: {
       keyed: /khóa `provider\/modelId`|key `provider\/modelId`/i,
       saved: /`defaultThinkingLevel`[^.]*lưu[^.]*Ctrl\+S[^.]*`\/thinking`/i,
       distinct: /tách biệt với[^.]*request field của provider/i,
-      recovery: /chẩn đoán phục hồi provider[^.]*thinking block Anthropic bị loại/i,
+      recovery:
+        /chẩn đoán phục hồi provider[^.]*thinking block Anthropic bị loại/i,
     },
   };
   const structures = [];
@@ -3720,7 +4169,8 @@ test("both settings references distinguish global and per-model thinking default
       ],
       `${locale} configuration thinking persistence`,
       {
-        heading: locale === "en" ? "### Model and thinking" : "### Model và thinking",
+        heading:
+          locale === "en" ? "### Model and thinking" : "### Model và thinking",
       },
     );
     assertParagraphContainsAll(
@@ -3743,7 +4193,7 @@ test("active docs do not present the renamed GoogleThinkingLevel identifier as c
 });
 
 test("known truncated-summary signatures use a focused positive and negative matrix", () => {
-  const guardedClaims = [
+  const releasedClaims = [
     "Pi does not persist a length-limited summary.",
     "Pi rejects a length-limited branch summary.",
     "Pi rejects a truncated compaction summary instead of persisting it.",
@@ -3755,20 +4205,14 @@ test("known truncated-summary signatures use a focused positive and negative mat
     "Pi không lưu bản tóm tắt compaction khi đầu ra vượt quá giới hạn tối đa.",
     "Pi không lưu bản tóm tắt compaction khi đầu ra quá lớn.",
   ];
-  const allowedClaims = [
+  const unrelatedClaims = [
     "Compaction summaries use `getSummarizationFailure` for a length-stopped generation.",
-    'For a compaction summary, `stopReason: "length"` marks the post-tag behavior.',
+    'For a compaction summary, `stopReason: "length"` is documented without a persistence claim.',
     "Compaction summary generation hit the token cap and the summary is incomplete.",
-    "At 0.84.3, a compaction summary does not use getSummarizationFailure.",
-    "Ở 0.84.3, bản tóm tắt compaction không sử dụng getSummarizationFailure.",
     "getSummarizationFailure applies elsewhere; this compaction summary is unaffected.",
     "getSummarizationFailure áp dụng ở nơi khác; bản tóm tắt compaction này không bị ảnh hưởng.",
-    "A historical note quotes “compaction summary generation hit the token cap and the summary is incomplete,” but explicitly says 0.84.3 does not have it.",
-    "Ghi chú lịch sử trích dẫn “compaction summary generation hit the token cap and the summary is incomplete,” nhưng nói rõ 0.84.3 không có hành vi này.",
     "Compaction does not truncate a single oversized Tool result at execution time.",
     "A truncated assistant response triggers compaction and one retry; it is not a compaction summary.",
-    "At 0.84.3, a compaction summary can fail when the provider returns an incomplete response.",
-    "Ở 0.84.3, bản tóm tắt compaction có thể thất bại khi nhà cung cấp trả về phản hồi không hoàn chỉnh.",
     "Compaction summary generation throws an error that reports response size.",
     "A branch summary fails because the response size is unknown.",
     "Pi does not persist a compaction summary because the provider only reports the response size.",
@@ -3786,134 +4230,31 @@ test("known truncated-summary signatures use a focused positive and negative mat
     "Pi does not persist diagnostics for a compaction summary when provider output is too large.",
     "The compaction summary is invalid when JSON parsing fails. Its output size is logged for diagnostics.",
   ];
-  const guardedSourceFences = [
+  const releasedSourceFences = [
     "```ts\n// compaction summary\nconst failure = getSummarizationFailure(response);\n```",
     '```typescript\n// branch summary\nif (response.stopReason === "length") return failure;\n```',
   ];
   const allowedNonSourceFence =
     "```text\ncompaction summary: getSummarizationFailure(response)\n```";
 
-  for (const claim of guardedClaims) {
+  for (const claim of releasedClaims) {
     const [segment] = markdownSemanticSegments(claim);
-    assert.equal(
-      hasKnownUnreleasedTruncatedSummarySignature(segment),
-      true,
-      claim,
-    );
+    assert.equal(hasReleasedTruncatedSummarySignature(segment), true, claim);
   }
-  for (const claim of allowedClaims) {
+  for (const claim of unrelatedClaims) {
     const [segment] = markdownSemanticSegments(claim);
-    assert.equal(
-      hasKnownUnreleasedTruncatedSummarySignature(segment),
-      false,
-      claim,
-    );
+    assert.equal(hasReleasedTruncatedSummarySignature(segment), false, claim);
   }
-  for (const source of guardedSourceFences) {
+  for (const source of releasedSourceFences) {
     const [segment] = markdownSemanticSegments(source);
-    assert.equal(
-      hasKnownUnreleasedTruncatedSummarySignature(segment),
-      true,
-      source,
-    );
+    assert.equal(hasReleasedTruncatedSummarySignature(segment), true, source);
   }
   const [nonSourceSegment] = markdownSemanticSegments(allowedNonSourceFence);
   assert.equal(
-    hasKnownUnreleasedTruncatedSummarySignature(nonSourceSegment),
+    hasReleasedTruncatedSummarySignature(nonSourceSegment),
     false,
     allowedNonSourceFence,
   );
-});
-
-test("truncated-summary rejection claims require visual localized unreleased warnings", () => {
-  const englishClaim =
-    "Pi rejects a truncated compaction summary instead of persisting it.";
-  const vietnameseClaim =
-    "Pi từ chối bản tóm tắt compaction bị cắt cụt và không lưu nó.";
-  const sourceClaim =
-    "```ts\n// compaction summary\nconst failure = getSummarizationFailure(response);\n```";
-
-  assert.throws(
-    () =>
-      assertTruncatedSummaryClaimsAreUnreleased(
-        englishClaim,
-        "en",
-        "synthetic English claim",
-      ),
-    /must put truncated-summary rejection in a warning callout/,
-  );
-  assert.throws(
-    () =>
-      assertTruncatedSummaryClaimsAreUnreleased(
-        sourceClaim,
-        "en",
-        "synthetic audited source claim",
-      ),
-    /must put truncated-summary rejection in a warning callout/,
-  );
-  assert.throws(
-    () =>
-      assertTruncatedSummaryClaimsAreUnreleased(
-        `{% hint style="warning" %}\n${englishClaim}\n{% endhint %}`,
-        "en",
-        "synthetic English unlabeled callout",
-      ),
-    /must visibly label truncated-summary rejection as unreleased/,
-  );
-  assert.throws(
-    () =>
-      assertTruncatedSummaryClaimsAreUnreleased(
-        `**Unreleased:** ${englishClaim}`,
-        "en",
-        "synthetic English non-visual warning",
-      ),
-    /must put truncated-summary rejection in a warning callout/,
-  );
-  assert.throws(
-    () =>
-      assertTruncatedSummaryClaimsAreUnreleased(
-        `{% hint style="warning" %}\n${vietnameseClaim}\n{% endhint %}`,
-        "vi",
-        "synthetic Vietnamese unlabeled callout",
-      ),
-    /must visibly label truncated-summary rejection as unreleased/,
-  );
-
-  assert.doesNotThrow(() =>
-    assertTruncatedSummaryClaimsAreUnreleased(
-      `{% hint style="warning" %}\n**Unreleased:** ${englishClaim}\n{% endhint %}`,
-      "en",
-      "synthetic English warning",
-    ),
-  );
-  assert.doesNotThrow(() =>
-    assertTruncatedSummaryClaimsAreUnreleased(
-      `{% hint style="warning" %}\n**Unreleased:** post-tag source only\n\n${sourceClaim}\n{% endhint %}`,
-      "en",
-      "synthetic audited source warning",
-    ),
-  );
-  assert.doesNotThrow(() =>
-    assertTruncatedSummaryClaimsAreUnreleased(
-      `{% hint style="warning" %}\n**Chưa phát hành:** ${vietnameseClaim}\n{% endhint %}`,
-      "vi",
-      "synthetic Vietnamese warning",
-    ),
-  );
-  assert.throws(
-    () =>
-      assertActiveTruncatedSummaryClaimsAreUnreleased([
-        {
-          filename: "content/en/ch07-event-driven.md",
-          source: englishClaim,
-        },
-      ]),
-    /must put truncated-summary rejection in a warning callout/,
-  );
-});
-
-test("active docs do not claim post-tag truncated-summary rejection as released", async () => {
-  assertActiveTruncatedSummaryClaimsAreUnreleased(await readActiveSources());
 });
 
 test("both environment locales preserve Bash guidance and add concrete PowerShell customization", async () => {

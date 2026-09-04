@@ -6,14 +6,14 @@ language: vi
 chapter: 9
 source_url: 'https://www.dgzhuya.com/modules/ch09-compaction'
 official_refs:
-  - 'https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/docs/compaction.md'
+  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/docs/compaction.md'
 terms_used:
   - Context Compaction
   - CompactionEntry
   - BranchSummaryEntry
   - Session
 status: reviewed
-last_updated: '2026-08-25'
+last_updated: '2026-09-04'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -45,15 +45,19 @@ Kích thước bản tóm tắt thay đổi theo cuộc hội thoại, mô hình
 
 ### Ranh giới lượt chạy: kiểm tra tự động và ngắt thủ công
 
-Bản cũ mô tả thời điểm này là “giữa hai lượt”. Pi hiện tại có hai điểm kiểm tra cụ thể. Sau khi `agent.prompt()` kết thúc và `agent_end` được phát, `_handlePostAgentRun()` kiểm tra thông điệp cuối của trợ lý. Pi cũng kiểm tra thông điệp đó trước khi nhận lời nhắc tiếp theo, nhờ vậy phát hiện được phản hồi đã bị hủy mà bước kiểm tra sau lượt chạy thông thường bỏ qua.
+Bản cũ mô tả thời điểm này là “giữa hai lượt”. Pi hiện tại cụ thể hơn. Khi low-level Agent run còn tiếp tục, Coding Agent có thể kiểm tra ngay trước phản hồi assistant kế tiếp. Sau khi `agent.prompt()` kết thúc và `agent_end` được phát, `_handlePostAgentRun()` kiểm tra thông điệp cuối của assistant lần nữa. Pi cũng kiểm tra thông điệp đó trước khi nhận prompt tiếp theo, nhờ vậy phát hiện response đã abort mà bước kiểm tra sau run thông thường bỏ qua.
 
 Nén thủ công đi theo đường riêng. `AgentSession.compact(customInstructions?)` gọi `abort()` cho thao tác hiện tại của Agent trước, rồi mới bắt đầu nén. Phương thức này không tự động tiếp tục lượt vừa bị ngắt.
 
 ```text
 đường tự động
-lượt chạy Agent → message_end lưu thông điệp → agent_end → _checkCompaction()
-                                                      ├─ không làm gì → kết thúc
-                                                      └─ nén → dựng lại thông điệp Agent
+assistant gọi Tool → append Tool result → chuẩn bị turn kế tiếp
+  → kiểm tra ngưỡng → compaction tùy chọn → phản hồi assistant kế tiếp
+
+đường sau run
+Agent run → agent_end → _handlePostAgentRun() → _checkCompaction()
+                                                ├─ không làm gì → kết thúc
+                                                └─ compact → dựng lại message Agent
 
 đường trước lời nhắc
 lời nhắc tiếp theo → xét trợ lý cuối, kể cả khi đã hủy → có thể nén → gửi thông điệp người dùng
@@ -102,7 +106,7 @@ Coding Agent đọc thiết lập toàn cục từ `~/.pi/agent/settings.json`. 
 
 ### Mức sử dụng hiện tại ưu tiên dữ liệu từ nhà cung cấp
 
-Mô tả cũ dùng `chars / 4` làm kích thước ngữ cảnh hiện tại. Pi `0.84.3` ưu tiên `usage` hợp lệ gần nhất của trợ lý. `calculateContextTokens()` lấy `usage.totalTokens` khi giá trị này khác 0; nếu không, hàm cộng `input + output + cacheRead + cacheWrite`.
+Mô tả cũ dùng `chars / 4` làm kích thước ngữ cảnh hiện tại. Pi `0.85.0` ưu tiên `usage` hợp lệ gần nhất của assistant. `calculateContextTokens()` lấy `usage.totalTokens` khi giá trị này khác 0; nếu không, hàm cộng `input + output + cacheRead + cacheWrite`.
 
 Với phản hồi bình thường của trợ lý có mức sử dụng khác 0, `_checkCompaction()` kiểm tra trực tiếp giá trị đó. Với phản hồi lỗi hoặc mức sử dụng toàn 0, `estimateContextTokens()` tìm mức sử dụng gần nhất của trợ lý không thuộc phản hồi lỗi hay bị hủy trong danh sách thông điệp đang hoạt động, rồi cộng ước lượng của các thông điệp theo sau. Nếu không có mức sử dụng hợp lệ, hàm ước lượng toàn bộ danh sách.
 
@@ -136,6 +140,19 @@ Pi có ba trường hợp tự động và một đường thủ công:
 Pi chỉ nén rồi thử lại một lần để phục hồi khi tràn ngữ cảnh. Thông điệp trợ lý bị lỗi hoặc bị cắt đã được lưu qua `message_end`; Pi bỏ nó khỏi ngữ cảnh thử lại trong bộ nhớ, nhưng không xóa khỏi cây phiên. Sau khi dựng lại, Pi tiếp tục bỏ thông điệp trợ lý ở cuối nếu phép chiếu đưa nó trở lại vị trí đó, vì `agent.continue()` cần một trạng thái có thể tiếp tục.
 
 Điều kiện cùng mô hình áp dụng khi phát hiện tràn ngữ cảnh và độ dài có thể phục hồi. Việc tính ngưỡng vẫn dùng mức sử dụng do nhà cung cấp trả về hoặc phép ước lượng riêng đã mô tả ở trên. Điều kiện này ngăn lỗi tràn cũ từ một mô hình có cửa sổ nhỏ hơn kích hoạt phục hồi sau khi người dùng đổi mô hình.
+
+### Các điểm kiểm tra compaction giữa lượt chạy
+
+Khi low-level loop còn một provider turn phải chạy, thứ tự được xác định rõ:
+
+1. Mọi Tool result trong batch đã hoàn tất được append vào lịch sử Agent và session.
+2. Sau đó Pi kiểm tra ngưỡng trên context đã cập nhật.
+3. Nếu vượt ngưỡng, compaction tùy chọn hoàn tất và thay active projection của Agent.
+4. Chỉ sau đó Pi mới yêu cầu phản hồi assistant kế tiếp.
+
+Một Tool batch kết thúc mà không có message steering hoặc follow-up trong queue sẽ bỏ qua compaction giữa lượt chạy vì không có phản hồi assistant kế tiếp. Message trong queue giữ loop tiếp tục, nên cùng preparation point có thể compact trước khi delivery.
+
+Vì vậy Pi giữ ba điểm kiểm tra: kiểm tra giữa lượt chạy ở trên, kiểm tra sau khi low-level Agent run kết thúc tại `agent_end`, và kiểm tra trước khi gửi prompt mới. Đường cuối cố ý bao gồm assistant message đã abort; đường sau run thông thường bỏ qua chúng.
 
 ## 3. Pi cắt nhánh đang hoạt động ở đâu
 
@@ -262,7 +279,13 @@ Lời nhắc yêu cầu giữ nguyên đường dẫn tệp, tên hàm và thôn
 
 Mỗi kết quả Tool sau khi tuần tự hóa giữ tối đa 2.000 ký tự, rồi thêm một dấu đánh dấu số ký tự đã lược bỏ. Giới hạn này chỉ áp dụng cho yêu cầu tóm tắt; nó không viết lại mục kết quả Tool đã lưu.
 
-Yêu cầu dùng `SUMMARIZATION_SYSTEM_PROMPT`, tắt lời gọi Tool bằng `toolChoice: "none"`, tắt ghi bộ nhớ đệm lời nhắc bằng `cacheRetention: "none"`, và tạo mã phiên định tuyến mới nếu bên gọi không cấp mã. Lỗi tạm thời trong luồng tóm tắt tuân theo chính sách thử lại đã cấu hình; lỗi tất định và thao tác hủy trả về ngay. Bản tóm tắt chính dùng một lần gọi mô hình. Lượt bị tách có thể cần một yêu cầu cho lịch sử chính, sau đó là một yêu cầu cho phần đầu lượt; Pi hiện chạy hai yêu cầu này tuần tự.
+Request dùng `SUMMARIZATION_SYSTEM_PROMPT`, không cung cấp định nghĩa Tool, không ép `toolChoice: "none"`, tắt ghi prompt cache bằng `cacheRetention: "none"`, và tạo routing session id mới nếu caller không cấp. Lỗi tạm thời trong summary stream tuân theo retry policy đã cấu hình; lỗi tất định và abort trả về ngay. History summary chính dùng một lần gọi model. Turn bị tách có thể cần request cho history chính, sau đó là request cho turn prefix; Pi hiện chạy hai request này tuần tự.
+
+### Từ chối summary chưa hoàn chỉnh
+
+Pi 0.85.0 chạy `getSummarizationFailure` sau từng request history summary tích hợp sẵn và turn-prefix summary; branch summarization dùng cùng phép kiểm tra. Response có `stopReason: "length"` là chưa hoàn chỉnh, nên Pi báo failure và không append hay lưu partial text thành `CompactionEntry` hoặc `BranchSummaryEntry`. Đường main và prefix throw vào lifecycle compaction failure đã mô tả; đường branch trả error result. `getSummarizationFailure` không được export từ package root.
+
+Branch summarization hiện cho phép output cap 4.096 token, bị chặn bởi `model.maxTokens` dương nhỏ hơn, thay vì cap 2.048 token cũ. Thay đổi này sửa failure khi reasoning dùng allowance trước đó trước khi đủ final summary text được emit. Cap lớn hơn không làm yếu validation: history summary, turn-prefix summary và branch summary vẫn từ chối `stopReason: "length"`.
 
 ### Bản tóm tắt tăng dần có quy tắc đầu vào chính xác
 
@@ -534,13 +557,21 @@ Pi không phát `compaction_start` công khai khi bước chuẩn bị tự đ�
 Đường tự động hoàn chỉnh đi qua năm dạng biểu diễn: mức sử dụng từ nhà cung cấp, mục phiên, thông điệp của yêu cầu tóm tắt, điểm kiểm tra đã lưu và yêu cầu tiếp theo gửi tới nhà cung cấp.
 
 ```text
-1. Phản hồi Agent kết thúc
-   message_end lưu trợ lý → agent_end → _handlePostAgentRun()
+1. Phase assistant và Tool kết thúc
+   message_end lưu assistant cùng mọi Tool result trong batch đã hoàn tất
 
-2. Phân loại
+2. Gate giữa run, chỉ khi low-level loop sẽ tiếp tục
+   prepareNextTurnWithContext → kiểm tra ngưỡng
+   → compaction tùy chọn và dựng lại projection → phản hồi assistant kế tiếp
+   (Tool batch kết thúc không có queued message sẽ bỏ qua gate này)
+
+3. Gate sau run
+   agent_end → _handlePostAgentRun() → _checkCompaction()
+
+4. Phân loại
    tràn/độ dài có thể phục hồi từ cùng mô hình HOẶC ngưỡng từ mức sử dụng hiện tại
 
-3. Chuẩn bị
+5. Chuẩn bị
    dựng đường dẫn của nhánh đang hoạt động
    → tính lại tokensBefore từ buildSessionContext(path).messages
    → tìm ranh giới của bản tóm tắt trước
@@ -548,35 +579,35 @@ Pi không phát `compaction_start` công khai khi bước chuẩn bị tự đ�
    → chia messagesToSummarize / turnPrefixMessages / vùng giữ lại
    → thu thập thao tác tệp tích hợp sẵn
 
-4. Can thiệp
+6. Can thiệp
    compaction_start → chờ session_before_compact
    → hủy, dùng kết quả tùy chỉnh hoặc tạo kết quả tích hợp sẵn
 
-5. Tóm tắt
+7. Tóm tắt
    convertToLlm → serializeConversation (kết quả Tool giới hạn 2.000 ký tự)
    → yêu cầu ban đầu/cập nhật theo sáu mục
    → yêu cầu phần đầu lượt theo thứ tự nếu cần
    → nối danh sách tệp đã sắp xếp và cộng mức sử dụng
 
-6. Lưu
+8. Lưu
    SessionManager.appendCompaction(...)
    → mục JSONL mới nối với mục cha; mục cũ vẫn còn
 
-7. Chiếu
+9. Chiếu
    buildSessionContext()
    → CompactionSummaryMessage + mục từ firstKeptEntryId + mục về sau
    → thay agent.state.messages
 
-8. Thông báo và tiếp tục
+10. Thông báo và tiếp tục
    session_compact → compaction_end
    → thử lại một lượt bị tràn, phát thông điệp đang chờ hoặc kết thúc
 
-9. Lần gọi mô hình tiếp theo
+11. Lần gọi mô hình tiếp theo
    transformContext → convertToLlm
    → lời nhắc hệ thống + thông điệp người dùng <summary> + thông điệp gần đây nguyên văn
 ```
 
-Nén thủ công đi vào bước 4 sau khi hủy lượt chạy Agent đang hoạt động và chuẩn bị các vùng thông điệp. Đường này không đi vào nhánh thử lại tự động ở bước 8.
+Nén thủ công đi vào bước 6 sau khi hủy lượt chạy Agent đang hoạt động và chuẩn bị các vùng thông điệp. Đường này không đi vào nhánh thử lại tự động ở bước 10.
 
 ## 8. Nguyên tắc thiết kế và kiểm tra bàn giao
 
@@ -611,15 +642,15 @@ Trước khi bàn giao một phần tích hợp nén, hãy kiểm tra các trư�
 
 [Chương 10](ch10-session.md) đi sâu vào cây JSONL liên kết qua các mục cha mà `getBranch()`, `appendCompaction()` và `buildContextEntries()` sử dụng, cùng thao tác quay lại và điều hướng nhánh. Mô hình lưu trữ đó giải thích vì sao cơ chế nén có thể bỏ các mục cũ khỏi yêu cầu mô hình tiếp theo mà không xóa chúng.
 
-Các tham chiếu triển khai của chương này được ghim tại Pi `0.84.3`, commit `4e58f324fae8ebfa98a3d45181fb248072a2afac`:
+Các tham chiếu triển khai của chương này được ghim tại Pi `0.85.0`, commit `107d79f11072bbc8a3a757ed7fd69596bee7d68c`:
 
-- [Giá trị mặc định, cách tính token, điểm cắt, mẫu, bước chuẩn bị và tạo kết quả nén](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/compaction/compaction.ts)
-- [Tuần tự hóa bản tóm tắt và theo dõi thao tác tệp](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/compaction/utils.ts)
-- [`CompactionEntry`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/session-manager.ts#L46-L80), [`appendCompaction()`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/session-manager.ts#L1096-L1119) và [`buildSessionContext()`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/session-manager.ts#L379-L469)
-- [Đường xử lý vòng đời, thử lại, hủy và thất bại trong chế độ thủ công hoặc tự động](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/agent-session.ts#L1818-L2359)
-- [Hợp đồng nén trong context của Extension](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/extensions/types.ts#L290-L302) và [các event hook](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/extensions/types.ts#L593-L630)
-- [Chuyển đổi thông điệp tóm tắt nén](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/messages.ts#L109-L120) và [thứ tự biến đổi cho từng lần gọi](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/agent-loop.ts#L277-L302)
-- [Hợp nhất thiết lập toàn cục/dự án](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/settings-manager.ts#L148-L170), [giá trị ghi đè từ SDK](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/settings-manager.ts#L546-L549) và [giá trị nén có hiệu lực](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/settings-manager.ts#L825-L852)
-- [Lược đồ `retainedTail` của Agent dùng chung](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/harness/session/types.ts#L39-L51), khác với Coding Agent `SessionManager`
+- [Giá trị mặc định, cách tính token, điểm cắt, mẫu, bước chuẩn bị và tạo kết quả nén](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/compaction/compaction.ts)
+- [Tuần tự hóa bản tóm tắt và theo dõi thao tác tệp](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/compaction/utils.ts)
+- [`CompactionEntry`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/session-manager.ts#L46-L80), [`appendCompaction()`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/session-manager.ts#L1096-L1119) và [`buildSessionContext()`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/session-manager.ts#L379-L469)
+- [Đường xử lý vòng đời, thử lại, hủy và thất bại trong chế độ thủ công hoặc tự động](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/agent-session.ts#L1818-L2359)
+- [Hợp đồng nén trong context của Extension](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/extensions/types.ts#L290-L302) và [các event hook](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/extensions/types.ts#L593-L630)
+- [Chuyển đổi thông điệp tóm tắt nén](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/messages.ts#L109-L120) và [thứ tự biến đổi cho từng lần gọi](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/agent-loop.ts#L277-L302)
+- [Hợp nhất thiết lập toàn cục/dự án](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/settings-manager.ts#L148-L170), [giá trị ghi đè từ SDK](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/settings-manager.ts#L546-L549) và [giá trị nén có hiệu lực](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/settings-manager.ts#L825-L852)
+- [Lược đồ `retainedTail` của Agent dùng chung](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/harness/session/types.ts#L39-L51), khác với Coding Agent `SessionManager`
 
 > **Tiếp theo:** [Chương 10: Quản lý phiên](ch10-session.md)
