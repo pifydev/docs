@@ -837,6 +837,11 @@ function assertImageMimeDetectionSemantics(source, context) {
     supportedImageMimeTypes,
     `${context} must name exactly the published supported MIME set`,
   );
+  assert.match(
+    paragraph,
+    /`image\/png`[^.]{0,100}(?:non-animated PNG|PNG không animation)|(?:non-animated PNG|PNG không animation)[^.]{0,100}`image\/png`/i,
+    `${context} must restrict image/png detection to non-animated PNG`,
+  );
   assert.doesNotMatch(
     paragraph,
     /returns? `undefined`|trả `undefined`/i,
@@ -2532,7 +2537,7 @@ test("Pi 0.85 API locales expose file-based supported image MIME detection", asy
   assert.deepEqual(structures[0], structures[1]);
 
   const mimeFixture =
-    "`detectSupportedImageMimeTypeFromFile()` reads at most the first 4,100 bytes and detects exactly `image/jpeg`, `image/png`, `image/gif`, `image/webp`, and `image/bmp`. It returns `null` for unsupported or undetectable content. This detection does not decode the image and does not fully validate it.";
+    "`detectSupportedImageMimeTypeFromFile()` reads at most the first 4,100 bytes and detects exactly `image/jpeg`, `image/png` for non-animated PNG, `image/gif`, `image/webp`, and `image/bmp`. It returns `null` for unsupported or undetectable content. This detection does not decode the image and does not fully validate it.";
   assert.doesNotThrow(() =>
     assertImageMimeDetectionSemantics(mimeFixture, "synthetic MIME fixture"),
   );
@@ -2551,6 +2556,22 @@ test("Pi 0.85 API locales expose file-based supported image MIME detection", asy
     assert.throws(
       () => assertImageMimeDetectionSemantics(mutation, `mutated MIME ${label}`),
       /file MIME detector behavior|published supported MIME set|must use null/,
+    );
+  }
+  for (const [label, mutation] of [
+    [
+      "removed",
+      mimeFixture.replace("`image/png` for non-animated PNG", "`image/png`"),
+    ],
+    ["reversed", mimeFixture.replace("non-animated PNG", "animated PNG")],
+  ]) {
+    assert.throws(
+      () =>
+        assertImageMimeDetectionSemantics(
+          mutation,
+          `mutated ${label} PNG animation restriction`,
+        ),
+      /must restrict image\/png detection to non-animated PNG/,
     );
   }
 });
