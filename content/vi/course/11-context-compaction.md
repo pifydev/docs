@@ -5,11 +5,11 @@ translation_key: course-11-context-compaction
 language: vi
 checkpoint: 11
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/index.ts"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/compaction/compaction.ts"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/compaction/index.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/index.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/compaction/compaction.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/compaction/index.ts"
 status: reviewed
-last_updated: "2026-08-26"
+last_updated: '2026-09-04'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -184,9 +184,9 @@ expect(
 - Yêu cầu hủy trước, trong hoặc sau lúc chọn bản tóm tắt trả lỗi ổn định và không thêm bản ghi.
 - Mọi lỗi giữ ngữ cảnh trước đó nguyên vẹn; khi thành công, hàm chỉ thêm đúng một bản ghi đã đóng băng sau khi kiểm tra toàn bộ trạng thái dự kiến.
 
-## So sánh với Pi SDK 0.84.3
+## So sánh với Pi SDK 0.85.0
 
-:::info[Pi SDK 0.84.3]
+:::info[Pi SDK 0.85.0]
 
 `@earendil-works/pi-coding-agent` xuất công khai `compact()`, `shouldCompact()`, `findCutPoint()`, `findTurnStartIndex()`, `estimateTokens()`, `calculateContextTokens()`, `DEFAULT_COMPACTION_SETTINGS` cùng các kiểu kết quả/cấu hình liên quan.
 

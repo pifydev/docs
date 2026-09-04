@@ -5,10 +5,10 @@ translation_key: course-04-deterministic-model
 language: en
 checkpoint: 4
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/ai/src/providers/faux.ts"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/ai/src/utils/event-stream.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/src/providers/faux.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/src/utils/event-stream.ts"
 status: reviewed
-last_updated: "2026-08-26"
+last_updated: '2026-09-04'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -163,9 +163,9 @@ Run the focused command. Both consumption paths reject with the same typed code,
 - One response iterator cannot be shared across calls or model instances.
 - Queue exhaustion rejects event iteration and `stream.result` with `SCRIPT_EXHAUSTED` while retaining call evidence.
 
-## Compare with Pi SDK 0.84.3
+## Compare with Pi SDK 0.85.0
 
-:::info[Pi SDK 0.84.3]
+:::info[Pi SDK 0.85.0]
 
 `@earendil-works/pi-ai` exports the testing helpers `fauxProvider()`, `fauxAssistantMessage()`, `fauxToolCall()`, `FauxResponseFactory`, and `FauxProviderHandle`. The same package exports `EventStream` and `AssistantMessageEventStream` for its richer streaming protocol.
 

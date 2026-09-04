@@ -5,12 +5,12 @@ translation_key: course-12-resources-extensions
 language: vi
 checkpoint: 12
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/index.ts"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/resource-loader.ts"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/extensions/index.ts"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/extensions/loader.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/index.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/resource-loader.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/extensions/index.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/extensions/loader.ts"
 status: reviewed
-last_updated: "2026-08-26"
+last_updated: '2026-09-04'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -190,9 +190,9 @@ Chạy lại focused command. Thử nghiệm chỉ pass khi disposer chạy đú
 - Activation thất bại thử mọi disposer đã lấy theo thứ tự ngược, aggregate lỗi rollback và không công bố contribution một phần.
 - Host disposal đảo ngược activation của Extension và thứ tự đăng ký Resource trong từng Extension, thử mọi cleanup rồi aggregate lỗi.
 
-## So sánh với Pi SDK 0.84.3
+## So sánh với Pi SDK 0.85.0
 
-:::info[Pi SDK 0.84.3]
+:::info[Pi SDK 0.85.0]
 
 `@earendil-works/pi-coding-agent` công khai `DefaultResourceLoader`, type `ResourceLoader`, `loadProjectContextFiles()`, `discoverAndLoadExtensions()`, `createExtensionRuntime()`, `ExtensionRunner`, `defineTool()` và các type Extension được ghi trong package entry point.
 

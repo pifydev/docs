@@ -5,11 +5,11 @@ translation_key: course-08-coding-tools
 language: en
 checkpoint: 8
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/index.ts"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/sdk.ts"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/tools/index.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/index.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/sdk.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/tools/index.ts"
 status: reviewed
-last_updated: "2026-08-26"
+last_updated: '2026-09-04'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -210,9 +210,9 @@ Save this runnable Vitest file beside `course/test/08-coding-tools.test.ts`, so 
 - Cancellation and timeout terminate active process work and settle without leaving `.pify-node-*` or `.pify-tmp-*` artifacts.
 - The traversal failure experiment leaves no `outside.txt` beyond the temporary root.
 
-## Compare with Pi SDK 0.84.3
+## Compare with Pi SDK 0.85.0
 
-:::info[Pi SDK 0.84.3]
+:::info[Pi SDK 0.85.0]
 
 `@earendil-works/pi-coding-agent` publicly exports `createCodingTools()`, `createReadOnlyTools()`, `createReadTool()`, `createWriteTool()`, `createBashTool()`, `createPowerShellTool()`, `createEditTool()`, `createGrepTool()`, `createFindTool()`, and `createLsTool()` for a caller-supplied `cwd`.
 

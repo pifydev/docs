@@ -3551,7 +3551,7 @@ test("Pi 0.85 Tool and terminal pages use the current baseline metadata", async 
       assertNoMisleadingWriteByteCount(source, `${locale} ${relativePath}`);
       assert.doesNotMatch(
         source,
-        /0\.84\.3|4e58f324fae8ebfa98a3d45181fb248072a2afac/,
+        /0\.84\.3|4e58f324fae8ebfa98a3d45181fb248072a2afac/, // stale-baseline-allow: rejected pattern
         `${locale} ${relativePath} must not retain the previous baseline`,
       );
       assert.match(
@@ -3986,7 +3986,7 @@ test("Pi 0.85 prompt and RPC pages use current source pins and review date", asy
     for (const { locale, source } of await readLocalizedContent(relativePath)) {
       assert.doesNotMatch(
         source,
-        /0\.84\.3|4e58f324fae8ebfa98a3d45181fb248072a2afac/,
+        /0\.84\.3|4e58f324fae8ebfa98a3d45181fb248072a2afac/, // stale-baseline-allow: rejected pattern
         `${locale} ${relativePath} must not retain the previous baseline`,
       );
       assert.match(
@@ -4725,6 +4725,98 @@ test("active content satisfies the published Pi migration contract", async () =>
   );
 });
 
+test("Chapter 3 preserves the Pi 0.85.0 post-turn steering order", async () => {
+  const chapters = await readLocalizedContent("ch03-agent-loop.md");
+
+  for (const { locale, source } of chapters) {
+    const stopHookIndex = source.indexOf(
+      "if (await config.shouldStopAfterTurn?.(lastCompletedTurn))",
+    );
+    const steeringAssignments = [
+      ...source.matchAll(
+        /pendingMessages = \(await config\.getSteeringMessages\?\.\(\)\) \|\| \[\];/g,
+      ),
+    ].map((match) => match.index);
+
+    assert.notEqual(stopHookIndex, -1, `${locale} Chapter 3 stop hook`);
+    assert.equal(
+      steeringAssignments.length,
+      2,
+      `${locale} Chapter 3 must show preparation-time and post-turn steering polls`,
+    );
+    assert.ok(
+      steeringAssignments[0] < stopHookIndex &&
+        stopHookIndex < steeringAssignments[1],
+      `${locale} Chapter 3 must poll steering after preparation and after the stop hook`,
+    );
+  }
+});
+
+test("active documentation and release surfaces contain no stale Pi baseline", async () => {
+  const previousVersion = ["0", "84", "3"].join(".");
+  const previousCommit = [
+    "4e58f324",
+    "fae8ebfa",
+    "98a3d451",
+    "81fb2480",
+    "72a2afac",
+  ].join("");
+  const previousReleaseFixture = ["pi-release-", "0843"].join("");
+  const previousSdkFixture = ["pi-sdk-", "0843"].join("");
+  const legacyRejectionMarker = "stale-baseline-allow: rejected";
+  const historicalChangelogHeading = "## 2026-08-26";
+  const activeSources = await readActiveSources();
+  const staleContentFiles = activeSources
+    .filter(({ filename, source }) => {
+      const activeSource = filename.endsWith("changelog.md")
+        ? source.replace(
+            new RegExp(
+              `^${historicalChangelogHeading}\\r?\\n[\\s\\S]*?(?=^## |(?![\\s\\S]))`,
+              "m",
+            ),
+            "",
+          )
+        : source;
+      return (
+        activeSource.includes(previousVersion) ||
+        source.includes(previousCommit)
+      );
+    })
+    .map(({ filename }) => filename)
+    .sort();
+
+  const releaseSurfaceURLs = [
+    new URL("package.json", repositoryRoot),
+    ...(await activeContentFiles(new URL("scripts/", repositoryRoot))),
+    ...(await activeContentFiles(new URL("tests/fixtures/", repositoryRoot))),
+  ];
+  const releaseSurfaces = await Promise.all(
+    releaseSurfaceURLs.map(async (fileURL) => ({
+      filename: path.relative(repositoryRoot.pathname, fileURL.pathname),
+      source: (await readFile(fileURL, "utf8"))
+        .split(/\r?\n/)
+        .filter((line) => !line.includes(legacyRejectionMarker))
+        .join("\n"),
+    })),
+  );
+  const staleReleaseSurfaceFiles = releaseSurfaces
+    .filter(
+      ({ filename, source }) =>
+        filename.includes(previousReleaseFixture) ||
+        filename.includes(previousSdkFixture) ||
+        source.includes(previousCommit) ||
+        source.includes(previousReleaseFixture) ||
+        source.includes(previousSdkFixture),
+    )
+    .map(({ filename }) => filename)
+    .sort();
+
+  assert.deepEqual(
+    { staleContentFiles, staleReleaseSurfaceFiles },
+    { staleContentFiles: [], staleReleaseSurfaceFiles: [] },
+  );
+});
+
 test("active content uses the maintained Pi repository authority", async () => {
   const activeSources = await readActiveSources();
   const legacyRepositoryMentions = activeSources
@@ -4736,18 +4828,20 @@ test("active content uses the maintained Pi repository authority", async () => {
 
 test("parses the exact GitHub source ref for published Pi release links", () => {
   const release = {
-    tag: "v0.84.3",
-    commit: "4e58f324fae8ebfa98a3d45181fb248072a2afac",
+    tag: "v0.85.0",
+    commit: "107d79f11072bbc8a3a757ed7fd69596bee7d68c",
     upstreamAuditCommit: "dcd461925db2edf69a43c8135db1180d418afd54",
   };
   const acceptedLinks = [
-    "https://github.com/earendil-works/pi/blob/v0.84.3/packages/ai/src/index.ts",
+    "https://github.com/earendil-works/pi/blob/v0.85.0/packages/ai/src/index.ts",
     `https://github.com/badlogic/pi-mono/tree/${release.commit}/packages/agent`,
     `https://github.com/earendil-works/pi/commit/${release.commit}`,
   ];
   const rejectedLinks = [
     "https://github.com/earendil-works/pi/blob/main/docs/v0.84.3-notes.md",
-    "https://github.com/earendil-works/pi/blob/v0.84.30/file.ts",
+    "https://github.com/earendil-works/pi/blob/v0.84.3/file.ts",
+    "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/file.ts", // stale-baseline-allow: rejected value
+    "https://github.com/earendil-works/pi/blob/v0.85.00/file.ts",
     `https://github.com/earendil-works/pi/blob/${release.upstreamAuditCommit}/file.ts`,
   ];
 
@@ -4758,7 +4852,9 @@ test("parses the exact GitHub source ref for published Pi release links", () => 
   ]);
   assert.deepEqual(rejectedLinks.map(releaseSourceRef), [
     "main",
-    "v0.84.30",
+    "v0.84.3",
+    "4e58f324fae8ebfa98a3d45181fb248072a2afac", // stale-baseline-allow: rejected value
+    "v0.85.00",
     release.upstreamAuditCommit,
   ]);
   assert.deepEqual(
@@ -4767,14 +4863,14 @@ test("parses the exact GitHub source ref for published Pi release links", () => 
   );
   assert.deepEqual(
     rejectedLinks.map((link) => isPublishedReleaseSourceLink(link, release)),
-    [false, false, false],
+    [false, false, false, false, false],
   );
 });
 
 test("detects invalid Pi source refs without a release version claim", () => {
   const release = {
-    tag: "v0.84.3",
-    commit: "4e58f324fae8ebfa98a3d45181fb248072a2afac",
+    tag: "v0.85.0",
+    commit: "107d79f11072bbc8a3a757ed7fd69596bee7d68c",
   };
   const sources = [
     {
@@ -4792,7 +4888,7 @@ test("detects invalid Pi source refs without a release version claim", () => {
   ]);
 });
 
-test("0.84.3 source links point to the published tag or release commit", async () => {
+test("0.85.0 source links point to the published tag or release commit", async () => {
   const release = await readReleaseFixture();
   const activeSources = await readActiveSources();
   const releaseClaimSources = activeSources.filter(({ source }) =>
@@ -4805,7 +4901,7 @@ test("0.84.3 source links point to the published tag or release commit", async (
   if (releaseClaimSources.length > 0) {
     assert.ok(
       publishedReleaseSourceLinks.length > 0,
-      "0.84.3 claims require at least one source link pinned to the published tag or release commit",
+      "0.85.0 claims require at least one source link pinned to the published tag or release commit",
     );
   }
 });

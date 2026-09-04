@@ -6,9 +6,9 @@ language: en
 chapter: 3
 source_url: "https://www.dgzhuya.com/modules/ch03-agent-loop"
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/agent-loop.ts"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/agent.ts"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/types.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/agent-loop.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/agent.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/types.ts"
 terms_used:
   - Agent Loop
   - Trace
@@ -18,12 +18,12 @@ terms_used:
   - Steering
   - Follow-up
 status: reviewed
-last_updated: "2026-08-25"
+last_updated: '2026-09-04'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
 
-Chapter 2 separated model transport, the Agent runtime, and the coding product. The Agent Loop is the moving part inside that architecture. This chapter starts with why a loop exists, then follows one message through Pi 0.84.3: context preparation, streaming, Tool execution, queued instructions, termination, events, and final settlement.
+Chapter 2 separated model transport, the Agent runtime, and the coding product. The Agent Loop is the moving part inside that architecture. This chapter starts with why a loop exists, then follows one message through Pi 0.85.0: context preparation, streaming, Tool execution, queued instructions, termination, events, and final settlement.
 
 ## 1. Prelude: three ways to use an LLM
 
@@ -181,9 +181,10 @@ string input
   -> Tool preflight and execution
   -> ToolResultMessage events and transcript append
   -> turn_end
-  -> prepareNextTurn
-  -> shouldStopAfterTurn
+  -> shouldStopAfterTurn(completed Turn)
   -> steering queue drain
+  -> if another inner Turn is required: prepareNextTurn
+  -> if the earlier poll was empty: steering queue refresh after preparation
   -> another Turn, follow-up outer loop, or agent_end
 ```
 
@@ -211,7 +212,7 @@ The loop also maintains `newMessages`, a run-local collector returned by the low
 
 ### What keeps the loop moving, and what ends it
 
-The historical implementation could be summarized too easily as “inspect `stopReason`.” Pi 0.84.3 uses several pieces of state:
+The historical implementation could be summarized too easily as “inspect `stopReason`.” Pi 0.85.0 uses several pieces of state:
 
 ```text
 assistant response
@@ -230,7 +231,7 @@ assistant response
 | Final reason        | What Agent Core does                                                                                                  |
 | ------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | `toolUse`           | Executes actual `ToolCall` content blocks; the label alone does not continue the loop                                 |
-| `stop`              | With no Tool calls, reaches queue checks and a possible normal exit                                                   |
+| `stop`              | With no Tool calls, reaches the stop hook and steering/follow-up queue checks                                         |
 | `length`            | Never executes Tool calls from the truncated response; emits an error result for each and lets the model reissue them |
 | `deferred`          | Takes the ordinary no-Tool post-Turn path; the loop does not poll the `DeferredHandle`                                |
 | `error` / `aborted` | Emits `turn_end` and `agent_end` immediately, skipping turn hooks and both queues                                     |
@@ -244,7 +245,7 @@ This explains why a termination report must name both the provider result and th
 The core decision is based on content and finalized Tool state, not one string:
 
 ```typescript
-// Abridged from packages/agent/src/agent-loop.ts at 4e58f324.
+// Abridged from packages/agent/src/agent-loop.ts at 107d79f1.
 const toolCalls = message.content.filter((part) => part.type === "toolCall");
 hasMoreToolCalls = false;
 
@@ -284,14 +285,14 @@ That loop is the ReAct rhythm: the model reasons into an action, the application
 
 | Exit path              | Trigger                                                   | Queue behavior                                                                                                           |
 | ---------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| Normal stable boundary | No Tool continuation and no queued message                | Emits `agent_end`                                                                                                        |
-| Batch termination hint | Every finalized Tool result has `terminate: true`         | Skips automatic Tool continuation, then still checks steering and follow-up                                              |
+| Normal stable boundary | No Tool continuation and no queued message                | Runs the stop hook, polls steering and follow-up, then emits `agent_end` if both are empty                                |
+| Batch termination hint | Every finalized Tool result has `terminate: true`         | Skips automatic Tool continuation, then still checks the stop hook, steering, and follow-up                               |
 | Graceful hook stop     | `shouldStopAfterTurn` returns `true`                      | Exits before steering and follow-up polling                                                                              |
 | Provider hard stop     | Final reason is `error` or `aborted`                      | Skips `prepareNextTurn`, stop hook, and queues                                                                           |
-| Deferred boundary      | Final reason is `deferred` and there are no Tool calls    | Runs hooks; if stop hook is falsy, polls steering, then follow-up only at a stable boundary; host handles DeferredHandle |
+| Deferred boundary      | Final reason is `deferred` and there are no Tool calls    | Runs the stop hook and steering poll, then follow-up at a stable boundary if steering is empty; host handles the handle   |
 | Callback/runtime throw | A “must not throw” transform, conversion, or hook rejects | Raw low-level normal sequence is not guaranteed; `Agent` catches run failure and emits a synthetic failure turn          |
 
-For a no-Tool `deferred` message, “does not poll” applies only to the `DeferredHandle`. The loop still emits `turn_end`, runs `prepareNextTurn`, applies its update, then runs `shouldStopAfterTurn`. If that hook is truthy, the loop emits `agent_end` and returns before polling either queue. Only a falsy result permits the steering poll; if steering does not reopen the inner loop, the loop polls follow-up at the stable boundary. The host alone fetches or cancels the deferred operation.
+For a no-Tool `deferred` message, the loop emits `turn_end` and runs `shouldStopAfterTurn` on the completed-Turn snapshot. If that hook is truthy, the loop emits `agent_end` immediately. Otherwise it polls steering. A returned steering message warrants another inner Turn, whose preparation runs before the message is injected; if steering is empty, the loop checks follow-up at the stable boundary. Neither poll fetches or cancels the `DeferredHandle`; that remains the host's responsibility.
 
 `Agent.abort()` signals the active provider request and Tool callbacks. Provider-side cancellation normally becomes an `aborted` assistant message. If the signal arrives during Tool processing, started Tools receive the signal; sequential preparation stops after the observed abort, and the next provider boundary receives the already-aborted signal. A Tool must honor its signal for cancellation to be prompt.
 
@@ -428,7 +429,30 @@ The pinned inner condition includes both automatic Tool continuation and injecte
 
 ```typescript
 // Faithfully abridged from packages/agent/src/agent-loop.ts.
+let lastCompletedTurn: PrepareNextTurnContext | undefined;
+
 while (hasMoreToolCalls || pendingMessages.length > 0) {
+  if (lastCompletedTurn) {
+    const nextTurnSnapshot = await config.prepareNextTurn?.(lastCompletedTurn);
+    if (nextTurnSnapshot) {
+      currentContext = nextTurnSnapshot.context ?? currentContext;
+      config = {
+        ...config,
+        model: nextTurnSnapshot.model ?? config.model,
+        reasoning:
+          nextTurnSnapshot.thinkingLevel === undefined
+            ? config.reasoning
+            : nextTurnSnapshot.thinkingLevel === "off"
+              ? undefined
+              : nextTurnSnapshot.thinkingLevel,
+      };
+    }
+    if (pendingMessages.length === 0) {
+      pendingMessages = (await config.getSteeringMessages?.()) || [];
+    }
+    await emit({ type: "turn_start" });
+  }
+
   if (pendingMessages.length > 0) {
     for (const pendingMessage of pendingMessages) {
       await emit({ type: "message_start", message: pendingMessage });
@@ -471,34 +495,14 @@ while (hasMoreToolCalls || pendingMessages.length > 0) {
   }
 
   await emit({ type: "turn_end", message, toolResults });
-  const nextTurnSnapshot = await config.prepareNextTurn?.({
+  lastCompletedTurn = {
     message,
     toolResults,
     context: currentContext,
     newMessages,
-  });
-  if (nextTurnSnapshot) {
-    currentContext = nextTurnSnapshot.context ?? currentContext;
-    config = {
-      ...config,
-      model: nextTurnSnapshot.model ?? config.model,
-      reasoning:
-        nextTurnSnapshot.thinkingLevel === undefined
-          ? config.reasoning
-          : nextTurnSnapshot.thinkingLevel === "off"
-            ? undefined
-            : nextTurnSnapshot.thinkingLevel,
-    };
-  }
+  };
 
-  if (
-    await config.shouldStopAfterTurn?.({
-      message,
-      toolResults,
-      context: currentContext,
-      newMessages,
-    })
-  ) {
+  if (await config.shouldStopAfterTurn?.(lastCompletedTurn)) {
     await emit({ type: "agent_end", messages: newMessages });
     return;
   }
@@ -507,7 +511,7 @@ while (hasMoreToolCalls || pendingMessages.length > 0) {
 }
 ```
 
-`hasMoreToolCalls` begins `true` so the first assistant response runs even with no pending messages. Each later iteration corresponds to a new Turn. The abridgement omits only `turn_start` bookkeeping; every called symbol shown above exists in the pinned file.
+`hasMoreToolCalls` begins `true` so the first assistant response runs even with no pending messages. Each later iteration corresponds to a new Turn. The abridgement removes detailed helper bodies but preserves the pinned control-flow order.
 
 #### Layering: the outer queue shell and stateful wrapper
 
@@ -539,7 +543,7 @@ agent.steer({
 });
 ```
 
-The queue does not interrupt the active provider stream or a running Tool. Agent Core polls steering once before the first inner-loop iteration and again after each completed Turn, after `prepareNextTurn` and `shouldStopAfterTurn`:
+The queue does not interrupt the active provider stream or a running Tool. Agent Core polls steering before the first inner-loop iteration and after every completed Turn whose stop hook is falsy. If Tool continuation or that post-Turn poll warrants another iteration, it runs `prepareNextTurn`; when the earlier poll was empty, it polls once more after preparation so steering queued during a long-running hook can join the next Turn:
 
 ```typescript
 if (pendingMessages.length > 0) {
@@ -553,7 +557,7 @@ if (pendingMessages.length > 0) {
 }
 ```
 
-`one-at-a-time` drains the oldest queued message per poll. `all` drains the whole queue. Because queue polling occurs at Turn boundaries, “steering” means next-Turn priority, not mid-Tool preemption.
+`one-at-a-time` drains the oldest queued message per poll. `all` drains the whole queue. Because polling occurs at Turn boundaries, “steering” means next-Turn priority, not mid-Tool preemption.
 
 ### 4.4 `streamAssistantResponse()`: the model boundary
 
@@ -658,7 +662,7 @@ The order of the two hooks is part of the contract. `transformContext` can reaso
 The loop creates a fresh provider-facing wrapper for each Turn:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at 4e58f324.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 107d79f1.
 const llmContext: Context = {
   systemPrompt: context.systemPrompt,
   messages: llmMessages,
@@ -669,7 +673,7 @@ const llmContext: Context = {
 It resolves a current API key, then calls the injected function:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at 4e58f324.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 107d79f1.
 const response = await streamFunction(config.model, llmContext, {
   ...config,
   apiKey: resolvedApiKey,
@@ -737,7 +741,7 @@ Provider adapters own cache-control serialization. Rebuilding the small `Context
 `streamAssistantResponse()` reserves one transcript slot on `start`, replaces that slot with each partial, and finally replaces it with the completed message:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at 4e58f324.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 107d79f1.
 case "start":
   partialMessage = event.partial;
   context.messages.push(partialMessage);
@@ -776,7 +780,7 @@ One slot avoids storing every token delta as a conversation message. Subscribers
 The hard-stop check occurs before Tool selection:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at 4e58f324.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 107d79f1.
 if (message.stopReason === "error" || message.stopReason === "aborted") {
   await emit({ type: "turn_end", message, toolResults: [] });
   await emit({ type: "agent_end", messages: newMessages });
@@ -784,7 +788,7 @@ if (message.stopReason === "error" || message.stopReason === "aborted") {
 }
 ```
 
-For every other final reason, the loop inspects actual Tool blocks. `length` is a special safety branch: arguments may be syntactically salvageable but incomplete, so Pi emits a failed Tool result for every call and executes none. After a normal Turn, `prepareNextTurn` runs first; then `shouldStopAfterTurn` may end the run before either queue is read.
+For every other final reason, the loop inspects actual Tool blocks. `length` is a special safety branch: arguments may be syntactically salvageable but incomplete, so Pi emits a failed Tool result for every call and executes none. After a normal Turn, `shouldStopAfterTurn` sees the completed-Turn context first, followed by the ordinary steering poll. Only a continuing inner loop later runs `prepareNextTurn` and may poll steering a second time before its next `turn_start`.
 
 ### 4.6 Execute Tool calls
 
@@ -800,7 +804,7 @@ The two modes preserve conversation order in different ways:
 If any targeted Tool declares `executionMode: "sequential"`, the whole assistant batch runs sequentially. Preflight resolves the Tool, applies `prepareArguments`, validates the schema, and calls `beforeToolCall`:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at 4e58f324.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 107d79f1.
 const preparedToolCall = prepareToolCallArguments(tool, toolCall);
 const validatedArgs = validateToolArguments(tool, preparedToolCall);
 const beforeResult = await config.beforeToolCall?.(
@@ -812,7 +816,7 @@ const beforeResult = await config.beforeToolCall?.(
 Unknown Tools, invalid arguments, thrown preflight code, blocked calls, and observed aborts become immediate error results. `afterToolCall` runs only after an allowed Tool actually executes; it may replace `content`, `details`, `usage`, `isError`, or `terminate` before final events:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at 4e58f324.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 107d79f1.
 const afterResult = await config.afterToolCall?.(
   {
     assistantMessage,
@@ -840,7 +844,7 @@ For each finalized call, Pi emits `tool_execution_end`, then a `message_start`/`
 Batch termination uses `every`:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at 4e58f324.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 107d79f1.
 const terminate =
   finalizedCalls.length > 0 &&
   finalizedCalls.every((entry) => entry.result.terminate === true);
@@ -858,14 +862,17 @@ The post-Turn order is fixed:
 
 ```text
 turn_end
-  -> prepareNextTurn({ message, toolResults, context, newMessages })
-  -> apply returned context/model/thinkingLevel
-  -> shouldStopAfterTurn(updated snapshot)
+  -> save { message, toolResults, context, newMessages }
+  -> shouldStopAfterTurn(completed-Turn snapshot)
   -> if true: agent_end
   -> otherwise: getSteeringMessages()
+  -> if the inner loop continues: prepareNextTurn(saved snapshot)
+  -> apply returned context/model/thinkingLevel
+  -> if the post-Turn poll was empty: getSteeringMessages() again
+  -> turn_start
 ```
 
-`prepareNextTurn` does not itself force another Turn; it prepares state in case Tool continuation or pending messages require one. Coding Agent installs `prepareNextTurnWithContext` to refresh its system prompt, Tool registry, selected model, and thinking level from live session state.
+`prepareNextTurn` does not itself force another Turn. It runs at the start of an iteration already warranted by Tool continuation or pending messages. Coding Agent installs `prepareNextTurnWithContext` to refresh its system prompt, Tool registry, selected model, and thinking level from live session state.
 
 The event path for a Tool Turn is:
 
@@ -884,20 +891,20 @@ Settlement extends past event emission. `agent_end` guarantees that the loop wil
 ### 4.8 Back to the top of the loop
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at 4e58f324.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 107d79f1.
 while (hasMoreToolCalls || pendingMessages.length > 0) {
   // one assistant response and its Tool batch
 }
 ```
 
-Automatic continuation comes from a non-terminating Tool batch. Steering continuation comes from pending messages. If both are false, the inner loop ends. `shouldStopAfterTurn` can exit earlier even when either would otherwise cause another Turn.
+Automatic continuation comes from a non-terminating Tool batch. Steering continuation comes from the post-Turn poll. If Tool continuation already warrants another iteration and that poll was empty, preparation gets one more steering poll before `turn_start`. If neither continuation condition holds, the inner loop ends. `shouldStopAfterTurn` can exit before any of these post-Turn queue decisions.
 
 ### 4.9 The follow-up outer loop
 
 At the stable boundary, Agent Core polls only the follow-up queue:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at 4e58f324.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 107d79f1.
 const followUpMessages = (await config.getFollowUpMessages?.()) || [];
 if (followUpMessages.length > 0) {
   pendingMessages = followUpMessages;
@@ -915,7 +922,7 @@ The outer `continue` returns to the inner loop, where follow-up messages receive
 | Dimension                         | Steering                                                   | Follow-up                                                        |
 | --------------------------------- | ---------------------------------------------------------- | ---------------------------------------------------------------- |
 | Enqueue API                       | `agent.steer(message)`                                     | `agent.followUp(message)`                                        |
-| Poll point                        | Before first inner iteration and after each completed Turn | Only after the inner loop would stop                             |
+| Poll point                        | Before the first inner iteration; after each completed Turn; again after preparation when that poll was empty and the loop continues | Only after the inner loop would stop                             |
 | Effect                            | Influences the next available Turn                         | Starts another Turn after current work reaches a stable boundary |
 | Does it interrupt a running Tool? | No                                                         | No                                                               |
 | Queue modes                       | `one-at-a-time` or `all`                                   | `one-at-a-time` or `all`                                         |
@@ -955,4 +962,4 @@ This separation lets a small domain Agent use `Agent` directly while the full co
 
 [Chapter 4](ch04-model-invocation.md) opens the `StreamFn` boundary: model collections, provider registration, request conversion, normalized streaming events, and error handling.
 
-> Version boundary: this walkthrough follows Pi `0.84.3` at commit `4e58f324fae8ebfa98a3d45181fb248072a2afac` and Node.js `>=22.19.0`.
+> Version boundary: this walkthrough follows Pi `0.85.0` at commit `107d79f11072bbc8a3a757ed7fd69596bee7d68c` and Node.js `>=22.19.0`.

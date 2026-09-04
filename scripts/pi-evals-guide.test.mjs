@@ -4,7 +4,7 @@ import { test } from "node:test";
 
 import matter from "gray-matter";
 
-const RELEASE_COMMIT = "4e58f324fae8ebfa98a3d45181fb248072a2afac";
+const RELEASE_COMMIT = "107d79f11072bbc8a3a757ed7fd69596bee7d68c";
 const GUIDE_PATHS = {
   en: new URL("../content/en/how-to/run-pi-evals.md", import.meta.url),
   vi: new URL("../content/vi/how-to/run-pi-evals.md", import.meta.url),
@@ -161,7 +161,7 @@ function validateGuideDocument(source, locale) {
   assert.equal(frontmatter.language, locale);
   assert.equal(frontmatter.status, "reviewed");
   assert.equal(frontmatter.reviewed_by, "Pify maintainers");
-  assert.equal(frontmatter.last_updated, "2026-08-25");
+  assert.equal(frontmatter.last_updated, "2026-09-04");
   assert.deepEqual(frontmatter.terms_used, [
     "harness",
     "judge",
@@ -383,7 +383,7 @@ test("rejects a removed shell command", async () => {
 test("rejects source links that survive only in frontmatter", async () => {
   const source = await readFile(GUIDE_PATHS.en, "utf8");
   const mutated = source.replace(
-    /^## Source map for Pi 0\.84\.3\n[\s\S]*?(?=^## Acceptance checklist)/m,
+    /^## Source map for Pi 0\.85\.0\n[\s\S]*?(?=^## Acceptance checklist)/m,
     "",
   );
   assert.notEqual(mutated, source, "the source-map section must be removed");

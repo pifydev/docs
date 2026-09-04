@@ -5,7 +5,7 @@ translation_key: course-overview
 language: en
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-08-26'
+last_updated: '2026-09-04'
 translator: Pify maintainers
 ---
 
@@ -13,7 +13,7 @@ This course is for TypeScript developers who want to understand an Agent by cons
 
 :::caution[Educational and unofficial]
 
-The code under `course/src/` is the **Course implementation**. It is an original, simplified teaching system maintained by Pify. It is not an official Pi package, does not import unpublished Pi internals, and makes no promise of API compatibility with Pi. Only text labeled **Pi SDK 0.84.3** describes the separately published SDK release or names one of its verified public exports.
+The code under `course/src/` is the **Course implementation**. It is an original, simplified teaching system maintained by Pify. It is not an official Pi package, does not import unpublished Pi internals, and makes no promise of API compatibility with Pi. Only text labeled **Pi SDK 0.85.0** describes the separately published SDK release or names one of its verified public exports.
 
 :::
 
@@ -131,13 +131,13 @@ npm run test:course
 
 A red result from queue exhaustion is useful only when the experiment asks for one response beyond the finite script. A TypeScript compile error, wrong file selector, dependency-install failure, or unrelated failing checkpoint does not prove that behavior. Keep the experiment narrow enough that the failure message points back to the mechanism described on the page.
 
-## Course implementation and Pi SDK 0.84.3
+## Course implementation and Pi SDK 0.85.0
 
 **Course implementation** callouts describe types and functions exported from this repository's `course/src/`. Names such as `EventStream`, `ScriptedModel`, `ToolRegistry`, `SessionTree`, and `CourseRuntimeManager` exist so the workshop can expose one concern at a time. Their signatures, limits, error classes, persistence format, and lifecycle rules belong to the workshop.
 
-**Pi SDK 0.84.3** callouts compare that concern with the published Pi packages at version `0.84.3`. A comparison may name a verified public export, or it may explain that Pi has a richer provider, Tool, event, session, or runtime contract. It is a reading aid, not an instruction to pass a Course object into a Pi function. Do not infer API compatibility from similar terms such as Agent, Tool, message, session, or compaction.
+**Pi SDK 0.85.0** callouts compare that concern with the published Pi packages at version `0.85.0`. A comparison may name a verified public export, or it may explain that Pi has a richer provider, Tool, event, session, or runtime contract. It is a reading aid, not an instruction to pass a Course object into a Pi function. Do not infer API compatibility from similar terms such as Agent, Tool, message, session, or compaction.
 
-This separation also sets the authority for discrepancies. The focused course test is authoritative for the Course implementation. The published `0.84.3` package and its matching release source are authoritative for a Pi SDK comparison. Unreleased upstream behavior is outside this course unless a page labels it explicitly as unreleased.
+This separation also sets the authority for discrepancies. The focused course test is authoritative for the Course implementation. The published `0.85.0` package and its matching release source are authoritative for a Pi SDK comparison. Unreleased upstream behavior is outside this course unless a page labels it explicitly as unreleased.
 
 ## Completion criteria
 
@@ -150,6 +150,6 @@ You have completed the course when you can demonstrate the contracts, not merely
 - you can explain who owns iteration, cancellation, transcript mutation, session persistence, runtime replacement, and cleanup at each boundary;
 - your failure experiments fail for the intended invariant and return to green after restoration;
 - you can distinguish a task failure from an infrastructure failure and identify what evidence is safe to retain;
-- you can point to the **Course implementation** for workshop behavior and to **Pi SDK 0.84.3** for production SDK behavior without mixing their APIs.
+- you can point to the **Course implementation** for workshop behavior and to **Pi SDK 0.85.0** for production SDK behavior without mixing their APIs.
 
 Start with [checkpoint 00](00-complete-agent-trace.md). It gives you a complete trace before checkpoint `01` separates that trace into protocols.

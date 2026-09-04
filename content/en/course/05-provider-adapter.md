@@ -5,11 +5,11 @@ translation_key: course-05-provider-adapter
 language: en
 checkpoint: 5
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/ai/src/models.ts"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/ai/src/types.ts"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/ai/src/utils/event-stream.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/src/models.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/src/types.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/src/utils/event-stream.ts"
 status: reviewed
-last_updated: "2026-08-26"
+last_updated: '2026-09-04'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -188,9 +188,9 @@ Stream that response and await both the chunks and terminal result. The Tool-cal
 - Unknown events, malformed payloads, transport errors, hostile sources, and queue exhaustion produce stable course-owned codes.
 - Removing `response_end` rejects iteration and result with `PROVIDER_MISSING_TERMINAL`, even after earlier chunks were emitted.
 
-## Compare with Pi SDK 0.84.3
+## Compare with Pi SDK 0.85.0
 
-:::info[Pi SDK 0.84.3]
+:::info[Pi SDK 0.85.0]
 
 `@earendil-works/pi-ai` exports `Provider`, `createProvider()`, `createModels()`, `MutableModels`, `AssistantMessageEventStream`, `AssistantMessageEvent`, `ToolCall`, `Usage`, and `StopReason`. `createProvider()` builds and returns a production-facing `Provider` from auth, models, and API stream parts. It does not register that provider. `createModels()` returns `MutableModels`; call `models.setProvider(provider)` on that returned instance to upsert the provider into the collection.
 

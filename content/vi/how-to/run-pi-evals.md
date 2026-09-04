@@ -5,12 +5,12 @@ translation_key: how-to-run-pi-evals
 language: vi
 source_url: "https://docs.pify.dev/vi/how-to/run-pi-evals"
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/README.md"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/src/smoke.eval.ts"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/src/pi-harness.ts"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/src/vitest-evals/reporter.ts"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/src/vitest-evals/artifacts.ts"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/src/vitest-evals/summary.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/README.md"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/smoke.eval.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/pi-harness.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/vitest-evals/reporter.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/vitest-evals/artifacts.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/vitest-evals/summary.ts"
 terms_used:
   - harness
   - judge
@@ -20,7 +20,7 @@ terms_used:
   - fail-closed
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-08-25'
+last_updated: '2026-09-04'
 translator: Pify maintainers
 ---
 
@@ -53,13 +53,13 @@ Dùng Node.js `>=22.19.0`. Block sau là toàn bộ checkout boundary cho hướ
 ```bash
 git clone https://github.com/earendil-works/pi.git
 cd pi
-git checkout 4e58f324fae8ebfa98a3d45181fb248072a2afac
+git checkout 107d79f11072bbc8a3a757ed7fd69596bee7d68c
 npm install
 ```
 
 Lệnh install ở root hydrate các monorepo workspace theo lockfile. Tại commit này, `packages/evals/package.json` khai báo `private: true` và chỉ expose ba package script: `eval`, `test`, `clean`. Repository root chuyển tiếp `npm run eval` vào workspace đó, vì vậy các lệnh còn lại được chạy từ repository root.
 
-Trước khi tốn một provider request, hãy xác nhận `git rev-parse HEAD` in ra `4e58f324fae8ebfa98a3d45181fb248072a2afac`. Nếu không đúng, hãy dừng lại: flag, định dạng report và hành vi artifact từ commit khác nằm ngoài release contract của hướng dẫn này.
+Trước khi tốn một provider request, hãy xác nhận `git rev-parse HEAD` in ra `107d79f11072bbc8a3a757ed7fd69596bee7d68c`. Nếu không đúng, hãy dừng lại: flag, định dạng report và hành vi artifact từ commit khác nằm ngoài release contract của hướng dẫn này.
 
 ## 2. Chạy một smoke eval
 
@@ -237,22 +237,22 @@ Custom path tương đối hoặc tuyệt đối cần được cleanup riêng, 
 
 Trong automation, đặt cleanup ở final step chạy cả khi success lẫn failure, nhưng chỉ upload output đã redact và được duyệt. Đừng log session content hoặc environment variable chứa secret trong cleanup diagnostic.
 
-## Source map cho Pi 0.84.3
+## Source map cho Pi 0.85.0
 
-Mọi link dưới đây đều pin vào release commit `4e58f324fae8ebfa98a3d45181fb248072a2afac`:
+Mọi link dưới đây đều pin vào release commit `107d79f11072bbc8a3a757ed7fd69596bee7d68c`:
 
 | Source | Nội dung cần kiểm tra |
 | --- | --- |
-| [`packages/evals/README.md`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/README.md) | Runner command được hỗ trợ, harness option, comparative methodology và artifact warning |
-| [`src/smoke.eval.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/src/smoke.eval.ts) | Một smoke prompt end-to-end và hard infrastructure assertion |
-| [`src/pi-harness.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/src/pi-harness.ts) | Model resolution, isolated session lifecycle, trace, telemetry, snapshot và temporary cleanup |
-| [`src/vitest-evals/reporter.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/src/vitest-evals/reporter.ts) | `runs.jsonl`, harness observation, incomplete diagnostic và printed comparison |
-| [`src/vitest-evals/artifacts.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/src/vitest-evals/artifacts.ts) | Loại session/source attachment, hashed path và file mode |
-| [`src/vitest-evals/summary.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/src/vitest-evals/summary.ts) | Điều kiện pair, pass-rate lift, telemetry delta và diagnostic reason |
+| [`packages/evals/README.md`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/README.md) | Runner command được hỗ trợ, harness option, comparative methodology và artifact warning |
+| [`src/smoke.eval.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/smoke.eval.ts) | Một smoke prompt end-to-end và hard infrastructure assertion |
+| [`src/pi-harness.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/pi-harness.ts) | Model resolution, isolated session lifecycle, trace, telemetry, snapshot và temporary cleanup |
+| [`src/vitest-evals/reporter.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/vitest-evals/reporter.ts) | `runs.jsonl`, harness observation, incomplete diagnostic và printed comparison |
+| [`src/vitest-evals/artifacts.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/vitest-evals/artifacts.ts) | Loại session/source attachment, hashed path và file mode |
+| [`src/vitest-evals/summary.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/vitest-evals/summary.ts) | Điều kiện pair, pass-rate lift, telemetry delta và diagnostic reason |
 
 ## Acceptance checklist
 
-- [ ] Checkout ở đúng commit `4e58f324fae8ebfa98a3d45181fb248072a2afac` và Node.js là `>=22.19.0`.
+- [ ] Checkout ở đúng commit `107d79f11072bbc8a3a757ed7fd69596bee7d68c` và Node.js là `>=22.19.0`.
 - [ ] Eval chạy từ Pi monorepo; không application nào cố cài private eval workspace như public package.
 - [ ] Provider và model được truyền cùng nhau, credential chỉ có scope cần thiết cho run.
 - [ ] Smoke eval pass trước khi chạy suite rộng hơn hoặc comparative suite.

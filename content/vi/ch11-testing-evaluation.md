@@ -6,12 +6,12 @@ language: vi
 chapter: 11
 source_url: "https://docs.pify.dev/vi/ch11-testing-evaluation"
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/ai/src/providers/faux.ts"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/test/e2e.test.ts"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/agent-loop.ts"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/session-manager.ts"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/README.md"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/src/pi-harness.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/src/providers/faux.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/test/e2e.test.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/agent-loop.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/session-manager.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/README.md"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/pi-harness.ts"
 terms_used:
   - test double
   - fixture
@@ -24,14 +24,14 @@ terms_used:
   - ToolCall
   - ToolResultMessage
 status: reviewed
-last_updated: "2026-08-25"
+last_updated: '2026-09-04'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
 
 Chương 10 kết thúc ở Session Tree bền vững. Cơ chế lưu bền vững giúp kiểm tra lại một lần chạy Agent, nhưng việc transcript tồn tại trên đĩa không chứng minh Agent đã hoạt động đúng. Một chiến lược kiểm thử hữu ích phải xác lập nhiều sự thật khác nhau: provider adapter tuân thủ streaming protocol, Agent Loop ghép đúng từng lệnh gọi Tool với kết quả, đường dẫn session đang hoạt động vẫn nhất quán, ứng dụng hoàn thành một tác vụ thực tế, và một thay đổi đề xuất hoạt động tốt hơn baseline đủ thường xuyên để đáng phát hành.
 
-Không thể gộp các sự thật đó thành một con số “chất lượng Agent”. Chương này xây dựng mô hình bằng chứng theo tầng quanh Pi `0.84.3`, giải thích loại lỗi thuộc về từng tầng và kết thúc bằng một ma trận sẵn sàng cho release. Ví dụ deterministic chỉ biên dịch với các export công khai của `@earendil-works/pi-ai@0.84.3` và `@earendil-works/pi-agent-core@0.84.3`. Phần đánh giá cũng trỏ vào monorepo của Pi tại release đã pin vì `packages/evals` là công cụ workspace private, không phải package SDK đã phát hành.
+Không thể gộp các sự thật đó thành một con số “chất lượng Agent”. Chương này xây dựng mô hình bằng chứng theo tầng quanh Pi `0.85.0`, giải thích loại lỗi thuộc về từng tầng và kết thúc bằng một ma trận sẵn sàng cho release. Ví dụ deterministic chỉ biên dịch với các export công khai của `@earendil-works/pi-ai@0.85.0` và `@earendil-works/pi-agent-core@0.85.0`. Phần đánh giá cũng trỏ vào monorepo của Pi tại release đã pin vì `packages/evals` là công cụ workspace private, không phải package SDK đã phát hành.
 
 ## 1. Xem kiểm thử là bằng chứng theo tầng, không phải một điểm end-to-end
 
@@ -333,8 +333,8 @@ Pseudocode sau cho thấy hình dạng điều phối. Nó chủ đích không �
 ```typescript
 // Pseudocode: evaluation orchestration, not a Pi SDK API.
 const experiment = {
-  release: "0.84.3",
-  sourceCommit: "4e58f324fae8ebfa98a3d45181fb248072a2afac",
+  release: "0.85.0",
+  sourceCommit: "107d79f11072bbc8a3a757ed7fd69596bee7d68c",
   baseline,
   candidate,
   tasks: heldOutTasks,
@@ -445,7 +445,7 @@ Release gate nhỏ nhất có độ tin cậy phải bao phủ mọi tầng mà 
 | Held-out evaluation baseline/candidate | Trước release làm thay đổi hành vi | Đạt ngưỡng với số eligible pair và diagnostic được báo cáo |
 | Audit artifact và cleanup | Trước khi bật trace hoặc judge mới | Kiểm tra redaction, access, retention và deletion đều pass |
 
-Với ví dụ code deterministic trong chương này, tiêu chí chấp nhận là `npm run typecheck` biên dịch cùng function với dependency chính xác `0.84.3`. Test thật nên gọi function trong test runner; repository tài liệu này chỉ giữ nó ở dạng compile-only để việc import contract fixture không bao giờ khởi chạy Agent.
+Với ví dụ code deterministic trong chương này, tiêu chí chấp nhận là `npm run typecheck` biên dịch cùng function với dependency chính xác `0.85.0`. Test thật nên gọi function trong test runner; repository tài liệu này chỉ giữ nó ở dạng compile-only để việc import contract fixture không bao giờ khởi chạy Agent.
 
 Trước khi phát hành thay đổi hành vi Agent, hãy trả lời các câu hỏi sau bằng bằng chứng:
 
@@ -456,14 +456,14 @@ Trước khi phát hành thay đổi hành vi Agent, hãy trả lời các câu 
 - Reviewer có thể tái lập cấu hình mà không nhận artifact private chưa redact hay không?
 - Candidate có đạt correctness policy mà không tạo regression không thể chấp nhận về latency, token hoặc cost hay không?
 
-Source map sau được pin tới release Pi `0.84.3`, commit `4e58f324fae8ebfa98a3d45181fb248072a2afac`:
+Source map sau được pin tới release Pi `0.85.0`, commit `107d79f11072bbc8a3a757ed7fd69596bee7d68c`:
 
-- [`packages/ai/src/providers/faux.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/ai/src/providers/faux.ts) định nghĩa `fauxProvider()`, response helper, hành vi hàng đợi và request factory.
-- [`packages/agent/test/e2e.test.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/test/e2e.test.ts) minh họa test deterministic cho Agent, Tool, abort, lifecycle và multi-turn.
-- [`packages/agent/src/agent-loop.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/agent-loop.ts) sở hữu bước chuẩn bị và thực thi Tool, dựng result, thứ tự append và tiếp tục turn.
-- [`packages/coding-agent/src/core/session-manager.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/session-manager.ts) triển khai session storage v3 liên kết bằng parent và phép chiếu active path của Coding Agent.
-- [`packages/agent/test/harness/session/context.test.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/test/harness/session/context.test.ts) và [`jsonl-storage.test.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/test/harness/session/jsonl-storage.test.ts) kiểm thử các contract session riêng của generic harness.
-- [`packages/evals/README.md`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/README.md), [`smoke.eval.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/src/smoke.eval.ts) và [`pi-harness.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/src/pi-harness.ts) định nghĩa entry eval model-backed private của release và Coding Agent harness.
-- [`harness-table.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/src/vitest-evals/harness-table.ts), [`reporter.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/src/vitest-evals/reporter.ts), [`artifacts.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/src/vitest-evals/artifacts.ts) và [`summary.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/src/vitest-evals/summary.ts) triển khai việc ghép cặp lặp lại, đính kèm artifact, diagnostic và summary so sánh.
+- [`packages/ai/src/providers/faux.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/src/providers/faux.ts) định nghĩa `fauxProvider()`, response helper, hành vi hàng đợi và request factory.
+- [`packages/agent/test/e2e.test.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/test/e2e.test.ts) minh họa test deterministic cho Agent, Tool, abort, lifecycle và multi-turn.
+- [`packages/agent/src/agent-loop.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/agent-loop.ts) sở hữu bước chuẩn bị và thực thi Tool, dựng result, thứ tự append và tiếp tục turn.
+- [`packages/coding-agent/src/core/session-manager.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/session-manager.ts) triển khai session storage v3 liên kết bằng parent và phép chiếu active path của Coding Agent.
+- [`packages/agent/test/harness/context.test.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/test/harness/context.test.ts) và [`jsonl-storage.test.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/test/harness/jsonl-storage.test.ts) kiểm thử các contract session riêng của generic harness.
+- [`packages/evals/README.md`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/README.md), [`smoke.eval.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/smoke.eval.ts) và [`pi-harness.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/pi-harness.ts) định nghĩa entry eval model-backed private của release và Coding Agent harness.
+- [`harness-table.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/vitest-evals/harness-table.ts), [`reporter.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/vitest-evals/reporter.ts), [`artifacts.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/vitest-evals/artifacts.ts) và [`summary.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/vitest-evals/summary.ts) triển khai việc ghép cặp lặp lại, đính kèm artifact, diagnostic và summary so sánh.
 
 Ranh giới này chuẩn bị cho ba hướng dẫn tập trung tiếp theo: kiểm thử Agent theo cách deterministic, chạy eval suite của Pi được pin theo release và host một session runtime có thể thay thế. Giữ test deterministic làm nền tảng chẩn đoán; dùng evaluation để trả lời câu hỏi sản phẩm rộng hơn sau khi các contract đó đã green.

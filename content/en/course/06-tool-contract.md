@@ -5,11 +5,11 @@ translation_key: course-06-tool-contract
 language: en
 checkpoint: 6
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/ai/src/types.ts"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/types.ts"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/agent-loop.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/src/types.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/types.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/agent-loop.ts"
 status: reviewed
-last_updated: "2026-08-26"
+last_updated: '2026-09-04'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -157,9 +157,9 @@ Then change only the validator to return `{ ok: true, value: { left: 20, right: 
 - Serialized content never exceeds `4096` Unicode code points including one truncation marker, and traversal obeys the explicit work budgets.
 - Invalid arguments sent to the spy Tool produce `TOOL_ARGUMENTS_INVALID` and zero side effects.
 
-## Compare with Pi SDK 0.84.3
+## Compare with Pi SDK 0.85.0
 
-:::info[Pi SDK 0.84.3]
+:::info[Pi SDK 0.85.0]
 
 `@earendil-works/pi-ai` exports `Tool`, `ToolCall`, `ToolResultMessage`, `Type`, `Static`, `TSchema`, and `validateToolArguments()`. `@earendil-works/pi-agent-core` exports the richer `AgentTool`, `AgentToolResult`, and Tool lifecycle members of `AgentEvent`.
 

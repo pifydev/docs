@@ -5,12 +5,12 @@ translation_key: how-to-run-pi-evals
 language: en
 source_url: "https://docs.pify.dev/en/how-to/run-pi-evals"
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/README.md"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/src/smoke.eval.ts"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/src/pi-harness.ts"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/src/vitest-evals/reporter.ts"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/src/vitest-evals/artifacts.ts"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/src/vitest-evals/summary.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/README.md"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/smoke.eval.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/pi-harness.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/vitest-evals/reporter.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/vitest-evals/artifacts.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/vitest-evals/summary.ts"
 terms_used:
   - harness
   - judge
@@ -20,7 +20,7 @@ terms_used:
   - fail-closed
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-08-25'
+last_updated: '2026-09-04'
 translator: Pify maintainers
 ---
 
@@ -53,13 +53,13 @@ Use Node.js `>=22.19.0`. The following block is the complete checkout boundary f
 ```bash
 git clone https://github.com/earendil-works/pi.git
 cd pi
-git checkout 4e58f324fae8ebfa98a3d45181fb248072a2afac
+git checkout 107d79f11072bbc8a3a757ed7fd69596bee7d68c
 npm install
 ```
 
 The root install hydrates the monorepo workspaces and their lockfile. At this commit, `packages/evals/package.json` declares `private: true` and exposes exactly three package scripts: `eval`, `test`, and `clean`. The repository root delegates `npm run eval` to that workspace, so the remaining commands run from the repository root.
 
-Before spending a provider request, confirm `git rev-parse HEAD` prints `4e58f324fae8ebfa98a3d45181fb248072a2afac`. If it does not, stop: flags, report formats, and artifact behavior from another commit are outside this guide's release contract.
+Before spending a provider request, confirm `git rev-parse HEAD` prints `107d79f11072bbc8a3a757ed7fd69596bee7d68c`. If it does not, stop: flags, report formats, and artifact behavior from another commit are outside this guide's release contract.
 
 ## 2. Run one smoke eval
 
@@ -237,22 +237,22 @@ Custom relative or absolute paths require separate, explicit, validated cleanup 
 
 For automation, clean up in a final step that runs on both success and failure, but upload only approved redacted outputs. Do not log session contents or secret-bearing environment variables as part of cleanup diagnostics.
 
-## Source map for Pi 0.84.3
+## Source map for Pi 0.85.0
 
-Every link below is pinned to release commit `4e58f324fae8ebfa98a3d45181fb248072a2afac`:
+Every link below is pinned to release commit `107d79f11072bbc8a3a757ed7fd69596bee7d68c`:
 
 | Source | What to verify |
 | --- | --- |
-| [`packages/evals/README.md`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/README.md) | Supported runner commands, harness options, comparative methodology, and artifact warning |
-| [`src/smoke.eval.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/src/smoke.eval.ts) | One end-to-end smoke prompt and hard infrastructure assertions |
-| [`src/pi-harness.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/src/pi-harness.ts) | Model resolution, isolated session lifecycle, traces, telemetry, snapshot, and temporary cleanup |
-| [`src/vitest-evals/reporter.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/src/vitest-evals/reporter.ts) | `runs.jsonl`, harness observations, incomplete diagnostics, and printed comparisons |
-| [`src/vitest-evals/artifacts.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/src/vitest-evals/artifacts.ts) | Session/source attachment categories, hashed paths, and file modes |
-| [`src/vitest-evals/summary.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/src/vitest-evals/summary.ts) | Pair eligibility, pass-rate lift, telemetry deltas, and diagnostic reasons |
+| [`packages/evals/README.md`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/README.md) | Supported runner commands, harness options, comparative methodology, and artifact warning |
+| [`src/smoke.eval.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/smoke.eval.ts) | One end-to-end smoke prompt and hard infrastructure assertions |
+| [`src/pi-harness.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/pi-harness.ts) | Model resolution, isolated session lifecycle, traces, telemetry, snapshot, and temporary cleanup |
+| [`src/vitest-evals/reporter.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/vitest-evals/reporter.ts) | `runs.jsonl`, harness observations, incomplete diagnostics, and printed comparisons |
+| [`src/vitest-evals/artifacts.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/vitest-evals/artifacts.ts) | Session/source attachment categories, hashed paths, and file modes |
+| [`src/vitest-evals/summary.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/vitest-evals/summary.ts) | Pair eligibility, pass-rate lift, telemetry deltas, and diagnostic reasons |
 
 ## Acceptance checklist
 
-- [ ] The checkout is at exact commit `4e58f324fae8ebfa98a3d45181fb248072a2afac` and Node.js is `>=22.19.0`.
+- [ ] The checkout is at exact commit `107d79f11072bbc8a3a757ed7fd69596bee7d68c` and Node.js is `>=22.19.0`.
 - [ ] The eval runs from the Pi monorepo; no application attempts to install the private eval workspace as a public package.
 - [ ] Provider and model are supplied together, with credentials scoped to the run.
 - [ ] The smoke eval passes before a broader or comparative suite runs.

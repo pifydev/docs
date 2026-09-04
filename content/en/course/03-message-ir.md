@@ -5,10 +5,10 @@ translation_key: course-03-message-ir
 language: en
 checkpoint: 3
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/ai/src/types.ts"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/agent-loop.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/src/types.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/agent-loop.ts"
 status: reviewed
-last_updated: "2026-08-26"
+last_updated: '2026-09-04'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -173,9 +173,9 @@ Run the focused command. The validator must not throw; it returns `ORPHAN_TOOL_R
 - A valid transcript retains discriminants and IDs after JSON serialization and validates again after parsing.
 - An orphan Tool result produces `ORPHAN_TOOL_RESULT` until its matching earlier call is restored.
 
-## Compare with Pi SDK 0.84.3
+## Compare with Pi SDK 0.85.0
 
-:::info[Pi SDK 0.84.3]
+:::info[Pi SDK 0.85.0]
 
 `@earendil-works/pi-ai` exports `Message = UserMessage | AssistantMessage | ToolResultMessage`. Its exported `ToolCall` has `type: "toolCall"`, `id`, `name`, and `arguments`; `ToolResultMessage` links back with `toolCallId` and `toolName`. Pi Agent core uses those public message types inside its Agent Loop.
 

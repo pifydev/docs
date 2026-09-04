@@ -5,10 +5,10 @@ translation_key: course-10-session-tree
 language: vi
 checkpoint: 10
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/index.ts"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/session-manager.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/index.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/session-manager.ts"
 status: reviewed
-last_updated: "2026-08-26"
+last_updated: '2026-09-04'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -157,9 +157,9 @@ Hai đoạn dùng đúng hàm hỗ trợ và dữ liệu từ `course/test/10-se
 - Append/flush commit qua tệp tạm đã kiểm tra định danh, dấu mốc phục hồi, đổi tên, đồng bộ thư mục, dọn dẹp và rollback; bộ nhớ chỉ đổi sau commit.
 - Giới hạn giữ nguyên `65,536` byte mỗi dòng, `4,194,304` byte mỗi tệp và `4,096` entry.
 
-## So sánh với Pi SDK 0.84.3
+## So sánh với Pi SDK 0.85.0
 
-:::info[Pi SDK 0.84.3]
+:::info[Pi SDK 0.85.0]
 
 `@earendil-works/pi-coding-agent` xuất công khai `SessionManager`, `SessionEntry`, `SessionHeader`, `SessionTreeNode`, `buildContextEntries()`, `buildSessionContext()` và `CURRENT_SESSION_VERSION`.
 

@@ -5,10 +5,10 @@ translation_key: course-03-message-ir
 language: vi
 checkpoint: 3
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/ai/src/types.ts"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/agent-loop.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/src/types.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/agent-loop.ts"
 status: reviewed
-last_updated: "2026-08-26"
+last_updated: '2026-09-04'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -173,9 +173,9 @@ Chạy focused command. Validator không được ném lỗi; nó trả `ORPHAN_
 - Valid transcript giữ discriminant và ID sau JSON serialization rồi validate lại sau parsing.
 - Orphan Tool result tạo `ORPHAN_TOOL_RESULT` cho đến khi matching call đứng trước được khôi phục.
 
-## So sánh với Pi SDK 0.84.3
+## So sánh với Pi SDK 0.85.0
 
-:::info[Pi SDK 0.84.3]
+:::info[Pi SDK 0.85.0]
 
 `@earendil-works/pi-ai` export `Message = UserMessage | AssistantMessage | ToolResultMessage`. `ToolCall` được export có `type: "toolCall"`, `id`, `name` và `arguments`; `ToolResultMessage` liên kết ngược bằng `toolCallId` và `toolName`. Pi Agent core dùng các public message type đó trong vòng lặp Agent (Agent Loop).
 

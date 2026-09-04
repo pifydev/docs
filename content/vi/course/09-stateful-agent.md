@@ -5,10 +5,10 @@ translation_key: course-09-stateful-agent
 language: vi
 checkpoint: 9
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/index.ts"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/agent.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/index.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/agent.ts"
 status: reviewed
-last_updated: "2026-08-26"
+last_updated: '2026-09-04'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -170,9 +170,9 @@ Nếu model nhận hai request thì hai mã gọi đã cùng lúc giữ một tr
 - Khi hoàn tất, bị hủy, vượt sức chứa hoặc gặp lỗi nội bộ, Agent đều xóa chủ sở hữu đang chạy để lần `continue()` hợp lệ sau đó có thể phục hồi.
 - Phép dành trước cho hàng đợi/transcript từ chối công việc không thể chứa trước khi vượt `256` message trong hàng đợi hoặc `4096` message do Agent sở hữu.
 
-## So sánh với Pi SDK 0.84.3
+## So sánh với Pi SDK 0.85.0
 
-:::info[Pi SDK 0.84.3]
+:::info[Pi SDK 0.85.0]
 
 `@earendil-works/pi-agent-core` xuất công khai `Agent`, `AgentOptions`, `AgentState`, `AgentEvent` cùng các kiểu liên quan tới hàng đợi. `Agent` của Pi cung cấp `prompt()`, `continue()`, `steer()`, `followUp()`, `subscribe()`, `abort()`, `waitForIdle()`, cơ chế điều khiển hàng đợi và `reset()`.
 
@@ -180,7 +180,7 @@ Nếu model nhận hai request thì hai mã gọi đã cùng lúc giữ một tr
 
 `Agent` công khai của Pi cũng từ chối các lần xử lý chồng lấn và cung cấp hàng đợi cho message điều hướng/tiếp nối. Ở release đã ghim, mã gọi có thể cấu hình chế độ rút hàng đợi, `prompt()` phân giải `Promise<void>`, `abort()` không nhận chuỗi lý do như khóa học, còn Promise của subscriber được `await` theo thứ tự đăng ký như một phần của quá trình kết thúc lần chạy. Pi còn cung cấp trạng thái, chính sách thực thi Tool, cấu hình thử lại và vòng đời sự kiện phong phú hơn.
 
-Khóa học trả `EventStream<AgentEvent, RunResult>`, quan sát nhưng không `await` Promise của subscriber, chỉ nhận văn bản trong hàm hỗ trợ hàng đợi, cố định cách lập lịch từng message một và áp dụng quy tắc sức chứa riêng cho workshop. Đây là giới hạn phục vụ giảng dạy có chủ đích, không phải lớp tương thích. Với mã Pi, hãy import và làm theo contract của Pi SDK `0.84.3`.
+Khóa học trả `EventStream<AgentEvent, RunResult>`, quan sát nhưng không `await` Promise của subscriber, chỉ nhận văn bản trong hàm hỗ trợ hàng đợi, cố định cách lập lịch từng message một và áp dụng quy tắc sức chứa riêng cho workshop. Đây là giới hạn phục vụ giảng dạy có chủ đích, không phải lớp tương thích. Với mã Pi, hãy import và làm theo contract của Pi SDK `0.85.0`.
 
 ## Checkpoint tiếp theo
 

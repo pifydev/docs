@@ -75,7 +75,7 @@ const headingContracts = {
     "Run the focused test",
     "Failure experiment",
     "Acceptance criteria",
-    "Compare with Pi SDK 0.84.3",
+    "Compare with Pi SDK 0.85.0",
     "Next checkpoint",
   ],
   vi: [
@@ -87,7 +87,7 @@ const headingContracts = {
     "Chạy focused test",
     "Thử nghiệm lỗi",
     "Tiêu chí chấp nhận",
-    "So sánh với Pi SDK 0.84.3",
+    "So sánh với Pi SDK 0.85.0",
     "Checkpoint tiếp theo",
   ],
 };
@@ -193,7 +193,7 @@ test("checkpoint evidence helpers reject fenced and prose lookalikes", () => {
 
 This heading is inside a fence.
 :::note[Course implementation]
-:::info[Pi SDK 0.84.3]
+:::info[Pi SDK 0.85.0]
 \`\`\`
 
 \`\`\`bash
@@ -659,8 +659,8 @@ test("every checkpoint satisfies the shared content contract", async () => {
         );
         assert.match(
           visibleBody,
-          /^:::info\[Pi SDK 0\.84\.3\]\s*$/m,
-          `${relativePath}: exact Pi SDK 0.84.3 callout label`,
+          /^:::info\[Pi SDK 0\.85\.0\]\s*$/m,
+          `${relativePath}: exact Pi SDK 0.85.0 callout label`,
         );
         assertNoPerPageAttribution(source, relativePath);
       } catch (error) {

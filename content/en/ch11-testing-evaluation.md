@@ -6,12 +6,12 @@ language: en
 chapter: 11
 source_url: "https://docs.pify.dev/en/ch11-testing-evaluation"
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/ai/src/providers/faux.ts"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/test/e2e.test.ts"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/agent-loop.ts"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/session-manager.ts"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/README.md"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/src/pi-harness.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/src/providers/faux.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/test/e2e.test.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/agent-loop.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/session-manager.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/README.md"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/pi-harness.ts"
 terms_used:
   - test double
   - fixture
@@ -24,14 +24,14 @@ terms_used:
   - ToolCall
   - ToolResultMessage
 status: reviewed
-last_updated: "2026-08-25"
+last_updated: '2026-09-04'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
 
 Chapter 10 ended at the durable Session Tree. Persistence makes an Agent run inspectable, but a transcript existing on disk does not prove that the Agent behaved correctly. A useful testing strategy must establish several different facts: the provider adapter obeyed the streaming protocol, the Agent Loop paired every Tool call with a result, the active session path stayed coherent, the application completed a realistic task, and a proposed change performed better than a baseline often enough to justify release.
 
-Those facts do not collapse into one “Agent quality” number. This chapter builds a layered evidence model around Pi `0.84.3`, explains which failures belong at each layer, and ends with a release-ready matrix. The deterministic example compiles only against the public `@earendil-works/pi-ai@0.84.3` and `@earendil-works/pi-agent-core@0.84.3` exports. The evaluation material also points into Pi's release-pinned monorepo because `packages/evals` is private workspace tooling, not a published SDK package.
+Those facts do not collapse into one “Agent quality” number. This chapter builds a layered evidence model around Pi `0.85.0`, explains which failures belong at each layer, and ends with a release-ready matrix. The deterministic example compiles only against the public `@earendil-works/pi-ai@0.85.0` and `@earendil-works/pi-agent-core@0.85.0` exports. The evaluation material also points into Pi's release-pinned monorepo because `packages/evals` is private workspace tooling, not a published SDK package.
 
 ## 1. Treat testing as layered evidence, not one end-to-end score
 
@@ -333,8 +333,8 @@ This pseudocode shows the orchestration shape. It is deliberately not presented 
 ```typescript
 // Pseudocode: evaluation orchestration, not a Pi SDK API.
 const experiment = {
-  release: "0.84.3",
-  sourceCommit: "4e58f324fae8ebfa98a3d45181fb248072a2afac",
+  release: "0.85.0",
+  sourceCommit: "107d79f11072bbc8a3a757ed7fd69596bee7d68c",
   baseline,
   candidate,
   tasks: heldOutTasks,
@@ -445,7 +445,7 @@ The smallest credible release gate covers every layer without making every pull 
 | Baseline/candidate held-out evaluation | Before behavior-changing release | Threshold met with eligible-pair count and diagnostics reported |
 | Artifact and cleanup audit | Before enabling new traces or judges | Redaction, access, retention, and deletion checks pass |
 
-For the deterministic code example in this chapter, acceptance means `npm run typecheck` compiles the same function against exact `0.84.3` dependencies. A real test should invoke the function in its test runner; this documentation repository keeps it compile-only so importing the contract fixture never starts an Agent run.
+For the deterministic code example in this chapter, acceptance means `npm run typecheck` compiles the same function against exact `0.85.0` dependencies. A real test should invoke the function in its test runner; this documentation repository keeps it compile-only so importing the contract fixture never starts an Agent run.
 
 Before releasing an Agent behavior change, answer these questions from evidence:
 
@@ -456,14 +456,14 @@ Before releasing an Agent behavior change, answer these questions from evidence:
 - Can a reviewer reproduce the configuration without receiving unredacted private artifacts?
 - Does the candidate meet correctness policy without an unacceptable latency, token, or cost regression?
 
-The following source map is pinned to Pi `0.84.3` commit `4e58f324fae8ebfa98a3d45181fb248072a2afac`:
+The following source map is pinned to Pi `0.85.0` commit `107d79f11072bbc8a3a757ed7fd69596bee7d68c`:
 
-- [`packages/ai/src/providers/faux.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/ai/src/providers/faux.ts) defines `fauxProvider()`, response helpers, queue behavior, and request factories.
-- [`packages/agent/test/e2e.test.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/test/e2e.test.ts) demonstrates deterministic Agent, Tool, abort, lifecycle, and multi-turn tests.
-- [`packages/agent/src/agent-loop.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/agent-loop.ts) owns Tool preparation, execution, result construction, append order, and turn continuation.
-- [`packages/coding-agent/src/core/session-manager.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/session-manager.ts) implements the Coding Agent's v3 parent-linked session storage and active-path projection.
-- [`packages/agent/test/harness/session/context.test.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/test/harness/session/context.test.ts) and [`jsonl-storage.test.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/test/harness/session/jsonl-storage.test.ts) exercise the separate generic harness session contracts.
-- [`packages/evals/README.md`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/README.md), [`smoke.eval.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/src/smoke.eval.ts), and [`pi-harness.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/src/pi-harness.ts) define the release's private model-backed eval entry and Coding Agent harness.
-- [`harness-table.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/src/vitest-evals/harness-table.ts), [`reporter.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/src/vitest-evals/reporter.ts), [`artifacts.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/src/vitest-evals/artifacts.ts), and [`summary.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/evals/src/vitest-evals/summary.ts) implement repeated pairing, artifact attachment, diagnostics, and comparative summaries.
+- [`packages/ai/src/providers/faux.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/src/providers/faux.ts) defines `fauxProvider()`, response helpers, queue behavior, and request factories.
+- [`packages/agent/test/e2e.test.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/test/e2e.test.ts) demonstrates deterministic Agent, Tool, abort, lifecycle, and multi-turn tests.
+- [`packages/agent/src/agent-loop.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/agent-loop.ts) owns Tool preparation, execution, result construction, append order, and turn continuation.
+- [`packages/coding-agent/src/core/session-manager.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/session-manager.ts) implements the Coding Agent's v3 parent-linked session storage and active-path projection.
+- [`packages/agent/test/harness/context.test.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/test/harness/context.test.ts) and [`jsonl-storage.test.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/test/harness/jsonl-storage.test.ts) exercise the separate generic harness session contracts.
+- [`packages/evals/README.md`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/README.md), [`smoke.eval.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/smoke.eval.ts), and [`pi-harness.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/pi-harness.ts) define the release's private model-backed eval entry and Coding Agent harness.
+- [`harness-table.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/vitest-evals/harness-table.ts), [`reporter.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/vitest-evals/reporter.ts), [`artifacts.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/vitest-evals/artifacts.ts), and [`summary.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/vitest-evals/summary.ts) implement repeated pairing, artifact attachment, diagnostics, and comparative summaries.
 
 This boundary prepares the three focused guides that follow: testing an Agent deterministically, running Pi's release-pinned eval suite, and hosting a replaceable session runtime. Keep deterministic tests as the diagnostic foundation; use evaluation to answer broader product questions after those contracts are green.

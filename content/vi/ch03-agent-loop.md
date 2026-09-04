@@ -6,9 +6,9 @@ language: vi
 chapter: 3
 source_url: "https://www.dgzhuya.com/modules/ch03-agent-loop"
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/agent-loop.ts"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/agent.ts"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/types.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/agent-loop.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/agent.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/types.ts"
 terms_used:
   - Agent Loop
   - Trace
@@ -18,12 +18,12 @@ terms_used:
   - Steering
   - Follow-up
 status: reviewed
-last_updated: "2026-08-25"
+last_updated: '2026-09-04'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
 
-Chương 2 đã tách model transport, Agent runtime và sản phẩm coding. Agent Loop là phần chuyển động bên trong kiến trúc đó. Chương này bắt đầu từ lý do cần vòng lặp, rồi theo một message qua Pi 0.84.3: chuẩn bị context, streaming, thực thi Tool, chỉ dẫn trong hàng chờ, termination, event và thời điểm run settle hoàn toàn.
+Chương 2 đã tách model transport, Agent runtime và sản phẩm coding. Agent Loop là phần chuyển động bên trong kiến trúc đó. Chương này bắt đầu từ lý do cần vòng lặp, rồi theo một message qua Pi 0.85.0: chuẩn bị context, streaming, thực thi Tool, chỉ dẫn trong hàng chờ, termination, event và thời điểm run settle hoàn toàn.
 
 ## 1. Mở đầu: ba cách dùng LLM
 
@@ -181,9 +181,10 @@ string input
   -> Tool preflight và execution
   -> event ToolResultMessage và append transcript
   -> turn_end
-  -> prepareNextTurn
-  -> shouldStopAfterTurn
+  -> shouldStopAfterTurn(Turn đã hoàn tất)
   -> drain steering queue
+  -> nếu cần inner Turn khác: prepareNextTurn
+  -> nếu lần poll trước rỗng: refresh steering queue sau preparation
   -> Turn khác, outer loop follow-up hoặc agent_end
 ```
 
@@ -211,7 +212,7 @@ Vòng lặp còn giữ `newMessages`, một collector cục bộ của run đư�
 
 ### Điều gì làm vòng lặp chạy tiếp, và điều gì kết thúc nó
 
-Implementation cũ dễ bị tóm tắt quá mức thành “kiểm tra `stopReason`”. Pi 0.84.3 dùng nhiều mảnh state:
+Implementation cũ dễ bị tóm tắt quá mức thành “kiểm tra `stopReason`”. Pi 0.85.0 dùng nhiều mảnh state:
 
 ```text
 assistant response
@@ -230,7 +231,7 @@ assistant response
 | Final reason        | Cách Agent Core xử lý                                                                     |
 | ------------------- | ----------------------------------------------------------------------------------------- |
 | `toolUse`           | Thực thi `ToolCall` block thật trong content; label này một mình không làm loop tiếp tục  |
-| `stop`              | Khi không có Tool call, đi tới queue check và có thể thoát bình thường                    |
+| `stop`              | Khi không có Tool call, đi tới stop hook và các bước kiểm tra steering/follow-up queue    |
 | `length`            | Không chạy Tool call từ response bị cắt; phát error result cho từng call để model gọi lại |
 | `deferred`          | Đi qua post-Turn path không có Tool bình thường; loop không poll `DeferredHandle`         |
 | `error` / `aborted` | Phát `turn_end` và `agent_end` ngay, bỏ qua turn hook cùng cả hai queue                   |
@@ -244,7 +245,7 @@ Vì vậy báo cáo termination phải nêu cả provider result lẫn runtime s
 Quyết định cốt lõi dựa vào content và state của Tool đã finalize, không dựa vào một string:
 
 ```typescript
-// Abridged from packages/agent/src/agent-loop.ts at 4e58f324.
+// Abridged from packages/agent/src/agent-loop.ts at 107d79f1.
 const toolCalls = message.content.filter((part) => part.type === "toolCall");
 hasMoreToolCalls = false;
 
@@ -284,14 +285,14 @@ while (true) {
 
 | Đường thoát                  | Trigger                                                       | Cách xử lý queue                                                                                                     |
 | ---------------------------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| Boundary ổn định bình thường | Không còn Tool continuation và queue message                  | Phát `agent_end`                                                                                                     |
-| Hint terminate của batch     | Mọi Tool result đã finalize có `terminate: true`              | Bỏ automatic Tool continuation, sau đó vẫn kiểm tra steering và follow-up                                            |
+| Boundary ổn định bình thường | Không còn Tool continuation và queue message                  | Chạy stop hook, poll steering và follow-up rồi phát `agent_end` nếu cả hai queue rỗng                                 |
+| Hint terminate của batch     | Mọi Tool result đã finalize có `terminate: true`              | Bỏ automatic Tool continuation, sau đó vẫn kiểm tra stop hook, steering và follow-up                                 |
 | Graceful stop bằng hook      | `shouldStopAfterTurn` trả `true`                              | Thoát trước khi poll steering và follow-up                                                                           |
 | Provider hard stop           | Final reason là `error` hoặc `aborted`                        | Bỏ `prepareNextTurn`, stop hook và queue                                                                             |
-| Deferred boundary            | Final reason là `deferred` và không có Tool call              | Chạy hook; nếu stop hook falsy, poll steering rồi chỉ poll follow-up tại boundary ổn định; host xử lý DeferredHandle |
+| Deferred boundary            | Final reason là `deferred` và không có Tool call              | Chạy stop hook và poll steering, rồi kiểm tra follow-up tại stable boundary nếu steering rỗng; host xử lý handle     |
 | Callback/runtime throw       | Transform, conversion hoặc hook “không được throw” lại reject | Raw low-level sequence không còn được bảo đảm; `Agent` bắt run failure và phát một failure turn tổng hợp             |
 
-Với message `deferred` không có Tool, “không poll” chỉ nói về `DeferredHandle`. Loop vẫn phát `turn_end`, chạy `prepareNextTurn`, áp dụng update của hook rồi chạy `shouldStopAfterTurn`. Nếu hook này trả truthy, loop phát `agent_end` và return trước khi poll cả hai queue. Chỉ kết quả falsy mới cho phép poll steering; nếu steering không mở lại inner loop, loop mới poll follow-up tại boundary ổn định. Chỉ host mới fetch hoặc cancel deferred operation.
+Với message `deferred` không có Tool, loop phát `turn_end` rồi chạy `shouldStopAfterTurn` trên snapshot của Turn đã hoàn tất. Nếu hook trả truthy, loop phát `agent_end` ngay. Nếu không, loop poll steering. Steering message được trả về sẽ yêu cầu inner Turn khác, với preparation chạy trước khi message được inject; nếu steering rỗng, loop kiểm tra follow-up tại stable boundary. Cả hai lần poll đều không fetch hay cancel `DeferredHandle`; việc đó vẫn thuộc về host.
 
 `Agent.abort()` signal provider request và Tool callback đang hoạt động. Cancellation phía provider thường thành một assistant message `aborted`. Nếu signal đến trong Tool processing, Tool đã start nhận signal; sequential preparation dừng sau khi quan sát abort, còn provider boundary tiếp theo nhận signal đã aborted. Tool phải tôn trọng signal thì cancellation mới kịp thời.
 
@@ -428,7 +429,30 @@ const config: AgentLoopConfig = {
 
 ```typescript
 // Faithfully abridged from packages/agent/src/agent-loop.ts.
+let lastCompletedTurn: PrepareNextTurnContext | undefined;
+
 while (hasMoreToolCalls || pendingMessages.length > 0) {
+  if (lastCompletedTurn) {
+    const nextTurnSnapshot = await config.prepareNextTurn?.(lastCompletedTurn);
+    if (nextTurnSnapshot) {
+      currentContext = nextTurnSnapshot.context ?? currentContext;
+      config = {
+        ...config,
+        model: nextTurnSnapshot.model ?? config.model,
+        reasoning:
+          nextTurnSnapshot.thinkingLevel === undefined
+            ? config.reasoning
+            : nextTurnSnapshot.thinkingLevel === "off"
+              ? undefined
+              : nextTurnSnapshot.thinkingLevel,
+      };
+    }
+    if (pendingMessages.length === 0) {
+      pendingMessages = (await config.getSteeringMessages?.()) || [];
+    }
+    await emit({ type: "turn_start" });
+  }
+
   if (pendingMessages.length > 0) {
     for (const pendingMessage of pendingMessages) {
       await emit({ type: "message_start", message: pendingMessage });
@@ -471,34 +495,14 @@ while (hasMoreToolCalls || pendingMessages.length > 0) {
   }
 
   await emit({ type: "turn_end", message, toolResults });
-  const nextTurnSnapshot = await config.prepareNextTurn?.({
+  lastCompletedTurn = {
     message,
     toolResults,
     context: currentContext,
     newMessages,
-  });
-  if (nextTurnSnapshot) {
-    currentContext = nextTurnSnapshot.context ?? currentContext;
-    config = {
-      ...config,
-      model: nextTurnSnapshot.model ?? config.model,
-      reasoning:
-        nextTurnSnapshot.thinkingLevel === undefined
-          ? config.reasoning
-          : nextTurnSnapshot.thinkingLevel === "off"
-            ? undefined
-            : nextTurnSnapshot.thinkingLevel,
-    };
-  }
+  };
 
-  if (
-    await config.shouldStopAfterTurn?.({
-      message,
-      toolResults,
-      context: currentContext,
-      newMessages,
-    })
-  ) {
+  if (await config.shouldStopAfterTurn?.(lastCompletedTurn)) {
     await emit({ type: "agent_end", messages: newMessages });
     return;
   }
@@ -507,7 +511,7 @@ while (hasMoreToolCalls || pendingMessages.length > 0) {
 }
 ```
 
-`hasMoreToolCalls` bắt đầu bằng `true` để assistant response đầu tiên chạy dù không có pending message. Mỗi iteration tiếp theo ứng với một Turn mới. Bản rút gọn chỉ bỏ bookkeeping `turn_start`; mọi symbol được gọi trong đoạn trên đều tồn tại trong file đã pin.
+`hasMoreToolCalls` bắt đầu bằng `true` để assistant response đầu tiên chạy dù không có pending message. Mỗi iteration tiếp theo ứng với một Turn mới. Bản rút gọn bỏ phần thân chi tiết của helper nhưng giữ nguyên thứ tự control flow trong file đã pin.
 
 #### Lớp ngoài: queue shell và stateful wrapper
 
@@ -539,7 +543,7 @@ agent.steer({
 });
 ```
 
-Queue không ngắt provider stream đang hoạt động hoặc Tool đang chạy. Agent Core poll steering một lần trước inner-loop iteration đầu tiên và một lần sau mỗi Turn hoàn chỉnh, sau `prepareNextTurn` và `shouldStopAfterTurn`:
+Queue không ngắt provider stream đang hoạt động hoặc Tool đang chạy. Agent Core poll steering trước inner-loop iteration đầu tiên và sau mỗi Turn hoàn chỉnh có stop hook trả falsy. Nếu Tool continuation hoặc lần poll sau Turn đó yêu cầu iteration khác, loop chạy `prepareNextTurn`; khi lần poll trước rỗng, loop poll thêm một lần sau preparation để steering được queue trong một hook chạy lâu có thể vào Turn kế tiếp:
 
 ```typescript
 if (pendingMessages.length > 0) {
@@ -553,7 +557,7 @@ if (pendingMessages.length > 0) {
 }
 ```
 
-`one-at-a-time` drain message cũ nhất ở mỗi poll. `all` drain cả queue. Vì queue được poll tại Turn boundary, “steering” có nghĩa là ưu tiên Turn kế tiếp, không phải preempt giữa lúc Tool chạy.
+`one-at-a-time` drain message cũ nhất ở mỗi lần poll. `all` drain cả queue. Vì việc poll diễn ra tại Turn boundary, “steering” có nghĩa là ưu tiên Turn kế tiếp, không phải preempt giữa lúc Tool chạy.
 
 ### 4.4 `streamAssistantResponse()`: boundary của model
 
@@ -658,7 +662,7 @@ Thứ tự hai hook là một phần của contract. `transformContext` có th�
 Loop tạo một provider-facing wrapper mới cho mỗi Turn:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at 4e58f324.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 107d79f1.
 const llmContext: Context = {
   systemPrompt: context.systemPrompt,
   messages: llmMessages,
@@ -669,7 +673,7 @@ const llmContext: Context = {
 Nó resolve API key hiện hành rồi gọi function đã inject:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at 4e58f324.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 107d79f1.
 const response = await streamFunction(config.model, llmContext, {
   ...config,
   apiKey: resolvedApiKey,
@@ -737,7 +741,7 @@ Provider adapter sở hữu cách serialize cache control. Việc dựng lại o
 `streamAssistantResponse()` dành một slot transcript ở event `start`, thay slot đó bằng từng partial, rồi thay lần cuối bằng message hoàn chỉnh:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at 4e58f324.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 107d79f1.
 case "start":
   partialMessage = event.partial;
   context.messages.push(partialMessage);
@@ -776,7 +780,7 @@ Một slot tránh lưu mỗi token delta thành conversation message. Subscriber
 Hard-stop check chạy trước bước chọn Tool:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at 4e58f324.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 107d79f1.
 if (message.stopReason === "error" || message.stopReason === "aborted") {
   await emit({ type: "turn_end", message, toolResults: [] });
   await emit({ type: "agent_end", messages: newMessages });
@@ -784,7 +788,7 @@ if (message.stopReason === "error" || message.stopReason === "aborted") {
 }
 ```
 
-Với mọi final reason khác, loop kiểm tra Tool block thật. `length` là safety branch riêng: argument có thể parse được nhưng chưa đầy đủ, nên Pi phát failed Tool result cho từng call và không thực thi call nào. Sau một Turn bình thường, `prepareNextTurn` chạy trước; rồi `shouldStopAfterTurn` có thể kết thúc run trước khi đọc một trong hai queue.
+Với mọi final reason khác, loop kiểm tra Tool block thật. `length` là safety branch riêng: argument có thể parse được nhưng chưa đầy đủ, nên Pi phát failed Tool result cho từng call và không thực thi call nào. Sau một Turn bình thường, `shouldStopAfterTurn` nhận context của Turn đã hoàn tất trước, rồi đến lần poll steering thông thường. Chỉ inner loop đang tiếp tục mới chạy `prepareNextTurn` và có thể poll steering lần hai trước `turn_start` kế tiếp.
 
 ### 4.6 Thực thi Tool call
 
@@ -800,7 +804,7 @@ Hai mode giữ conversation order theo cách khác nhau:
 Nếu bất kỳ Tool được gọi nào khai báo `executionMode: "sequential"`, toàn bộ assistant batch chạy sequential. Preflight resolve Tool, áp dụng `prepareArguments`, validate schema rồi gọi `beforeToolCall`:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at 4e58f324.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 107d79f1.
 const preparedToolCall = prepareToolCallArguments(tool, toolCall);
 const validatedArgs = validateToolArguments(tool, preparedToolCall);
 const beforeResult = await config.beforeToolCall?.(
@@ -812,7 +816,7 @@ const beforeResult = await config.beforeToolCall?.(
 Tool không tồn tại, argument sai, preflight code throw, call bị block và abort đã được quan sát đều trở thành immediate error result. `afterToolCall` chỉ chạy sau khi một Tool được phép đã thực thi; hook có thể thay `content`, `details`, `usage`, `isError` hoặc `terminate` trước final event:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at 4e58f324.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 107d79f1.
 const afterResult = await config.afterToolCall?.(
   {
     assistantMessage,
@@ -840,7 +844,7 @@ Với mỗi call đã finalize, Pi phát `tool_execution_end` rồi một cặp 
 Batch termination dùng `every`:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at 4e58f324.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 107d79f1.
 const terminate =
   finalizedCalls.length > 0 &&
   finalizedCalls.every((entry) => entry.result.terminate === true);
@@ -858,14 +862,17 @@ Thứ tự sau Turn được cố định:
 
 ```text
 turn_end
-  -> prepareNextTurn({ message, toolResults, context, newMessages })
-  -> áp dụng context/model/thinkingLevel được trả về
-  -> shouldStopAfterTurn(snapshot đã update)
+  -> lưu { message, toolResults, context, newMessages }
+  -> shouldStopAfterTurn(snapshot của Turn đã hoàn tất)
   -> nếu true: agent_end
   -> nếu không: getSteeringMessages()
+  -> nếu inner loop tiếp tục: prepareNextTurn(snapshot đã lưu)
+  -> áp dụng context/model/thinkingLevel được trả về
+  -> nếu lần poll sau Turn rỗng: getSteeringMessages() lần nữa
+  -> turn_start
 ```
 
-`prepareNextTurn` không tự ép mở Turn khác; nó chuẩn bị state phòng khi Tool continuation hoặc pending message cần Turn mới. Coding Agent cài `prepareNextTurnWithContext` để refresh system prompt, Tool registry, model đã chọn và thinking level từ session state đang live.
+`prepareNextTurn` không tự ép mở Turn khác. Nó chạy ở đầu một iteration vốn đã được Tool continuation hoặc pending message yêu cầu. Coding Agent cài `prepareNextTurnWithContext` để refresh system prompt, Tool registry, model đã chọn và thinking level từ session state đang live.
 
 Event path của một Tool Turn là:
 
@@ -884,20 +891,20 @@ Settlement kéo dài qua thời điểm phát event. `agent_end` bảo đảm lo
 ### 4.8 Quay lại đầu vòng lặp
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at 4e58f324.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 107d79f1.
 while (hasMoreToolCalls || pendingMessages.length > 0) {
   // one assistant response and its Tool batch
 }
 ```
 
-Automatic continuation đến từ Tool batch không terminate. Steering continuation đến từ pending message. Nếu cả hai đều false, inner loop kết thúc. `shouldStopAfterTurn` có thể thoát sớm hơn ngay cả khi một trong hai điều kiện lẽ ra mở Turn khác.
+Automatic continuation đến từ Tool batch không terminate. Steering continuation đến từ lần poll sau Turn. Nếu Tool continuation đã yêu cầu iteration khác và lần poll đó rỗng, preparation sẽ poll steering thêm một lần trước `turn_start`. Nếu không có điều kiện continuation nào, inner loop kết thúc. `shouldStopAfterTurn` có thể thoát trước mọi quyết định queue sau Turn này.
 
 ### 4.9 Outer loop follow-up
 
 Tại boundary ổn định, Agent Core chỉ poll follow-up queue:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at 4e58f324.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 107d79f1.
 const followUpMessages = (await config.getFollowUpMessages?.()) || [];
 if (followUpMessages.length > 0) {
   pendingMessages = followUpMessages;
@@ -915,7 +922,7 @@ Outer `continue` quay lại inner loop, nơi follow-up message nhận message ev
 | Chiều so sánh                 | Steering                                             | Follow-up                                                |
 | ----------------------------- | ---------------------------------------------------- | -------------------------------------------------------- |
 | API enqueue                   | `agent.steer(message)`                               | `agent.followUp(message)`                                |
-| Điểm poll                     | Trước inner iteration đầu và sau mỗi Turn hoàn chỉnh | Chỉ sau khi inner loop sắp dừng                          |
+| Điểm poll                     | Trước inner iteration đầu; sau mỗi Turn hoàn chỉnh; thêm lần nữa sau preparation khi lần poll đó rỗng và loop tiếp tục | Chỉ sau khi inner loop sắp dừng                          |
 | Tác dụng                      | Ảnh hưởng Turn sớm nhất còn có thể chạy              | Mở Turn khác sau khi work hiện tại chạm boundary ổn định |
 | Có ngắt Tool đang chạy không  | Không                                                | Không                                                    |
 | Queue mode                    | `one-at-a-time` hoặc `all`                           | `one-at-a-time` hoặc `all`                               |
@@ -955,4 +962,4 @@ Cách tách này cho phép một domain Agent nhỏ dùng `Agent` trực tiếp,
 
 [Chương 4](ch04-model-invocation.md) mở boundary `StreamFn`: model collection, provider registration, request conversion, normalized streaming event và error handling.
 
-> Version boundary: phần walkthrough này theo Pi `0.84.3` tại commit `4e58f324fae8ebfa98a3d45181fb248072a2afac` và Node.js `>=22.19.0`.
+> Version boundary: phần walkthrough này theo Pi `0.85.0` tại commit `107d79f11072bbc8a3a757ed7fd69596bee7d68c` và Node.js `>=22.19.0`.

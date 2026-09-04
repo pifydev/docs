@@ -5,10 +5,10 @@ translation_key: course-01-typescript-protocols
 language: en
 checkpoint: 1
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/ai/src/types.ts"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/types.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/src/types.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/types.ts"
 status: reviewed
-last_updated: "2026-08-26"
+last_updated: '2026-09-04'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -177,9 +177,9 @@ npm run typecheck
 - Every `RunResult` status reaches one explicit branch and the default branch receives `never`.
 - Adding an unhandled union member makes `npm run typecheck` fail at the exhaustive switch.
 
-## Compare with Pi SDK 0.84.3
+## Compare with Pi SDK 0.85.0
 
-:::info[Pi SDK 0.84.3]
+:::info[Pi SDK 0.85.0]
 
 `@earendil-works/pi-ai` exports `Message`, `UserMessage`, `AssistantMessage`, `ToolResultMessage`, `ToolCall`, `AssistantMessageEvent`, and related model types. `@earendil-works/pi-agent-core` exports `AgentMessage`, `AgentEvent`, `AgentState`, and `AgentTool`. These are the public release types to use in a Pi integration.
 

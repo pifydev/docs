@@ -5,11 +5,11 @@ translation_key: course-05-provider-adapter
 language: vi
 checkpoint: 5
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/ai/src/models.ts"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/ai/src/types.ts"
-  - "https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/ai/src/utils/event-stream.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/src/models.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/src/types.ts"
+  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/src/utils/event-stream.ts"
 status: reviewed
-last_updated: "2026-08-26"
+last_updated: '2026-09-04'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -188,9 +188,9 @@ Sao chép fixture thành một giá trị tạm rồi xóa `response_end` khỏi
 - Sự kiện không nhận biết được, payload sai hình dạng, lỗi vận chuyển, nguồn thù địch và trạng thái hết hàng đợi đều tạo mã ổn định do khóa học sở hữu.
 - Xóa `response_end` khiến phép lặp và `result` cùng bị từ chối bằng `PROVIDER_MISSING_TERMINAL`, kể cả sau khi chunk trước đó đã được phát.
 
-## So sánh với Pi SDK 0.84.3
+## So sánh với Pi SDK 0.85.0
 
-:::info[Pi SDK 0.84.3]
+:::info[Pi SDK 0.85.0]
 
 `@earendil-works/pi-ai` xuất `Provider`, `createProvider()`, `createModels()`, `MutableModels`, `AssistantMessageEventStream`, `AssistantMessageEvent`, `ToolCall`, `Usage` và `StopReason`. `createProvider()` dựng rồi trả về một `Provider` dùng trong production từ các thành phần xác thực, model và luồng API; hàm này không đăng ký provider. `createModels()` trả về `MutableModels`; hãy gọi `models.setProvider(provider)` trên instance được trả về để thêm mới hoặc thay thế provider trong tập hợp đó.
 
