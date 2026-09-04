@@ -450,7 +450,7 @@ declare function detectSupportedImageMimeTypeFromFile(
 ): Promise<string | null>;
 ```
 
-The function opens the filename supplied by `filePath`, reads at most the first 4,100 bytes, and checks file-header signatures and the limited structural fields needed to recognize Pi-supported JPEG, non-animated PNG, GIF, WebP, or BMP input. It returns the supported MIME string or `null` when those checks do not identify an accepted image; filesystem open or read failures still reject the promise. Detection is based on file content, not the filename extension, and it does not decode, resize, or validate every image pixel. Use the result as an input-format gate, not as proof that an image is fully decodable or safe.
+`detectSupportedImageMimeTypeFromFile()` opens the filename supplied by `filePath`, reads at most the first 4,100 bytes, and checks file-header signatures plus the limited structural fields needed to detect exactly `image/jpeg`, `image/png` for non-animated PNG, `image/gif`, `image/webp`, or `image/bmp`. It returns `null` for unsupported or undetectable content; filesystem open or read failures still reject the promise. This detection is based on file content, not the filename extension, and does not decode, resize, or fully validate the image. Use the result as an input-format gate, not as proof that an image is fully decodable or safe.
 
 ### Extensions and managed tools
 

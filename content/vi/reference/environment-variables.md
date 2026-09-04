@@ -80,7 +80,13 @@ Pi tự động phát hiện OSC 8 hyperlink, inline image protocol và truecolo
 | Inline image | `PI_IMAGE_PROTOCOL=kitty\|iterm2\|none\|auto` | `terminal.images: "kitty"\|"iterm2"\|false\|"auto"` |
 | Truecolor | `PI_TRUE_COLOR=1\|0\|auto` | `terminal.trueColor: true\|false\|"auto"` |
 
-JSON setting tường minh được ưu tiên hơn environment variable tương ứng. Nếu setting chưa được đặt hoặc là `auto`, Pi tiếp tục dùng giá trị environment tường minh; khi environment value chưa được đặt hoặc cũng là `auto`, cơ chế tự động detect sẽ quyết định. Chỉ force capability khi toàn bộ đường đi qua terminal, proxy và multiplexer hỗ trợ nó, vì escape sequence không được hỗ trợ có thể làm hỏng rendering.
+Với `PI_HYPERLINKS`, `1` buộc bật OSC 8 hyperlink, `0` buộc tắt chúng, còn `auto` chuyển sang tự động detect. `terminal.hyperlinks` setting tường minh được ưu tiên hơn cả `PI_HYPERLINKS` lẫn kết quả detect tự động; `"auto"` không tạo setting override.
+
+Với `PI_IMAGE_PROTOCOL`, `kitty` chọn protocol Kitty và `iterm2` chọn protocol iTerm2; `none` buộc tắt inline image, còn `auto` chuyển sang tự động detect. Một protocol tường minh hoặc `false` trong `terminal.images` setting được ưu tiên hơn cả `PI_IMAGE_PROTOCOL` lẫn kết quả detect tự động; `"auto"` không tạo setting override.
+
+Với `PI_TRUE_COLOR`, `1` buộc bật truecolor, `0` buộc tắt nó, còn `auto` chuyển sang tự động detect. `terminal.trueColor` setting tường minh được ưu tiên hơn cả `PI_TRUE_COLOR` lẫn kết quả detect tự động; `"auto"` không tạo setting override.
+
+Chỉ force capability khi toàn bộ đường đi qua terminal, proxy và multiplexer hỗ trợ nó, vì escape sequence không được hỗ trợ có thể làm hỏng rendering.
 
 Cơ chế tự động detect nhận diện integrated terminal của Zed là có truecolor và hyperlink nhưng không chọn inline image protocol tại đó. Với `auto`, Zed vì vậy dùng image text fallback; đừng force sequence của Kitty hay iTerm2 nếu terminal path thực tế không hỗ trợ.
 

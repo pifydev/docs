@@ -192,7 +192,13 @@ Pi tự động detect terminal capability và nhận chính xác các giá tr�
 | Inline image | `PI_IMAGE_PROTOCOL=kitty\|iterm2\|none\|auto` | `terminal.images: "kitty"\|"iterm2"\|false\|"auto"` |
 | Truecolor | `PI_TRUE_COLOR=1\|0\|auto` | `terminal.trueColor: true\|false\|"auto"` |
 
-Setting tường minh được ưu tiên hơn environment variable tương ứng. Setting chưa được đặt hoặc là `auto` vẫn cho phép environment override có hiệu lực; environment value chưa được đặt hoặc cũng là `auto` sẽ chuyển quyền quyết định cho cơ chế tự động detect. Force capability không được hỗ trợ ở bất kỳ đoạn nào trên đường đi qua terminal, proxy hay multiplexer có thể phát escape sequence không được hỗ trợ và làm hỏng rendering. Cơ chế detect nhận diện integrated terminal của Zed có truecolor và hyperlink nhưng không có inline image protocol, nên `auto` dùng image text fallback tại đó.
+Với `PI_HYPERLINKS`, `1` buộc bật OSC 8 hyperlink, `0` buộc tắt chúng, còn `auto` chuyển sang tự động detect. `terminal.hyperlinks` setting tường minh được ưu tiên hơn cả `PI_HYPERLINKS` lẫn kết quả detect tự động; `"auto"` không tạo setting override.
+
+Với `PI_IMAGE_PROTOCOL`, `kitty` chọn protocol Kitty và `iterm2` chọn protocol iTerm2; `none` buộc tắt inline image, còn `auto` chuyển sang tự động detect. Một protocol tường minh hoặc `false` trong `terminal.images` setting được ưu tiên hơn cả `PI_IMAGE_PROTOCOL` lẫn kết quả detect tự động; `"auto"` không tạo setting override.
+
+Với `PI_TRUE_COLOR`, `1` buộc bật truecolor, `0` buộc tắt nó, còn `auto` chuyển sang tự động detect. `terminal.trueColor` setting tường minh được ưu tiên hơn cả `PI_TRUE_COLOR` lẫn kết quả detect tự động; `"auto"` không tạo setting override.
+
+Force capability không được hỗ trợ ở bất kỳ đoạn nào trên đường đi qua terminal, proxy hay multiplexer có thể phát escape sequence không được hỗ trợ và làm hỏng rendering. Cơ chế detect nhận diện integrated terminal của Zed có truecolor và hyperlink nhưng không có inline image protocol, nên `auto` dùng image text fallback tại đó.
 
 `shellPath` chọn executable cho Tool `bash`, `shellCommandPrefix` thêm prefix vào mọi command `bash`, còn `npmCommand` là argv array cho package operation. Các setting dành cho Bash này không activate, cấu hình hay thay thế Tool `powershell`; hãy chọn PowerShell trong `defaultTools`, `--tools` hoặc option `tools` của SDK. Path Windows trong JSON cần dùng dấu gạch chéo xuôi hoặc escape dấu gạch chéo ngược.
 
@@ -226,9 +232,9 @@ Setting tường minh được ưu tiên hơn environment variable tương ứng
 
 `editorPaddingX` được clamp từ 0 đến 3, `outputPad` là 0 hoặc 1, còn `autocompleteMaxVisible` được clamp từ 3 đến 20. `showHardwareCursor` hỗ trợ nhập bằng IME. `tuiMode` nhận `regular` hoặc `fullscreen` đang thử nghiệm; các key flat liên quan là `fullscreenExitOutput` (`transcript` hoặc `resume-hint`) và `fullscreenScrollbar` (`auto`, `always` hoặc `hidden`). Hai shape lồng cũ `tui.*` và `fullscreen.*` không còn dùng. Thời gian chờ phím Escape là environment control được mô tả ở <a href="/vi/reference/environment-variables">Biến môi trường</a>.
 
-`fullscreenCopyOnSelect` mặc định là `true`, nên drag selection ở fullscreen được copy tự động. Khi setting này bị tắt, selection vẫn active và được highlight; `Ctrl+X` copy active selection đó trước khi fallback sang assistant message gần nhất. Setting này chỉ tác động đến text selection trong fullscreen, còn `/tree` vẫn giữ hành vi copy message đang được chọn.
+`fullscreenCopyOnSelect` mặc định là `true`, nên drag selection ở fullscreen được copy tự động. Khi setting này bị tắt, selection vẫn active và được highlight; `Ctrl+X` thử copy selection đang active đủ điều kiện rồi kết thúc action bất kể clipboard write thành công hay thất bại. Action chỉ fallback sang assistant message cuối khi không có selection đang active đủ điều kiện. Setting này chỉ tác động đến text selection trong fullscreen, còn `/tree` vẫn giữ hành vi copy message đang được chọn.
 
-Khi fullscreen transcript đã scroll lên, control có thể click `Jump to latest message` xuất hiện ở hàng dưới cùng và hiển thị shortcut `tui.altScreen.bottom`. Với `fullscreenScrollbar: "auto"`, scrollbar hiện ra trong lúc scroll hoặc khi pointer đi vào track ở cột ngoài cùng bên phải. Click vào track sẽ nhảy qua transcript; `always` luôn dành cột và hiển thị scrollbar, còn `hidden` loại bỏ nó.
+Control có thể click `Jump to latest message` chỉ xuất hiện khi fullscreen transcript đã scroll lên phía trên message mới nhất; control nằm ở hàng dưới cùng và hiển thị shortcut `tui.altScreen.bottom`. Với `fullscreenScrollbar: "auto"`, scrollbar hiện ra trong lúc scroll hoặc khi pointer đi vào track ở cột ngoài cùng bên phải. Click vào track sẽ nhảy qua transcript; `always` luôn dành cột và hiển thị scrollbar, còn `hidden` loại bỏ nó.
 
 ### Markdown và warning
 

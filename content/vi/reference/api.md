@@ -450,7 +450,7 @@ declare function detectSupportedImageMimeTypeFromFile(
 ): Promise<string | null>;
 ```
 
-Function này mở filename do `filePath` chỉ định, đọc tối đa 4.100 byte đầu rồi kiểm tra signature trong file header cùng các field cấu trúc tối thiểu cần để nhận diện input JPEG, PNG không animation, GIF, WebP hoặc BMP mà Pi hỗ trợ. Nó trả MIME string được hỗ trợ hoặc `null` khi các bước kiểm tra không nhận diện được image hợp lệ; lỗi mở hay đọc filesystem vẫn làm promise reject. Cơ chế này dựa trên nội dung file, không dựa trên extension của filename, và không decode, resize hay validate mọi pixel của image. Hãy dùng kết quả như một input-format gate, không phải bằng chứng rằng image có thể decode hoàn toàn hoặc an toàn.
+`detectSupportedImageMimeTypeFromFile()` mở filename do `filePath` chỉ định, đọc tối đa 4.100 byte đầu rồi kiểm tra signature trong file header cùng các field cấu trúc tối thiểu cần để phát hiện chính xác `image/jpeg`, `image/png` cho PNG không animation, `image/gif`, `image/webp` hoặc `image/bmp`. Function trả `null` cho nội dung thuộc format không được hỗ trợ hoặc không nhận diện được; lỗi mở hay đọc filesystem vẫn làm promise reject. Cơ chế phát hiện này dựa trên nội dung file, không dựa trên extension của filename, đồng thời không decode, resize hay xác thực đầy đủ image. Hãy dùng kết quả như một input-format gate, không phải bằng chứng rằng image có thể decode hoàn toàn hoặc an toàn.
 
 ### Extension và managed tool
 

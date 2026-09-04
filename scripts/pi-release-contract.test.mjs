@@ -690,6 +690,7 @@ function assertParagraphContainsAll(source, patterns, context) {
     matchingParagraph,
     `${context} must relate ${patterns.join(", ")} in one paragraph`,
   );
+  return matchingParagraph;
 }
 
 const liveCwdBuiltins = ["bash", "edit", "find", "grep", "ls", "read", "write"];
@@ -737,6 +738,124 @@ function assertNoMisleadingWriteByteCount(source, context) {
       `${context} must not claim that write reports UTF-16 code units as bytes`,
     );
   }
+}
+
+const terminalCapabilityContracts = [
+  {
+    environment: "PI_HYPERLINKS",
+    setting: "terminal.hyperlinks",
+    enable: /`1`[^.]{0,80}(?:force-enables?|buộc bật)/i,
+    disable: /`0`[^.]{0,80}(?:force-disables?|buộc tắt)/i,
+  },
+  {
+    environment: "PI_IMAGE_PROTOCOL",
+    setting: "terminal.images",
+    enable:
+      /`kitty`[^.]{0,80}(?:selects?|chọn)[^.]{0,80}Kitty[^.]{0,80}`iterm2`[^.]{0,80}(?:selects?|chọn)[^.]{0,80}iTerm2/i,
+    disable: /`none`[^.]{0,80}(?:force-disables?|buộc tắt)/i,
+  },
+  {
+    environment: "PI_TRUE_COLOR",
+    setting: "terminal.trueColor",
+    enable: /`1`[^.]{0,80}(?:force-enables?|buộc bật)/i,
+    disable: /`0`[^.]{0,80}(?:force-disables?|buộc tắt)/i,
+  },
+];
+
+function assertTerminalCapabilitySemantics(source, context) {
+  for (const contract of terminalCapabilityContracts) {
+    const settingPattern = new RegExp(
+      `\\b${contract.setting.replace(".", "\\.")}\\b[^.]{0,160}(?:overrides?|takes precedence over|ghi đè|được ưu tiên hơn)[^.]{0,160}(?:${contract.environment}|environment|môi trường|detection|detect|phát hiện)`,
+      "i",
+    );
+    assertParagraphContainsAll(
+      source,
+      [
+        new RegExp(`\\b${contract.environment}\\b`),
+        new RegExp(`\\b${contract.setting.replace(".", "\\.")}\\b`),
+        contract.enable,
+        contract.disable,
+        /`auto`[^.]{0,120}(?:falls? back to|leaves?)[^.]{0,80}(?:automatic detection|auto-detection)|`auto`[^.]{0,120}(?:chuyển|để)[^.]{0,80}(?:tự động detect|tự động phát hiện|cơ chế detect)/i,
+        settingPattern,
+      ],
+      `${context} ${contract.environment}/${contract.setting}`,
+    );
+  }
+}
+
+function assertFullscreenControlSemantics(source, context) {
+  assertParagraphContainsAll(
+    source,
+    [
+      /fullscreenCopyOnSelect[^.]{0,100}(?:defaults? to|mặc định là) `true`/i,
+      /(?:disabled|`false`|tắt)/i,
+      /Ctrl\+X/,
+      /(?:eligible )?active selection|selection đang active đủ điều kiện/i,
+      /attempts? to copy|thử copy/i,
+      /returns?[^.]{0,100}(?:succeeds? or fails?|success or failure)|(?:kết thúc|dừng)[^.]{0,100}(?:thành công hay thất bại|thành công hoặc thất bại)/i,
+      /falls? back[^.]{0,140}only when no (?:eligible )?active selection exists|chỉ fallback[^.]{0,140}không có selection đang active đủ điều kiện/i,
+      /last assistant message|assistant message cuối/i,
+    ],
+    `${context} fullscreen selection-copy precedence`,
+  );
+  assertParagraphContainsAll(
+    source,
+    [
+      /Jump to latest message/,
+      /appears?[^.]{0,100}only while[^.]{0,100}(?:scrolled|above the latest)|chỉ xuất hiện[^.]{0,100}(?:scroll|ở phía trên message mới nhất)/i,
+      /transcript/i,
+    ],
+    `${context} jump-to-latest visibility condition`,
+  );
+}
+
+const supportedImageMimeTypes = [
+  "image/bmp",
+  "image/gif",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+];
+
+function assertImageMimeDetectionSemantics(source, context) {
+  const paragraph = assertParagraphContainsAll(
+    source,
+    [
+      /detectSupportedImageMimeTypeFromFile/,
+      /(?:reads?|inspects?)[^.]{0,120}at most[^.]{0,80}first[^.]{0,30}4[,.]100 bytes?|(?:đọc|kiểm tra)[^.]{0,120}tối đa[^.]{0,30}4[,.]100 byte[^.]{0,30}đầu/i,
+      /returns? `null`[^.]{0,120}(?:unsupported|undetectable)|trả `null`[^.]{0,120}(?:không được hỗ trợ|không nhận diện được)/i,
+      /detect(?:s|ion)?[^.]{0,160}(?:does not|not)[^.]{0,100}decode|phát hiện[^.]{0,160}không decode/i,
+      /(?:does not|not)[^.]{0,100}(?:fully validate|validate every)|không[^.]{0,100}(?:xác thực đầy đủ|validate mọi)/i,
+    ],
+    `${context} file MIME detector behavior`,
+  );
+  const mimeTypes = [...paragraph.matchAll(/`(image\/(?:bmp|gif|jpeg|png|webp))`/g)]
+    .map((match) => match[1])
+    .sort();
+  assert.deepEqual(
+    [...new Set(mimeTypes)],
+    supportedImageMimeTypes,
+    `${context} must name exactly the published supported MIME set`,
+  );
+  assert.doesNotMatch(
+    paragraph,
+    /returns? `undefined`|trả `undefined`/i,
+    `${context} must use null, not undefined, for undetectable content`,
+  );
+}
+
+function assertCustomToolLiveCwdGuidance(source, context) {
+  assertLiveInvocationCwdBinding(source, context);
+  assertParagraphContainsAll(
+    source,
+    [
+      /`ctx\.cwd`/,
+      /custom Tool/i,
+      /authorization|permission|safe|cấp quyền|được phép|an toàn/i,
+      /does not|still|không|vẫn/i,
+    ],
+    `${context} authorization warning`,
+  );
 }
 
 function markdownSemanticSegments(source) {
@@ -2282,21 +2401,42 @@ test("Pi 0.85 terminal override contracts preserve exact values and precedence",
           minWords: 125,
         },
       );
-      assertParagraphContainsAll(
+      assertTerminalCapabilitySemantics(
         section.body,
-        [
-          /setting/i,
-          /precedence|ưu tiên/i,
-          /environment variable/i,
-          /auto/i,
-          /detect/i,
-        ],
-        `${locale} ${documentContract.path} terminal capability precedence`,
+        `${locale} ${documentContract.path} terminal capability semantics`,
       );
       structures.push(sectionStructure(section));
     }
     assert.deepEqual(structures[0], structures[1]);
   }
+
+  const terminalFixture = [
+    "`PI_HYPERLINKS`: `1` force-enables hyperlinks, `0` force-disables them, and `auto` falls back to automatic detection. The explicit `terminal.hyperlinks` setting overrides `PI_HYPERLINKS` and detection.",
+    "`PI_IMAGE_PROTOCOL`: `kitty` selects Kitty and `iterm2` selects iTerm2; `none` force-disables inline images, while `auto` falls back to automatic detection. The explicit `terminal.images` setting overrides `PI_IMAGE_PROTOCOL` and detection.",
+    "`PI_TRUE_COLOR`: `1` force-enables truecolor, `0` force-disables it, and `auto` falls back to automatic detection. The explicit `terminal.trueColor` setting overrides `PI_TRUE_COLOR` and detection.",
+  ].join("\n\n");
+  assert.doesNotThrow(() =>
+    assertTerminalCapabilitySemantics(terminalFixture, "synthetic terminal fixture"),
+  );
+  assert.throws(
+    () =>
+      assertTerminalCapabilitySemantics(
+        terminalFixture.replace("`1` force-enables hyperlinks", "`1` force-disables hyperlinks"),
+        "mutated terminal enable semantics",
+      ),
+    /PI_HYPERLINKS\/terminal\.hyperlinks/,
+  );
+  assert.throws(
+    () =>
+      assertTerminalCapabilitySemantics(
+        terminalFixture.replace(
+          "The explicit `terminal.trueColor` setting overrides `PI_TRUE_COLOR` and detection.",
+          "`PI_TRUE_COLOR` overrides the `terminal.trueColor` setting and detection.",
+        ),
+        "mutated terminal precedence",
+      ),
+    /PI_TRUE_COLOR\/terminal\.trueColor/,
+  );
 });
 
 test("Pi 0.85 fullscreen controls are documented in both configuration locales", async () => {
@@ -2325,9 +2465,38 @@ test("Pi 0.85 fullscreen controls are documented in both configuration locales",
       `${locale} configuration fullscreen controls`,
       { heading: headings[locale], minWords: 115 },
     );
+    assertFullscreenControlSemantics(
+      section.body,
+      `${locale} configuration fullscreen controls`,
+    );
     structures.push(sectionStructure(section));
   }
   assert.deepEqual(structures[0], structures[1]);
+
+  const fullscreenFixture =
+    "`fullscreenCopyOnSelect` defaults to `true`. When disabled, `Ctrl+X` attempts to copy the eligible active selection and returns whether that copy succeeds or fails; it falls back to the last assistant message only when no eligible active selection exists.\n\nThe `Jump to latest message` label appears only while the transcript is scrolled above the latest message.";
+  assert.doesNotThrow(() =>
+    assertFullscreenControlSemantics(fullscreenFixture, "synthetic fullscreen fixture"),
+  );
+  assert.throws(
+    () =>
+      assertFullscreenControlSemantics(
+        fullscreenFixture.replace("only when no eligible active selection exists", "when selection copying fails"),
+        "mutated fullscreen fallback",
+      ),
+    /selection-copy precedence/,
+  );
+  assert.throws(
+    () =>
+      assertFullscreenControlSemantics(
+        fullscreenFixture.replace(
+          "appears only while the transcript is scrolled above the latest message",
+          "always appears below the transcript",
+        ),
+        "mutated jump visibility",
+      ),
+    /jump-to-latest visibility condition/,
+  );
 });
 
 test("Pi 0.85 API locales expose file-based supported image MIME detection", async () => {
@@ -2354,9 +2523,84 @@ test("Pi 0.85 API locales expose file-based supported image MIME detection", asy
       `${locale} API image MIME detection`,
       { heading: headings[locale], minWords: 70, fenceLanguages: ["ts"] },
     );
+    assertImageMimeDetectionSemantics(
+      section.body,
+      `${locale} API image MIME detection`,
+    );
     structures.push(sectionStructure(section));
   }
   assert.deepEqual(structures[0], structures[1]);
+
+  const mimeFixture =
+    "`detectSupportedImageMimeTypeFromFile()` reads at most the first 4,100 bytes and detects exactly `image/jpeg`, `image/png`, `image/gif`, `image/webp`, and `image/bmp`. It returns `null` for unsupported or undetectable content. This detection does not decode the image and does not fully validate it.";
+  assert.doesNotThrow(() =>
+    assertImageMimeDetectionSemantics(mimeFixture, "synthetic MIME fixture"),
+  );
+  for (const [label, mutation] of [
+    ["sniff bound", mimeFixture.replace("4,100", "41,000")],
+    ["sentinel", mimeFixture.replace("`null`", "`undefined`")],
+    ["supported set", mimeFixture.replace(", and `image/bmp`", "")],
+    [
+      "decode scope",
+      mimeFixture.replace(
+        "This detection does not decode the image and does not fully validate it.",
+        "This detection fully decodes and validates the image.",
+      ),
+    ],
+  ]) {
+    assert.throws(
+      () => assertImageMimeDetectionSemantics(mutation, `mutated MIME ${label}`),
+      /file MIME detector behavior|published supported MIME set|must use null/,
+    );
+  }
+});
+
+test("Pi 0.85 custom Tool guidance preserves live cwd and authorization boundaries", async () => {
+  const references = await readLocalizedContent("how-to/add-custom-tool.md");
+  const headings = {
+    en: "### Arguments, paths, commands, and secrets",
+    vi: "### Đối số, đường dẫn, lệnh và secret",
+  };
+  const structures = [];
+
+  for (const { locale, source } of references) {
+    const section = extractMarkdownSection(
+      source,
+      headings[locale],
+      `${locale} custom Tool live cwd guidance`,
+    );
+    assertCustomToolLiveCwdGuidance(
+      section.body,
+      `${locale} custom Tool live cwd guidance`,
+    );
+    structures.push(sectionStructure(section));
+  }
+  assert.deepEqual(structures[0], structures[1]);
+
+  const customToolFixture =
+    "At each live invocation, `bash`, `edit`, `find`, `grep`, `ls`, `read`, and `write` use `ctx.cwd`; the factory cwd is a fallback, so they are not permanently load-time bound. A custom Tool still owns authorization, and `ctx.cwd` does not make arbitrary paths safe.";
+  assert.doesNotThrow(() =>
+    assertCustomToolLiveCwdGuidance(customToolFixture, "synthetic custom Tool fixture"),
+  );
+  assert.throws(
+    () =>
+      assertCustomToolLiveCwdGuidance(
+        customToolFixture.replace(", `grep`", ""),
+        "mutated custom Tool list",
+      ),
+    /exactly the affected built-in Tool set/,
+  );
+  assert.throws(
+    () =>
+      assertCustomToolLiveCwdGuidance(
+        customToolFixture.replace(
+          "A custom Tool still owns authorization, and `ctx.cwd` does not make arbitrary paths safe.",
+          "A custom Tool may trust every path from `ctx.cwd`.",
+        ),
+        "mutated custom Tool authorization",
+      ),
+    /authorization warning/,
+  );
 });
 
 test("Pi 0.85 Tool and terminal pages use the current baseline metadata", async () => {

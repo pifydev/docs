@@ -360,7 +360,7 @@ Dùng cơ chế điều khiển Tool đang hoạt động cho hành vi của ses
 
 Coi đối số từ model là dữ liệu không tin cậy ngay cả sau schema validation. TypeBox kiểm tra shape, giới hạn và literal; nó không quyết định một customer ID, đường dẫn, URL hay shell command có được phép hay không. Kiểm tra lại các quy tắc đó ngay cạnh thao tác tạo side effect. Handler của Extension `tool_call` có thể sửa `event.input`, và Pi không kiểm tra schema lại sau thay đổi này, nên handler sửa input phải giữ hoặc tự kiểm tra lại các bất biến của schema.
 
-Đừng suy ra working directory cố định từ đối số của built-in Tool factory. Trong Pi 0.85.0, `bash`, `edit`, `find`, `grep`, `ls`, `read` và `write` dùng `ctx.cwd` của lời gọi hiện tại để xác định working directory và phân giải relative path; `cwd` truyền vào factory chỉ là fallback khi không có execution context. Custom Tool vẫn phải tự bảo vệ ranh giới authorization: dùng context hiện tại không khiến một path bất kỳ trở nên an toàn.
+Đừng suy ra working directory cố định từ đối số của built-in Tool factory. Trong Pi 0.85.0, `bash`, `edit`, `find`, `grep`, `ls`, `read` và `write` dùng `ctx.cwd` của lời gọi hiện tại để xác định working directory và phân giải relative path; `cwd` truyền vào factory chỉ là fallback khi không có execution context, nên các Tool này không bị cố định vĩnh viễn tại thời điểm load. Custom Tool vẫn phải tự bảo vệ ranh giới authorization: dùng context hiện tại không khiến một path bất kỳ trở nên an toàn.
 
 Với Tool đọc một file đã tồn tại trong project, phân giải cả thư mục gốc lẫn file đích bằng `realpath()` rồi kiểm tra containment. Đoạn sau là mã ứng dụng, không phải helper của Pi:
 

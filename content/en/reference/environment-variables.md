@@ -80,7 +80,13 @@ Pi auto-detects OSC 8 hyperlinks, an inline image protocol, and truecolor. Pi 0.
 | Inline images | `PI_IMAGE_PROTOCOL=kitty\|iterm2\|none\|auto` | `terminal.images: "kitty"\|"iterm2"\|false\|"auto"` |
 | Truecolor | `PI_TRUE_COLOR=1\|0\|auto` | `terminal.trueColor: true\|false\|"auto"` |
 
-An explicit JSON setting takes precedence over its environment variable. If the setting is unset or `auto`, Pi next honors an explicit environment value; an unset or `auto` environment value leaves automatic detection in control. Force a capability only when the complete terminal, proxy, and multiplexer path supports it, because unsupported escape sequences can corrupt rendering.
+For `PI_HYPERLINKS`, `1` force-enables OSC 8 hyperlinks, `0` force-disables them, and `auto` falls back to automatic detection. An explicit boolean `terminal.hyperlinks` setting overrides both `PI_HYPERLINKS` and automatic detection; `"auto"` supplies no setting override.
+
+For `PI_IMAGE_PROTOCOL`, `kitty` selects the Kitty protocol and `iterm2` selects the iTerm2 protocol; `none` force-disables inline images, while `auto` falls back to automatic detection. An explicit protocol or `false` in the `terminal.images` setting overrides both `PI_IMAGE_PROTOCOL` and automatic detection; `"auto"` supplies no setting override.
+
+For `PI_TRUE_COLOR`, `1` force-enables truecolor, `0` force-disables it, and `auto` falls back to automatic detection. An explicit boolean `terminal.trueColor` setting overrides both `PI_TRUE_COLOR` and automatic detection; `"auto"` supplies no setting override.
+
+Force a capability only when the complete terminal, proxy, and multiplexer path supports it, because unsupported escape sequences can corrupt rendering.
 
 Automatic detection recognizes the Zed integrated terminal as truecolor- and hyperlink-capable, but it does not select an inline image protocol there. Under `auto`, Zed therefore uses the image text fallback; do not force Kitty or iTerm2 sequences unless the actual terminal path supports them.
 

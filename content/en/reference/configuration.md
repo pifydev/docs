@@ -192,7 +192,13 @@ Pi auto-detects terminal capabilities, with these exact environment and setting 
 | Inline images | `PI_IMAGE_PROTOCOL=kitty\|iterm2\|none\|auto` | `terminal.images: "kitty"\|"iterm2"\|false\|"auto"` |
 | Truecolor | `PI_TRUE_COLOR=1\|0\|auto` | `terminal.trueColor: true\|false\|"auto"` |
 
-An explicit setting takes precedence over its environment variable. An unset or `auto` setting leaves the environment override in play, and an unset or `auto` environment value falls through to automatic detection. Forcing a capability unsupported anywhere along the terminal, proxy, or multiplexer path may emit unsupported escape sequences and corrupt rendering. Detection recognizes the Zed integrated terminal as supporting truecolor and hyperlinks but no inline image protocol, so `auto` uses the image text fallback there.
+For `PI_HYPERLINKS`, `1` force-enables OSC 8 hyperlinks, `0` force-disables them, and `auto` falls back to automatic detection. An explicit boolean `terminal.hyperlinks` setting overrides both `PI_HYPERLINKS` and automatic detection; `"auto"` supplies no setting override.
+
+For `PI_IMAGE_PROTOCOL`, `kitty` selects the Kitty protocol and `iterm2` selects the iTerm2 protocol; `none` force-disables inline images, while `auto` falls back to automatic detection. An explicit protocol or `false` in the `terminal.images` setting overrides both `PI_IMAGE_PROTOCOL` and automatic detection; `"auto"` supplies no setting override.
+
+For `PI_TRUE_COLOR`, `1` force-enables truecolor, `0` force-disables it, and `auto` falls back to automatic detection. An explicit boolean `terminal.trueColor` setting overrides both `PI_TRUE_COLOR` and automatic detection; `"auto"` supplies no setting override.
+
+Forcing a capability unsupported anywhere along the terminal, proxy, or multiplexer path may emit unsupported escape sequences and corrupt rendering. Detection recognizes the Zed integrated terminal as supporting truecolor and hyperlinks but no inline image protocol, so `auto` uses the image text fallback there.
 
 `shellPath` selects the executable for the `bash` Tool, `shellCommandPrefix` prefixes every `bash` command, and `npmCommand` is an argv array for package operations. These Bash settings do not activate, configure, or replace the `powershell` Tool; PowerShell selection belongs in `defaultTools`, `--tools`, or the SDK `tools` option. Windows JSON paths need forward slashes or escaped backslashes.
 
@@ -226,9 +232,9 @@ An explicit setting takes precedence over its environment variable. An unset or 
 
 `editorPaddingX` is clamped from 0 to 3, `outputPad` is 0 or 1, and `autocompleteMaxVisible` is clamped from 3 to 20. `showHardwareCursor` helps IME input. `tuiMode` is `regular` or experimental `fullscreen`; the related flat keys are `fullscreenExitOutput` (`transcript` or `resume-hint`) and `fullscreenScrollbar` (`auto`, `always`, or `hidden`). The old nested `tui.*` and `fullscreen.*` shapes are not current. Escape-key timing is an environment control documented in <a href="/en/reference/environment-variables">Environment variables</a>.
 
-`fullscreenCopyOnSelect` defaults to `true`, which copies a fullscreen drag selection automatically. When it is disabled, the selection remains active and highlighted; `Ctrl+X` copies that active selection before falling back to the last assistant message. This setting affects fullscreen text selection, while `/tree` keeps its own selected-message copy behavior.
+`fullscreenCopyOnSelect` defaults to `true`, which copies a fullscreen drag selection automatically. When it is disabled, the selection remains active and highlighted; `Ctrl+X` attempts to copy the eligible active selection and returns from the copy action whether the clipboard write succeeds or fails. It falls back to the last assistant message only when no eligible active selection exists. This setting affects fullscreen text selection, while `/tree` keeps its own selected-message copy behavior.
 
-When the fullscreen transcript is scrolled up, the clickable `Jump to latest message` control appears on its bottom row and shows the `tui.altScreen.bottom` shortcut. For `fullscreenScrollbar: "auto"`, the scrollbar becomes visible while scrolling or when the pointer enters its rightmost-column track. Clicking that track jumps through the transcript; `always` reserves and displays the column continuously, while `hidden` removes it.
+The clickable `Jump to latest message` control appears only while the fullscreen transcript is scrolled above the latest message; it occupies the bottom row and shows the `tui.altScreen.bottom` shortcut. For `fullscreenScrollbar: "auto"`, the scrollbar becomes visible while scrolling or when the pointer enters its rightmost-column track. Clicking that track jumps through the transcript; `always` reserves and displays the column continuously, while `hidden` removes it.
 
 ### Markdown and warnings
 
