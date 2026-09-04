@@ -6,6 +6,9 @@ language: en
 official_refs:
   - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/src/types.ts'
   - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/settings-manager.ts'
+  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/extensions/types.ts'
+  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/modes/interactive/components/custom-editor.ts'
+  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/modes/rpc/rpc-types.ts'
   - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/utils/mime.ts'
   - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/client/src/index.ts'
   - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/client/README.md'
@@ -480,6 +483,12 @@ const extension: ExtensionFactory = (pi) => {
 export default extension;
 ```
 
+`pi.setModel()` changes the current session's model. A successful selection is recorded in session history and restored when that session is resumed, but it does not change the configured `defaultProvider` or `defaultModel` used by new sessions. The Promise resolves to `false` when the selected provider lacks authentication.
+
+`pi.setThinkingLevel()` similarly changes only the current session. The choice is recorded in session history and restored when that session is resumed, but it does not change the configured default used by new sessions; Pi also clamps the requested level to the active model's capabilities.
+
+The default editor automatically embeds its working indicator in the editor border. Custom editors built from `CustomEditor` keep the standalone working indicator unless they opt in: pass `{ embedWorkingStatus: true }` as the fourth constructor argument to embed the same status in the border. The option changes status placement, not Agent settlement or Tool execution.
+
 | Managed tool | Availability |
 |---|---|
 | `read`, `bash`, `edit`, `write` | Built in and active by default unless settings or SDK options change the selection |
@@ -488,6 +497,25 @@ export default extension;
 | Extension or `customTools` entries | Registered by the host; still filtered by `tools`, `excludeTools`, and `noTools` |
 
 Tool access is an application policy. The current SDK does not expose the baseline `--yolo` switch.
+
+### RPC queue and cancellation
+
+The headless RPC protocol accepts an optional correlation ID. Its exact `clear_queue` request and successful response types are:
+
+```ts
+{ id?: string; type: "clear_queue" }
+{
+  id?: string;
+  type: "response";
+  command: "clear_queue";
+  success: true;
+  data: { steering: string[]; followUp: string[] };
+}
+```
+
+`clear_queue` atomically removes queued work and returns the removed text, keeping steering and follow-up messages separate. RPC `abort` cancels the active operation, now including active manual compaction, and waits until the session is idle before responding. Queued work can continue unless `clear_queue` removed it; cancellation and queue disposal are distinct operations.
+
+For an interactive Escape flow, issue `clear_queue` before `abort`, then decide whether to restore the returned `steering` and `followUp` strings in the editor. This ordering prevents queued continuation work from starting while the abort command waits for idle.
 
 ### PowerShell Tool factory and operations
 

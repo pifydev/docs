@@ -6,21 +6,21 @@ language: vi
 chapter: 7
 source_url: 'https://www.dgzhuya.com/modules/ch07-event-driven'
 official_refs:
-  - 'https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/README.md#event-flow'
-  - 'https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/docs/extensions.md#events'
+  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/README.md#event-flow'
+  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/docs/extensions.md#events'
 terms_used:
   - Event
   - Agent
   - Tool
   - Stream
 status: reviewed
-last_updated: '2026-08-25'
+last_updated: '2026-09-04'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
 Sáu chương đầu đã lần theo dữ liệu qua model, vòng lặp Agent, Tool và các ranh giới của message. Sự kiện xuất hiện ở mọi bước, nhưng còn ba câu hỏi: thay đổi trạng thái được chuyển tới mã bên ngoài ra sao, thành phần nào nhận thay đổi đó, và khi nào Agent phải chờ thành phần nhận xử lý xong?
 
-Chương này trả lời các câu hỏi đó qua ba lớp API của Pi 0.84.3:
+Chương này trả lời các câu hỏi đó qua ba lớp API của Pi 0.85.0:
 
 - `AgentEvent` trong `@earendil-works/pi-agent-core` mô tả một lượt chạy ở cấp thấp;
 - `AgentSessionEvent` trong `@earendil-works/pi-coding-agent` bổ sung trạng thái cấp sản phẩm như retry và compaction;
@@ -93,7 +93,7 @@ Bên trong, Pi vẫn gọi listener. Sự tách rời nằm ở quyền sở h�
 | Tool | `tool_execution_update` | `toolCallId`, `toolName`, `args`, `partialResult` |
 | Tool | `tool_execution_end` | `toolCallId`, `toolName`, `result`, `isError` |
 
-Đoạn dưới đây bám sát mã nguồn [`packages/agent/src/types.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/types.ts). Đoạn trích chỉ dàn lại thành nhiều dòng, không lược bỏ trường nào:
+Đoạn dưới đây bám sát mã nguồn [`packages/agent/src/types.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/types.ts). Đoạn trích chỉ dàn lại thành nhiều dòng, không lược bỏ trường nào:
 
 ```typescript
 export type AgentEvent =
@@ -192,7 +192,7 @@ Hãy kiểm tra discriminant lồng bên trong trước khi đọc `delta`. Khô
 
 ### `AgentSessionEvent`: vòng đời lõi và trạng thái sản phẩm
 
-`AgentSession` chuyển tiếp mười discriminant của lõi, đổi `agent_end` để thêm `willRetry: boolean`, rồi bổ sung 13 discriminant cấp sản phẩm. Union ở bản mã nguồn đã pin lặp hai nhánh `auto_retry_end` giống hệt nhau tại dòng 169 và 184. Khi bỏ nhánh trùng và chỉ đếm các giá trị `type` khác nhau, session có 23 loại sự kiện.
+`AgentSession` chuyển tiếp mười discriminant của lõi, đổi `agent_end` để thêm `willRetry: boolean`, rồi bổ sung 13 discriminant cấp sản phẩm. Tính cả các giá trị kế thừa và giá trị cấp sản phẩm, session có 23 loại sự kiện riêng biệt.
 
 | Sự kiện sản phẩm | Payload chính xác |
 | --- | --- |
@@ -210,7 +210,7 @@ Hãy kiểm tra discriminant lồng bên trong trước khi đọc `delta`. Khô
 | `summarization_retry_finished` | không có |
 | `bash_execution_update` | `id` không bắt buộc, `delta: string` |
 
-Danh sách chuẩn hóa dưới đây dựa trên [`packages/coding-agent/src/core/agent-session.ts`, dòng 142–185](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/agent-session.ts#L142-L185). Danh sách tham chiếu lại union lõi, gộp cách xuống dòng và chủ động bỏ nhánh `auto_retry_end` thứ hai giống hệt nhánh trước. Đây không phải đoạn trích nguyên văn:
+Danh sách chuẩn hóa dưới đây dựa trên [`packages/coding-agent/src/core/agent-session.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/agent-session.ts). Danh sách tham chiếu lại union lõi và gộp cách xuống dòng. Đây không phải đoạn trích nguyên văn:
 
 ```typescript
 type AgentSessionEvent =
@@ -243,10 +243,36 @@ type AgentSessionEvent =
 | Khởi động và tài nguyên | `project_trust`, `resources_discover` |
 | Phiên | `session_start`, `session_info_changed`, `session_before_switch`, `session_before_fork`, `session_before_compact`, `session_compact`, `session_compact_failed`, `session_before_tree`, `session_tree`, `session_shutdown` |
 | Agent và provider | `before_agent_start`, `agent_start`, `agent_end`, `agent_settled`, `turn_start`, `turn_end`, `message_start`, `message_update`, `message_end`, `tool_execution_start`, `tool_execution_update`, `tool_execution_end`, `context`, `before_provider_request`, `before_provider_headers`, `after_provider_response` |
+| Prompt UI của Extension | `ui_prompt_start`, `ui_prompt_end` |
 | Model | `model_select`, `thinking_level_select` |
 | Tool, Bash và dữ liệu vào | `tool_call`, `tool_result`, `user_bash`, `input` |
 
 Một số tên trùng với sự kiện lõi, nhưng payload và bảo đảm do Extension API định nghĩa. Chẳng hạn, `turn_start` của Extension thêm `turnIndex` và `timestamp`; `agent_end` của Extension không có `willRetry` như sự kiện mà session gửi tới bên đăng ký; `tool_call` và `context` có thể thay đổi quá trình thực thi, còn `tool_execution_start` và `message_update` chỉ thông báo trạng thái vòng đời.
+
+Pi 0.85.0 export các kiểu sự kiện prompt sau từ package root:
+
+```typescript
+type UIPromptKind =
+  "select" | "confirm" | "input" | "editor" | "custom";
+
+interface UIPromptStartEvent {
+  type: "ui_prompt_start";
+  reason: "ui_prompt";
+  kind: UIPromptKind;
+  title?: string;
+}
+
+interface UIPromptEndEvent {
+  type: "ui_prompt_end";
+  reason: "ui_prompt";
+  kind: UIPromptKind;
+  title?: string;
+}
+```
+
+Các lời gọi hướng tới người dùng và có tính chặn gồm `ctx.ui.select()`, `ctx.ui.confirm()`, `ctx.ui.input()`, `ctx.ui.editor()` và `ctx.ui.custom()` phát `ui_prompt_start` trước khi Pi bắt đầu chờ, rồi phát `ui_prompt_end` khi Pi thôi chờ. Cả hai payload luôn mang `reason: "ui_prompt"` cùng `kind` chính xác; `title` chỉ có mặt khi prompt cung cấp tiêu đề. Nhờ vậy, host phân biệt được trạng thái “đang chờ người dùng” với công việc Agent đang chạy mà không xem notification này như hook điều khiển.
+
+Việc phân phối là best-effort và không được chờ trước khi prompt mở hoặc đóng. Các prompt lồng nhau hoặc chồng lấp được gộp thành một khoảng chờ ngoài cùng: chỉ lúc khoảng này mở mới phát `ui_prompt_start`, và chỉ lúc nó đóng mới phát `ui_prompt_end` tương ứng. Vì thế observer chậm hoặc lỗi không thể trì hoãn dialog; integration nên dùng cặp sự kiện làm gợi ý trạng thái, không phải ranh giới audit bền vững.
 
 Payload lỗi chính xác không chỉ là một tên trong danh mục:
 
@@ -296,7 +322,7 @@ Pi duyệt tập `Set` chứa các listener theo thứ tự đăng ký. Pi chờ
 
 ### Trạng thái được cập nhật trước khi bên đăng ký nhận sự kiện
 
-`Agent.processEvents()` cập nhật trạng thái công khai của Agent trước, rồi mới gọi listener. Đoạn dưới là pseudocode rút gọn từ [`packages/agent/src/agent.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/agent.ts):
+`Agent.processEvents()` cập nhật trạng thái công khai của Agent trước, rồi mới gọi listener. Đoạn dưới là pseudocode rút gọn từ [`packages/agent/src/agent.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/agent.ts):
 
 ```typescript
 // Pseudocode: omitted cases retain the same state-before-delivery order.
@@ -335,9 +361,9 @@ Thứ tự này tạo ra các điểm chờ cụ thể. Việc phân phối `mes
 
 ### Tiến độ Tool có thể phân phối chồng lấp rồi hội tụ tại điểm chờ
 
-Tài liệu Pi cũ nói listener của `tool_execution_update` không bao giờ được chờ. Pi 0.84.3 xử lý theo hai giai đoạn. Callback đồng bộ `onUpdate` của Tool khởi chạy việc phân phối nhưng không chờ, nên Tool có thể báo cập nhật tiếp theo khi bên đăng ký còn xử lý cập nhật trước. Pi giữ lại mọi promise phân phối và chờ tất cả hoàn tất trước khi hậu xử lý kết quả.
+Tài liệu Pi cũ nói listener của `tool_execution_update` không bao giờ được chờ. Pi 0.85.0 xử lý theo hai giai đoạn. Callback đồng bộ `onUpdate` của Tool khởi chạy việc phân phối nhưng không chờ, nên Tool có thể báo cập nhật tiếp theo khi bên đăng ký còn xử lý cập nhật trước. Pi giữ lại mọi promise phân phối và chờ tất cả hoàn tất trước khi hậu xử lý kết quả.
 
-Đoạn dưới là pseudocode theo đúng thứ tự trong [`executePreparedToolCall()`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/agent-loop.ts#L670):
+Đoạn dưới là pseudocode theo đúng thứ tự trong [`executePreparedToolCall()`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/agent-loop.ts#L670):
 
 ```typescript
 // Pseudocode: exact ordering, abbreviated payload construction.
@@ -505,7 +531,7 @@ export default function protectProduction(pi: ExtensionAPI) {
 }
 ```
 
-Ở đây, `terminate` áp dụng cho lời gọi bị chặn. Theo [`shouldTerminateToolBatch()`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/agent-loop.ts#L582-L584) ở bản mã nguồn đã pin, Pi chỉ quyết định kết thúc sau khi đã hoàn tất mọi kết quả của nhóm hiện tại. Nếu nhóm có kết quả và mọi kết quả đều có `terminate: true`, quyết định `terminate` cho nhóm nhận giá trị `true`; cờ này không dừng sớm công việc đang chạy trong nhóm.
+Ở đây, `terminate` áp dụng cho lời gọi bị chặn. Theo [`shouldTerminateToolBatch()`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/agent-loop.ts#L582-L584) ở bản mã nguồn đã pin, Pi chỉ quyết định kết thúc sau khi đã hoàn tất mọi kết quả của nhóm hiện tại. Nếu nhóm có kết quả và mọi kết quả đều có `terminate: true`, quyết định `terminate` cho nhóm nhận giá trị `true`; cờ này không dừng sớm công việc đang chạy trong nhóm.
 
 ### Tiền xử lý ngữ cảnh model mà không đổi lịch sử
 
@@ -638,7 +664,7 @@ turn_end
 
 ### Thực thi tuần tự và song song trong một nhóm lời gọi
 
-Ở chế độ tuần tự, Pi xử lý xong kết quả preflight tức thời hoặc toàn bộ pipeline đã chuẩn bị của một lời gọi, phát sự kiện kết thúc và vòng đời của message kết quả, rồi mới bắt đầu lời gọi tiếp theo. Trong bản mã nguồn đã pin, [`executeToolCallsParallel()`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/agent-loop.ts#L489-L552) tách lượt quét theo thứ tự xuất hiện khỏi các pipeline đã chuẩn bị chạy đồng thời:
+Ở chế độ tuần tự, Pi xử lý xong kết quả preflight tức thời hoặc toàn bộ pipeline đã chuẩn bị của một lời gọi, phát sự kiện kết thúc và vòng đời của message kết quả, rồi mới bắt đầu lời gọi tiếp theo. Trong bản mã nguồn đã pin, [`executeToolCallsParallel()`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/agent-loop.ts#L489-L552) tách lượt quét theo thứ tự xuất hiện khỏi các pipeline đã chuẩn bị chạy đồng thời:
 
 1. Pi phát `tool_execution_start` và chạy preflight tuần tự theo thứ tự lời gọi Tool trong message của assistant. Lỗi tra cứu, chuẩn bị, kiểm tra hợp lệ, hook hoặc abort trở thành kết quả tức thời, nên `tool_execution_end` của lỗi đó cũng được phát ngay trong lượt quét. Pi vẫn quét các lời gọi phía sau trừ khi phát hiện abort.
 2. Sau lượt quét, các Tool đã chuẩn bị bắt đầu chạy đồng thời. Mỗi pipeline bình thường phải chờ `tool.execute()`, mọi lần phân phối tiến độ đã thu thập và bước hoàn tất `afterToolCall` trước khi phát `tool_execution_end`.
@@ -690,4 +716,4 @@ Khi áp dụng thiết kế hướng sự kiện cho hệ thống khác, hãy ki
 
 Sự kiện cho biết khi nào ngữ cảnh được chuẩn bị, message đang truyền theo luồng và kết quả Tool đã trở về. Sự kiện không quyết định chỉ dẫn, lịch sử, tài nguyên hay đầu ra Tool nào đi vào lần gọi model kế tiếp. [Chương 8](ch08-context-engineering.md) sẽ đi theo quy trình kỹ thuật ngữ cảnh đó, từ xây dựng system prompt và giới hạn đầu ra Tool tới compaction và branch summary.
 
-> **Chỉ mục mã nguồn đã pin:** Pi `0.84.3`, commit `4e58f324fae8ebfa98a3d45181fb248072a2afac`: [`packages/ai/src/types.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/ai/src/types.ts#L527-L551), [`packages/agent/src/types.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/types.ts), [`packages/agent/src/agent-loop.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/agent-loop.ts#L281), [`packages/agent/src/agent.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/agent/src/agent.ts#L240-L253), [`packages/coding-agent/src/core/agent-session.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/agent-session.ts#L142-L185), và [`packages/coding-agent/src/core/extensions/runner.ts`](https://github.com/earendil-works/pi/blob/4e58f324fae8ebfa98a3d45181fb248072a2afac/packages/coding-agent/src/core/extensions/runner.ts#L801).
+> **Chỉ mục mã nguồn đã pin:** Pi `0.85.0`, commit `107d79f11072bbc8a3a757ed7fd69596bee7d68c`: [`packages/ai/src/types.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/src/types.ts#L527-L551), [`packages/agent/src/types.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/types.ts), [`packages/agent/src/agent-loop.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/agent-loop.ts#L281), [`packages/agent/src/agent.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/agent.ts#L240-L253), [`packages/coding-agent/src/core/agent-session.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/agent-session.ts#L142-L185), [`packages/coding-agent/src/core/extensions/types.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/extensions/types.ts), và [`packages/coding-agent/src/core/extensions/runner.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/extensions/runner.ts#L801).

@@ -6,6 +6,9 @@ language: vi
 official_refs:
   - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/src/types.ts'
   - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/settings-manager.ts'
+  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/extensions/types.ts'
+  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/modes/interactive/components/custom-editor.ts'
+  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/modes/rpc/rpc-types.ts'
   - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/utils/mime.ts'
   - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/client/src/index.ts'
   - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/client/README.md'
@@ -480,6 +483,12 @@ const extension: ExtensionFactory = (pi) => {
 export default extension;
 ```
 
+`pi.setModel()` đổi model của session hiện tại. Lựa chọn thành công được ghi vào lịch sử session và được khôi phục khi session đó được resume, nhưng không thay đổi `defaultProvider` hoặc `defaultModel` đã cấu hình cho session mới. Promise trả về `false` khi provider được chọn chưa có authentication.
+
+Tương tự, `pi.setThinkingLevel()` chỉ đổi mức thinking của session hiện tại. Lựa chọn được ghi vào lịch sử session và được khôi phục khi session đó được resume, nhưng không thay đổi default đã cấu hình cho session mới; Pi cũng giới hạn mức yêu cầu theo capability của model đang hoạt động.
+
+Editor mặc định tự động nhúng working indicator vào viền editor. Các custom editor dựng từ `CustomEditor` giữ working indicator độc lập trừ khi chủ động opt in: truyền `{ embedWorkingStatus: true }` làm đối số thứ tư của constructor để nhúng cùng trạng thái đó vào viền. Option này chỉ đổi vị trí trạng thái, không đổi thời điểm Agent settle hoặc cách Tool chạy.
+
 | Managed tool | Availability |
 |---|---|
 | `read`, `bash`, `edit`, `write` | Được tích hợp và active mặc định, trừ khi setting hoặc SDK option thay đổi lựa chọn |
@@ -488,6 +497,25 @@ export default extension;
 | Entry từ extension hoặc `customTools` | Do host đăng ký; vẫn được lọc bởi `tools`, `excludeTools` và `noTools` |
 
 Quyền truy cập tool là policy của ứng dụng. SDK hiện tại không cung cấp switch `--yolo` trong baseline.
+
+### Queue RPC và thao tác hủy
+
+Giao thức RPC headless nhận correlation ID không bắt buộc. Đây là các kiểu chính xác cho request `clear_queue` và response thành công:
+
+```ts
+{ id?: string; type: "clear_queue" }
+{
+  id?: string;
+  type: "response";
+  command: "clear_queue";
+  success: true;
+  data: { steering: string[]; followUp: string[] };
+}
+```
+
+`clear_queue` loại bỏ nguyên tử công việc trong queue và trả về phần text đã loại bỏ, vẫn tách riêng message steering và follow-up. RPC `abort` hủy thao tác đang hoạt động, nay bao gồm cả compaction thủ công đang chạy, rồi chờ tới khi session idle mới phản hồi. Công việc trong queue vẫn có thể tiếp tục trừ khi `clear_queue` đã loại bỏ nó; thao tác hủy và dọn queue là hai việc riêng.
+
+Trong luồng Escape tương tác, hãy gọi `clear_queue` trước `abort`, sau đó quyết định có khôi phục các chuỗi `steering` và `followUp` được trả về vào editor hay không. Thứ tự này ngăn công việc tiếp diễn trong queue bắt đầu khi lệnh abort còn chờ trạng thái idle.
 
 ### Factory và operations của PowerShell Tool
 

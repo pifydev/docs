@@ -3,9 +3,12 @@ title: Stream output của agent
 description: Hiển thị text, thinking và tiến trình Tool từ event của AgentSession mà không buffer toàn bộ lượt chạy.
 translation_key: how-to-stream-output
 language: vi
+official_refs:
+  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/agent-session.ts'
+  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/modes/rpc/rpc-types.ts'
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-08-25'
+last_updated: '2026-09-04'
 ---
 
 Subscribe vào `AgentSession` trước khi gọi `prompt()`. Các event của session cho phép CLI hoặc UI hiển thị partial output, công việc của Tool, retry và trạng thái cuối mà không phải đọc lại toàn bộ transcript.
@@ -18,10 +21,10 @@ Subscribe vào `AgentSession` trước khi gọi `prompt()`. Các event của se
 
 :::
 
-Các ví dụ dùng Node.js `>=22.19.0`, ESM và package phát hành ở phiên bản `0.84.3`:
+Các ví dụ dùng Node.js `>=22.19.0`, ESM và package phát hành ở phiên bản `0.85.0`:
 
 ```bash
-npm install @earendil-works/pi-coding-agent@0.84.3
+npm install @earendil-works/pi-coding-agent@0.85.0
 npm install --save-dev tsx typescript @types/node
 ```
 
@@ -233,6 +236,25 @@ export function wireCancel(
 ```
 
 Giữ lại partial output đã render. Nếu có assistant response đang hoạt động, nó kết thúc qua `message_end` với `stopReason: "aborted"`, rồi tới event kết thúc attempt và settle. API này bảo đảm thao tác hủy cục bộ và trạng thái idle; nó không đưa ra cam kết tính phí cho provider bên ngoài.
+
+RPC headless tách thao tác hủy khỏi việc dọn queue. Đây là shape chính xác của request `clear_queue` và response thành công công khai:
+
+```ts title="rpc-clear-queue.ts"
+{ id?: string; type: "clear_queue" }
+{
+  id?: string;
+  type: "response";
+  command: "clear_queue";
+  success: true;
+  data: { steering: string[]; followUp: string[] };
+}
+```
+
+RPC `abort` hủy thao tác đang hoạt động—kể cả compaction thủ công đang chạy ở Pi 0.85.0—và chờ tới khi session idle rồi mới phản hồi. Công việc steering hoặc follow-up trong queue vẫn có thể tiếp tục trừ khi `clear_queue` loại bỏ nó, nên chỉ riêng response của abort không có nghĩa queue đã bị xóa.
+
+Đối với Escape tương tác, hãy gửi `clear_queue` trước `abort`, rồi khôi phục text `steering` và `followUp` được trả về trong editor phía client nếu phù hợp. Đảo thứ tự có thể khiến công việc trong queue bắt đầu khi `abort` còn đang chờ trạng thái idle.
+
+Hướng dẫn tiêu thụ sự kiện này trung lập với transport: tiến trình RPC truyền command và event bằng JSON Lines, còn ứng dụng có thể chiếu event của session qua SSE, WebSocket hoặc kênh khác. Không phải mọi provider đều dùng SSE, vì vậy bản sửa OpenAI Codex trong Pi 0.85.0 cho terminal SSE event không có dòng trống theo sau là chi tiết của adapter, không phải quy tắc framing cho renderer này.
 
 ## 5. Batch công việc UI; đừng kỳ vọng backpressure
 

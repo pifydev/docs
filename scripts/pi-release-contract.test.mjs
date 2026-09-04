@@ -693,6 +693,97 @@ function assertParagraphContainsAll(source, patterns, context) {
   return matchingParagraph;
 }
 
+function assertExtensionPromptLifecycle(source, context) {
+  assert.match(
+    source,
+    /type UIPromptKind =\s*\n?\s*"select" \| "confirm" \| "input" \| "editor" \| "custom";/,
+    `${context} must preserve the exact UIPromptKind union`,
+  );
+  for (const [name, discriminant] of [
+    ["UIPromptStartEvent", "ui_prompt_start"],
+    ["UIPromptEndEvent", "ui_prompt_end"],
+  ]) {
+    assert.match(
+      source,
+      new RegExp(
+        `interface ${name} \\{[^}]*type: "${discriminant}";[^}]*reason: "ui_prompt";[^}]*kind: UIPromptKind;[^}]*title\\?: string;[^}]*\\}`,
+      ),
+      `${context} must preserve the exact ${name} payload`,
+    );
+  }
+  assert.match(
+    source,
+    /\|[^|]*(?:Extension UI prompts|Prompt UI của Extension)[^|]*\|[^|]*`ui_prompt_start`[^|]*`ui_prompt_end`[^|]*\|/i,
+    `${context} must include both prompt events in the Extension catalog`,
+  );
+  assertParagraphContainsAll(
+    source,
+    [
+      /`ctx\.ui\.select\(\)`/,
+      /`ctx\.ui\.confirm\(\)`/,
+      /`ctx\.ui\.input\(\)`/,
+      /`ctx\.ui\.editor\(\)`/,
+      /`ctx\.ui\.custom\(\)`/,
+      /`ui_prompt_start`/,
+      /`ui_prompt_end`/,
+      /waiting|chờ/i,
+    ],
+    `${context} prompt-method event relationship`,
+  );
+  assertParagraphContainsAll(
+    source,
+    [
+      /best-effort/i,
+      /not awaited|không được chờ/i,
+      /nested|lồng nhau/i,
+      /overlapping|chồng lấp/i,
+      /coalesc|gộp/i,
+      /outer[^.]*waiting span|khoảng chờ ngoài cùng/i,
+    ],
+    `${context} prompt delivery and coalescing relationship`,
+  );
+}
+
+function assertRpcQueueLifecycle(source, context) {
+  assert.ok(
+    source.includes('{ id?: string; type: "clear_queue" }'),
+    `${context} must preserve the exact clear_queue request shape`,
+  );
+  assert.ok(
+    source.includes(`{
+  id?: string;
+  type: "response";
+  command: "clear_queue";
+  success: true;
+  data: { steering: string[]; followUp: string[] };
+}`),
+    `${context} must preserve the exact clear_queue response shape`,
+  );
+  assertParagraphContainsAll(
+    source,
+    [
+      /`abort`/,
+      /waits?[^.]*idle|chờ[^.]*idle/i,
+      /queued|trong queue/i,
+      /continue|tiếp tục/i,
+      /`clear_queue`/,
+      /manual compaction|compaction thủ công/i,
+      /cancel|hủy/i,
+    ],
+    `${context} abort, queue, and manual-compaction relationship`,
+  );
+  assertParagraphContainsAll(
+    source,
+    [
+      /interactive Escape|Escape tương tác/i,
+      /`clear_queue`[^.]*before[^.]*`abort`|`clear_queue`[^.]*trước[^.]*`abort`/i,
+      /steering/,
+      /followUp/,
+    ],
+    `${context} interactive Escape ordering`,
+  );
+}
+
 const liveCwdBuiltins = ["bash", "edit", "find", "grep", "ls", "read", "write"];
 
 function assertLiveInvocationCwdBinding(source, context) {
@@ -2728,7 +2819,7 @@ test("both configuration locales distinguish tool selection from shell selection
   assert.deepEqual(structures[0], structures[1]);
 });
 
-test("Chapter 7 Extension catalogs specify the 0.84.3 compaction-failure terminal contract", async () => {
+test("Chapter 7 Extension catalogs specify the Pi 0.85 compaction-failure terminal contract", async () => {
   const chapters = await readLocalizedContent("ch07-event-driven.md");
   const localeContract = {
     en: {
@@ -2781,6 +2872,265 @@ test("Chapter 7 Extension catalogs specify the 0.84.3 compaction-failure termina
     structures.push(sectionStructure(section));
   }
   assert.deepEqual(structures[0], structures[1]);
+});
+
+test("Pi 0.85 Chapter 7 Extension catalogs define the coalesced UI prompt lifecycle", async () => {
+  const chapters = await readLocalizedContent("ch07-event-driven.md");
+  const headings = {
+    en: "### Extension events form a separate contract",
+    vi: "### Sự kiện Extension có hợp đồng riêng",
+  };
+  const structures = [];
+
+  for (const { locale, source } of chapters) {
+    const section = extractMarkdownSection(
+      source,
+      headings[locale],
+      `${locale} Chapter 7 Extension prompt lifecycle`,
+    );
+    assertExtensionPromptLifecycle(
+      section.body,
+      `${locale} Chapter 7 Extension prompt lifecycle`,
+    );
+    structures.push(sectionStructure(section));
+  }
+  assert.deepEqual(structures[0], structures[1]);
+
+  const promptFixture = `
+type UIPromptKind = "select" | "confirm" | "input" | "editor" | "custom";
+interface UIPromptStartEvent { type: "ui_prompt_start"; reason: "ui_prompt"; kind: UIPromptKind; title?: string; }
+interface UIPromptEndEvent { type: "ui_prompt_end"; reason: "ui_prompt"; kind: UIPromptKind; title?: string; }
+
+| Extension UI prompts | \`ui_prompt_start\`, \`ui_prompt_end\` |
+
+\`ctx.ui.select()\`, \`ctx.ui.confirm()\`, \`ctx.ui.input()\`, \`ctx.ui.editor()\`, and \`ctx.ui.custom()\` emit \`ui_prompt_start\` and \`ui_prompt_end\` around the time Pi is waiting for the user.
+
+Delivery is best-effort and not awaited. Nested or overlapping prompts are coalesced into one outer waiting span.`;
+  assert.doesNotThrow(() =>
+    assertExtensionPromptLifecycle(promptFixture, "synthetic prompt fixture"),
+  );
+  for (const [label, mutation] of [
+    ["missing kind", promptFixture.replace(' | "custom"', "")],
+    ["wrong reason", promptFixture.replaceAll('"ui_prompt"', '"prompt"')],
+    ["awaited", promptFixture.replace("not awaited", "awaited")],
+    ["uncoalesced", promptFixture.replace("are coalesced", "remain separate")],
+  ]) {
+    assert.throws(
+      () =>
+        assertExtensionPromptLifecycle(
+          mutation,
+          `mutated prompt lifecycle ${label}`,
+        ),
+      /UIPromptKind|UIPromptStartEvent|UIPromptEndEvent|prompt delivery and coalescing/,
+    );
+  }
+});
+
+test("Pi 0.85 stream guides define RPC queue clearing and abort ordering", async () => {
+  const guides = await readLocalizedContent("how-to/stream-output.md");
+  const headings = {
+    en: "## 4. Cancel an active run",
+    vi: "## 4. Hủy lượt chạy đang hoạt động",
+  };
+  const structures = [];
+
+  for (const { locale, source } of guides) {
+    const section = extractMarkdownSection(
+      source,
+      headings[locale],
+      `${locale} stream guide RPC queue lifecycle`,
+    );
+    assertRpcQueueLifecycle(
+      section.body,
+      `${locale} stream guide RPC queue lifecycle`,
+    );
+    assertParagraphContainsAll(
+      section.body,
+      [
+        /transport-neutral|trung lập với transport/i,
+        /JSON Lines/,
+        /not[^.]*all providers[^.]*SSE|không[^.]*mọi provider[^.]*SSE/i,
+      ],
+      `${locale} stream guide transport boundary`,
+    );
+    structures.push(sectionStructure(section));
+  }
+  assert.deepEqual(structures[0], structures[1]);
+
+  const rpcFixture = `
+\`\`\`ts
+{ id?: string; type: "clear_queue" }
+{
+  id?: string;
+  type: "response";
+  command: "clear_queue";
+  success: true;
+  data: { steering: string[]; followUp: string[] };
+}
+\`\`\`
+
+RPC \`abort\` waits until idle and now cancels active manual compaction; queued work can continue unless \`clear_queue\` removes it.
+
+For interactive Escape, send \`clear_queue\` before \`abort\`, then restore the returned steering and followUp text.
+
+This event-consumption guidance is transport-neutral: RPC uses JSON Lines, and not all providers use SSE.`;
+  assert.doesNotThrow(() =>
+    assertRpcQueueLifecycle(rpcFixture, "synthetic RPC fixture"),
+  );
+  for (const [label, mutation] of [
+    [
+      "response field",
+      rpcFixture.replace("followUp: string[]", "follow_up: string[]"),
+    ],
+    [
+      "abort ordering",
+      rpcFixture.replace(
+        "`clear_queue` before `abort`",
+        "`abort` before `clear_queue`",
+      ),
+    ],
+    [
+      "queue semantics",
+      rpcFixture.replace(
+        "queued work can continue",
+        "queued work is discarded",
+      ),
+    ],
+    [
+      "compaction cancellation",
+      rpcFixture.replace(
+        "now cancels active manual compaction",
+        "does not affect manual compaction",
+      ),
+    ],
+  ]) {
+    assert.throws(
+      () => assertRpcQueueLifecycle(mutation, `mutated RPC lifecycle ${label}`),
+      /response shape|abort, queue, and manual-compaction|interactive Escape ordering/,
+    );
+  }
+});
+
+test("Pi 0.85 API Extension guidance preserves session-scoped controls and editor status ownership", async () => {
+  const references = await readLocalizedContent("reference/api.md");
+  const headings = {
+    en: "### Extensions and managed tools",
+    vi: "### Extension và managed tool",
+  };
+  const localeContract = {
+    en: {
+      restored: /recorded[^.]*session history[^.]*restored[^.]*resumed/i,
+      modelDefault:
+        /does not change[^.]*`defaultProvider`[^.]*`defaultModel`[^.]*new sessions/i,
+      thinkingDefault:
+        /does not change[^.]*configured default[^.]*new sessions/i,
+      defaultEditor: /default editor[^.]*embeds[^.]*working indicator/i,
+      customEditor: /custom editors[^.]*standalone[^.]*unless[^.]*opt in/i,
+    },
+    vi: {
+      restored: /ghi[^.]*lịch sử session[^.]*khôi phục[^.]*resume/i,
+      modelDefault:
+        /không thay đổi[^.]*`defaultProvider`[^.]*`defaultModel`[^.]*session mới/i,
+      thinkingDefault:
+        /không thay đổi[^.]*default đã cấu hình[^.]*session mới/i,
+      defaultEditor: /editor mặc định[^.]*nhúng[^.]*working indicator/i,
+      customEditor: /custom editor[^.]*độc lập[^.]*trừ khi[^.]*opt in/i,
+    },
+  };
+  const structures = [];
+
+  for (const { locale, source } of references) {
+    const section = assertContainsAll(
+      source,
+      [
+        /`pi\.setModel\(\)`/,
+        /`pi\.setThinkingLevel\(\)`/,
+        /`CustomEditor`/,
+        /\{ embedWorkingStatus: true \}/,
+      ],
+      `${locale} API Extension session controls`,
+      { heading: headings[locale], minWords: 190 },
+    );
+    const contract = localeContract[locale];
+    assertParagraphContainsAll(
+      section.body,
+      [/`pi\.setModel\(\)`/, contract.restored, contract.modelDefault],
+      `${locale} API setModel session-default boundary`,
+    );
+    assertParagraphContainsAll(
+      section.body,
+      [
+        /`pi\.setThinkingLevel\(\)`/,
+        contract.restored,
+        contract.thinkingDefault,
+      ],
+      `${locale} API setThinkingLevel session-default boundary`,
+    );
+    assertParagraphContainsAll(
+      section.body,
+      [
+        /`CustomEditor`/,
+        /\{ embedWorkingStatus: true \}/,
+        contract.defaultEditor,
+        contract.customEditor,
+      ],
+      `${locale} API editor working-status ownership`,
+    );
+    structures.push(sectionStructure(section));
+  }
+  assert.deepEqual(structures[0], structures[1]);
+});
+
+test("Pi 0.85 API reference records exact RPC clear_queue shapes and lifecycle", async () => {
+  const references = await readLocalizedContent("reference/api.md");
+  const headings = {
+    en: "### RPC queue and cancellation",
+    vi: "### Queue RPC và thao tác hủy",
+  };
+  const structures = [];
+
+  for (const { locale, source } of references) {
+    const section = extractMarkdownSection(
+      source,
+      headings[locale],
+      `${locale} API RPC queue lifecycle`,
+    );
+    assertRpcQueueLifecycle(section.body, `${locale} API RPC queue lifecycle`);
+    structures.push(sectionStructure(section));
+  }
+  assert.deepEqual(structures[0], structures[1]);
+});
+
+test("Pi 0.85 prompt and RPC pages use current source pins and review date", async () => {
+  const release = await readReleaseFixture();
+  const paths = [
+    "ch07-event-driven.md",
+    "how-to/stream-output.md",
+    "reference/api.md",
+  ];
+
+  for (const relativePath of paths) {
+    for (const { locale, source } of await readLocalizedContent(relativePath)) {
+      assert.doesNotMatch(
+        source,
+        /0\.84\.3|4e58f324fae8ebfa98a3d45181fb248072a2afac/,
+        `${locale} ${relativePath} must not retain the previous baseline`,
+      );
+      assert.match(
+        source,
+        /last_updated:\s*["']2026-09-04["']/,
+        `${locale} ${relativePath} must record the Pi 0.85 review date`,
+      );
+      for (const { link } of piSourceLinks([
+        { filename: relativePath, source },
+      ])) {
+        assert.ok(
+          isPublishedReleaseSourceLink(link, release),
+          `${locale} ${relativePath} must pin Pi source links to 0.85.0`,
+        );
+      }
+    }
+  }
 });
 
 test("Chapter 9 compaction lifecycle specifies failed-event payload, order, and terminal behavior", async () => {
