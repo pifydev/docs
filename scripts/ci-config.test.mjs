@@ -525,6 +525,15 @@ test("ESLint excludes isolated worktrees from repository-wide linting", async ()
   assert.match(config, /["']\.worktrees\/\*\*["']/);
 });
 
+test("repository text files use LF across operating systems", async () => {
+  const attributes = await readFile(
+    new URL(".gitattributes", repositoryRoot),
+    "utf8",
+  ).catch(() => "");
+
+  assert.match(attributes, /^\* text=auto eol=lf$/m);
+});
+
 test("deployment guard rejects secret contexts and deploy steps", () => {
   const forbiddenWorkflows = [
     { env: { TOKEN: "${{ secrets.TOP_LEVEL_TOKEN }}" }, jobs: {} },
