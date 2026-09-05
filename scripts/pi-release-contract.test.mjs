@@ -37,6 +37,10 @@ const requiredArchitectureTerms = [
   "Chord",
 ];
 
+function normalizeLineEndings(source) {
+  return source.replace(/\r\n?/g, "\n");
+}
+
 function chapter11ExampleFence(markdown) {
   const matches = [
     ...markdown.matchAll(
@@ -2755,9 +2759,11 @@ test("replaceable runtime guides bind Extensions before every host subscription"
 });
 
 test("replaceable runtime binding guard rejects missing and reordered Extension binding", async () => {
-  const markdown = await readFile(
-    new URL("content/en/how-to/host-session-runtime.md", repositoryRoot),
-    "utf8",
+  const markdown = normalizeLineEndings(
+    await readFile(
+      new URL("content/en/how-to/host-session-runtime.md", repositoryRoot),
+      "utf8",
+    ),
   );
   const extensionBinding =
     "      await session.bindExtensions(bindings.extensionBindings(session));\n";
@@ -2802,9 +2808,11 @@ test("replaceable runtime guides clean up failed initial and replacement binding
 });
 
 test("replaceable runtime cleanup guard rejects missing subscription cleanup and runtime disposal", async () => {
-  const markdown = await readFile(
-    new URL("content/en/how-to/host-session-runtime.md", repositoryRoot),
-    "utf8",
+  const markdown = normalizeLineEndings(
+    await readFile(
+      new URL("content/en/how-to/host-session-runtime.md", repositoryRoot),
+      "utf8",
+    ),
   );
   const bindStart = markdown.indexOf(
     "  const bindSession = async (session: AgentSession) => {",
@@ -3199,7 +3207,7 @@ test("deterministic Agent guide parity rejects function, import, and runner drif
         repositoryRoot,
       ),
       "utf8",
-    ),
+    ).then((source) => normalizeLineEndings(source)),
     readFile(
       new URL("tests/fixtures/pi-sdk-0850.contract.ts", repositoryRoot),
       "utf8",
@@ -3258,7 +3266,7 @@ test("deterministic Agent guide parser rejects malformed and unrelated top-level
         repositoryRoot,
       ),
       "utf8",
-    ),
+    ).then((source) => normalizeLineEndings(source)),
     readFile(
       new URL("tests/fixtures/pi-sdk-0850.contract.ts", repositoryRoot),
       "utf8",

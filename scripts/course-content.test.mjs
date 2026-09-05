@@ -100,10 +100,11 @@ async function exists(relativePath) {
 }
 
 async function readCoursePage(locale, filename) {
-  return readFile(
+  const source = await readFile(
     new URL(`content/${locale}/course/${filename}`, repositoryRoot),
     "utf8",
   );
+  return source.replace(/\r\n?/g, "\n");
 }
 
 function scanMarkdownFences(body) {

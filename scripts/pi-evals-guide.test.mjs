@@ -338,7 +338,7 @@ function validateGuideDocument(source, locale) {
 test("the paired Pi eval guides satisfy the release-pinned workflow contract", async () => {
   const documents = await Promise.all(
     Object.entries(GUIDE_PATHS).map(async ([locale, url]) => {
-      const source = await readFile(url, "utf8");
+      const source = normalizeLineEndings(await readFile(url, "utf8"));
       return { locale, source };
     }),
   );
@@ -361,7 +361,7 @@ test("the paired Pi eval guides satisfy the release-pinned workflow contract", a
 });
 
 test("rejects a changed shell command", async () => {
-  const source = await readFile(GUIDE_PATHS.en, "utf8");
+  const source = normalizeLineEndings(await readFile(GUIDE_PATHS.en, "utf8"));
   const mutated = source.replace(
     "npm run eval -- --provider openai --model gpt-5.6-sol src/smoke.eval.ts\n```",
     "npm run eval -- --provider openai --model gpt-5.6-sol src/not-smoke.eval.ts\n```",
@@ -371,7 +371,7 @@ test("rejects a changed shell command", async () => {
 });
 
 test("rejects a removed shell command", async () => {
-  const source = await readFile(GUIDE_PATHS.en, "utf8");
+  const source = normalizeLineEndings(await readFile(GUIDE_PATHS.en, "utf8"));
   const mutated = source.replace(
     "```bash\nnpm run clean --workspace=@earendil-works/pi-evals\n```\n",
     "",
@@ -381,7 +381,7 @@ test("rejects a removed shell command", async () => {
 });
 
 test("rejects source links that survive only in frontmatter", async () => {
-  const source = await readFile(GUIDE_PATHS.en, "utf8");
+  const source = normalizeLineEndings(await readFile(GUIDE_PATHS.en, "utf8"));
   const mutated = source.replace(
     /^## Source map for Pi 0\.85\.0\n[\s\S]*?(?=^## Acceptance checklist)/m,
     "",
@@ -391,7 +391,7 @@ test("rejects source links that survive only in frontmatter", async () => {
 });
 
 test("rejects a topic token present only in frontmatter", async () => {
-  const source = await readFile(GUIDE_PATHS.en, "utf8");
+  const source = normalizeLineEndings(await readFile(GUIDE_PATHS.en, "utf8"));
   const parsed = matter(source);
   const mutated = source.replace(
     parsed.content,
@@ -415,7 +415,7 @@ test("rejects a topic token present only in frontmatter", async () => {
 });
 
 test("rejects removal of the custom artifact cleanup caveat", async () => {
-  const source = await readFile(GUIDE_PATHS.en, "utf8");
+  const source = normalizeLineEndings(await readFile(GUIDE_PATHS.en, "utf8"));
   const mutated = source.replace(
     /The fixed script only removes[\s\S]*?under your own retention policy\./,
     "The command removes every local eval run.",

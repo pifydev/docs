@@ -516,6 +516,15 @@ test("Mermaid validation supplies the documented Chromium CI sandbox override", 
   assert.deepEqual(JSON.parse(configText), { args: ["--no-sandbox"] });
 });
 
+test("ESLint excludes isolated worktrees from repository-wide linting", async () => {
+  const config = await readFile(
+    new URL("eslint.config.mjs", repositoryRoot),
+    "utf8",
+  );
+
+  assert.match(config, /["']\.worktrees\/\*\*["']/);
+});
+
 test("deployment guard rejects secret contexts and deploy steps", () => {
   const forbiddenWorkflows = [
     { env: { TOKEN: "${{ secrets.TOP_LEVEL_TOKEN }}" }, jobs: {} },

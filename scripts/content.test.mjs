@@ -283,7 +283,7 @@ test("README and bilingual changelog describe the complete SDK and course releas
     /Run the complete local gate:\s*```bash\s*([\s\S]*?)```/,
   )?.[1];
   assert.equal(
-    completeGate?.trim(),
+    completeGate?.trim().replace(/\r\n?/g, "\n"),
     [
       "npm run quality:content",
       "npm run typecheck",
