@@ -827,6 +827,50 @@ function withoutAllowedStaleBaselineSelfTestLiterals(
     );
 }
 
+function tokenizeShellCommands(source, cmdShell = false) {
+  const commands = [];
+  let command = [];
+  let argument = "";
+  let quote;
+  let comment = false;
+  const endArgument = () => {
+    if (cmdShell && command.length === 0 && /^(?:@?rem$|::)/i.test(argument)) {
+      comment = true;
+    } else if (argument.length > 0) {
+      command.push(argument);
+    }
+    argument = "";
+  };
+  const endCommand = () => {
+    endArgument();
+    if (command.length > 0) commands.push(command);
+    command = [];
+  };
+  for (const character of source) {
+    if (comment) {
+      if (character !== "\n") continue;
+      comment = false;
+    }
+    if (quote) {
+      if (character === quote) quote = undefined;
+      else argument += character;
+    } else if (character === '"' || (!cmdShell && character === "'")) {
+      quote = character;
+    } else if (!cmdShell && character === "#") {
+      comment = true;
+    } else if (/[\n;&|]/.test(character)) {
+      endCommand();
+    } else if (/\s/.test(character)) {
+      endArgument();
+    } else {
+      argument += character;
+    }
+  }
+  assert.equal(quote, undefined, "SDK install recipes must close shell quotes");
+  endCommand();
+  return commands;
+}
+
 function sdkInstallCommands(markdown) {
   const snippets = [];
   for (const segment of markdownSemanticSegments(markdown)) {
@@ -841,18 +885,22 @@ function sdkInstallCommands(markdown) {
           ? /\^\n[ \t]*/g
           : /\\\n[ \t]*/g;
       const body = segment.text.split("\n").slice(1, -1).join("\n");
-      snippets.push(body.replace(continuation, " "));
+      snippets.push({
+        source: body.replace(continuation, " "),
+        cmdShell: /^(?:cmd|bat)$/.test(language),
+      });
     } else {
       snippets.push(
-        ...[...segment.text.matchAll(/`([^`\n]+)`/g)].map((match) => match[1]),
+        ...[...segment.text.matchAll(/`([^`\n]+)`/g)].map((match) => ({
+          source: match[1],
+        })),
       );
     }
   }
-  return snippets.flatMap((snippet) =>
-    snippet
-      .split(/\n|[;&|]+/)
-      .map((command) => command.trim())
-      .filter((command) => /^npm[ \t]+install(?:[ \t]|$)/.test(command)),
+  return snippets.flatMap(({ source, cmdShell }) =>
+    tokenizeShellCommands(source, cmdShell).filter(
+      ([executable, action]) => executable === "npm" && action === "install",
+    ),
   );
 }
 
@@ -864,9 +912,14 @@ function assertSdkInstallPackages(source, scope, context) {
       ),
     ].map((match) => match[1]),
   );
-  const installedPackages = sdkInstallCommands(scope).flatMap((command) => [
-    ...command.matchAll(/(@earendil-works\/pi-[a-z-]+)(?:@([^\s`]+))?/g),
-  ]);
+  const installedPackages = sdkInstallCommands(scope).flatMap((command) =>
+    command
+      .slice(2)
+      .map((argument) =>
+        /^(@earendil-works\/pi-[a-z-]+)(?:@(.+))?$/.exec(argument),
+      )
+      .filter(Boolean),
+  );
   assert.ok(importedPackages.size > 0, `${context} must import Pi packages`);
   assert.deepEqual(
     [...new Set(installedPackages.map((match) => match[1]))].sort(),
@@ -3128,6 +3181,60 @@ test("SDK install recipes keep following commands and prose outside the install 
   ]) {
     assert.doesNotThrow(() =>
       assertSdkInstallPackages(source, scope, "command boundary"),
+    );
+  }
+});
+
+test("SDK install recipes accept quoted package arguments", () => {
+  const source =
+    'import { createAgentSession } from "@earendil-works/pi-coding-agent";';
+  for (const [language, quotes] of [
+    ["bash", ["'", '"']],
+    ["powershell", ["'", '"']],
+    ["cmd", ['"']],
+  ]) {
+    for (const quote of quotes) {
+      const scope = [
+        `\`\`\`${language}`,
+        `npm install --save-exact ${quote}@earendil-works/pi-coding-agent@0.87.1${quote}`,
+        "```",
+      ].join("\n");
+      assert.doesNotThrow(() => assertSdkInstallPackages(source, scope, language));
+    }
+  }
+});
+
+test("SDK install recipes ignore shell comments without stripping quoted hashes", () => {
+  const source =
+    'import { createAgentSession } from "@earendil-works/pi-coding-agent";';
+  for (const [language, comment] of [
+    ["bash", "#"],
+    ["powershell", "#"],
+    ["cmd", "& rem"],
+    ["cmd", "& ::"],
+  ]) {
+    const unquotedScope = [
+      `\`\`\`${language}`,
+      `npm install @earendil-works/pi-coding-agent@0.87.1 ${comment} @earendil-works/pi-server@0.87.1 "unmatched quote in comment`,
+      "```",
+    ].join("\n");
+    assert.doesNotThrow(() =>
+      assertSdkInstallPackages(source, unquotedScope, language),
+    );
+    const scope = [
+      `\`\`\`${language}`,
+      `npm install --registry="https://registry.example/#mirror;cache" "@earendil-works/pi-coding-agent@0.87.1" ${comment} @earendil-works/pi-server@0.87.1`,
+      "```",
+    ].join("\n");
+    assert.doesNotThrow(() => assertSdkInstallPackages(source, scope, language));
+    assert.throws(
+      () =>
+        assertSdkInstallPackages(
+          source,
+          scope.replace("pi-coding-agent@0.87.1", "pi-coding-agent@0.87.1#invalid"),
+          language,
+        ),
+      /must pin @earendil-works\/pi-coding-agent to 0\.87\.1/,
     );
   }
 });
