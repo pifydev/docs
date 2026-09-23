@@ -2086,6 +2086,12 @@ function assertRollupPublicationScope(entryBody, locale, context) {
             /\b(?:scheduled|planned|deferred|pending|will)\b/i,
             /\b(?:later|remaining|subsequent|future|follow-up)\b/i,
           ],
+          completed: [
+            /\b(?:chapters?|guides?|references?)\b|\bsource(?:[- ]review)?\s+records?\b/i,
+            /\b(?:already|now|are|is|have been|has been)\s+(?:(?:been|already|now|fully)\s+)*(?:migrated|updated|complete(?:d)?|finished)\b/i,
+          ],
+          negatedCompletion:
+            /\b(?:not|never)\s+(?:(?:yet|already|fully|now|been)\s+)*(?:migrated|updated|complete(?:d)?|finished)\b/i,
         }
       : {
           published: [
@@ -2103,6 +2109,13 @@ function assertRollupPublicationScope(entryBody, locale, context) {
             /dự kiến|sẽ|để lại|chờ/i,
             /còn lại|tiếp theo|sau/i,
           ],
+          completed: [
+            /chương|hướng dẫn|trang tham khảo|hồ sơ nguồn|source[- ]review\s+record/i,
+            /đã|nay|hiện/i,
+            /cập nhật|migrat(?:e|ion)|hoàn tất|hoàn thành/i,
+          ],
+          negatedCompletion:
+            /(?:chưa|không)\s+(?:(?:được|hoàn toàn)\s+)*(?:cập nhật|migrat(?:e|ion)|hoàn tất|hoàn thành)/i,
         };
   assertParagraphContainsAll(
     scope,
@@ -2114,6 +2127,16 @@ function assertRollupPublicationScope(entryBody, locale, context) {
     [/\bcommits?\b/i, ...anchors.deferred],
     `${context} detailed migrations deferred to later commits`,
   );
+  for (const claim of scope.split(/[.!?;](?:\s+|$)|\n(?=- )/)) {
+    const completed =
+      anchors.completed.every((pattern) => pattern.test(claim)) &&
+      !anchors.negatedCompletion.test(claim);
+    assert.equal(
+      completed,
+      false,
+      `${context} must not claim completed detailed migrations: ${claim.trim()}`,
+    );
+  }
 }
 
 test("first bilingual changelog distinguishes publication scope and includes GPT-6 Astra", async () => {
@@ -2138,6 +2161,14 @@ test("first bilingual changelog publication guard allows editorial rewrites and 
         "Later commits will migrate the chapters, guides, references, and source-review records.",
       completed:
         "The chapters, guides, references, and source-review records are already migrated.",
+      completedAlternatives: [
+        "All detailed chapters are now complete.",
+        "The How-to guides have been fully migrated.",
+        "The references are already updated.",
+        "Source-review records are fully migrated.",
+      ],
+      notCompleted: "The detailed chapters are not yet fully migrated.",
+      unrelatedCompleted: "The package fixtures are already updated.",
     },
     vi: {
       published:
@@ -2146,6 +2177,14 @@ test("first bilingual changelog publication guard allows editorial rewrites and 
         "Các chương, hướng dẫn, trang tham khảo cùng hồ sơ nguồn sẽ được cập nhật trong những commit tiếp theo.",
       completed:
         "Các chương, hướng dẫn, trang tham khảo cùng hồ sơ nguồn đã cập nhật xong.",
+      completedAlternatives: [
+        "Các chương chi tiết đã hoàn tất.",
+        "Những hướng dẫn How-to nay đã được cập nhật đầy đủ.",
+        "Trang tham khảo hiện đã hoàn thành migration.",
+        "Hồ sơ nguồn đã được cập nhật xong.",
+      ],
+      notCompleted: "Các chương chi tiết chưa được cập nhật xong.",
+      unrelatedCompleted: "Các package fixture đã được cập nhật xong.",
     },
   };
   for (const { locale, source } of await readLocalizedContent("changelog.md")) {
@@ -2157,13 +2196,48 @@ test("first bilingual changelog publication guard allows editorial rewrites and 
       context,
     );
     const firstBullet = scope.body.split(/\n(?=- )/)[0];
-    const { published, deferred, completed } = rewrites[locale];
+    const {
+      published,
+      deferred,
+      completed,
+      completedAlternatives,
+      notCompleted,
+      unrelatedCompleted,
+    } = rewrites[locale];
     const rewrite = entry.body.replace(
       firstBullet,
       `- ${published} ${deferred}`,
     );
     assert.doesNotThrow(() =>
       assertRollupPublicationScope(rewrite, locale, context),
+    );
+    for (const claim of [completed, ...completedAlternatives]) {
+      assert.throws(
+        () =>
+          assertRollupPublicationScope(
+            rewrite.replace(deferred, `${deferred} ${claim}`),
+            locale,
+            context,
+          ),
+        { name: "AssertionError" },
+        `${context} must reject an appended completion claim: ${claim}`,
+      );
+    }
+    for (const claim of [notCompleted, unrelatedCompleted]) {
+      assert.doesNotThrow(() =>
+        assertRollupPublicationScope(
+          rewrite.replace(deferred, `${deferred} ${claim}`),
+          locale,
+          context,
+        ),
+      );
+    }
+    assert.doesNotThrow(() =>
+      assertRollupPublicationScope(
+        `${completed}\n\n${rewrite}`,
+        locale,
+        context,
+      ),
     );
     assert.throws(
       () =>
