@@ -370,6 +370,13 @@ Context edits are themselves append-only tree entries:
 | `raw transcript / UI history` | `append-only` | `unchanged` |
 | `returned editId` | `new context_edit entry` | `not target entry` |
 
+```text
+appendContextEdit(targetEntryId, null) -> context_edit(editId) -> provider context - targetEntryId
+appendContextEdit(targetEntryId, { content }) -> context_edit(editId) -> provider context[targetEntryId] = content
+context_edit -> raw transcript append-only
+editId != targetEntryId
+```
+
 The returned ID identifies the new edit entry, not the target. An exhaustive `SessionEntry` switch must handle `context_edit`, even though `sessionEntryToContextMessages()` emits no message for the edit itself.
 
 ### Why entries store only their parent

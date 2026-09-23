@@ -37,6 +37,14 @@ const requiredArchitectureTerms = [
   "attachmentId",
   "Chord",
 ];
+const releaseContractTestTitles = Object.freeze({
+  toolTerminalBaseline:
+    "Tool and terminal pages use the current baseline metadata",
+  promptRpcBaseline:
+    "Pi 0.87.1 prompt and RPC pages use current source pins and review date",
+  sourceRefParser:
+    "parses the exact GitHub source ref for published Pi release links",
+});
 
 function normalizeLineEndings(source) {
   return source.replace(/\r\n?/g, "\n");
@@ -755,17 +763,14 @@ function withoutAllowedStaleBaselineSelfTestLiterals(
   }
 
   const previousBaselinePattern = `/0\\.84\\.3|${previousCommit}/`;
-  const allowedLiteralsByTest = new Map([
+  const allowedLiteralsByTestId = new Map([
     [
-      "Pi 0.85 Tool and terminal pages use the current baseline metadata",
+      "toolTerminalBaseline",
       [{ kind: "regex", value: previousBaselinePattern }],
     ],
+    ["promptRpcBaseline", [{ kind: "regex", value: previousBaselinePattern }]],
     [
-      "Pi 0.85 prompt and RPC pages use current source pins and review date",
-      [{ kind: "regex", value: previousBaselinePattern }],
-    ],
-    [
-      "parses the exact GitHub source ref for published Pi release links",
+      "sourceRefParser",
       [
         {
           kind: "string",
@@ -794,10 +799,13 @@ function withoutAllowedStaleBaselineSelfTestLiterals(
       continue;
     }
     const titleNode = statement.expression.arguments[0];
-    if (!ts.isStringLiteral(titleNode)) continue;
-    const remainingLiterals = allowedLiteralsByTest
-      .get(titleNode.text)
-      ?.slice();
+    const testId =
+      ts.isPropertyAccessExpression(titleNode) &&
+      ts.isIdentifier(titleNode.expression) &&
+      titleNode.expression.text === "releaseContractTestTitles"
+        ? titleNode.name.text
+        : undefined;
+    const remainingLiterals = allowedLiteralsByTestId.get(testId)?.slice();
     if (!remainingLiterals) continue;
 
     const visit = (node) => {
@@ -1122,21 +1130,32 @@ function assertContractTableRows(source, expectedRows, context, options = {}) {
   return table;
 }
 
-function assertContractTable(
+function assertTechnicalContractRows(
   source,
-  { header: expectedHeader, rows: expectedRows },
+  expectedRows,
   context,
-  options = {},
+  { ordered = false } = {},
 ) {
   const table = parseMarkdownContractTableDefinitions(source).find(
-    ({ header, rows }) =>
-      header.length === expectedHeader.length &&
-      header.every((cell, index) => cell === expectedHeader[index]) &&
-      contractTableContainsRows(rows, expectedRows, options),
+    ({ rows }) => {
+      let lastIndex = -1;
+      return expectedRows.every((expectedCells) => {
+        const rowIndex = rows.findIndex(
+          (row, index) =>
+            (!ordered || index > lastIndex) &&
+            expectedCells.every(
+              ([cellIndex, value]) => row[cellIndex] === value,
+            ),
+        );
+        if (rowIndex === -1) return false;
+        lastIndex = rowIndex;
+        return true;
+      });
+    },
   );
   assert.ok(
     table,
-    `${context} must preserve the localized header and technical relationships`,
+    `${context} must preserve the stable technical relationships`,
   );
   return table;
 }
@@ -1880,6 +1899,20 @@ function extractTypeScriptFenceContaining(source, marker, context) {
   return matches[0][1].replaceAll("\r\n", "\n");
 }
 
+function extractTextFenceContaining(source, marker, context) {
+  const matches = [
+    ...source.matchAll(
+      /^```text(?:[ \t]+[^\r\n]*)?[ \t]*\r?\n([\s\S]*?)\r?\n```[ \t]*$/gm,
+    ),
+  ].filter((match) => match[1].includes(marker));
+  assert.equal(
+    matches.length,
+    1,
+    `${context} must contain exactly one text contract for ${marker}`,
+  );
+  return matches[0][1].replaceAll("\r\n", "\n");
+}
+
 function assertVirtualTypeScriptCompiles(virtualSources, context) {
   const options = {
     target: ts.ScriptTarget.ES2022,
@@ -1993,7 +2026,15 @@ function stripAllowedLifecycleMigration(block, patternIndex) {
             "giu",
           ),
           new RegExp(
+            `\\bmigrate\\s+${oldTurnPredicate}\\s+to\\s+${finishTurn}`,
+            "giu",
+          ),
+          new RegExp(
             `\\bthay\\s+${oldTurnPredicate}\\s+bằng\\s+${finishTurn}`,
+            "giu",
+          ),
+          new RegExp(
+            `\\bchuyển\\s+${oldTurnPredicate}\\s+sang\\s+${finishTurn}`,
             "giu",
           ),
         ]
@@ -2003,7 +2044,15 @@ function stripAllowedLifecycleMigration(block, patternIndex) {
             "giu",
           ),
           new RegExp(
+            `\\bmigrate\\s+${oldTurnBoundary}\\s+to\\s+${emitBoundary}`,
+            "giu",
+          ),
+          new RegExp(
             `\\bthay\\s+${oldTurnBoundary}\\s+bằng\\s+${emitBoundary}`,
+            "giu",
+          ),
+          new RegExp(
+            `\\bchuyển\\s+${oldTurnBoundary}\\s+sang\\s+${emitBoundary}`,
             "giu",
           ),
         ];
@@ -2070,473 +2119,250 @@ test("0.87.0 session context and lifecycle removes obsolete current guidance", a
     assert.match(migration, /\bfinishTurn\b/);
   }
 
-  const changelogFixture = (body) => `# Changelog
-
-## 2026-09-23
-
-${body}
-
-## 2026-09-22
-
-Previous release.`;
-  const scanFixture = (body) =>
+  const englishChangelog = activeSources.find(({ filename }) =>
+    filename.replaceAll("\\", "/").endsWith("content/en/changelog.md"),
+  );
+  assert.ok(englishChangelog, "English changelog source");
+  const scanEnglishChangelog = (source) =>
     findStaleLifecycleGuidance([
-      {
-        filename: "content/en/changelog.md",
-        source: changelogFixture(body),
-      },
+      { filename: englishChangelog.filename, source },
     ]);
 
+  const migratedPredicate = englishChangelog.source.replace(
+    "replace `shouldStopAfterTurn` with `finishTurn`",
+    "Migrate `shouldStopAfterTurn` to `finishTurn`",
+  );
+  assert.notEqual(migratedPredicate, englishChangelog.source);
   assert.deepEqual(
-    scanFixture(`- Replace \`shouldStopAfterTurn\` with \`finishTurn\`.
-- Replace \`ExtensionRunner.emit("turn_end", event)\` with \`emitBoundary(baseEvent, buildContext)\`.`),
+    scanEnglishChangelog(migratedPredicate),
     [],
-    "directed changelog migration rows remain valid historical guidance",
+    "a natural forward migration clause remains valid history",
   );
 
-  for (const [label, body] of [
-    [
-      "unrelated obsolete guidance inside the release section",
-      `- Replace \`shouldStopAfterTurn\` with \`finishTurn\`.
+  const migratedBoundary = englishChangelog.source.replace(
+    "Dispatch actionable `turn_end` and `agent_before_settle` boundaries through `emitBoundary()`",
+    'Migrate `ExtensionRunner.emit("turn_end", event)` to `emitBoundary(baseEvent, buildContext)`. Dispatch actionable `turn_end` and `agent_before_settle` boundaries through `emitBoundary()`',
+  );
+  assert.notEqual(migratedBoundary, englishChangelog.source);
+  assert.deepEqual(
+    scanEnglishChangelog(migratedBoundary),
+    [],
+    "the old boundary call is allowed only inside its forward migration clause",
+  );
 
-- Configure \`shouldStopAfterTurn\` for current agent loops.`,
-    ],
+  for (const [label, source] of [
     [
-      "second obsolete occurrence in the migration paragraph",
-      "- Replace `shouldStopAfterTurn` with `finishTurn`. Keep `shouldStopAfterTurn` enabled for compatibility.",
+      "unrelated obsolete guidance inside the real release section",
+      migratedPredicate.replace(
+        "The hook runs before `turn_end`",
+        "Keep `shouldStopAfterTurn` enabled. The hook runs before `turn_end`",
+      ),
     ],
     [
       "missing shouldStopAfterTurn replacement target",
-      "- Continue using `shouldStopAfterTurn` after upgrading.",
+      migratedPredicate.replace(" to `finishTurn`", ""),
     ],
     [
       "reversed shouldStopAfterTurn migration",
-      "- Replace `finishTurn` with `shouldStopAfterTurn`.",
+      migratedPredicate.replace(
+        "Migrate `shouldStopAfterTurn` to `finishTurn`",
+        "Migrate `finishTurn` to `shouldStopAfterTurn`",
+      ),
     ],
     [
       "missing ExtensionRunner.emit replacement target",
-      '- Keep calling `ExtensionRunner.emit("turn_end", event)` directly.',
-    ],
-    [
-      "obsolete ExtensionRunner.emit with ordinary call spacing",
-      '- Keep calling `ExtensionRunner.emit( "turn_end", event )` directly.',
+      migratedBoundary.replace(
+        " to `emitBoundary(baseEvent, buildContext)`",
+        "",
+      ),
     ],
     [
       "reversed ExtensionRunner.emit migration",
-      '- Replace `emitBoundary(baseEvent, buildContext)` with `ExtensionRunner.emit("turn_end", event)`.',
+      migratedBoundary.replace(
+        'Migrate `ExtensionRunner.emit("turn_end", event)` to `emitBoundary(baseEvent, buildContext)`',
+        'Migrate `emitBoundary(baseEvent, buildContext)` to `ExtensionRunner.emit("turn_end", event)`',
+      ),
     ],
     [
-      "obsolete executable example adjacent to valid migration prose",
-      `- Replace \`ExtensionRunner.emit("turn_end", event)\` with \`emitBoundary(baseEvent, buildContext)\`.
-
-\`\`\`typescript
-await runner.ExtensionRunner.emit("turn_end", event);
-\`\`\``,
+      "obsolete executable example in its own real changelog block",
+      migratedBoundary.replace(
+        "\n## 2026-09-04",
+        '\n```typescript\nawait runner.ExtensionRunner.emit("turn_end", event);\n```\n\n## 2026-09-04',
+      ),
     ],
   ]) {
     assert.notDeepEqual(
-      scanFixture(body),
+      source,
+      englishChangelog.source,
+      `${label} mutation must change the real changelog`,
+    );
+    assert.notDeepEqual(
+      scanEnglishChangelog(source),
       [],
       `${label} must be rejected even under the dated changelog heading`,
     );
   }
 });
 
-test("0.87.0 session context and lifecycle preserves exact bilingual boundary relationships", async () => {
-  const localized = await readLifecycleScopedContent();
-  const contractsByLocale = {
-    en: {
-      lifecycle: {
-        header: ["Callback / result", "Responses", "Runtime boundary"],
-        rows: [
-          [
-            "finishTurn",
-            "normal, error, aborted",
-            "runs before turn_end; decision applies after turn_end",
-          ],
-          [
-            'normal + { action: "end" }',
-            "turn_end",
-            "agent_end before queue polling",
-          ],
-          ["error / aborted + undefined", "turn_end", "hard exit"],
-        ],
+function validateLifecycleTechnicalContracts(localized) {
+  const specs = [
+    {
+      filename: "ch03-agent-loop.md",
+      headings: {
+        en: "### 4.5 Stop and termination checks",
+        vi: "### 4.5 Kiểm tra dừng và kết thúc",
       },
-      boundary: {
-        header: ["Extension event", "Contract", "Host scheduling"],
-        rows: [
-          ["turn_end", "actionable", "emitBoundary(baseEvent, buildContext)"],
-          [
-            "agent_before_settle",
-            "actionable",
-            "emitBoundary(baseEvent, buildContext)",
-          ],
-          [
-            "agent_settled",
-            "requested runs",
-            "after all settled handlers finish",
-          ],
+      rows: [
+        [
+          [0, "finishTurn"],
+          [1, "normal, error, aborted"],
         ],
-      },
-      context: {
-        header: ["Extension phase", "Handler input", "Runtime handling"],
-        rows: [
-          [
-            "context",
-            "conversation without system messages",
-            "Pi restores leading prompt and tool state",
-          ],
-          [
-            "context_with_system",
-            "full transcript including system messages",
-            "returned messages are sent verbatim",
-          ],
-          [
-            "context_with_system without leading system message",
-            "provider prompt and initial tool declarations",
-            "removed",
-          ],
+        [
+          [0, 'normal + { action: "end" }'],
+          [1, "turn_end"],
         ],
-      },
-      session: {
-        header: ["Operation", "Stored change", "Projection effect"],
-        rows: [
-          [
-            "appendContextEdit(targetEntryId, null)",
-            "append context_edit",
-            "omit target from future provider context",
-          ],
-          [
-            "appendContextEdit(targetEntryId, { content })",
-            "append context_edit",
-            "replace target content in future provider context",
-          ],
-          ["raw transcript / UI history", "append-only", "unchanged"],
-          ["returned editId", "new context_edit entry", "not target entry"],
+        [
+          [0, "error / aborted + undefined"],
+          [1, "turn_end"],
         ],
-      },
-      compaction: {
-        header: ["Situation", "Projection/accounting action", "Result"],
-        rows: [
-          [
-            "appendCompaction(summary, null, tokensBefore)",
-            "compaction entry ID",
-            "retain no preceding entries",
-          ],
-          [
-            "context_edit present",
-            "projected context estimate",
-            "usage accounting",
-          ],
-          [
-            "abandoned retry / recovery attempt",
-            "context_edit omission",
-            "excluded from future provider context",
-          ],
-          ["raw history", "append-only", "preserved"],
-        ],
-      },
-      host: {
-        header: ["Host operation", "Public API", "Context result"],
-        rows: [
-          [
-            "external restore",
-            "SessionManager.inMemory(cwd, { id: sessionId }, entries)",
-            "canonical provider context",
-          ],
-          [
-            "tree navigation",
-            "session.navigateTree(targetId)",
-            "refreshes canonical projection",
-          ],
-          [
-            "manual append",
-            "session.sessionManager append operation → session.refreshContext()",
-            "refreshes canonical projection",
-          ],
-        ],
-      },
-      stream: {
-        header: ["View", "Owner", "Behavior"],
-        rows: [
-          [
-            "provider context",
-            "SessionManager projection",
-            "may omit or replace content",
-          ],
-          ["raw transcript / UI history", "append-only", "still observable"],
-        ],
-      },
+      ],
     },
-    vi: {
-      lifecycle: {
-        header: ["Callback / kết quả", "Phản hồi", "Ranh giới runtime"],
-        rows: [
-          [
-            "finishTurn",
-            "normal, error, aborted",
-            "chạy trước turn_end; quyết định có hiệu lực sau turn_end",
-          ],
-          [
-            'normal + { action: "end" }',
-            "turn_end",
-            "agent_end trước khi poll queue",
-          ],
-          ["error / aborted + undefined", "turn_end", "thoát bắt buộc"],
-        ],
+    {
+      filename: "ch07-event-driven.md",
+      headings: {
+        en: "### Extension events form a separate contract",
+        vi: "### Sự kiện Extension có hợp đồng riêng",
       },
-      boundary: {
-        header: ["Sự kiện Extension", "Hợp đồng", "Cách host lên lịch"],
-        rows: [
-          [
-            "turn_end",
-            "cho phép trả kết quả điều khiển",
-            "emitBoundary(baseEvent, buildContext)",
-          ],
-          [
-            "agent_before_settle",
-            "cho phép trả kết quả điều khiển",
-            "emitBoundary(baseEvent, buildContext)",
-          ],
-          [
-            "agent_settled",
-            "các lượt chạy được yêu cầu",
-            "sau khi mọi settled handler hoàn tất",
-          ],
+      rows: [
+        [
+          [0, "turn_end"],
+          [2, "emitBoundary(baseEvent, buildContext)"],
         ],
-      },
-      context: {
-        header: ["Pha Extension", "Đầu vào handler", "Cách runtime xử lý"],
-        rows: [
-          [
-            "context",
-            "hội thoại không có system message",
-            "Pi khôi phục leading prompt và trạng thái Tool",
-          ],
-          [
-            "context_with_system",
-            "toàn bộ transcript có system message",
-            "các message trả về được gửi nguyên văn",
-          ],
-          [
-            "context_with_system không có system message đứng đầu",
-            "provider prompt và khai báo Tool ban đầu",
-            "bị loại bỏ",
-          ],
+        [
+          [0, "agent_before_settle"],
+          [2, "emitBoundary(baseEvent, buildContext)"],
         ],
-      },
-      session: {
-        header: ["Thao tác", "Thay đổi được lưu", "Ảnh hưởng lên projection"],
-        rows: [
-          [
-            "appendContextEdit(targetEntryId, null)",
-            "thêm entry context_edit",
-            "loại entry đích khỏi provider context về sau",
-          ],
-          [
-            "appendContextEdit(targetEntryId, { content })",
-            "thêm entry context_edit",
-            "thay content của entry đích trong provider context về sau",
-          ],
-          [
-            "transcript thô / lịch sử UI",
-            "chỉ ghi thêm (append-only)",
-            "không đổi",
-          ],
-          ["editId trả về", "entry context_edit mới", "không phải entry đích"],
-        ],
-      },
-      compaction: {
-        header: ["Tình huống", "Cách projection/accounting xử lý", "Kết quả"],
-        rows: [
-          [
-            "appendCompaction(summary, null, tokensBefore)",
-            "ID của compaction entry",
-            "không giữ entry nào đứng trước",
-          ],
-          ["có context_edit", "ước lượng projected context", "tính toán usage"],
-          [
-            "lượt retry / recovery đã bị bỏ",
-            "context_edit với replacement: null",
-            "bị loại khỏi provider context về sau",
-          ],
-          ["lịch sử thô", "chỉ ghi thêm (append-only)", "được giữ nguyên"],
-        ],
-      },
-      host: {
-        header: ["Thao tác của host", "Public API", "Kết quả context"],
-        rows: [
-          [
-            "khôi phục từ nguồn ngoài",
-            "SessionManager.inMemory(cwd, { id: sessionId }, entries)",
-            "provider context chuẩn",
-          ],
-          [
-            "điều hướng tree",
-            "session.navigateTree(targetId)",
-            "làm mới projection chuẩn",
-          ],
-          [
-            "append thủ công",
-            "thao tác append qua session.sessionManager → session.refreshContext()",
-            "làm mới projection chuẩn",
-          ],
-        ],
-      },
-      stream: {
-        header: ["Góc nhìn", "Nguồn quản lý", "Hành vi"],
-        rows: [
-          [
-            "provider context",
-            "projection của SessionManager",
-            "có thể bỏ hoặc thay content",
-          ],
-          [
-            "transcript thô / lịch sử UI",
-            "chỉ ghi thêm (append-only)",
-            "vẫn quan sát được",
-          ],
-        ],
-      },
+        [[0, "agent_settled"]],
+      ],
     },
-  };
+    {
+      filename: "ch08-context-engineering.md",
+      headings: {
+        en: "### Request transforms: `context` versus `context_with_system`",
+        vi: "### Biến đổi request: `context` và `context_with_system`",
+      },
+      rows: [[[0, "context"]], [[0, "context_with_system"]]],
+    },
+    {
+      filename: "ch09-compaction.md",
+      headings: {
+        en: "### `CompactionEntry` is the stored checkpoint",
+        vi: "### `CompactionEntry` là điểm kiểm tra được lưu",
+      },
+      rows: [[[0, "appendCompaction(summary, null, tokensBefore)"]]],
+    },
+    {
+      filename: "ch10-session.md",
+      headings: {
+        en: "### Eleven Coding Agent entry types",
+        vi: "### Mười một loại entry của Coding Agent",
+      },
+      rows: [
+        [[0, "appendContextEdit(targetEntryId, null)"]],
+        [[0, "appendContextEdit(targetEntryId, { content })"]],
+      ],
+    },
+    {
+      filename: "how-to/host-session-runtime.md",
+      headings: {
+        en: "### Keep `SessionManager` canonical after replacement",
+        vi: "### Giữ `SessionManager` làm nguồn chuẩn sau khi thay session",
+      },
+      rows: [
+        [[1, "SessionManager.inMemory(cwd, { id: sessionId }, entries)"]],
+        [[1, "session.navigateTree(targetId)"]],
+      ],
+    },
+    {
+      filename: "how-to/persist-sessions.md",
+      headings: {
+        en: "## Edit future provider context without rewriting history",
+        vi: "## Chỉnh provider context về sau mà không viết lại history",
+      },
+      rows: [
+        [[0, "appendContextEdit(targetEntryId, null)"]],
+        [[0, "appendContextEdit(targetEntryId, { content })"]],
+      ],
+    },
+    {
+      filename: "how-to/stream-output.md",
+      headings: {
+        en: "### Projected provider context is not raw UI history",
+        vi: "### Provider context đã chiếu không phải raw UI history",
+      },
+      rows: [[[0, "provider context"]]],
+    },
+    {
+      filename: "reference/api.md",
+      headings: {
+        en: "#### Canonical session context and append-only edits",
+        vi: "#### Provider context chuẩn và append-only edit",
+      },
+      rows: [
+        [[0, "appendContextEdit(targetEntryId, null)"]],
+        [[0, "appendContextEdit(targetEntryId, { content })"]],
+      ],
+    },
+  ];
 
   for (const locale of ["en", "vi"]) {
-    const get = (filename) => localized.get(`${locale}/${filename}`);
-    const contracts = contractsByLocale[locale];
-    const agentLoop = extractMarkdownSection(
-      get("ch03-agent-loop.md"),
-      locale === "en"
-        ? "### 4.5 Stop and termination checks"
-        : "### 4.5 Kiểm tra dừng và kết thúc",
-      `${locale} finishTurn lifecycle`,
-    );
-    assertContractTable(
-      agentLoop.body,
-      contracts.lifecycle,
-      `${locale} finishTurn order`,
+    for (const spec of specs) {
+      const section = extractMarkdownSection(
+        localized.get(`${locale}/${spec.filename}`),
+        spec.headings[locale],
+        `${locale} ${spec.filename} lifecycle contract`,
+      );
+      assertTechnicalContractRows(
+        section.body,
+        spec.rows,
+        `${locale} ${spec.filename}`,
+        { ordered: true },
+      );
+    }
+
+    const contextRelations = [
+      "context: handler input = messages - SystemMessage; handler output + leading SystemMessage + tool state",
+      "context_with_system: handler input = full transcript; provider input = handler output",
+      "context_with_system: handler output - leading SystemMessage -> provider prompt removed + initial tool declarations removed",
+    ].join("\n");
+    assert.equal(
+      extractTextFenceContaining(
+        localized.get(`${locale}/ch08-context-engineering.md`),
+        "provider input = handler output",
+        `${locale} context phase direction`,
+      ),
+      contextRelations,
     );
 
-    const extensionEvents = extractMarkdownSection(
-      get("ch07-event-driven.md"),
-      locale === "en"
-        ? "### Extension events form a separate contract"
-        : "### Sự kiện Extension có hợp đồng riêng",
-      `${locale} actionable Extension boundaries`,
-    );
-    assertContractTable(
-      extensionEvents.body,
-      contracts.boundary,
-      `${locale} Extension boundary dispatch`,
-    );
-
-    const contextTransforms = extractMarkdownSection(
-      get("ch08-context-engineering.md"),
-      locale === "en"
-        ? "### Request transforms: `context` versus `context_with_system`"
-        : "### Biến đổi request: `context` và `context_with_system`",
-      `${locale} request context phases`,
-    );
-    assertContractTable(
-      contextTransforms.body,
-      contracts.context,
-      `${locale} context phase ownership`,
-    );
-
-    const compaction = extractMarkdownSection(
-      get("ch09-compaction.md"),
-      locale === "en"
-        ? "### `CompactionEntry` is the stored checkpoint"
-        : "### `CompactionEntry` là điểm kiểm tra được lưu",
-      `${locale} compaction projection semantics`,
-    );
-    assertContractTable(
-      compaction.body,
-      contracts.compaction,
-      `${locale} compaction boundaries`,
-    );
-
-    const sessionEntries = extractMarkdownSection(
-      get("ch10-session.md"),
-      locale === "en"
-        ? "### Eleven Coding Agent entry types"
-        : "### Mười một loại entry của Coding Agent",
-      `${locale} context edit entries`,
-    );
-    assertContractTable(
-      sessionEntries.body,
-      contracts.session,
-      `${locale} append-only context edits`,
-    );
-
-    const host = extractMarkdownSection(
-      get("how-to/host-session-runtime.md"),
-      locale === "en"
-        ? "### Keep `SessionManager` canonical after replacement"
-        : "### Giữ `SessionManager` làm nguồn chuẩn sau khi thay session",
-      `${locale} hosted session context ownership`,
-    );
-    assertContractTable(
-      host.body,
-      contracts.host,
-      `${locale} host canonical projection`,
-    );
-
-    const persisted = extractMarkdownSection(
-      get("how-to/persist-sessions.md"),
-      locale === "en"
-        ? "## Edit future provider context without rewriting history"
-        : "## Chỉnh provider context về sau mà không viết lại history",
-      `${locale} persisted context edits`,
-    );
-    assertContractTable(
-      persisted.body,
-      contracts.session,
-      `${locale} persisted append-only context edits`,
-    );
-
-    const streamed = extractMarkdownSection(
-      get("how-to/stream-output.md"),
-      locale === "en"
-        ? "### Projected provider context is not raw UI history"
-        : "### Provider context đã chiếu không phải raw UI history",
-      `${locale} streamed history boundary`,
-    );
-    assertContractTable(
-      streamed.body,
-      contracts.stream,
-      `${locale} stream projection boundary`,
-    );
-
-    const api = extractMarkdownSection(
-      get("reference/api.md"),
-      locale === "en"
-        ? "#### Canonical session context and append-only edits"
-        : "#### Provider context chuẩn và append-only edit",
-      `${locale} API session lifecycle`,
-    );
-    assertContractTable(
-      api.body,
-      contracts.session,
-      `${locale} API context edits`,
+    const contextEditRelations = [
+      "appendContextEdit(targetEntryId, null) -> context_edit(editId) -> provider context - targetEntryId",
+      "appendContextEdit(targetEntryId, { content }) -> context_edit(editId) -> provider context[targetEntryId] = content",
+      "context_edit -> raw transcript append-only",
+      "editId != targetEntryId",
+    ].join("\n");
+    assert.equal(
+      extractTextFenceContaining(
+        localized.get(`${locale}/ch10-session.md`),
+        "context_edit(editId)",
+        `${locale} context edit direction`,
+      ),
+      contextEditRelations,
     );
   }
+}
 
-  const englishLifecycleFixture = `| Callback / result | Responses | Runtime boundary |
-| --- | --- | --- |
-| \`finishTurn\` | \`normal, error, aborted\` | \`runs before turn_end; decision applies after turn_end\` |
-| \`normal + { action: "end" }\` | \`turn_end\` | \`agent_end before queue polling\` |
-| \`error / aborted + undefined\` | \`turn_end\` | \`hard exit\` |`;
-  assert.throws(
-    () =>
-      assertContractTable(
-        englishLifecycleFixture,
-        contractsByLocale.vi.lifecycle,
-        "Vietnamese lifecycle localization guard",
-      ),
-    assert.AssertionError,
-    "English descriptive text must not satisfy the Vietnamese table contract",
-  );
+test("0.87.0 session context and lifecycle preserves stable bilingual boundary relationships", async () => {
+  validateLifecycleTechnicalContracts(await readLifecycleScopedContent());
 });
 
 test("0.87.0 session context and lifecycle examples typecheck against Pi 0.87.1", async () => {
@@ -2593,65 +2419,377 @@ test("0.87.0 session context and lifecycle examples typecheck against Pi 0.87.1"
   );
 });
 
-test("0.87.0 session context and lifecycle mutation guards reject inverted boundaries", () => {
-  const contracts = [
-    {
-      label: "finishTurn order",
-      expected: [["finishTurn", "turn_end", "apply decision"]],
-      source: `| Callback | Event | Effect |
-|---|---|---|
-| \`finishTurn\` | \`turn_end\` | \`apply decision\` |`,
-      broken: "| `turn_end` | `finishTurn` | `apply decision` |",
-    },
-    {
-      label: "context omission direction",
-      expected: [
-        [
-          "replacement: null",
-          "future provider context",
-          "raw history unchanged",
-        ],
+function validateLowLevelLoopExamples(localized) {
+  const virtualSources = [];
+  const parity = new Map();
+
+  for (const locale of ["en", "vi"]) {
+    for (const [name, filename, marker] of [
+      ["raw-loop", "ch03-agent-loop.md", "const rawContext: AgentContext"],
+      [
+        "provider-boundary",
+        "ch03-agent-loop.md",
+        "async function requestAssistant",
       ],
-      source: `| Edit | Projection | Storage |
-|---|---|---|
-| \`replacement: null\` | \`future provider context\` | \`raw history unchanged\` |`,
-      broken:
-        "| `replacement: null` | `raw history` | `future provider context unchanged` |",
+      ["api-raw-loop", "reference/api.md", "const rawContext: AgentContext"],
+    ]) {
+      const source = extractTypeScriptFenceContaining(
+        localized.get(`${locale}/${filename}`),
+        marker,
+        `${locale} ${name}`,
+      );
+      virtualSources.push([`provider-context-${locale}-${name}.ts`, source]);
+      if (parity.has(name)) {
+        assert.equal(source, parity.get(name), `${name} example locale parity`);
+      } else {
+        parity.set(name, source);
+      }
+    }
+  }
+
+  for (const name of ["raw-loop", "api-raw-loop"]) {
+    const source = parity.get(name);
+    assert.match(
+      source,
+      /messages:\s*\[\s*\{\s*role: "system",\s*content: "Be (?:precise|exact)\.",\s*timestamp: Date\.now\(\),?\s*\},?\s*\]/,
+      `${name} must encode the prompt as the leading SystemMessage`,
+    );
+    assert.match(
+      source,
+      /message\.role === "system"/,
+      `${name} conversion must preserve system messages`,
+    );
+    assert.doesNotMatch(source, /systemPrompt\s*:/);
+  }
+
+  const providerBoundary = parity.get("provider-boundary");
+  assert.match(providerBoundary, /streamFunction: StreamFn/);
+  assert.match(
+    providerBoundary,
+    /const llmMessages = await config\.convertToLlm\(context\.messages\);\s+const llmContext = normalizeContext\(\{ messages: llmMessages \}\);\s+return streamFunction\(config\.model, llmContext,/,
+    "provider example must convert first, normalize the TranscriptContext, then stream",
+  );
+  assert.doesNotMatch(
+    providerBoundary,
+    /context\.systemPrompt|tools:\s*context\.tools/,
+  );
+
+  assertVirtualTypeScriptCompiles(
+    virtualSources,
+    "published low-level loop examples must compile against installed 0.87.1 declarations",
+  );
+}
+
+test("0.87.1 low-level loop examples preserve system transcript state and compile", async () => {
+  validateLowLevelLoopExamples(await readLifecycleScopedContent());
+});
+
+test("0.87.1 CompactionEntry examples match the installed public declaration", async () => {
+  const localized = await readLifecycleScopedContent();
+  const expectedProperties = [
+    ["type", false, '"compaction"'],
+    ["id", false, "string"],
+    ["parentId", false, "string | null"],
+    ["timestamp", false, "string"],
+    ["summary", false, "string"],
+    ["firstKeptEntryId", false, "string"],
+    ["tokensBefore", false, "number"],
+    ["details", true, "T"],
+    ["usage", true, "Usage"],
+    ["fromHook", true, "boolean"],
+    ["systemMessage", true, "SystemMessage"],
+  ];
+  const virtualSources = [];
+
+  for (const locale of ["en", "vi"]) {
+    const source = extractTypeScriptFenceContaining(
+      localized.get(`${locale}/ch09-compaction.md`),
+      "interface CompactionEntry",
+      `${locale} CompactionEntry declaration`,
+    );
+    virtualSources.push([`compaction-entry-${locale}.ts`, source]);
+    const sourceFile = ts.createSourceFile(
+      `${locale}-compaction-entry.ts`,
+      source,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TS,
+    );
+    const declaration = sourceFile.statements.find(
+      (statement) =>
+        ts.isInterfaceDeclaration(statement) &&
+        statement.name.text === "CompactionEntry",
+    );
+    assert.ok(declaration, `${locale} CompactionEntry interface`);
+    assert.deepEqual(
+      declaration.members.map((member) => [
+        member.name?.getText(sourceFile),
+        Boolean(member.questionToken),
+        member.type?.getText(sourceFile),
+      ]),
+      expectedProperties,
+      `${locale} CompactionEntry public field set`,
+    );
+    assert.match(
+      source,
+      /import type \{ SystemMessage, Usage \} from "@earendil-works\/pi-ai";/,
+    );
+  }
+
+  assertVirtualTypeScriptCompiles(
+    virtualSources,
+    "published CompactionEntry declarations must compile against installed 0.87.1 types",
+  );
+});
+
+test("0.87.1 actionable boundaries publish the hard-exit and recovery order", async () => {
+  const localized = await readLifecycleScopedContent();
+  const expected = [
+    "turn_end + outcome=completed + continue=true + context.canContinue=true -> next provider request",
+    "turn_end + outcome=error|aborted + continue=true -> agent_end",
+    "retry|compaction|queue policy -> agent_before_settle",
+    "agent_before_settle + continue=true + context.canContinue=true -> next provider request",
+  ].join("\n");
+
+  for (const locale of ["en", "vi"]) {
+    for (const filename of ["ch07-event-driven.md", "reference/api.md"]) {
+      assert.equal(
+        extractTextFenceContaining(
+          localized.get(`${locale}/${filename}`),
+          "outcome=completed",
+          `${locale} ${filename} actionable boundary order`,
+        ),
+        expected,
+      );
+    }
+
+    const handler = extractTypeScriptFenceContaining(
+      localized.get(`${locale}/ch07-event-driven.md`),
+      "function registerRecoveryBoundary",
+      `${locale} recovery boundary handler`,
+    );
+    assert.match(handler, /event\.outcome !== "error"/);
+    assert.match(handler, /event\.context\.canContinue/);
+  }
+});
+
+test("installed Pi 0.87.1 enforces hard turn exits before the recovery boundary", async () => {
+  const {
+    DefaultResourceLoader,
+    ModelRuntime,
+    SessionManager,
+    SettingsManager,
+    createAgentSession,
+  } = await import("@earendil-works/pi-coding-agent");
+  const { fauxAssistantMessage, fauxProvider } =
+    await import("@earendil-works/pi-ai");
+  let sequence = 0;
+
+  const run = async (label, responses, extensionFactory) => {
+    sequence += 1;
+    const faux = fauxProvider({
+      api: `task7-${label}-${sequence}`,
+      provider: `task7-${label}-${sequence}`,
+      models: [{ id: "contract-model", name: "Contract model" }],
+    });
+    faux.setResponses(responses);
+    const modelRuntime = await ModelRuntime.create({
+      modelsPath: null,
+      refreshOnCreate: false,
+    });
+    modelRuntime.registerNativeProvider(faux.provider);
+    const settingsManager = SettingsManager.inMemory({
+      retry: { enabled: false },
+      compaction: { enabled: false },
+    });
+    const cwd = process.cwd();
+    const resourceLoader = new DefaultResourceLoader({
+      cwd,
+      agentDir: cwd,
+      settingsManager,
+      extensionFactories: [extensionFactory],
+      noSkills: true,
+      noPromptTemplates: true,
+      noThemes: true,
+      noContextFiles: true,
+    });
+    await resourceLoader.reload();
+    const { session } = await createAgentSession({
+      cwd,
+      model: faux.getModel(),
+      modelRuntime,
+      resourceLoader,
+      settingsManager,
+      sessionManager: SessionManager.inMemory(cwd),
+      noTools: "all",
+    });
+    try {
+      await session.prompt("exercise the boundary", {
+        expandPromptTemplates: false,
+      });
+      return {
+        calls: faux.state.callCount,
+        entries: session.sessionManager.getBranch(),
+      };
+    } finally {
+      session.dispose();
+    }
+  };
+
+  const turnEndObservations = [];
+  const hardExit = await run(
+    "turn-end",
+    [fauxAssistantMessage("failed", { stopReason: "error" })],
+    (pi) => {
+      pi.on("turn_end", (event) => {
+        turnEndObservations.push([event.outcome, event.context.canContinue]);
+        return { continue: true };
+      });
+    },
+  );
+  assert.equal(hardExit.calls, 1);
+  assert.deepEqual(turnEndObservations, [["error", false]]);
+
+  const beforeSettleObservations = [];
+  const recoveryProviderRoles = [];
+  let recoveryPending = true;
+  const recovered = await run(
+    "before-settle",
+    [
+      fauxAssistantMessage("failed", { stopReason: "error" }),
+      (context) => {
+        recoveryProviderRoles.push(
+          context.messages.map((message) => message.role),
+        );
+        return fauxAssistantMessage("recovered", { stopReason: "stop" });
+      },
+    ],
+    (pi) => {
+      pi.on("agent_before_settle", (event) => {
+        beforeSettleObservations.push([
+          event.outcome,
+          event.context.canContinue,
+        ]);
+        if (
+          !recoveryPending ||
+          event.outcome !== "error" ||
+          event.context.canContinue
+        ) {
+          return;
+        }
+        const failedAssistant = event.context.contextEntries.findLast(
+          (entry) =>
+            entry.sourceEntry.type === "message" &&
+            entry.sourceEntry.message.role === "assistant",
+        );
+        assert.ok(failedAssistant, "failed assistant projection entry");
+        recoveryPending = false;
+        return {
+          entries: [
+            ...event.entries,
+            {
+              type: "context_edit",
+              targetId: failedAssistant.sourceEntry.id,
+              replacement: null,
+            },
+          ],
+          continue: true,
+        };
+      });
+    },
+  );
+  assert.equal(recovered.calls, 2);
+  assert.deepEqual(beforeSettleObservations, [
+    ["error", false],
+    ["completed", false],
+  ]);
+  assert.deepEqual(
+    recoveryProviderRoles,
+    [["system", "user"]],
+    "the omission must rebuild a continuable user-tailed projection before the second call",
+  );
+  assert.ok(
+    recovered.entries.some(
+      (entry) => entry.type === "context_edit" && entry.replacement === null,
+    ),
+    "recovery must remain an append-only context omission",
+  );
+});
+
+test("0.87.0 session context and lifecycle mutation guards use real published sections", async () => {
+  const localized = await readLifecycleScopedContent();
+  validateLifecycleTechnicalContracts(localized);
+  validateLowLevelLoopExamples(localized);
+
+  const mutations = [
+    {
+      label: "finishTurn and turn_end order",
+      key: "en/ch03-agent-loop.md",
+      from: "| `finishTurn` | `normal, error, aborted` |",
+      to: "| `turn_end` | `normal, error, aborted` |",
+      validator: validateLifecycleTechnicalContracts,
     },
     {
-      label: "full transcript verbatim",
-      expected: [["context_with_system", "full transcript", "verbatim"]],
-      source: `| Event | Input | Output |
-|---|---|---|
-| \`context_with_system\` | \`full transcript\` | \`verbatim\` |`,
-      broken:
-        "| `context_with_system` | `conversation only` | `Pi restores system state` |",
+      label: "context_with_system phase",
+      key: "en/ch08-context-engineering.md",
+      from: "| `context_with_system` |",
+      to: "| `context` |",
+      validator: validateLifecycleTechnicalContracts,
     },
     {
-      label: "retain-none compaction",
-      expected: [
-        ["firstKeptEntryId: null", "compaction entry ID", "retain none"],
-      ],
-      source: `| Input | Stored boundary | Result |
-|---|---|---|
-| \`firstKeptEntryId: null\` | \`compaction entry ID\` | \`retain none\` |`,
-      broken:
-        "| `firstKeptEntryId: null` | `previous entry ID` | `retain all` |",
+      label: "context_with_system verbatim direction",
+      key: "en/ch08-context-engineering.md",
+      from: "provider input = handler output",
+      to: "provider input = Pi-restored transcript",
+      validator: validateLifecycleTechnicalContracts,
+    },
+    {
+      label: "retain-none compaction signature",
+      key: "en/ch09-compaction.md",
+      from: "| `appendCompaction(summary, null, tokensBefore)` |",
+      to: "| `appendCompaction(summary, firstKeptEntryId, tokensBefore)` |",
+      validator: validateLifecycleTechnicalContracts,
+    },
+    {
+      label: "context omission signature",
+      key: "en/ch10-session.md",
+      from: "| `appendContextEdit(targetEntryId, null)` |",
+      to: "| `appendContextEdit(targetEntryId, { content })` |",
+      validator: validateLifecycleTechnicalContracts,
+    },
+    {
+      label: "raw transcript append-only boundary",
+      key: "en/ch10-session.md",
+      from: "context_edit -> raw transcript append-only",
+      to: "context_edit -> raw transcript rewritten",
+      validator: validateLifecycleTechnicalContracts,
+    },
+    {
+      label: "raw-loop system preservation",
+      key: "en/ch03-agent-loop.md",
+      from: 'role: "system",\n      content: "Be precise."',
+      to: 'role: "user",\n      content: "Be precise."',
+      validator: validateLowLevelLoopExamples,
+    },
+    {
+      label: "provider conversion order",
+      key: "en/ch03-agent-loop.md",
+      from: "const llmMessages = await config.convertToLlm(context.messages);\n  const llmContext = normalizeContext({ messages: llmMessages });",
+      to: "const llmContext = normalizeContext({ messages: context.messages });\n  const llmMessages = await config.convertToLlm(context.messages);",
+      validator: validateLowLevelLoopExamples,
     },
   ];
 
-  for (const { label, expected, source, broken } of contracts) {
-    assertContractTableRows(source, expected, `${label} baseline`);
-    const dataRow = source.trim().split("\n").at(-1);
+  for (const { label, key, from, to, validator } of mutations) {
+    const mutated = new Map(localized);
+    const source = mutated.get(key);
+    const replacement = source.replace(from, to);
+    assert.notEqual(replacement, source, `${label} must mutate a real section`);
+    mutated.set(key, replacement);
     assert.throws(
-      () =>
-        assertContractTableRows(
-          source.replace(dataRow, broken),
-          expected,
-          `${label} mutation`,
-        ),
+      () => validator(mutated),
       assert.AssertionError,
-      `${label} guard must reject the inverted contract`,
+      `${label} mutation must fail the real validator`,
     );
   }
 });
@@ -6928,7 +7066,7 @@ test("Pi 0.85 custom Tool guidance preserves live cwd and authorization boundari
   );
 });
 
-test("Tool and terminal pages use the current baseline metadata", async () => {
+test(releaseContractTestTitles.toolTerminalBaseline, async () => {
   const paths = [
     "ch05-tool-system.md",
     "how-to/add-custom-tool.md",
@@ -7366,7 +7504,7 @@ test("Pi 0.85 API reference records exact RPC clear_queue shapes and lifecycle",
   assert.deepEqual(structures[0], structures[1]);
 });
 
-test("Pi 0.85 prompt and RPC pages use current source pins and review date", async () => {
+test(releaseContractTestTitles.promptRpcBaseline, async () => {
   const release = await readReleaseFixture();
   const paths = [
     "ch07-event-driven.md",
@@ -7383,15 +7521,15 @@ test("Pi 0.85 prompt and RPC pages use current source pins and review date", asy
       );
       assert.match(
         source,
-        /last_updated:\s*["']2026-09-04["']/,
-        `${locale} ${relativePath} must record the Pi 0.85 review date`,
+        /last_updated:\s*["']2026-09-23["']/,
+        `${locale} ${relativePath} must record the Pi 0.87.1 review date`,
       );
       for (const { link } of piSourceLinks([
         { filename: relativePath, source },
       ])) {
         assert.ok(
           isPublishedReleaseSourceLink(link, release),
-          `${locale} ${relativePath} must pin Pi source links to 0.85.0`,
+          `${locale} ${relativePath} must pin Pi source links to 0.87.1`,
         );
       }
     }
@@ -8233,29 +8371,52 @@ test("active content satisfies the published Pi migration contract", async () =>
   );
 });
 
-test("Chapter 3 preserves the Pi 0.85.0 post-turn steering order", async () => {
+test("Chapter 3 preserves the Pi 0.87.1 post-turn steering order", async () => {
   const chapters = await readLocalizedContent("ch03-agent-loop.md");
 
   for (const { locale, source } of chapters) {
-    const stopHookIndex = source.indexOf(
-      "if (await config.shouldStopAfterTurn?.(lastCompletedTurn))",
+    const section = extractMarkdownSection(
+      source,
+      locale === "en"
+        ? "### 4.7 `turn_end`, hooks, events, and steering"
+        : "### 4.7 `turn_end`, hook, event và steering",
+      `${locale} Chapter 3 post-turn order`,
     );
-    const steeringAssignments = [
-      ...source.matchAll(
-        /pendingMessages = \(await config\.getSteeringMessages\?\.\(\)\) \|\| \[\];/g,
-      ),
-    ].map((match) => match.index);
-
-    assert.notEqual(stopHookIndex, -1, `${locale} Chapter 3 stop hook`);
-    assert.equal(
-      steeringAssignments.length,
-      2,
-      `${locale} Chapter 3 must show preparation-time and post-turn steering polls`,
+    const order = extractTextFenceContaining(
+      section.body,
+      "-> turn_end",
+      `${locale} Chapter 3 post-turn order`,
     );
+    const finishTurn = order.indexOf("finishTurn(");
+    const turnEnd = order.indexOf("turn_end");
+    const gracefulEnd = order.indexOf("action=end: agent_end");
+    const steering = order.indexOf("getSteeringMessages()", gracefulEnd);
     assert.ok(
-      steeringAssignments[0] < stopHookIndex &&
-        stopHookIndex < steeringAssignments[1],
-      `${locale} Chapter 3 must poll steering after preparation and after the stop hook`,
+      finishTurn < turnEnd && turnEnd < gracefulEnd && gracefulEnd < steering,
+      `${locale} Chapter 3 must apply finishTurn through turn_end before steering`,
+    );
+
+    const stopSection = extractMarkdownSection(
+      source,
+      locale === "en"
+        ? "### 4.5 Stop and termination checks"
+        : "### 4.5 Kiểm tra dừng và kết thúc",
+      `${locale} Chapter 3 hard exit`,
+    );
+    assertTechnicalContractRows(
+      stopSection.body,
+      [
+        [
+          [0, "finishTurn"],
+          [1, "normal, error, aborted"],
+        ],
+        [
+          [0, "error / aborted + undefined"],
+          [1, "turn_end"],
+        ],
+      ],
+      `${locale} Chapter 3 hard-error branch`,
+      { ordered: true },
     );
   }
 });
@@ -8419,7 +8580,7 @@ test("active content uses the maintained Pi repository authority", async () => {
   assert.deepEqual(legacyRepositoryMentions, []);
 });
 
-test("parses the exact GitHub source ref for published Pi release links", () => {
+test(releaseContractTestTitles.sourceRefParser, () => {
   const release = {
     tag: "v0.85.0",
     commit: "107d79f11072bbc8a3a757ed7fd69596bee7d68c",
@@ -8481,7 +8642,7 @@ test("detects invalid Pi source refs without a release version claim", () => {
   ]);
 });
 
-test("bilingual semantic source links pin the exact Pi 0.85 implementation ranges", async () => {
+test("bilingual semantic source links pin the Pi 0.87.1 implementation paths", async () => {
   const { commit } = await readReleaseFixture();
   const sourceBase = `https://github.com/earendil-works/pi/blob/${commit}/`;
   const contracts = [
@@ -8490,38 +8651,35 @@ test("bilingual semantic source links pin the exact Pi 0.85 implementation range
       links: [
         {
           label: /executePreparedToolCall/,
-          target: `${sourceBase}packages/agent/src/agent-loop.ts#L677-L718`,
+          target: `${sourceBase}packages/agent/src/agent-loop.ts`,
         },
         {
           label: /shouldTerminateToolBatch/,
-          target: `${sourceBase}packages/agent/src/agent-loop.ts#L589-L590`,
+          target: `${sourceBase}packages/agent/src/agent-loop.ts`,
         },
       ],
-      staleFragments: ["#L670", "#L582-L584"],
     },
     {
       path: "ch08-context-engineering.md",
       links: [
         {
           label: /`read`/,
-          target: `${sourceBase}packages/coding-agent/src/core/tools/read.ts#L151-L176`,
+          target: `${sourceBase}packages/coding-agent/src/core/tools/read.ts`,
         },
         {
           label: /`grep`/,
-          target: `${sourceBase}packages/coding-agent/src/core/tools/grep.ts#L285-L303`,
+          target: `${sourceBase}packages/coding-agent/src/core/tools/grep.ts`,
         },
       ],
-      staleFragments: ["#L271-L317", "#L321-L361"],
     },
     {
       path: "ch09-compaction.md",
       links: [
         {
           label: /SDK|ghi đè/,
-          target: `${sourceBase}packages/coding-agent/src/core/settings-manager.ts#L550-L553`,
+          target: `${sourceBase}packages/coding-agent/src/core/settings-manager.ts`,
         },
       ],
-      staleFragments: ["#L546-L549"],
     },
   ];
 
@@ -8540,12 +8698,6 @@ test("bilingual semantic source links pin the exact Pi 0.85 implementation range
               link.target === expected.target,
           ),
           `${locale} ${contract.path} must pin ${expected.target}`,
-        );
-      }
-      for (const staleFragment of contract.staleFragments) {
-        assert.ok(
-          !source.includes(staleFragment),
-          `${locale} ${contract.path} must not retain ${staleFragment}`,
         );
       }
     }

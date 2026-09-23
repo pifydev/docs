@@ -175,7 +175,7 @@ string input
   -> agent_start, turn_start, user message_start/message_end
   -> transformContext(AgentMessage[])
   -> convertToLlm(AgentMessage[]) -> Message[]
-  -> streamFn(model, Context, options)
+  -> streamFn(model, TranscriptContext, options)
   -> assistant message_start/message_update*/message_end
   -> chọn ToolCall block từ AssistantMessage.content
   -> Tool preflight và execution
@@ -382,9 +382,32 @@ function agentLoopContinue(
 
 Low-level caller còn phải tự sở hữu transcript persistence. `agentLoop()` tạo working message array và trả artifact sinh trong invocation qua `stream.result()`; `AgentContext` truyền vào không thay thế cho một `Agent` có state. Caller muốn chạy low-level lần độc lập khác phải tự merge result vào context của mình. Vì thế wrapper `Agent` là default an toàn hơn.
 
-Low-level prompt input có shape `AgentMessage` bình thường:
+Raw context mang transcript message và các implementation Tool thực thi được (không bắt buộc). Provider prompt là `SystemMessage` đứng đầu, không phải field `AgentContext.systemPrompt`. `toolsAdded` hoặc `toolsRemoved` trên system message mô tả trạng thái Tool trong transcript; `AgentContext.tools` giữ các callback `AgentTool` mà runtime thực sự có thể chạy. Ví dụ low-level đầy đủ sau giữ lại system message khi chuyển đổi:
 
 ```typescript
+import {
+  agentLoop,
+  type AgentContext,
+  type AgentLoopConfig,
+  type AgentMessage,
+} from "@earendil-works/pi-agent-core";
+import type { Message } from "@earendil-works/pi-ai";
+import { builtinModels } from "@earendil-works/pi-ai/providers/all";
+
+const models = builtinModels();
+const model = models.getModel("openai", "gpt-4o-mini");
+if (!model) throw new Error("Model not found");
+
+const rawContext: AgentContext = {
+  messages: [
+    {
+      role: "system",
+      content: "Be precise.",
+      timestamp: Date.now(),
+    },
+  ],
+  tools: [],
+};
 const prompts: AgentMessage[] = [
   {
     role: "user",
@@ -392,32 +415,27 @@ const prompts: AgentMessage[] = [
     timestamp: Date.now(),
   },
 ];
-```
-
-Loop nhận một context snapshot:
-
-```typescript
-const context: AgentContext = {
-  systemPrompt: "Be precise.",
-  messages: [],
-  tools: [],
-};
-```
-
-Behavior của nó đến từ callback và stream option:
-
-```typescript
 const config: AgentLoopConfig = {
   model,
   convertToLlm: (messages) =>
     messages.filter(
-      (message) =>
+      (message): message is Message =>
+        message.role === "system" ||
         message.role === "user" ||
         message.role === "assistant" ||
         message.role === "toolResult",
     ),
   toolExecution: "parallel",
 };
+
+const events = agentLoop(
+  prompts,
+  rawContext,
+  config,
+  undefined,
+  models.streamSimple.bind(models),
+);
+void events;
 ```
 
 `Agent` public tạo snapshot của system prompt, message và Tool, chạy `runAgentLoop` hoặc `runAgentLoopContinue`, rồi reduce event ngược về `AgentState` đang live.
@@ -671,29 +689,35 @@ Provider adapter không cần hiểu message type của storage hoặc UI trong 
 
 Thứ tự hai hook là một phần của contract. `transformContext` có thể xử lý application-only type trước khi dữ liệu bị loại. Sau đó `convertToLlm` mới projection lần cuối sang provider union. Nếu đảo thứ tự, compaction hoặc Extension logic sẽ không thấy message không được gửi thẳng cho model nhưng vẫn mang state hữu ích của ứng dụng.
 
-#### Pha C: dựng `Context` và gọi model đã chọn
+#### Pha C: dựng `TranscriptContext` và gọi model đã chọn
 
-Loop tạo một provider-facing wrapper mới cho mỗi Turn:
-
-```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at f07218c4.
-const llmContext: Context = {
-  systemPrompt: context.systemPrompt,
-  messages: llmMessages,
-  tools: context.tools,
-};
-```
-
-Nó resolve API key hiện hành rồi gọi function đã inject:
+Loop chuyển đổi application message trước, rồi normalize kết quả thành `TranscriptContext` mà `StreamFn` nhận. System prompt và các khai báo Tool trong transcript vẫn nằm ở leading system message; các implementation `AgentTool` thực thi được nằm trong `AgentContext.tools` để Agent Core chạy, thay vì được chép thành field riêng trên provider wrapper:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at f07218c4.
-const response = await streamFunction(config.model, llmContext, {
-  ...config,
-  apiKey: resolvedApiKey,
-  signal,
-});
+import type {
+  AgentContext,
+  AgentLoopConfig,
+  StreamFn,
+} from "@earendil-works/pi-agent-core";
+import {
+  normalizeContext,
+  type AssistantMessageEventStream,
+  type SimpleStreamOptions,
+} from "@earendil-works/pi-ai";
+
+async function requestAssistant(
+  context: AgentContext,
+  config: AgentLoopConfig,
+  streamFunction: StreamFn,
+  options?: SimpleStreamOptions,
+): Promise<AssistantMessageEventStream> {
+  const llmMessages = await config.convertToLlm(context.messages);
+  const llmContext = normalizeContext({ messages: llmMessages });
+  return streamFunction(config.model, llmContext, options);
+}
 ```
+
+Production loop còn resolve API key hiện hành và merge các stream option portable trước lời gọi này.
 
 Với ứng dụng Agent Core thông thường, hãy truyền method của model collection hiện tại kèm receiver:
 
@@ -741,14 +765,15 @@ streamFn: async (model, context, options) => {
 
 Scope bao quanh trong `sdk.ts` cung cấp `settingsManager`, `extensionRunnerRef`, `mergeProviderAttributionHeaders` và `modelRuntime`. Wrapper áp dụng setting timeout và retry, provider attribution cùng Extension header hook. Việc resolve credential vẫn thuộc Agent Loop qua `getApiKey`; loop chỉ nhìn thấy `StreamFn`.
 
-| Thành phần Context | Độ ổn định thường gặp giữa các Turn | Vì sao vẫn có thể đổi                              |
-| ------------------ | ----------------------------------- | -------------------------------------------------- |
-| `systemPrompt`     | Thường ổn định                      | `prepareNextTurn` hoặc product setting có thể thay |
-| `tools`            | Thường ổn định                      | Extension hoặc Tool result có thể đổi availability |
-| `messages`         | Tăng sau mỗi Turn                   | Assistant và Tool result message được append       |
-| `model`            | Thường ổn định                      | `prepareNextTurn` có thể chọn model khác           |
+| Thành phần Context                         | Độ ổn định thường gặp giữa các Turn | Vì sao vẫn có thể đổi                                              |
+| ------------------------------------------ | ----------------------------------- | ------------------------------------------------------------------ |
+| leading `SystemMessage`                    | Thường ổn định                      | `prepareNextTurn` hoặc product setting có thể thay trạng thái prompt |
+| `AgentContext.tools` thực thi được         | Thường ổn định                      | Extension hoặc Tool result có thể đổi availability                 |
+| khai báo Tool trong system message         | Thường ổn định                      | System message có thể khai báo Tool được thêm hoặc bị loại          |
+| `messages`                                 | Tăng sau mỗi Turn                   | Assistant và Tool result message được append                       |
+| `model`                                    | Thường ổn định                      | `prepareNextTurn` có thể chọn model khác                            |
 
-Provider adapter sở hữu cách serialize cache control. Việc dựng lại object `Context` nhỏ không tự quyết định cache hit; content provider nhìn thấy và cache semantics của provider mới quyết định.
+Provider adapter sở hữu cách serialize cache control. Việc dựng lại object `TranscriptContext` nhỏ không tự quyết định cache hit; content provider nhìn thấy và cache semantics của provider mới quyết định.
 
 #### Pha D: stream và thay assistant message tại chỗ
 

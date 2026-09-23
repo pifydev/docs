@@ -258,6 +258,15 @@ Several names overlap with core events, but the payloads and guarantees belong t
 | `agent_before_settle` | `actionable` | `emitBoundary(baseEvent, buildContext)` |
 | `agent_settled` | `requested runs` | `after all settled handlers finish` |
 
+`turn_end` can continue only a normally completed Turn. A low-level `error` or `aborted` response remains a hard exit through `agent_end`, even when a handler returns `continue: true`. Coding Agent applies retry, compaction, and queue policy before the later `agent_before_settle` recovery boundary. A recovery handler should therefore inspect both `event.outcome` and `event.context.canContinue` before appending the entries that make another request valid.
+
+```text
+turn_end + outcome=completed + continue=true + context.canContinue=true -> next provider request
+turn_end + outcome=error|aborted + continue=true -> agent_end
+retry|compaction|queue policy -> agent_before_settle
+agent_before_settle + continue=true + context.canContinue=true -> next provider request
+```
+
 An actionable handler can append a context omission and ask for one next provider request. Guard the continuation condition; returning `continue: true` unconditionally creates a loop.
 
 ```typescript
@@ -269,7 +278,13 @@ export function registerRecoveryBoundary(
 ): () => void {
   let recoveryPending = true;
   return pi.on("agent_before_settle", (event) => {
-    if (!recoveryPending) return;
+    if (
+      !recoveryPending ||
+      event.outcome !== "error" ||
+      event.context.canContinue
+    ) {
+      return;
+    }
     recoveryPending = false;
     return {
       entries: [

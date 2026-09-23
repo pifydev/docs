@@ -552,6 +552,12 @@ Coding Agent chạy request transform của Extension theo hai phase. Handler `c
 | `context_with_system` | `toàn bộ transcript có system message` | `các message trả về được gửi nguyên văn` |
 | `context_with_system không có system message đứng đầu` | `provider prompt và khai báo Tool ban đầu` | `bị loại bỏ` |
 
+```text
+context: handler input = messages - SystemMessage; handler output + leading SystemMessage + tool state
+context_with_system: handler input = full transcript; provider input = handler output
+context_with_system: handler output - leading SystemMessage -> provider prompt removed + initial tool declarations removed
+```
+
 Dùng `context` cho phép lọc cục bộ theo request thông thường vì phase này không thể vô tình làm mất prompt hoặc Tool state. Chỉ dùng `context_with_system` khi Extension chủ động sở hữu toàn bộ provider transcript. Nếu xóa hoặc thay system message đầu tiên, Extension sẽ đổi nội dung provider nhận trong request đó; Pi không dựng lại message này sau handler.
 
 Không đặt compaction của session trong hook chỉ biến đổi context cho một request. Kết quả Tool đã giới hạn byte cũng không chứng minh toàn bộ context theo token sẽ vừa cửa sổ.

@@ -370,6 +370,13 @@ Context edit cũng là append-only tree entry:
 | `transcript thô / lịch sử UI` | `chỉ ghi thêm (append-only)` | `không đổi` |
 | `editId trả về` | `entry context_edit mới` | `không phải entry đích` |
 
+```text
+appendContextEdit(targetEntryId, null) -> context_edit(editId) -> provider context - targetEntryId
+appendContextEdit(targetEntryId, { content }) -> context_edit(editId) -> provider context[targetEntryId] = content
+context_edit -> raw transcript append-only
+editId != targetEntryId
+```
+
 ID trả về thuộc edit entry vừa được tạo, không thuộc target. Switch exhaustive trên `SessionEntry` phải xử lý `context_edit`, dù `sessionEntryToContextMessages()` không tạo message cho chính edit entry.
 
 ### Vì sao entry chỉ lưu parent

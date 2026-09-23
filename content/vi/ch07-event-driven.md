@@ -258,6 +258,15 @@ Một số tên trùng với sự kiện lõi, nhưng payload và bảo đảm d
 | `agent_before_settle` | `cho phép trả kết quả điều khiển` | `emitBoundary(baseEvent, buildContext)` |
 | `agent_settled` | `các lượt chạy được yêu cầu` | `sau khi mọi settled handler hoàn tất` |
 
+`turn_end` chỉ có thể tiếp tục sau một Turn hoàn tất bình thường. Response low-level có `error` hoặc `aborted` vẫn hard-exit qua `agent_end`, kể cả khi handler trả `continue: true`. Coding Agent áp dụng policy retry, compaction và queue trước ranh giới recovery `agent_before_settle` diễn ra sau đó. Vì vậy, recovery handler nên kiểm tra cả `event.outcome` lẫn `event.context.canContinue` trước khi append các entry giúp request tiếp theo hợp lệ.
+
+```text
+turn_end + outcome=completed + continue=true + context.canContinue=true -> next provider request
+turn_end + outcome=error|aborted + continue=true -> agent_end
+retry|compaction|queue policy -> agent_before_settle
+agent_before_settle + continue=true + context.canContinue=true -> next provider request
+```
+
 Actionable handler có thể append một context omission rồi yêu cầu đúng một provider request kế tiếp. Cần guard điều kiện continuation; luôn trả `continue: true` sẽ tạo loop.
 
 ```typescript
@@ -269,7 +278,13 @@ export function registerRecoveryBoundary(
 ): () => void {
   let recoveryPending = true;
   return pi.on("agent_before_settle", (event) => {
-    if (!recoveryPending) return;
+    if (
+      !recoveryPending ||
+      event.outcome !== "error" ||
+      event.context.canContinue
+    ) {
+      return;
+    }
     recoveryPending = false;
     return {
       entries: [

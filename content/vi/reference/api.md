@@ -308,11 +308,20 @@ const models = builtinModels();
 const model = models.getModel("openai", "gpt-4o-mini");
 if (!model) throw new Error("Model not found");
 
-const context: AgentContext = { systemPrompt: "Be exact.", messages: [], tools: [] };
+const rawContext: AgentContext = {
+  messages: [
+    {
+      role: "system",
+      content: "Be exact.",
+      timestamp: Date.now(),
+    },
+  ],
+  tools: [],
+};
 const prompt = { role: "user" as const, content: "Summarize the API.", timestamp: Date.now() };
 const events = agentLoop(
   [prompt],
-  context,
+  rawContext,
   {
     model,
     convertToLlm: (messages) =>
@@ -328,6 +337,8 @@ const events = agentLoop(
 for await (const event of events) console.log(event.type);
 const newMessages = await events.result();
 ```
+
+`AgentContext.tools` chứa các implementation `AgentTool` thực thi được. Nó khác với khai báo Tool do leading `SystemMessage` ghi lại; `convertToLlm` phải giữ system message đó để provider nhận prompt và trạng thái Tool của transcript qua `TranscriptContext`.
 
 ### `AgentLoopConfig`
 
@@ -577,6 +588,15 @@ Mọi overload của `pi.on()` đều trả về hàm unsubscribe. Pi chụp sna
 #### Actionable lifecycle boundary
 
 `TurnEndEvent` nay có thêm `turnIndex`, `messageEntryId`, `toolResultEntryIds`, `outcome`, `entries`, `continue` và context preview bên cạnh message đã finalize cùng Tool result. `AgentBeforeSettleEvent` thuộc union `ExtensionEvent` đã export. Handler `turn_end` và `agent_before_settle` đều có thể trả append-only entry draft cùng `continue: true`; host dispatch hai actionable event này qua `emitBoundary(baseEvent, buildContext)`.
+
+Continuation từ `turn_end` chỉ áp dụng cho Turn hoàn tất bình thường. Outcome low-level `error` và `aborted` hard-exit qua `agent_end` kể cả khi handler trả `continue: true`. Sau khi policy retry, compaction và queue đã chạy, `agent_before_settle` là ranh giới recovery diễn ra muộn hơn; handler nên kiểm tra `event.outcome` và `event.context.canContinue` trước khi yêu cầu một provider call khác.
+
+```text
+turn_end + outcome=completed + continue=true + context.canContinue=true -> next provider request
+turn_end + outcome=error|aborted + continue=true -> agent_end
+retry|compaction|queue policy -> agent_before_settle
+agent_before_settle + continue=true + context.canContinue=true -> next provider request
+```
 
 Event `context` thông thường nhận conversation message không có system message; Pi khôi phục leading prompt và Tool state sau mỗi handler. `context_with_system` chạy sau đó với full transcript và gửi nguyên văn message được trả về. Vì vậy, xóa leading system message ở phase này cũng xóa provider prompt cùng Tool declaration ban đầu. Run được yêu cầu bên trong handler `agent_settled` chỉ bắt đầu sau khi mọi settled handler đã chạy xong.
 

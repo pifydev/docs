@@ -175,7 +175,7 @@ string input
   -> agent_start, turn_start, user message_start/message_end
   -> transformContext(AgentMessage[])
   -> convertToLlm(AgentMessage[]) -> Message[]
-  -> streamFn(model, Context, options)
+  -> streamFn(model, TranscriptContext, options)
   -> assistant message_start/message_update*/message_end
   -> ToolCall blocks selected from AssistantMessage.content
   -> Tool preflight and execution
@@ -382,9 +382,32 @@ function agentLoopContinue(
 
 Low-level callers must also own transcript persistence. `agentLoop()` creates a working message array and returns the messages created by that invocation through `stream.result()`; the supplied `AgentContext` is not a stateful substitute for `Agent`. A caller that wants another independent low-level run must merge the returned artifacts into its own context deliberately. This ownership rule is one reason the `Agent` wrapper is the safer default.
 
-A low-level prompt input has normal `AgentMessage` shape:
+The raw context carries transcript messages and optional executable Tool implementations. The provider prompt is the leading `SystemMessage`, not an `AgentContext.systemPrompt` field. Any `toolsAdded` or `toolsRemoved` on that system message describe the transcript's Tool state; `AgentContext.tools` holds the actual `AgentTool` callbacks the runtime can execute. This complete low-level example preserves the system message during conversion:
 
 ```typescript
+import {
+  agentLoop,
+  type AgentContext,
+  type AgentLoopConfig,
+  type AgentMessage,
+} from "@earendil-works/pi-agent-core";
+import type { Message } from "@earendil-works/pi-ai";
+import { builtinModels } from "@earendil-works/pi-ai/providers/all";
+
+const models = builtinModels();
+const model = models.getModel("openai", "gpt-4o-mini");
+if (!model) throw new Error("Model not found");
+
+const rawContext: AgentContext = {
+  messages: [
+    {
+      role: "system",
+      content: "Be precise.",
+      timestamp: Date.now(),
+    },
+  ],
+  tools: [],
+};
 const prompts: AgentMessage[] = [
   {
     role: "user",
@@ -392,32 +415,27 @@ const prompts: AgentMessage[] = [
     timestamp: Date.now(),
   },
 ];
-```
-
-The loop receives a context snapshot:
-
-```typescript
-const context: AgentContext = {
-  systemPrompt: "Be precise.",
-  messages: [],
-  tools: [],
-};
-```
-
-And its behavior comes from callbacks and stream options:
-
-```typescript
 const config: AgentLoopConfig = {
   model,
   convertToLlm: (messages) =>
     messages.filter(
-      (message) =>
+      (message): message is Message =>
+        message.role === "system" ||
         message.role === "user" ||
         message.role === "assistant" ||
         message.role === "toolResult",
     ),
   toolExecution: "parallel",
 };
+
+const events = agentLoop(
+  prompts,
+  rawContext,
+  config,
+  undefined,
+  models.streamSimple.bind(models),
+);
+void events;
 ```
 
 The public `Agent` creates snapshots of its system prompt, messages, and Tools, runs `runAgentLoop` or `runAgentLoopContinue`, then reduces events back into live `AgentState`.
@@ -671,29 +689,35 @@ Provider adapters never need to understand Coding Agent’s storage or UI messag
 
 The order of the two hooks is part of the contract. `transformContext` can reason about application-only types before anything is discarded. `convertToLlm` then performs the final projection into the provider union. Reversing them would make compaction or Extension logic blind to messages that the model should not receive directly but that still carry useful application state.
 
-#### Phase C: build `Context` and call the selected model
+#### Phase C: build `TranscriptContext` and call the selected model
 
-The loop creates a fresh provider-facing wrapper for each Turn:
-
-```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at f07218c4.
-const llmContext: Context = {
-  systemPrompt: context.systemPrompt,
-  messages: llmMessages,
-  tools: context.tools,
-};
-```
-
-It resolves a current API key, then calls the injected function:
+The loop converts application messages first, then normalizes the result into the `TranscriptContext` accepted by `StreamFn`. The system prompt and transcript Tool declarations remain in leading system messages; executable `AgentTool` implementations stay in `AgentContext.tools` and are used by Agent Core for execution rather than copied into the provider wrapper:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at f07218c4.
-const response = await streamFunction(config.model, llmContext, {
-  ...config,
-  apiKey: resolvedApiKey,
-  signal,
-});
+import type {
+  AgentContext,
+  AgentLoopConfig,
+  StreamFn,
+} from "@earendil-works/pi-agent-core";
+import {
+  normalizeContext,
+  type AssistantMessageEventStream,
+  type SimpleStreamOptions,
+} from "@earendil-works/pi-ai";
+
+async function requestAssistant(
+  context: AgentContext,
+  config: AgentLoopConfig,
+  streamFunction: StreamFn,
+  options?: SimpleStreamOptions,
+): Promise<AssistantMessageEventStream> {
+  const llmMessages = await config.convertToLlm(context.messages);
+  const llmContext = normalizeContext({ messages: llmMessages });
+  return streamFunction(config.model, llmContext, options);
+}
 ```
+
+The production loop also resolves the current API key and merges the portable stream options before making this call.
 
 For ordinary Agent Core applications, pass the current model collection method with its receiver:
 
@@ -741,14 +765,15 @@ streamFn: async (model, context, options) => {
 
 The surrounding `sdk.ts` scope supplies `settingsManager`, `extensionRunnerRef`, `mergeProviderAttributionHeaders`, and `modelRuntime`. The wrapper applies timeout and retry settings, provider attribution, and the Extension header hook. Credential resolution remains an Agent Loop concern through `getApiKey`; the loop still sees only `StreamFn`.
 
-| Context part   | Typical stability across Turns | Why it can still change                              |
-| -------------- | ------------------------------ | ---------------------------------------------------- |
-| `systemPrompt` | Often stable                   | `prepareNextTurn` or product settings may replace it |
-| `tools`        | Often stable                   | Extensions or a Tool result may change availability  |
-| `messages`     | Grows each Turn                | Assistant and Tool result messages are appended      |
-| `model`        | Usually stable                 | `prepareNextTurn` can select another model           |
+| Context part                            | Typical stability across Turns | Why it can still change                                      |
+| --------------------------------------- | ------------------------------ | ------------------------------------------------------------ |
+| leading `SystemMessage`                 | Often stable                   | `prepareNextTurn` or product settings may replace prompt state |
+| executable `AgentContext.tools`         | Often stable                   | Extensions or a Tool result may change availability          |
+| transcript Tool declarations in system | Often stable                   | System messages can declare Tool additions and removals       |
+| `messages`                              | Grows each Turn                | Assistant and Tool result messages are appended               |
+| `model`                                 | Usually stable                 | `prepareNextTurn` can select another model                     |
 
-Provider adapters own cache-control serialization. Rebuilding the small `Context` object does not itself define a cache hit; provider-visible content and provider cache semantics do.
+Provider adapters own cache-control serialization. Rebuilding the small `TranscriptContext` object does not itself define a cache hit; provider-visible content and provider cache semantics do.
 
 #### Phase D: stream and replace the assistant message in place
 

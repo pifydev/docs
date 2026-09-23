@@ -308,11 +308,20 @@ const models = builtinModels();
 const model = models.getModel("openai", "gpt-4o-mini");
 if (!model) throw new Error("Model not found");
 
-const context: AgentContext = { systemPrompt: "Be exact.", messages: [], tools: [] };
+const rawContext: AgentContext = {
+  messages: [
+    {
+      role: "system",
+      content: "Be exact.",
+      timestamp: Date.now(),
+    },
+  ],
+  tools: [],
+};
 const prompt = { role: "user" as const, content: "Summarize the API.", timestamp: Date.now() };
 const events = agentLoop(
   [prompt],
-  context,
+  rawContext,
   {
     model,
     convertToLlm: (messages) =>
@@ -328,6 +337,8 @@ const events = agentLoop(
 for await (const event of events) console.log(event.type);
 const newMessages = await events.result();
 ```
+
+`AgentContext.tools` contains executable `AgentTool` implementations. It is distinct from the Tool declarations recorded by the leading `SystemMessage`; `convertToLlm` must preserve that system message so the provider receives the prompt and transcript Tool state through `TranscriptContext`.
 
 ### `AgentLoopConfig`
 
@@ -577,6 +588,15 @@ Every `pi.on()` overload returns an unsubscribe function. Pi snapshots matching 
 #### Actionable lifecycle boundaries
 
 `TurnEndEvent` now includes `turnIndex`, `messageEntryId`, `toolResultEntryIds`, `outcome`, `entries`, `continue`, and a context preview in addition to the finalized message and Tool results. `AgentBeforeSettleEvent` is part of the exported `ExtensionEvent` union. Both `turn_end` and `agent_before_settle` handlers may return append-only entry drafts and `continue: true`; a host dispatches these actionable events through `emitBoundary(baseEvent, buildContext)`.
+
+Continuation from `turn_end` applies only to a normally completed Turn. Low-level `error` and `aborted` outcomes hard-exit through `agent_end` even if the handler returns `continue: true`. After retry, compaction, and queue policy have run, `agent_before_settle` is the later recovery boundary; handlers should inspect `event.outcome` and `event.context.canContinue` before requesting another provider call.
+
+```text
+turn_end + outcome=completed + continue=true + context.canContinue=true -> next provider request
+turn_end + outcome=error|aborted + continue=true -> agent_end
+retry|compaction|queue policy -> agent_before_settle
+agent_before_settle + continue=true + context.canContinue=true -> next provider request
+```
 
 The ordinary `context` event receives conversation messages without system messages; Pi restores the leading prompt and Tool state after each handler. `context_with_system` runs afterward with the full transcript and sends returned messages verbatim. Removing its leading system message therefore removes the provider prompt and initial Tool declarations. A run requested inside an `agent_settled` handler is deferred until every settled handler has finished.
 

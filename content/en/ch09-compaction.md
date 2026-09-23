@@ -430,7 +430,7 @@ The split remains lossy, but the next model receives the original request and ea
 `SessionManager.appendCompaction()` appends a child of the current leaf and advances the leaf. It does not delete the entries summarized by the new checkpoint. The public Coding Agent type at the pinned revision has this shape:
 
 ```typescript
-import type { Usage } from "@earendil-works/pi-ai";
+import type { SystemMessage, Usage } from "@earendil-works/pi-ai";
 
 interface CompactionEntry<T = unknown> {
   type: "compaction";
@@ -443,10 +443,11 @@ interface CompactionEntry<T = unknown> {
   details?: T;
   usage?: Usage;
   fromHook?: boolean;
+  systemMessage?: SystemMessage;
 }
 ```
 
-`timestamp` is an ISO string in the stored session, not the numeric timestamp used by projected `AgentMessage`s. `fromHook` is the backward-compatible field name for an Extension-provided result. `details` must be JSON-serializable if the session uses JSONL storage.
+`timestamp` is an ISO string in the stored session, not the numeric timestamp used by projected `AgentMessage`s. `fromHook` is the backward-compatible field name for an Extension-provided result. `details` must be JSON-serializable if the session uses JSONL storage. When `appendCompaction()` creates the entry, it snapshots the current leading `SystemMessage` into `systemMessage` when one exists, preserving the prompt and Tool state at that compaction boundary.
 
 ```json
 {

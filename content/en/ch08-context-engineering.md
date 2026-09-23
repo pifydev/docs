@@ -552,6 +552,12 @@ Coding Agent runs Extension request transforms in two phases. An ordinary `conte
 | `context_with_system` | `full transcript including system messages` | `returned messages are sent verbatim` |
 | `context_with_system without leading system message` | `provider prompt and initial tool declarations` | `removed` |
 
+```text
+context: handler input = messages - SystemMessage; handler output + leading SystemMessage + tool state
+context_with_system: handler input = full transcript; provider input = handler output
+context_with_system: handler output - leading SystemMessage -> provider prompt removed + initial tool declarations removed
+```
+
 Use `context` for normal request-local filtering because it cannot accidentally discard prompt or Tool state. Use `context_with_system` only when the Extension deliberately owns the entire provider transcript. Removing or replacing its first system message changes what the provider receives for that request; Pi does not reconstruct it afterward.
 
 Session compaction does not belong in a disposable request hook, and a byte-limited Tool result does not prove that the complete token context fits.

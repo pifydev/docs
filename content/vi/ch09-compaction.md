@@ -433,7 +433,7 @@ Việc tách lượt vẫn làm mất thông tin, nhưng mô hình tiếp theo n
 `SessionManager.appendCompaction()` thêm một mục con vào lá hiện tại rồi chuyển lá sang mục mới. Phương thức này không xóa các mục vừa được tóm tắt. Kiểu công khai của Coding Agent tại phiên bản mã nguồn đã ghim có cấu trúc sau:
 
 ```typescript
-import type { Usage } from "@earendil-works/pi-ai";
+import type { SystemMessage, Usage } from "@earendil-works/pi-ai";
 
 interface CompactionEntry<T = unknown> {
   type: "compaction";
@@ -446,10 +446,11 @@ interface CompactionEntry<T = unknown> {
   details?: T;
   usage?: Usage;
   fromHook?: boolean;
+  systemMessage?: SystemMessage;
 }
 ```
 
-`timestamp` là chuỗi ISO trong phiên đã lưu, khác với mốc thời gian dạng số của `AgentMessage` được chiếu. `fromHook` là tên trường tương thích ngược dành cho kết quả do Extension cung cấp. `details` phải tuần tự hóa được thành JSON nếu phiên được lưu dưới dạng JSONL.
+`timestamp` là chuỗi ISO trong phiên đã lưu, khác với mốc thời gian dạng số của `AgentMessage` được chiếu. `fromHook` là tên trường tương thích ngược dành cho kết quả do Extension cung cấp. `details` phải tuần tự hóa được thành JSON nếu phiên được lưu dưới dạng JSONL. Khi `appendCompaction()` tạo entry, nó chụp leading `SystemMessage` hiện hành vào `systemMessage` nếu message này tồn tại, nhờ đó giữ prompt và trạng thái Tool tại ranh giới compaction.
 
 ```json
 {
