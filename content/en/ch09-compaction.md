@@ -158,10 +158,10 @@ The automatic dispatcher distinguishes more than “preventive” and “emergen
 | --- | --- | --- |
 | Threshold | Valid or estimated usage satisfies the strict threshold | Keeps the completed response; no retry |
 | Overflow, completed response | Same-model response reports overflow but has `stopReason: "stop"` | Keeps the response; no retry |
-| Overflow or recoverable length | Same-model overflow error, or a recoverable `length` stop below the model's desired output limit | Removes the failed/truncated assistant from Agent state, compacts, and retries once |
+| Overflow or recoverable length | Same-model overflow error, or a recoverable `length` stop below the model's desired output limit | Appends omission edits for the failed attempt, compacts the resulting projection, and retries once |
 | Manual | `/compact [instructions]`, RPC/SDK `compact()`, or Extension `ctx.compact()` | Aborts any current run first; never resumes it automatically |
 
-Overflow recovery is limited to one compact-and-retry attempt. The failed or truncated assistant was already persisted on `message_end`; Pi removes it from the in-memory retry context, not from the session tree. After rebuilding, it removes that terminal assistant again if projection brought it back as the last message, because `agent.continue()` requires a continuable state.
+Overflow recovery is limited to one compact-and-retry attempt. The failed or truncated assistant and its Tool results may already be persisted on `message_end`. `_omitRecoveryAttempt()` appends a `ContextEditEntry` through `appendContextEdit(targetId, null)` for each resolved message entry, then refreshes the canonical projection. The source entries remain in the append-only tree, while the durable edits keep that failed attempt out of later projections and give `agent.continue()` a continuable state.
 
 The same-model guard applies to overflow and recoverable-length detection. Threshold accounting remains the separate provider-usage or estimate path described above. This prevents a stale overflow from a smaller previous model from forcing recovery after a model switch.
 
@@ -246,16 +246,16 @@ derive turnStartIndex and isSplitTurn
 return firstKeptEntryIndex, turnStartIndex, isSplitTurn
 ```
 
-For the first compaction, `boundaryStart` is the beginning of the active branch path. On a later compaction, Pi finds the previous `CompactionEntry` and starts at its `firstKeptEntryId`. If that id is absent from the active path, it falls back to the entry after the previous compaction. Messages that survived the earlier cut can therefore enter the next summary rather than becoming detached from the evolving checkpoint.
+For the first compaction, `boundaryStart` is the beginning of the canonical projected path. On a later compaction, `prepareCompaction()` calls `buildSessionProjection()`, finds the newest projected `CompactionEntry`, and sets `boundaryStart = prevCompactionIndex + 1`. The projection has already applied that checkpoint's retained tail and any later `context_edit` records, so preparation does not search the raw branch for the former `firstKeptEntryId`. Messages that survived the earlier cut can still enter the next summary through the canonical projection.
 
 ```text
-previous checkpoint
-  summary A + entries from firstKept(A) onward
+canonical projection
+  [prevCompactionIndex: summary A] + retained projected entries
 
 next preparation
   previousSummary = summary A
-  boundaryStart   = firstKept(A), or entry after compaction A as fallback
-  new cut         = firstKept(B)
+  boundaryStart   = prevCompactionIndex + 1
+  new cut         = firstKept(B) in projected entries
 
 messages [boundaryStart, new cut) → new summary input
 messages [new cut, current leaf]   → retained region
@@ -338,7 +338,7 @@ later compaction
 
 The update instructions preserve existing information, add progress and decisions, move completed work, refresh next steps, and permit removal of information that is no longer relevant. “Incremental” therefore means an LLM-guided update, not byte-for-byte accumulation.
 
-During a split turn, the main-history request receives `previousSummary` only when `messagesToSummarize` is nonempty. If the split interval contains no complete earlier messages, current `compact()` uses the literal `No prior history.` before the turn-prefix summary and does not make a separate previous-summary request.
+During a split turn, `compact()` initializes `historyText` with `previousSummary ?? "No prior history."`. When `messagesToSummarize` is nonempty, the generated history summary replaces that value. When the split interval contains no complete earlier messages, Pi makes no separate history request, but it preserves an existing `previousSummary`; the literal fallback appears only when no earlier summary exists.
 
 ### File-operation metadata is narrow and cumulative
 
@@ -409,7 +409,7 @@ The prefix request uses a smaller output cap, the smaller of `floor(0.5 × reser
 When complete earlier messages exist, Pi generates or updates the six-section history summary first. It then generates the prefix summary. Usage from both requests is added field by field. The stored text joins the two parts with a separator and a `Turn Context (split turn)` label.
 
 ```text
-[six-section history summary, or "No prior history."]
+[new six-section history summary, previousSummary, or "No prior history."]
 
 ---
 
@@ -516,7 +516,7 @@ The monorepo's generic Agent runtime has a separate compaction schema with a mat
 
 ### Public events and Extension hooks serve different consumers
 
-`AgentSession.subscribe()` consumers see `compaction_start` and `compaction_end`. The start has `reason: "manual" | "threshold" | "overflow"`. The end always reports that reason plus `result`, `aborted`, `willRetry`, and an optional `errorMessage`.
+`AgentSession.subscribe()` consumers see `compaction_start` and `compaction_end`. The start has `reason: "manual" | "threshold" | "overflow"`. The end always reports that reason plus `result`, `aborted`, `willRetry`, and an optional `errorMessage`. In the declaration, those fields are `result: CompactionResult | undefined`, `aborted: boolean`, `willRetry: boolean`, and `errorMessage?: string`; only the last property is optional.
 
 Extensions have three separate hooks:
 
@@ -624,10 +624,10 @@ The complete automatic path crosses five representations: provider usage, sessio
    same-model overflow/recoverable length OR threshold from current usage
 
 5. Prepare
-   build active branch path
-   → recalculate tokensBefore from buildSessionContext(path).messages
-   → find previous-summary boundary
-   → walk backward to firstKeptEntryId
+   buildSessionProjection(pathEntries)
+   → recalculate tokensBefore with estimateProjectedContextTokens(projection, pathEntries)
+   → find the projected previous-summary boundary
+   → walk backward through projected entries to choose firstKeptEntryId
    → split messagesToSummarize / turnPrefixMessages / kept region
    → collect built-in file operations
 
@@ -646,7 +646,7 @@ The complete automatic path crosses five representations: provider usage, sessio
    → new parent-linked JSONL entry; old entries remain
 
 9. Project
-   buildSessionContext()
+   buildSessionProjection()
    → CompactionSummaryMessage + entries from firstKeptEntryId + later entries
    → replace agent.state.messages
 

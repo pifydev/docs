@@ -68,7 +68,7 @@ Yes. Submit matching English and Vietnamese files, keep their heading and code-f
 
 ### Where is the terminology policy?
 
-The repository-level [GLOSSARY.md](https://github.com/pifydev/docs/blob/main/GLOSSARY.md) defines canonical terms. Preserve identifiers and translate only the concepts that the glossary marks as translatable.
+The [documentation glossary](../glossary.md) defines canonical terms. Preserve identifiers and translate only the concepts that the glossary marks as translatable.
 
 ## Common pitfalls
 
@@ -83,7 +83,7 @@ These implementation corrections expose no public API. If an OpenAI-compatible e
 
 ### My tool result does not reach the model
 
-Return a `ToolResultMessage` whose `toolCallId` matches the original `ToolCall.id`. Also preserve the tool name and provide content in the expected block format.
+An `AgentTool.execute` implementation returns an `AgentToolResult` with `content` and optional `details` or `usage`; it does not construct a `ToolResultMessage`. Agent Core associates the result with the current `ToolCall` and creates the protocol message with the matching call ID and Tool name. If no result reaches the model, inspect the returned content blocks and the `tool_execution_end` event.
 
 ### My session does not resume
 

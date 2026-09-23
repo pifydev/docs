@@ -298,7 +298,7 @@ XML giúp model nhìn thấy ranh giới giữa các nguồn. Nó không thực 
 
 Pi tìm skill từ thư mục gốc của người dùng, thư mục dự án được project trust cho phép, package, cài đặt và đường dẫn `--skill` tường minh. Nó tìm đệ quy các thư mục chứa `SKILL.md`, kiểm tra frontmatter, chuẩn hóa đường dẫn, cảnh báo khi trùng tên và giữ tên gặp trước.
 
-Khi `read` đang hoạt động, `formatSkillsForPrompt()` chèn metadata hiển thị cho model thay vì toàn bộ nội dung của mọi skill:
+Khi `read` hoặc `bash` đang hoạt động, `formatSkillsForPrompt()` chèn metadata hiển thị cho model thay vì toàn bộ nội dung của mọi skill. Builder tính `skillFileReadTool = ["read", "bash"].find(...)`, nên ưu tiên `read` khi cả hai được chọn và dùng `bash` làm fallback:
 
 ```xml
 <available_skills>
@@ -310,32 +310,35 @@ Khi `read` đang hoạt động, `formatSkillsForPrompt()` chèn metadata hiển
 </available_skills>
 ```
 
-Phần prompt đứng trước danh sách yêu cầu model dùng `read` khi tác vụ khớp và phân giải tham chiếu tương đối từ thư mục skill. `disable-model-invocation: true` loại skill khỏi danh sách này. Skill vẫn có thể được gọi tường minh bằng `/skill:name`.
+Phần prompt đứng trước danh sách nêu đúng reader đã chọn: nó yêu cầu model dùng `read` hoặc `bash` khi tác vụ khớp và phân giải tham chiếu tương đối từ thư mục skill. `disable-model-invocation: true` loại skill khỏi danh sách này. Skill vẫn có thể được gọi tường minh bằng `/skill:name`.
 
-Hai cách nạp tạo ra lịch sử khác nhau. Skill do model chọn đi vào dưới dạng kết quả Tool bình thường của `read`. `/skill:name args` đọc file trong ứng dụng, bỏ frontmatter, bọc nội dung trong `<skill name="…" location="…">`, nối đối số rồi mở rộng văn bản đó thành thông điệp của người dùng. Metadata được nạp sớm; nội dung chỉ dẫn chỉ đi vào context khi cần.
+Hai cách nạp tạo ra lịch sử khác nhau. Skill do model chọn đi qua file reader đã chọn, dưới dạng Tool result bình thường của `read` hoặc output của Bash. `/skill:name args` đọc file trong ứng dụng, bỏ frontmatter, bọc nội dung trong `<skill name="…" location="…">`, nối đối số rồi mở rộng văn bản đó thành thông điệp của người dùng. Metadata được nạp sớm; nội dung chỉ dẫn chỉ đi vào context khi cần.
 
-### Khung đầy đủ của system prompt
+### Khung system prompt có cấu trúc
 
-`buildSystemPrompt()` hiện tại không thêm ngày. Thứ tự cuối là:
+`buildSystemPrompt()` hiện tại không thêm ngày. Preamble là plain text; mọi named section theo sau được render bằng tag kiểu XML. Thứ tự cuối là:
 
 ```text
 Đường mặc định
-1. vai trò coding assistant
-2. đoạn mô tả một dòng cho Tool đang hoạt động
-3. hướng dẫn của Tool đang hoạt động + hướng dẫn về câu trả lời ngắn và đường dẫn rõ ràng
-4. đường dẫn tài liệu Pi cùng quy tắc đọc
-5. appendSystemPrompt, nếu có
-6. các file <project_context>, theo thứ tự của bộ nạp
-7. <available_skills>, chỉ khi `read` đang hoạt động và có skill hiển thị cho model
-8. thư mục làm việc hiện tại
+1. preamble về vai trò coding assistant
+2. <tools>: đoạn mô tả một dòng cho Tool đang hoạt động
+3. <rules>: hướng dẫn của Tool đang hoạt động + hướng dẫn về câu trả lời ngắn và đường dẫn rõ ràng
+4. <docs>: đường dẫn tài liệu Pi cùng quy tắc đọc
+5. <addendum>: appendSystemPrompt, nếu có
+6. <project_context>: context file theo thứ tự của loader
+7. <skills>: chỉ dẫn cùng <available_skills>, khi `read` hoặc `bash` được chọn
+8. <cwd>: current working directory
 
 Đường dùng prompt tùy chỉnh
-1. customPrompt
-2. appendSystemPrompt
-3. ngữ cảnh dự án
-4. skill hiển thị, khi `read` được chọn
-5. thư mục làm việc hiện tại
+1. preamble customPrompt
+2. <addendum>: appendSystemPrompt
+3. <project_context>: ngữ cảnh dự án
+4. <skills>: skill hiển thị, khi `read` hoặc `bash` được chọn
+5. <cwd>: current working directory
+6. custom tagged section đã validate, theo insertion order
 ```
+
+`customSections` áp dụng cho cả hai đường sau khi map section dựng sẵn đã được ghép. Giá trị không rỗng có tên sẵn sẽ thay section đó tại chỗ; tên hợp lệ mới sẽ nối một tagged section theo insertion order. Tên dành riêng `preamble` bị từ chối, cũng như tên không khớp section-name pattern.
 
 `AgentSession._rebuildSystemPrompt()` truyền tên, đoạn mô tả và hướng dẫn của Tool đang hoạt động, cùng giá trị prompt, file ngữ cảnh và skill từ bộ nạp. Tách khỏi phần văn xuôi đó, `Agent` mang đối tượng Tool thật trong yêu cầu Pi AI. Ranh giới này giữ schema dùng khi thực thi Tool ngoài phần văn xuôi nhưng vẫn mô tả đúng mục đích dùng Tool.
 

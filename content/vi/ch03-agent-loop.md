@@ -907,7 +907,7 @@ Mixed batch vẫn tiếp tục. Result bị `beforeToolCall` block chỉ tham gi
 
 Parallel mode cố ý tách preparation khỏi execution. Pi prepare call theo source order của assistant và ghi immediate failure trước khi launch đồng thời các call được phép. Vì thế `tool_execution_end` có thể phản ánh completion order thật, còn Tool result message đợi mọi work đã launch settle rồi quay về source order. Model nhìn thấy transcript deterministic dù UI cho thấy Tool này hoàn thành trước Tool kia.
 
-Flag `terminate` chỉ tồn tại trong runtime. `createToolResultMessage()` copy content, details, usage, tên Tool mới được thêm, error state và field nhận dạng, nhưng không copy `terminate`. Provider request kế tiếp không nhận một termination field ngoài protocol. Agent Core tiêu thụ hint này khi quyết định có cần automatic continuation hay không.
+Flag `terminate` chỉ tồn tại trong runtime. `createToolResultMessage()` copy content, details, usage, error state và field nhận dạng, nhưng không copy `terminate`. Thay đổi khai báo Tool vẫn nằm trên `SystemMessage` đầu tiên qua `toolsAdded` và `toolsRemoved`; chúng không phải field của Tool result. Provider request kế tiếp không nhận một termination field ngoài protocol. Agent Core tiêu thụ hint này khi quyết định có cần automatic continuation hay không.
 
 ### 4.7 `turn_end`, hook, event và steering
 

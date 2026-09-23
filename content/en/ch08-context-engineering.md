@@ -298,7 +298,7 @@ XML makes source boundaries visible to the model. It does not enforce the instru
 
 Pi discovers skills from user roots, project roots enabled by project trust, packages, settings, and explicit `--skill` paths. It recursively finds directories containing `SKILL.md`, validates frontmatter, canonicalizes paths, and warns on name collisions while keeping the first name encountered.
 
-When `read` is active, `formatSkillsForPrompt()` injects model-visible metadata rather than every skill body:
+When either `read` or `bash` is active, `formatSkillsForPrompt()` injects model-visible metadata rather than every skill body. The builder computes `skillFileReadTool = ["read", "bash"].find(...)`, so `read` is preferred when both are selected and `bash` is the fallback:
 
 ```xml
 <available_skills>
@@ -310,32 +310,35 @@ When `read` is active, `formatSkillsForPrompt()` injects model-visible metadata 
 </available_skills>
 ```
 
-The preceding prompt text tells the model to use `read` when a task matches and to resolve relative references from the skill directory. `disable-model-invocation: true` removes a skill from this list. It remains available for explicit `/skill:name` use.
+The preceding prompt text names the selected reader: it tells the model to use `read` or `bash` when a task matches and to resolve relative references from the skill directory. `disable-model-invocation: true` removes a skill from this list. It remains available for explicit `/skill:name` use.
 
-The two loading paths produce different history. A model-selected skill arrives as a normal `read` Tool result. `/skill:name args` reads the file in the application, strips frontmatter, wraps the body in `<skill name="…" location="…">`, appends the arguments, and expands that text into the user message. Metadata is eager; the instruction body is on demand.
+The two loading paths produce different history. A model-selected skill arrives through the selected file reader, as a normal `read` Tool result or Bash output. `/skill:name args` reads the file in the application, strips frontmatter, wraps the body in `<skill name="…" location="…">`, appends the arguments, and expands that text into the user message. Metadata is eager; the instruction body is on demand.
 
-### Full system-prompt skeleton
+### Structured system-prompt skeleton
 
-Current `buildSystemPrompt()` does not add a date. Its final order is:
+Current `buildSystemPrompt()` does not add a date. The preamble is plain text; every following named section is rendered as an XML-style tag. Its final order is:
 
 ```text
 Default path
-1. coding-assistant role
-2. one-line snippets for active Tools
-3. active-Tool guidelines + concise/path guidelines
-4. Pi documentation paths and reading rules
-5. appendSystemPrompt, when present
-6. <project_context> files, in loader order
-7. <available_skills>, only when read is active and skills are model-visible
-8. Current working directory
+1. coding-assistant preamble
+2. <tools>: one-line snippets for active Tools
+3. <rules>: active-Tool guidelines + concise/path guidelines
+4. <docs>: Pi documentation paths and reading rules
+5. <addendum>: appendSystemPrompt, when present
+6. <project_context>: context files in loader order
+7. <skills>: instructions plus <available_skills>, when read or bash is selected
+8. <cwd>: current working directory
 
 Custom-prompt path
-1. customPrompt
-2. appendSystemPrompt
-3. project context
-4. visible skills, when read is selected
-5. Current working directory
+1. customPrompt preamble
+2. <addendum>: appendSystemPrompt
+3. <project_context>: project context
+4. <skills>: visible skills, when read or bash is selected
+5. <cwd>: current working directory
+6. validated custom tagged sections, in insertion order
 ```
+
+`customSections` applies to both paths after the built-in section map is assembled. A nonempty value with an existing name replaces that section in place; a new valid name appends a tagged section in insertion order. The reserved name `preamble` is rejected, as are names outside the section-name pattern.
 
 `AgentSession._rebuildSystemPrompt()` supplies active Tool names, snippets, guidelines, loader prompt values, context files, and skills. Separately, the `Agent` carries actual Tool objects in the Pi AI request. This separation keeps a Tool's executable schema out of prose while still describing its intended use.
 

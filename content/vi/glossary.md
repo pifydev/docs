@@ -81,7 +81,7 @@ Bốn Tool `read`, `write`, `edit` và `bash` được coding agent cung cấp m
 
 ## Message
 
-Record có kiểu được truyền qua các lớp model và agent. Package Pi AI định nghĩa `UserMessage`, `AssistantMessage` và `ToolResultMessage`; provider adapter chuyển các record này sang wire format của từng provider.
+Record có kiểu được truyền qua các lớp model và agent. Package Pi AI định nghĩa `SystemMessage`, `UserMessage`, `AssistantMessage` và `ToolResultMessage`; provider adapter chuyển các record này sang wire format của từng provider.
 
 ## Model Provider
 
@@ -129,7 +129,7 @@ Implementation riêng cho từng provider, chịu trách nhiệm chuyển messag
 
 ## Turn
 
-Một user request cùng toàn bộ model/tool work cần thiết để agent đạt state ổn định tiếp theo. Một lượt có thể chứa nhiều model call khi model gọi Tool.
+Một assistant response cùng lô Tool được chấp nhận từ response đó, nằm giữa `turn_start` và `turn_end`. Một Agent run có thể chứa nhiều Turn, do đó có thể có nhiều model call.
 
 ## Verdict
 

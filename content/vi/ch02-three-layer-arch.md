@@ -6,10 +6,10 @@ language: vi
 chapter: 2
 source_url: 'https://www.dgzhuya.com/modules/ch02-three-layer-arch'
 official_refs:
-  - 'https://github.com/earendil-works/pi/tree/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages'
-  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/client/README.md'
-  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/protocol/README.md'
-  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/server/README.md'
+  - 'https://github.com/earendil-works/pi/tree/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/client/README.md'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/protocol/README.md'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/server/README.md'
 terms_used:
   - Model
   - Provider
@@ -30,7 +30,7 @@ terms_used:
   - TypeBox
   - TSchema
 status: reviewed
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -40,7 +40,7 @@ reviewed_by: Pify maintainers
 
 ## 1. Bạn vừa mở một codebase Agent
 
-Giả sử bạn vừa clone repository Pi tại revision `107d79f1` rồi mở thư mục `packages/`. Phần cây thư mục liên quan trông như sau:
+Giả sử bạn vừa clone repository Pi tại revision `f07218c` rồi mở thư mục `packages/`. Phần cây thư mục liên quan trông như sau:
 
 ```text
 repo/
@@ -52,6 +52,8 @@ repo/
 │   ├── server/             ← boundary service thử nghiệm
 │   ├── client/             ← @earendil-works/pi-client (thử nghiệm)
 │   ├── protocol/           ← @earendil-works/pi-protocol (thử nghiệm)
+│   ├── chord/
+│   ├── durable/
 │   ├── telemetry/
 │   ├── evals/
 │   └── session-backends/
@@ -59,7 +61,7 @@ repo/
 └── tsconfig.json
 ```
 
-Ba package đầu tạo thành mô hình hướng dependency được trình bày trong chương này. `pi-tui` là thư viện UI trực giao. Các package client, protocol và server tạo thành một boundary thử nghiệm, tùy chọn và nằm ngang hàng; những thư mục còn lại hỗ trợ telemetry, evaluation và session backend. Vì vậy monorepo có nhiều hơn năm package, dù năm vai trò vẫn là một cách vào bài dễ hiểu cho chuyến tham quan kiến trúc đầu tiên.
+Ba package đầu tạo thành mô hình hướng dependency được trình bày trong chương này. `pi-tui` là thư viện UI trực giao. Các package client, protocol và server tạo thành một boundary thử nghiệm, tùy chọn và nằm ngang hàng; những thư mục còn lại hỗ trợ Chord service, durable execution, telemetry, evaluation và session backend. Vì vậy monorepo có nhiều hơn năm package, dù năm vai trò vẫn là một cách vào bài dễ hiểu cho chuyến tham quan kiến trúc đầu tiên.
 
 Tài liệu Pi cũ có thể nhắc tới `pi-web-ui` hoặc `pi-orchestrator`. Cả hai đều không phải workspace tại revision đã ghim. Cụ thể, nhận định cũ rằng một `pi-orchestrator` thử nghiệm nằm trên coding-agent không còn mô tả đúng cây source này. Thay vào đó, Mục 2.5 lập bản đồ boundary client/protocol/server tùy chọn và ghi rõ trạng thái thử nghiệm của nó.
 
@@ -77,7 +79,7 @@ Tạm gác mũi tên dependency sang một bên. Hãy đọc từng package từ
 
 `@earendil-works/pi-ai`, nằm trong `packages/ai/`, trả lời câu hỏi: làm sao một ứng dụng có thể gọi model từ nhiều provider qua các type và streaming contract dùng chung?
 
-Manifest mô tả package này là “Unified LLM API with automatic model discovery and provider configuration”. Tại revision `107d79f1`, package sở hữu bốn nhóm khái niệm liên quan:
+Manifest mô tả package này là “Unified LLM API with automatic model discovery and provider configuration”. Tại revision `f07218c`, package sở hữu bốn nhóm khái niệm liên quan:
 
 1. `Model<TApi>` mô tả một model cụ thể, gồm provider, API protocol, input mode, context window, token limit, chi phí, header và thiết lập tương thích.
 2. `Provider<TApi>` sở hữu provider ID, cách xác thực, model catalog đồng bộ, hành vi refresh tùy chọn cùng implementation của `stream()` và `streamSimple()`.
@@ -87,7 +89,7 @@ Manifest mô tả package này là “Unified LLM API with automatic model disco
 Root entry được giữ side-effect free có chủ đích. Provider factory nằm sau package subpath, còn `createModels()` và các domain type dùng chung nằm ở root:
 
 ```typescript
-// packages/ai/src/index.ts (một số export tại 107d79f1)
+// packages/ai/src/index.ts (một số export tại f07218c)
 export type { Static, TSchema } from "typebox";
 export { Type } from "typebox";
 export * from "./models.ts";
@@ -117,7 +119,7 @@ Manifest gọi đây là “General-purpose agent with transport abstraction, st
 Public entry point phản ánh sự phân chia đó:
 
 ```typescript
-// packages/agent/src/index.ts (một số export tại 107d79f1)
+// packages/agent/src/index.ts (một số export tại f07218c)
 export * from "./agent.ts";
 export * from "./agent-loop.ts";
 export * from "./harness/compaction/compaction.ts";
@@ -226,10 +228,10 @@ Coding package phụ thuộc trực tiếp vào cả ba package nền tảng tro
 ```jsonc
 {
   "dependencies": {
-    // Các dependency nền tảng được chọn từ package.json tại 107d79f1.
-    "@earendil-works/pi-agent-core": "^0.85.0",
-    "@earendil-works/pi-ai": "^0.85.0",
-    "@earendil-works/pi-tui": "^0.85.0"
+    // Các dependency nền tảng được chọn từ package.json tại f07218c.
+    "@earendil-works/pi-agent-core": "^0.87.1",
+    "@earendil-works/pi-ai": "^0.87.1",
+    "@earendil-works/pi-tui": "^0.87.1"
   }
 }
 ```
@@ -242,28 +244,29 @@ Manifest đầy đủ còn liệt kê `@earendil-works/pi-client` và `@earendil
 
 Một số direct import tồn tại vì public API của sản phẩm nhắc đến `Model`, `Provider`, `Usage`, `Context`, `ImageContent` và các type Pi AI khác. TypeScript vẫn phải resolve những type đó ngay cả khi import cụ thể biến mất khỏi JavaScript được emit.
 
-Dependency cũng tồn tại lúc runtime. Coding Agent so sánh model, lấy text từ nội dung message, tạo ID, retry assistant call và hiện thực `ModelRuntime` cùng `ModelRegistry` trên contract của Pi AI. Mô tả cạnh này là “chỉ re-export type” sẽ sai ở revision `107d79f1`.
+Dependency cũng tồn tại lúc runtime. Coding Agent so sánh model, lấy text từ nội dung message, tạo ID, retry assistant call và hiện thực `ModelRuntime` cùng `ModelRegistry` trên contract của Pi AI. Mô tả cạnh này là “chỉ re-export type” sẽ sai ở revision `f07218c`.
 
 Agent Core cho thấy nền tảng được mở rộng dần rõ nhất:
 
 ```typescript
-// packages/agent/src/types.ts (lược bớt import, 107d79f1)
+// packages/agent/src/types.ts (lược bớt import, f07218c)
 import type {
   Api,
   AssistantMessageEventStream,
-  Context,
   ImageContent,
+  JsonValue,
   Message,
   Model,
   SimpleStreamOptions,
   TextContent,
   Tool,
   ToolResultMessage,
+  TranscriptContext,
   Usage,
 } from "@earendil-works/pi-ai";
 ```
 
-`Message`, `Model`, `Tool` và `Context` là các nguyên tử dùng để phát biểu runtime contract. Agent Core thêm state, execution, queue và event của nó. Coding Agent có thể dùng cả hai nhóm vì nó đảm nhiệm việc lắp ráp sản phẩm.
+`Message`, `Model`, `Tool` và `TranscriptContext` đã normalize là các nguyên tử dùng để phát biểu contract của Agent runtime. Agent Core thêm state, execution, queue và event của nó. Coding Agent có thể dùng cả hai nhóm vì nó đảm nhiệm việc lắp ráp sản phẩm.
 
 ### Vậy quy tắc phân lớp thực sự là gì?
 
@@ -364,7 +367,7 @@ Coding Agent lắp các type quanh một workflow hoàn chỉnh cho người dù
 Với Tool, `ToolDefinition` hướng sản phẩm được tách hẳn khỏi `AgentTool`. Metadata dành cho model của hai type có phần trùng nhau, nhưng execution signature thì khác: `ToolDefinition.execute` bắt buộc có tham số thứ năm `ctx: ExtensionContext`. Vì vậy không thể truyền trực tiếp một `ToolDefinition` cho Agent Core dưới dạng `AgentTool`.
 
 ```typescript
-// Các field và signature được trích chính xác từ extensions/types.ts tại 107d79f1.
+// Các field và signature được trích chính xác từ extensions/types.ts tại f07218c.
 export interface ToolDefinition<
   TParams extends TSchema = TSchema,
   TDetails = unknown,
@@ -376,6 +379,8 @@ export interface ToolDefinition<
   promptSnippet?: string;
   promptGuidelines?: string[];
   parameters: TParams;
+  constrainedSampling?: false | ConstrainedSamplingConfig;
+  renderShell?: "default" | "self";
   prepareArguments?: (args: unknown) => Static<TParams>;
   executionMode?: ToolExecutionMode;
   execute(
@@ -402,7 +407,7 @@ export interface ToolDefinition<
 Product boundary trở thành runtime Tool qua adapter tường minh trong `packages/coding-agent/src/core/tools/tool-definition-wrapper.ts`:
 
 ```typescript
-// Trích từ tool-definition-wrapper.ts tại 107d79f1.
+// Trích từ tool-definition-wrapper.ts tại f07218c.
 export function wrapToolDefinition<TDetails = unknown>(
   definition: ToolDefinition<any, TDetails>,
   ctxFactory?: () => ExtensionContext,
@@ -437,7 +442,7 @@ Adapter sao chép các field của `AgentTool` rồi thay `execute` bằng funct
 Loader còn giữ các registration của từng Extension đã nạp trong một aggregate. Đây là interface hiện hành, không lược bỏ field nào:
 
 ```typescript
-// packages/coding-agent/src/core/extensions/types.ts tại 107d79f1.
+// packages/coding-agent/src/core/extensions/types.ts tại f07218c.
 export interface Extension {
   path: string;
   resolvedPath: string;
@@ -574,7 +579,7 @@ Ba kịch bản dẫn tới một lựa chọn thực dụng:
 
 Dù chọn hình dạng nào, hãy giữ package lớp dưới không biết product knowledge của lớp trên. Agent Core không nên import ứng dụng đang nhúng nó, còn Pi AI không nên import Agent Core hay ứng dụng ấy. Những điểm injection như `streamFn`, context transform, hook và Tool implementation cho phép lớp trên cung cấp hành vi mà không đẩy policy xuống dưới.
 
-Quy tắc này không hứa rằng bạn có thể thay mọi package lớp dưới mà không cần adapter. Public contract của Agent Core dùng trực tiếp `Model`, `Message`, `Context` và stream type từ Pi AI. Nó bảo đảm rằng khi bỏ sản phẩm lớp trên, dependency lớp dưới vẫn dùng độc lập được.
+Quy tắc này không hứa rằng bạn có thể thay mọi package lớp dưới mà không cần adapter. Public contract của Agent Core dùng trực tiếp `Model`, `Message`, `TranscriptContext` đã normalize và stream type từ Pi AI. Nó bảo đảm rằng khi bỏ sản phẩm lớp trên, dependency lớp dưới vẫn dùng độc lập được.
 
 Bảng chọn vị trí dựa trên cùng quy tắc cũng hữu ích khi review code:
 
@@ -637,6 +642,6 @@ Chương 3 theo dõi một prompt đi qua Agent Loop: vì sao cần vòng lặp,
 
 > **Thứ tự đọc:** Chương 1–6 xây cơ chế lõi theo trình tự. Từ Chương 7 trở đi, mỗi chương tách một vấn đề kỹ thuật nâng cao và có thể dùng như tài liệu tra cứu theo chủ đề.
 
-> **Ghi chú phiên bản:** Chương này mô tả Pi `0.85.0` tại commit `107d79f11072bbc8a3a757ed7fd69596bee7d68c`. Tên package, export, dependency và nhãn thử nghiệm đều đã được kiểm tra theo revision đó.
+> **Ghi chú phiên bản:** Chương này mô tả Pi `0.87.1` tại commit `f07218c4d4bbc12bef056a7058c3dd49dfe41abe`. Tên package, export, dependency và nhãn thử nghiệm đều đã được kiểm tra theo revision đó.
 
 > **Chương tiếp theo:** [Chương 3: Agent Loop](ch03-agent-loop.md)

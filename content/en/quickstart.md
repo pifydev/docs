@@ -105,6 +105,9 @@ for await (const event of stream) {
     process.stdout.write(event.delta);
   } else if (event.type === "done") {
     console.log("\n[done] reason:", event.reason);
+  } else if (event.type === "error") {
+    console.error("\n[error] reason:", event.reason);
+    process.exitCode = 1;
   }
 }
 ```
@@ -114,7 +117,7 @@ Four steps happen in this file:
 1. `builtinModels()` creates a `Models` collection with the built-in providers registered.
 2. `models.getModel("anthropic", "claude-sonnet-4-5")` resolves a model descriptor from that collection.
 3. `models.streamSimple(model, context)` opens a streaming request and returns an async iterable of events.
-4. The `for await` loop consumes events until the stream finishes. `text_delta` carries text fragments; `done` is the terminal event.
+4. The `for await` loop consumes events until the stream finishes. `text_delta` carries text fragments; `done` and `error` are terminal events. Setup and authentication failures can arrive through `error`, so the example reports them and sets a failing process exit code.
 
 ## 4. Load the key and run
 

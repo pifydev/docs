@@ -366,4 +366,4 @@ Runtime abort và dispose session cũ trước khi áp dụng session thay thế
 ## Tiếp theo
 
 - [Chương 6: Hệ thống message](../ch06-messages.md) giải thích các kiểu message được event mang theo.
-- [Tham chiếu: API event](../reference/api.md#event) liệt kê các nhóm event công khai và field của chúng.
+- [Tham chiếu: Stream event](../reference/api.md#stream-event) liệt kê các nhóm stream event công khai và field của chúng.

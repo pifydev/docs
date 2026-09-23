@@ -232,6 +232,7 @@ Pi therefore keeps richer runtime messages and projects them late. In Coding Age
 ```text
 AgentMessage
 ├─ Message from @earendil-works/pi-ai
+│  ├─ system
 │  ├─ user
 │  ├─ assistant
 │  └─ toolResult
@@ -242,7 +243,7 @@ AgentMessage
    └─ compactionSummary
 ```
 
-Those four roles describe the current Coding Agent, not a permanent upper bound on `AgentMessage`. Another application can add different roles. Even Coding Agent has session-only entry types that are not messages at all. “Seven message types” is therefore a useful snapshot of this package augmentation, not the definition of the Agent abstraction.
+Those four application roles describe the current Coding Agent additions, not a permanent upper bound on `AgentMessage`. Together with the four Pi AI roles, the union currently has eight message types. Another application can add different roles. Even Coding Agent has session-only entry types that are not messages at all. “Eight message types” is therefore a useful snapshot of this package augmentation, not the definition of the Agent abstraction.
 
 Custom roles provide three independent capabilities. First, a UI can dispatch on `role` and render structured fields. Second, a product can define an explicit serialization and migration path. Third, `convertToLlm` can translate or omit each role without changing the stored object. Declaration merging supplies compile-time membership only; it does not implement any of those runtime policies.
 
@@ -490,7 +491,8 @@ The current Coding Agent behavior makes the separation concrete:
 
 | Record                                          | Agent/runtime context                   | Model after conversion | TUI conversation                   | Persisted session                                    |
 | ----------------------------------------------- | --------------------------------------- | ---------------------- | ---------------------------------- | ---------------------------------------------------- |
-| Standard `Message`                              | Yes                                     | Yes                    | Yes                                | `SessionMessageEntry` after settled message events   |
+| `UserMessage`, `AssistantMessage`, `ToolResultMessage` | Yes                                | Yes                    | Yes                                | `SessionMessageEntry` after settled message events   |
+| `SystemMessage`                                 | Yes; carries prompt and Tool state       | Yes; projected as the provider prompt | No; interactive rendering uses `case "system": break` | Rebuilt from product prompt state, not a normal conversation card |
 | Normal `BashExecutionMessage`                   | Yes; after the post-run flush if queued | As one `UserMessage`   | Yes                                | `SessionMessageEntry` at the same insertion boundary |
 | Bash with `excludeFromContext`                  | Yes; after the post-run flush if queued | No                     | Yes                                | `SessionMessageEntry` at the same insertion boundary |
 | `CustomMessage`, `display: true`                | Yes                                     | As one `UserMessage`   | Yes, with custom rendering         | `CustomMessageEntry`                                 |

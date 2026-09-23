@@ -62,7 +62,7 @@ In Vietnamese prose, introduce terms marked **Explain first use** with the Vietn
 | convertToLlm | convertToLlm | Bridge AgentMessage → Message[] LLM-friendly |
 | beforeToolCall | beforeToolCall | Hook chạy sau tool_execution_start |
 | afterToolCall | afterToolCall | Hook chạy sau khi tool xong |
-| shouldStopAfterTurn | shouldStopAfterTurn | Hook quyết định dừng loop |
+| finishTurn | finishTurn | Hook quyết định kết thúc hoặc tiếp tục sau Turn |
 | subscribe() | subscribe() | Agent method đăng ký event listener |
 | prompt() | prompt() | Agent method gửi user message |
 | ExtensionAPI | ExtensionAPI | Interface injection vào extension factory |
@@ -282,7 +282,7 @@ In Vietnamese prose, introduce terms marked **Explain first use** with the Vietn
 | Follow-up Mode | Follow-up Mode | Alt+Enter queue và inject sau khi Agent xong |
 | `--mode json` | `--mode json` | JSON event stream stdout (cho integration) |
 | `--mode rpc` | `--mode rpc` | RPC mode (JSON-RPC over stdio) |
-| `--mode print` | `--mode print` | Print mode (`-p` flag): non-interactive one-shot |
+| `--print / -p` | `--print / -p` | Non-interactive one-shot mode |
 | `--ignore-scripts` | `--ignore-scripts` | npm install flag vô hiệu lifecycle scripts |
 | `-e / --extension` | `-e / --extension` | Quick-test extension từ local path |
 | `pi -c` | `pi -c` | Continue most-recent session |
@@ -349,7 +349,7 @@ In Vietnamese prose, introduce terms marked **Explain first use** with the Vietn
 | `convertToLlm` | `convertToLlm` | Required bridge: AgentMessage[] → LLM-compatible Message[] |
 | `beforeToolCall` | `beforeToolCall` | Hook chạy sau tool_execution_start + argument parsing |
 | `afterToolCall` | `afterToolCall` | Hook chạy sau tool xong, trước tool_execution_end |
-| `shouldStopAfterTurn` | `shouldStopAfterTurn` | Hook quyết định dừng agent loop |
+| `finishTurn` | `finishTurn` | Hook quyết định kết thúc hoặc tiếp tục sau Turn |
 | `subscribe(eventHandler)` | `subscribe(eventHandler)` | Agent method đăng ký event listener |
 | `prompt(message)` | `prompt(message)` | Agent method gửi user message vào loop |
 | `toolExecution` | `toolExecution` | Config parallel / sequential cho tool execution |

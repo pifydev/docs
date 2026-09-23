@@ -6,10 +6,10 @@ language: en
 chapter: 2
 source_url: 'https://www.dgzhuya.com/modules/ch02-three-layer-arch'
 official_refs:
-  - 'https://github.com/earendil-works/pi/tree/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages'
-  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/client/README.md'
-  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/protocol/README.md'
-  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/server/README.md'
+  - 'https://github.com/earendil-works/pi/tree/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/client/README.md'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/protocol/README.md'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/server/README.md'
 terms_used:
   - Model
   - Provider
@@ -30,7 +30,7 @@ terms_used:
   - TypeBox
   - TSchema
 status: reviewed
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -40,7 +40,7 @@ reviewed_by: Pify maintainers
 
 ## 1. You just opened an Agent codebase
 
-Suppose you cloned the Pi repository at revision `107d79f1` and opened `packages/`. The relevant part of the tree looks like this:
+Suppose you cloned the Pi repository at revision `f07218c` and opened `packages/`. The relevant part of the tree looks like this:
 
 ```text
 repo/
@@ -52,6 +52,8 @@ repo/
 │   ├── server/             ← experimental service boundary
 │   ├── client/             ← @earendil-works/pi-client (experimental)
 │   ├── protocol/           ← @earendil-works/pi-protocol (experimental)
+│   ├── chord/
+│   ├── durable/
 │   ├── telemetry/
 │   ├── evals/
 │   └── session-backends/
@@ -59,7 +61,7 @@ repo/
 └── tsconfig.json
 ```
 
-The first three packages form the dependency-direction model taught in this chapter. `pi-tui` is an orthogonal UI library. The client, protocol, and server packages form an optional experimental sibling boundary; the remaining directories support telemetry, evaluations, and session backends. The monorepo therefore contains more than five packages, even though five roles are useful for the first architectural tour.
+The first three packages form the dependency-direction model taught in this chapter. `pi-tui` is an orthogonal UI library. The client, protocol, and server packages form an optional experimental sibling boundary; the remaining directories support Chord services, durable execution, telemetry, evaluations, and session backends. The monorepo therefore contains more than five packages, even though five roles are useful for the first architectural tour.
 
 Older Pi material may mention `pi-web-ui` or `pi-orchestrator`. Neither is a workspace at the pinned revision. In particular, the old claim that an experimental `pi-orchestrator` sits above coding-agent cannot describe this tree. Section 2.5 instead maps the optional client/protocol/server boundary and keeps its experimental status explicit.
 
@@ -77,7 +79,7 @@ Set dependency arrows aside for a moment. Read each package from its own public 
 
 `@earendil-works/pi-ai`, in `packages/ai/`, answers: how can one application call models from different providers through shared types and streaming contracts?
 
-Its manifest describes a “Unified LLM API with automatic model discovery and provider configuration.” At revision `107d79f1`, the package owns four related concepts:
+Its manifest describes a “Unified LLM API with automatic model discovery and provider configuration.” At revision `f07218c`, the package owns four related concepts:
 
 1. `Model<TApi>` describes a concrete model, including its provider, API protocol, input modes, context window, token limit, costs, headers, and compatibility settings.
 2. `Provider<TApi>` owns a provider ID, authentication behavior, a synchronous model catalog, optional refresh behavior, and its `stream()` and `streamSimple()` implementations.
@@ -87,7 +89,7 @@ Its manifest describes a “Unified LLM API with automatic model discovery and p
 The root entry is intentionally side-effect free. Provider factories live behind package subpaths, while `createModels()` and the shared domain types stay at the root:
 
 ```typescript
-// packages/ai/src/index.ts (selected exports at 107d79f1)
+// packages/ai/src/index.ts (selected exports at f07218c)
 export type { Static, TSchema } from "typebox";
 export { Type } from "typebox";
 export * from "./models.ts";
@@ -117,7 +119,7 @@ Its manifest calls it a “General-purpose agent with transport abstraction, sta
 The public entry point reflects that split:
 
 ```typescript
-// packages/agent/src/index.ts (selected exports at 107d79f1)
+// packages/agent/src/index.ts (selected exports at f07218c)
 export * from "./agent.ts";
 export * from "./agent-loop.ts";
 export * from "./harness/compaction/compaction.ts";
@@ -226,10 +228,10 @@ The coding package depends directly on all three foundational packages in the te
 ```jsonc
 {
   "dependencies": {
-    // Selected foundational dependencies from package.json at 107d79f1.
-    "@earendil-works/pi-agent-core": "^0.85.0",
-    "@earendil-works/pi-ai": "^0.85.0",
-    "@earendil-works/pi-tui": "^0.85.0"
+    // Selected foundational dependencies from package.json at f07218c.
+    "@earendil-works/pi-agent-core": "^0.87.1",
+    "@earendil-works/pi-ai": "^0.87.1",
+    "@earendil-works/pi-tui": "^0.87.1"
   }
 }
 ```
@@ -242,28 +244,29 @@ The full manifest also lists `@earendil-works/pi-client` and `@earendil-works/pi
 
 Some direct imports exist because public product APIs mention `Model`, `Provider`, `Usage`, `Context`, `ImageContent`, and other Pi AI types. TypeScript must resolve those types even when a given import disappears from emitted JavaScript.
 
-The dependency is also present at runtime. Coding Agent compares models, extracts message content, creates IDs, retries assistant calls, and implements `ModelRuntime` and `ModelRegistry` over Pi AI contracts. Describing the edge as “only a type re-export” would be inaccurate at `107d79f1`.
+The dependency is also present at runtime. Coding Agent compares models, extracts message content, creates IDs, retries assistant calls, and implements `ModelRuntime` and `ModelRegistry` over Pi AI contracts. Describing the edge as “only a type re-export” would be inaccurate at `f07218c`.
 
 Agent Core shows the progressive foundation most clearly:
 
 ```typescript
-// packages/agent/src/types.ts (imports abridged, 107d79f1)
+// packages/agent/src/types.ts (imports abridged, f07218c)
 import type {
   Api,
   AssistantMessageEventStream,
-  Context,
   ImageContent,
+  JsonValue,
   Message,
   Model,
   SimpleStreamOptions,
   TextContent,
   Tool,
   ToolResultMessage,
+  TranscriptContext,
   Usage,
 } from "@earendil-works/pi-ai";
 ```
 
-`Message`, `Model`, `Tool`, and `Context` are the atoms used to state the runtime contract. Agent Core adds its own state, execution, queues, and events. Coding Agent may use both sets because it assembles the product.
+`Message`, `Model`, `Tool`, and normalized `TranscriptContext` are the atoms used to state the Agent runtime contract. Agent Core adds its own state, execution, queues, and events. Coding Agent may use both sets because it assembles the product.
 
 ### So what is the actual layering rule?
 
@@ -364,7 +367,7 @@ Coding Agent assembles types around a complete user workflow. `AgentSession` coo
 For Tools, the product-facing `ToolDefinition` is deliberately separate from `AgentTool`. Their model-facing metadata overlaps, but their execution signatures do not: `ToolDefinition.execute` requires a fifth `ctx: ExtensionContext` parameter. A `ToolDefinition` therefore cannot be passed directly to Agent Core as an `AgentTool`.
 
 ```typescript
-// Selected exact fields and signatures from extensions/types.ts at 107d79f1.
+// Selected exact fields and signatures from extensions/types.ts at f07218c.
 export interface ToolDefinition<
   TParams extends TSchema = TSchema,
   TDetails = unknown,
@@ -376,6 +379,8 @@ export interface ToolDefinition<
   promptSnippet?: string;
   promptGuidelines?: string[];
   parameters: TParams;
+  constrainedSampling?: false | ConstrainedSamplingConfig;
+  renderShell?: "default" | "self";
   prepareArguments?: (args: unknown) => Static<TParams>;
   executionMode?: ToolExecutionMode;
   execute(
@@ -402,7 +407,7 @@ export interface ToolDefinition<
 The product boundary becomes a runtime Tool through an explicit adapter in `packages/coding-agent/src/core/tools/tool-definition-wrapper.ts`:
 
 ```typescript
-// Selected from tool-definition-wrapper.ts at 107d79f1.
+// Selected from tool-definition-wrapper.ts at f07218c.
 export function wrapToolDefinition<TDetails = unknown>(
   definition: ToolDefinition<any, TDetails>,
   ctxFactory?: () => ExtensionContext,
@@ -437,7 +442,7 @@ The adapter copies the `AgentTool` fields and replaces `execute` with a function
 The loader also preserves the registrations from each loaded Extension as one aggregate. This is the current interface, with no fields omitted:
 
 ```typescript
-// packages/coding-agent/src/core/extensions/types.ts at 107d79f1.
+// packages/coding-agent/src/core/extensions/types.ts at f07218c.
 export interface Extension {
   path: string;
   resolvedPath: string;
@@ -574,7 +579,7 @@ The scenarios lead to a practical choice:
 
 Whichever shape you choose, keep lower packages free of upper-product knowledge. Agent Core should not import the application that embeds it, and Pi AI should not import either Agent Core or that application. Injection points such as `streamFn`, context transforms, hooks, and Tool implementations let higher layers supply behavior without pushing their policy downward.
 
-That rule does not promise that any lower package can be replaced without adaptation. Agent Core's public contract explicitly uses Pi AI's `Model`, `Message`, `Context`, and stream types. It does promise that removing an upper product leaves its lower dependencies independently usable.
+That rule does not promise that any lower package can be replaced without adaptation. Agent Core's public contract explicitly uses Pi AI's `Model`, `Message`, normalized `TranscriptContext`, and stream types. It does promise that removing an upper product leaves its lower dependencies independently usable.
 
 A related placement guide from the same rule is useful during code review:
 
@@ -637,6 +642,6 @@ Chapter 3 follows one prompt through the Agent Loop: why a loop is needed, how s
 
 > **Reading order:** Chapters 1–6 build the core mechanism in sequence. Chapters 7 onward isolate advanced engineering concerns and can be read as focused references.
 
-> **Version note:** This chapter describes Pi `0.85.0` at commit `107d79f11072bbc8a3a757ed7fd69596bee7d68c`. Package names, exports, dependencies, and experimental labels were checked against that revision.
+> **Version note:** This chapter describes Pi `0.87.1` at commit `f07218c4d4bbc12bef056a7058c3dd49dfe41abe`. Package names, exports, dependencies, and experimental labels were checked against that revision.
 
 > **Next up:** [Chapter 3: Agent Loop](ch03-agent-loop.md)

@@ -668,7 +668,7 @@ return executeToolCallsParallel(
 
 The conservative batch vote avoids inventing a conflict analyzer. Use the per-Tool override for interactions, global state transitions, and operations whose meaning depends on sibling order. Use global sequential mode when the host cannot permit overlap at all.
 
-The seven built-in Coding Agent definitions at this pin omit `executionMode`, so the global default allows them to overlap. Built-in `edit` and `write` add a second, more precise safeguard: `withFileMutationQueue()` serializes the complete mutation window per canonical file path while leaving different files concurrent. Custom file-mutating Tools should use the same exported helper with the resolved absolute target path.
+The eight built-in Coding Agent definitions at this pin omit `executionMode`, so the global default allows them to overlap. Built-in `edit` and `write` add a second, more precise safeguard: `withFileMutationQueue()` serializes the complete mutation window per canonical file path while leaving different files concurrent. Custom file-mutating Tools should use the same exported helper with the resolved absolute target path.
 
 ### Parallel and sequential paths emit different timelines
 
@@ -833,7 +833,12 @@ try {
 
 const snapshot = await finishOutput();
 const { text: outputText, details } = formatOutput(snapshot);
-if (exitCode !== 0 && exitCode !== null) {
+if (exitCode === null) {
+  throw new Error(
+    appendStatus(outputText, "Command terminated without an exit code"),
+  );
+}
+if (exitCode !== 0) {
   throw new Error(
     appendStatus(outputText, `Command exited with code ${exitCode}`),
   );

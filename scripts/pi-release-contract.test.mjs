@@ -7,6 +7,8 @@ import { fileURLToPath } from "node:url";
 
 import ts from "typescript";
 
+import { codeFenceLanguages } from "./lib/markdown.mjs";
+
 const repositoryRoot = new URL("../", import.meta.url);
 const releaseFixtureURL = new URL(
   "fixtures/pi-release-0871.json",
@@ -727,6 +729,144 @@ function findStaleContentFiles(
     })
     .map(({ filename }) => filename)
     .sort();
+}
+
+const staleCurrentBaselinePatterns = [
+  {
+    id: "version",
+    pattern: /0\.85\.0/g,
+  },
+  {
+    id: "source-commit",
+    pattern: /107d79f11072bbc8a3a757ed7fd69596bee7d68c/g,
+  },
+];
+
+const pi0871BilingualAuditSuffixes = [
+  "ch01-overview.md",
+  "ch02-three-layer-arch.md",
+  "ch03-agent-loop.md",
+  "ch04-model-invocation.md",
+  "ch05-tool-system.md",
+  "ch06-messages.md",
+  "ch07-event-driven.md",
+  "ch08-context-engineering.md",
+  "ch09-compaction.md",
+  "ch10-session.md",
+  "ch11-testing-evaluation.md",
+  "changelog.md",
+  "course/00-complete-agent-trace.md",
+  "course/01-typescript-protocols.md",
+  "course/02-event-stream.md",
+  "course/03-message-ir.md",
+  "course/04-deterministic-model.md",
+  "course/05-provider-adapter.md",
+  "course/06-tool-contract.md",
+  "course/07-agent-loop.md",
+  "course/08-coding-tools.md",
+  "course/09-stateful-agent.md",
+  "course/10-session-tree.md",
+  "course/11-context-compaction.md",
+  "course/12-resources-extensions.md",
+  "course/13-runtime-composition.md",
+  "course/14-agent-evaluation.md",
+  "course/index.mdx",
+  "glossary.md",
+  "help/faq.md",
+  "how-to/add-custom-tool.md",
+  "how-to/customize-system-prompt.md",
+  "how-to/host-session-runtime.md",
+  "how-to/persist-sessions.md",
+  "how-to/plug-new-model.md",
+  "how-to/run-pi-evals.md",
+  "how-to/stream-output.md",
+  "how-to/test-agent-deterministically.md",
+  "index.mdx",
+  "quickstart.md",
+  "reference/api.md",
+  "reference/configuration.md",
+  "reference/environment-variables.md",
+];
+
+function parsePi0871AuditRows(source) {
+  return normalizeLineEndings(source)
+    .split("\n")
+    .filter((line) => /^\|\s+`[^`]+`\s+\|/.test(line))
+    .map((line) => {
+      const cells = line
+        .slice(1, -1)
+        .split("|")
+        .map((cell) => cell.trim());
+      assert.equal(cells.length, 6, `invalid audit ledger row: ${line}`);
+      return {
+        suffix: cells[0].slice(1, -1),
+        outcome: cells[1],
+        evidence: cells[2],
+        checkedFiles: cells[3],
+        fences: cells[4],
+        deletion: cells[5],
+      };
+    });
+}
+
+function markdownOccurrenceBlock(source, offset) {
+  const normalized = normalizeLineEndings(source);
+  const start = normalized.lastIndexOf("\n\n", offset - 1) + 2;
+  const followingBreak = normalized.indexOf("\n\n", offset);
+  const end = followingBreak === -1 ? normalized.length : followingBreak;
+  const preceding = normalized.slice(0, start);
+  const sectionHeadings = [...preceding.matchAll(/^## ([^#\n].*)$/gm)];
+  const section = sectionHeadings.at(-1)?.[1]?.trim() ?? "";
+
+  return {
+    source: normalized.slice(start, end).trim(),
+    section,
+  };
+}
+
+function isHistoricalChangelogOccurrence(filename, block) {
+  if (!filename.replaceAll("\\", "/").endsWith("/changelog.md")) {
+    return false;
+  }
+
+  const forwardMigration =
+    /(?:from|từ)[\s\S]*0\.85\.0[\s\S]*(?:to|lên)[\s\S]*0\.87\.1/i.test(
+      block.source,
+    ) ||
+    /0\.85\.0[\s\S]*(?:no longer needed|không còn cần)[\s\S]*0\.85\.1/i.test(
+      block.source,
+    );
+  if (forwardMigration) return true;
+
+  const datedHistoricalSection = /^\d{4}-\d{2}-\d{2}$/.test(block.section);
+  const explicitCurrentClaim =
+    /(?:is authoritative|current baseline|baseline hiện tại|là authoritative|Compare with|So sánh với)/i.test(
+      block.source,
+    );
+  return datedHistoricalSection && !explicitCurrentClaim;
+}
+
+function findStaleCurrentBaselineOccurrences(activeSources) {
+  const hits = [];
+
+  for (const { filename, source } of activeSources) {
+    for (const { id, pattern } of staleCurrentBaselinePatterns) {
+      pattern.lastIndex = 0;
+      for (const match of source.matchAll(pattern)) {
+        const block = markdownOccurrenceBlock(source, match.index);
+        if (isHistoricalChangelogOccurrence(filename, block)) continue;
+        const line = source.slice(0, match.index).split(/\r?\n/).length;
+        hits.push({ filename: filename.replaceAll("\\", "/"), line, id });
+      }
+    }
+  }
+
+  return hits.sort(
+    (left, right) =>
+      left.filename.localeCompare(right.filename) ||
+      left.line - right.line ||
+      left.id.localeCompare(right.id),
+  );
 }
 
 function findStaleReleaseSurfaceFiles(
@@ -9516,6 +9656,305 @@ test("stale content scanner reports repository and Course README paths exactly",
     ),
     ["README.md", "content/en/guide.md", "course/README.md"],
   );
+});
+
+test("stale current-baseline scanner evaluates each changelog occurrence", () => {
+  const staleVersion = ["0", "85", "0"].join(".");
+  const staleCommit = ["107d79f11072bbc8a3a757ed7fd69596", "bee7d68c"].join("");
+  const sources = [
+    {
+      filename: "content/en/changelog.md",
+      source: [
+        "## 2026-09-23",
+        "",
+        `Pify moves its documentation baseline from \`${staleVersion}\` to Pi \`0.87.1\`.`,
+        "",
+        "## 2026-09-04",
+        "",
+        `The documentation baseline followed the Pi \`${staleVersion}\` release.`,
+        "",
+        `Pi SDK \`${staleVersion}\` is authoritative for current guidance.`,
+      ].join("\n"),
+    },
+    {
+      filename: "content/vi/changelog.md",
+      source: [
+        "## 2026-09-23",
+        "",
+        `Pify chuyển baseline tài liệu từ \`${staleVersion}\` lên Pi \`0.87.1\`.`,
+        "",
+        "## 2026-09-04",
+        "",
+        `Tài liệu từng theo release Pi \`${staleVersion}\`.`,
+        "",
+        `Pi SDK \`${staleVersion}\` là authoritative cho baseline hiện tại.`,
+      ].join("\n"),
+    },
+    {
+      filename: "content/en/ch01-overview.md",
+      source: `Source: https://github.com/earendil-works/pi/blob/${staleCommit}/packages/ai/src/index.ts`,
+    },
+  ];
+
+  assert.deepEqual(findStaleCurrentBaselineOccurrences(sources), [
+    {
+      filename: "content/en/ch01-overview.md",
+      line: 1,
+      id: "source-commit",
+    },
+    { filename: "content/en/changelog.md", line: 9, id: "version" },
+    { filename: "content/vi/changelog.md", line: 9, id: "version" },
+  ]);
+});
+
+test("Pi 0.87.1 bilingual audit ledger covers every public pair with file evidence", async () => {
+  const ledger = await readFile(
+    new URL("docs/translation-review/2026-09-23-pi-0871.md", repositoryRoot),
+    "utf8",
+  ).catch(() => "");
+  const commit = "f07218c4d4bbc12bef056a7058c3dd49dfe41abe";
+
+  assert.match(ledger, /Target release: Pi `0\.87\.1`/);
+  assert.match(ledger, /Tag: `v0\.87\.1`/);
+  assert.ok(ledger.includes("Commit: `" + commit + "`"));
+  assert.match(ledger, /Published: `2026-09-22T19:43:43Z`/);
+  assert.match(ledger, /IT\/Coding terms/);
+  assert.match(ledger, /source-proven[^.]*wrong or duplicated/i);
+
+  const rows = parsePi0871AuditRows(ledger);
+  assert.deepEqual(
+    rows.map(({ suffix }) => suffix),
+    pi0871BilingualAuditSuffixes,
+  );
+  assert.equal(new Set(rows.map(({ suffix }) => suffix)).size, 43);
+
+  for (const row of rows) {
+    assert.ok(
+      ["substantive", "pin-only", "verified unchanged"].includes(row.outcome),
+      `${row.suffix}: invalid outcome ${row.outcome}`,
+    );
+    assert.match(
+      row.evidence,
+      new RegExp(
+        `https://github\\.com/earendil-works/pi/(?:blob|tree)/${commit}/[^)\\s]+`,
+      ),
+      `${row.suffix}: evidence must name a precise path at the release commit`,
+    );
+    assert.equal(
+      row.checkedFiles,
+      `\`content/en/${row.suffix}\`<br>\`content/vi/${row.suffix}\``,
+      `${row.suffix}: checked file evidence`,
+    );
+
+    const localizedSources = await Promise.all(
+      ["en", "vi"].map((locale) =>
+        readFile(
+          new URL(`content/${locale}/${row.suffix}`, repositoryRoot),
+          "utf8",
+        ),
+      ),
+    );
+    const fenceCounts = localizedSources.map(
+      (source) => codeFenceLanguages(source).length,
+    );
+    assert.equal(
+      row.fences,
+      `${fenceCounts[0]}/${fenceCounts[1]} audited`,
+      `${row.suffix}: code-fence audit must match both files`,
+    );
+    if (row.suffix === "ch03-agent-loop.md") {
+      assert.match(row.deletion, /added Tool names/);
+      assert.match(
+        row.deletion,
+        new RegExp(
+          `https://github\\.com/earendil-works/pi/blob/${commit}/packages/agent/src/agent-loop\\.ts`,
+        ),
+      );
+    } else {
+      assert.equal(row.deletion, "none", `${row.suffix}: deletion evidence`);
+    }
+  }
+});
+
+test("code-fence audit recognizes matching variable-length markers", () => {
+  const nested = [
+    "````markdown",
+    "```typescript",
+    "const nested = true;",
+    "```",
+    "````",
+    "~~~text",
+    "tilde fence",
+    "~~~~",
+  ].join("\n");
+
+  assert.deepEqual(codeFenceLanguages(nested), ["markdown", "text"]);
+});
+
+test("active docs contain no stale Pi 0.85.0 baseline", async () => {
+  const activeSources = await readActiveSources();
+  assert.deepEqual(findStaleCurrentBaselineOccurrences(activeSources), []);
+});
+
+test("opening chapters describe the Pi 0.87.1 package and transcript boundaries", async () => {
+  const commit = "f07218c4d4bbc12bef056a7058c3dd49dfe41abe";
+  const overviews = await readLocalizedContent("ch01-overview.md");
+  const architectures = await readLocalizedContent("ch02-three-layer-arch.md");
+
+  for (const { locale, source } of overviews) {
+    assert.match(source, new RegExp(commit, "g"));
+    assert.match(source, /Package version\s+\| `0\.87\.1`/);
+    assert.match(source, locale === "en" ? /\| Chapter 11 / : /\| Chương 11 /);
+  }
+
+  for (const { locale, source } of architectures) {
+    assert.match(source, /├── chord\//);
+    assert.match(source, /├── durable\//);
+    assert.match(source, /"@earendil-works\/pi-agent-core": "\^0\.87\.1"/);
+    assert.match(source, /"@earendil-works\/pi-ai": "\^0\.87\.1"/);
+    assert.match(source, /"@earendil-works\/pi-tui": "\^0\.87\.1"/);
+
+    const agentTypesFence = extractTypeScriptFenceContaining(
+      source,
+      "packages/agent/src/types.ts",
+      `${locale} Chapter 2 Agent type imports`,
+    );
+    assert.match(agentTypesFence, /\bJsonValue\b/);
+    assert.match(agentTypesFence, /\bTranscriptContext\b/);
+    assert.doesNotMatch(agentTypesFence, /^\s*Context,\s*$/m);
+
+    const toolDefinitionFence = extractTypeScriptFenceContaining(
+      source,
+      "export interface ToolDefinition",
+      `${locale} Chapter 2 ToolDefinition`,
+    );
+    assert.match(toolDefinitionFence, /constrainedSampling\?:/);
+    assert.match(toolDefinitionFence, /renderShell\?:/);
+  }
+});
+
+test("current API boundaries are accurate across chapters and public entry points", async () => {
+  const chapters = await Promise.all(
+    [
+      "ch03-agent-loop.md",
+      "ch04-model-invocation.md",
+      "ch05-tool-system.md",
+      "ch06-messages.md",
+      "glossary.md",
+      "help/faq.md",
+      "quickstart.md",
+    ].map(async (suffix) => [suffix, await readLocalizedContent(suffix)]),
+  );
+  const localizedBySuffix = new Map(chapters);
+
+  for (const { source } of localizedBySuffix.get("ch03-agent-loop.md")) {
+    assert.doesNotMatch(
+      source,
+      /createToolResultMessage\(\)[^\n]*added Tool names/,
+    );
+    assert.match(source, /toolsAdded/);
+    assert.match(source, /toolsRemoved/);
+  }
+
+  for (const { source } of localizedBySuffix.get("ch04-model-invocation.md")) {
+    assert.match(source, /prompt_cache_retention: "24h"/);
+    assert.match(source, /prompt_cache_options: \{ ttl: "30m" \}/);
+    assert.match(source, /supportsExplicitPromptCacheMode/);
+  }
+
+  for (const { source } of localizedBySuffix.get("ch05-tool-system.md")) {
+    assert.match(source, /eight built-in|Tám định nghĩa dựng sẵn/);
+    assert.match(source, /if \(exitCode === null\)/);
+    assert.match(source, /Command terminated without an exit code/);
+    assert.match(source, /if \(exitCode !== 0\)/);
+    assert.doesNotMatch(source, /exitCode !== 0 && exitCode !== null/);
+  }
+
+  for (const { source } of localizedBySuffix.get("ch06-messages.md")) {
+    assert.match(source, /│  ├─ system/);
+    assert.match(source, /eight message types|tám loại message/);
+    assert.match(source, /SystemMessage/);
+    assert.match(source, /case "system": break/);
+  }
+
+  for (const { source } of localizedBySuffix.get("glossary.md")) {
+    assert.match(source, /SystemMessage/);
+    assert.match(source, /turn_start/);
+    assert.match(source, /turn_end/);
+  }
+
+  for (const { source } of localizedBySuffix.get("help/faq.md")) {
+    assert.match(source, /AgentToolResult/);
+    assert.doesNotMatch(source, /Return a `ToolResultMessage`/);
+    assert.doesNotMatch(source, /blob\/main\/GLOSSARY\.md/);
+  }
+
+  for (const { source } of localizedBySuffix.get("quickstart.md")) {
+    assert.match(source, /event\.type === "error"/);
+    assert.match(source, /`done`[^\n]*`error`|`error`[^\n]*`done`/);
+  }
+
+  const repositoryGlossary = await readFile(
+    new URL("GLOSSARY.md", repositoryRoot),
+    "utf8",
+  );
+  assert.doesNotMatch(repositoryGlossary, /shouldStopAfterTurn/);
+  assert.doesNotMatch(repositoryGlossary, /`--mode print`/);
+  assert.match(repositoryGlossary, /finishTurn/);
+  assert.match(repositoryGlossary, /`--print \/ -p`/);
+});
+
+test("compaction guidance follows the canonical 0.87.1 session projection", async () => {
+  const compacted = await readLocalizedContent("ch09-compaction.md");
+
+  for (const { source } of compacted) {
+    assert.match(source, /buildSessionProjection\(\)/);
+    assert.match(source, /prevCompactionIndex \+ 1/);
+    assert.match(
+      source,
+      /estimateProjectedContextTokens\(projection, pathEntries\)/,
+    );
+    assert.match(source, /previousSummary \?\? "No prior history\."/);
+    assert.match(source, /appendContextEdit\(targetId, null\)/);
+    assert.match(source, /result: CompactionResult \| undefined/);
+    assert.match(source, /aborted: boolean/);
+    assert.match(source, /willRetry: boolean/);
+    assert.match(source, /errorMessage\?: string/);
+    assert.doesNotMatch(source, /buildSessionContext\(path\)\.messages/);
+  }
+});
+
+test("skill readers and public event links match current source boundaries", async () => {
+  const contexts = await readLocalizedContent("ch08-context-engineering.md");
+  const promptGuides = await readLocalizedContent(
+    "how-to/customize-system-prompt.md",
+  );
+
+  for (const { source } of [...contexts, ...promptGuides]) {
+    assert.match(source, /skillFileReadTool/);
+    assert.match(source, /\["read", "bash"\]/);
+  }
+  for (const { source } of contexts) {
+    assert.match(source, /<skills>/);
+    assert.match(source, /<cwd>/);
+    assert.match(source, /customSections/);
+    assert.match(source, /`preamble`/);
+  }
+
+  const apiReferences = await readLocalizedContent("reference/api.md");
+  for (const { source } of apiReferences) {
+    assert.doesNotMatch(
+      source,
+      /the validated final tool call|tool call cuối đã validate/i,
+    );
+  }
+
+  const streamGuides = await readLocalizedContent("how-to/stream-output.md");
+  assert.match(
+    streamGuides[0].source,
+    /\.\.\/reference\/api\.md#stream-events/,
+  );
+  assert.match(streamGuides[1].source, /\.\.\/reference\/api\.md#stream-event/);
 });
 
 test("active documentation and release surfaces contain no stale Pi baseline", async () => {

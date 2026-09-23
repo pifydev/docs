@@ -68,7 +68,7 @@ Có. Hãy gửi đủ file tiếng Anh và tiếng Việt, giữ cấu trúc hea
 
 ### Quy ước thuật ngữ nằm ở đâu?
 
-[GLOSSARY.md](https://github.com/pifydev/docs/blob/main/GLOSSARY.md) tại repository root định nghĩa thuật ngữ chuẩn. Giữ nguyên identifier và chỉ dịch các khái niệm được glossary cho phép.
+[Glossary của tài liệu](../glossary.md) định nghĩa thuật ngữ chuẩn. Giữ nguyên identifier và chỉ dịch các khái niệm được glossary cho phép.
 
 ## Lỗi thường gặp
 
@@ -83,7 +83,7 @@ Các sửa đổi implementation này không expose public API. Nếu endpoint t
 
 ### Kết quả Tool không đến được model
 
-Hãy trả về `ToolResultMessage` có `toolCallId` khớp với `ToolCall.id` ban đầu. Đồng thời giữ đúng tên Tool và định dạng content block mà API yêu cầu.
+Implementation của `AgentTool.execute` trả về `AgentToolResult` gồm `content` cùng `details` hoặc `usage` tùy chọn; implementation không tự dựng `ToolResultMessage`. Agent Core liên kết result với `ToolCall` hiện tại rồi tạo protocol message có call ID và tên Tool khớp. Nếu model không nhận được kết quả, hãy kiểm tra các content block được trả về và sự kiện `tool_execution_end`.
 
 ### Không thể tiếp tục phiên làm việc
 

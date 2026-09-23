@@ -659,7 +659,7 @@ Flow xác nhận cho phép kèm hoặc bỏ transcript của session. Nếu bỏ
 
 Radius upload không yêu cầu login; Radius session đã xác thực sẽ gắn report với tài khoản để maintainer có thể follow up. Sau khi upload, Pi ghi report ID vào session dưới dạng entry `pi.bug-report`. Process crash được ghi riêng ở `~/.pi/agent/crashes.json`, thông báo một lần trong lần khởi động kế tiếp và đính kèm vào report tiếp theo. Crash file đó là diagnostic state, không thay thế session JSONL.
 
-### Các chỉnh sửa session được giới thiệu trong Pi 0.85.0
+### Các bản sửa độ tin cậy của session được giữ trong Pi 0.87.1
 
 Bốn fix làm chặt các workflow cụ thể mà không đổi storage model. Imported JSONL trùng filename với destination đã có giờ nhận suffix dạng số thay vì ghi đè file đó. Các thao tác share session đồng thời không ghi đè nhau nữa. Một fork nay giữ ranh giới compaction áp dụng, nên context dựng lại tôn trọng checkpoint của source. Một fork in-memory được yêu cầu trước khi active turn settle chỉ được xử lý sau khi runtime teardown đã await active response, nhờ đó giữ turn đã hoàn tất hoặc bị abort trước khi manager thay đổi.
 

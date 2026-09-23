@@ -267,7 +267,7 @@ In Pi 0.87.1, `ToolCall.arguments` is a `JsonObject`, and `ToolResultMessage.det
 | `start` | Initial partial assistant message |
 | `text_start` / `text_delta` / `text_end` | Text block lifecycle and incremental text |
 | `thinking_start` / `thinking_delta` / `thinking_end` | Thinking block lifecycle when the model emits it |
-| `toolcall_start` / `toolcall_delta` / `toolcall_end` | Partial arguments and the validated final tool call |
+| `toolcall_start` / `toolcall_delta` / `toolcall_end` | Partial arguments and the parsed, completed Tool call; Agent Core validates arguments before execution |
 | `done` | Successful terminal event with reason `stop`, `length`, `toolUse`, or `deferred` |
 | `error` | Terminal `error` or `aborted` assistant message |
 

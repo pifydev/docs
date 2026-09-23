@@ -29,7 +29,7 @@ Pi tách riêng project context, prompt nền đã chọn, phần prompt bổ su
 | Phần builder thêm | Context file, skill đủ điều kiện, rồi current working directory |
 | Thay đổi theo lượt | Các handler `before_agent_start`, nối tiếp theo thứ tự extension |
 
-Chuỗi prompt nền chọn đúng một nguồn. Chuỗi append được discover cũng chọn một file, nhưng các CLI append flag lặp lại tạo thành danh sách có thứ tự và thay thế tập nguồn append được discover. Builder vẫn thêm context file và các skill đủ điều kiện khi tool `read` đang bật; thay prompt nền không loại bỏ chúng.
+Chuỗi prompt nền chọn đúng một nguồn. Chuỗi append được discover cũng chọn một file, nhưng các CLI append flag lặp lại tạo thành danh sách có thứ tự và thay thế tập nguồn append được discover. Với metadata của skill, builder tính `skillFileReadTool = ["read", "bash"].find(...)`: ưu tiên `read` và dùng `bash` làm fallback. Thay prompt nền không loại bỏ context file hoặc skill đủ điều kiện khi một trong hai reader đang hoạt động.
 
 Project trust áp dụng cho prompt file, settings, extension và các resource được bảo vệ khác trong `.pi` của project. Nó **không** chặn `AGENTS.override.md`, `AGENTS.md` hay `CLAUDE.md`: context file vẫn được load cho project chưa trust trừ khi đặt `--no-context-files`.
 

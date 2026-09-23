@@ -668,7 +668,7 @@ return executeToolCallsParallel(
 
 Quy tắc bỏ phiếu thận trọng cho cả lô giúp Pi không phải tự dựng bộ phân tích xung đột. Dùng cấu hình riêng theo Tool cho tương tác, chuyển trạng thái toàn cục và thao tác có ý nghĩa phụ thuộc vào thứ tự giữa các lời gọi cùng lô. Dùng chế độ tuần tự toàn cục khi host không thể cho phép bất kỳ sự chồng lấp nào.
 
-Bảy định nghĩa dựng sẵn của Coding Agent tại commit này đều không khai báo `executionMode`, vì vậy mặc định toàn cục cho phép chúng chạy chồng lấp. Các Tool `edit` và `write` dựng sẵn có thêm cơ chế bảo vệ chính xác hơn: `withFileMutationQueue()` tuần tự hóa toàn bộ khoảng thay đổi theo đường dẫn tệp chuẩn hóa nhưng vẫn cho phép các tệp khác chạy đồng thời. Tool tùy chỉnh có thay đổi tệp nên dùng cùng hàm hỗ trợ đã export với đường dẫn tuyệt đối của đích đã phân giải.
+Tám định nghĩa dựng sẵn của Coding Agent tại commit này đều không khai báo `executionMode`, vì vậy mặc định toàn cục cho phép chúng chạy chồng lấp. Các Tool `edit` và `write` dựng sẵn có thêm cơ chế bảo vệ chính xác hơn: `withFileMutationQueue()` tuần tự hóa toàn bộ khoảng thay đổi theo đường dẫn tệp chuẩn hóa nhưng vẫn cho phép các tệp khác chạy đồng thời. Tool tùy chỉnh có thay đổi tệp nên dùng cùng hàm hỗ trợ đã export với đường dẫn tuyệt đối của đích đã phân giải.
 
 ### Nhánh song song và nhánh tuần tự phát sự kiện theo hai trình tự
 
@@ -833,7 +833,12 @@ try {
 
 const snapshot = await finishOutput();
 const { text: outputText, details } = formatOutput(snapshot);
-if (exitCode !== 0 && exitCode !== null) {
+if (exitCode === null) {
+  throw new Error(
+    appendStatus(outputText, "Command terminated without an exit code"),
+  );
+}
+if (exitCode !== 0) {
   throw new Error(
     appendStatus(outputText, `Command exited with code ${exitCode}`),
   );

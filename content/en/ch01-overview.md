@@ -6,16 +6,16 @@ language: en
 chapter: 1
 source_url: "https://www.dgzhuya.com/modules/ch01-overview"
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/README.md"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/docs/quickstart.md"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/docs/models.md"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/docs/sdk.md"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/docs/extensions.md"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/README.md"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/README.md"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/client/README.md"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/protocol/README.md"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/server/README.md"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/README.md"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/quickstart.md"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/models.md"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/sdk.md"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/extensions.md"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/README.md"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/README.md"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/client/README.md"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/protocol/README.md"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/server/README.md"
 terms_used:
   - Pi
   - Agent
@@ -32,7 +32,7 @@ terms_used:
   - Provider
   - SDK
 status: reviewed
-last_updated: "2026-09-04"
+last_updated: "2026-09-23"
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -41,7 +41,7 @@ reviewed_by: Pify maintainers
 
 :::info[Version scope]
 
-The facts and examples in this chapter were checked against upstream commit [`107d79f1`](https://github.com/earendil-works/pi/commit/107d79f11072bbc8a3a757ed7fd69596bee7d68c), package version `0.85.0`. All four foundational packages require Node.js `>=22.19.0`. Later releases may change package catalogs and APIs.
+The facts and examples in this chapter were checked against upstream commit [`f07218c`](https://github.com/earendil-works/pi/commit/f07218c4d4bbc12bef056a7058c3dd49dfe41abe), package version `0.87.1`. All four foundational packages require Node.js `>=22.19.0`. Later releases may change package catalogs and APIs.
 
 :::
 
@@ -66,7 +66,7 @@ That three-part answer sets the order for this chapter. We first map the reposit
 Each word narrows the design:
 
 - **Coding Agent shell:** Pi joins a model, a system prompt, project context, Tools, and session state into an application that can read and change a codebase. “Shell” describes the frame and connection points while models and policies remain replaceable.
-- **Terminal:** the default interactive interface runs where developers already use shells, version control, and process tools. Regular TUI mode preserves terminal-owned scrollback. Version `0.85.0` also has an experimental fullscreen TUI mode with application-owned scrolling, so “terminal” no longer means only one rendering strategy.
+- **Terminal:** the default interactive interface runs where developers already use shells, version control, and process tools. Regular TUI mode preserves terminal-owned scrollback. Version `0.87.1` also has an experimental fullscreen TUI mode with application-owned scrolling, so “terminal” no longer means only one rendering strategy.
 - **Minimal default:** the model receives four Tools by default: `read`, `write`, `edit`, and `bash`. The built-in read-only helpers `grep`, `find`, and `ls` are available through Tool options. Features such as plan mode and sub-agents live outside the default product surface.
 - **Extensible:** Extensions can register Tools, commands, shortcuts, event hooks, providers, and UI. Skills, Prompt Templates, Themes, and Pi Packages cover reusable instructions, prompts, presentation, and distribution.
 
@@ -78,7 +78,7 @@ Fast-moving popularity and provider counts age badly, so this snapshot records f
 
 | Metric                    | Pinned value | What it tells you                                                                                     |
 | ------------------------- | ------------ | ----------------------------------------------------------------------------------------------------- |
-| Package version           | `0.85.0`     | The chapter describes one concrete release, not an unspecified `main` branch.                         |
+| Package version           | `0.87.1`     | The chapter describes one concrete release, not an unspecified `main` branch.                         |
 | Node.js runtime           | `>=22.19.0`  | The same engine requirement appears in the foundational package manifests.                            |
 | Default Tools             | 4            | `read`, `write`, `edit`, and `bash` form the default model-facing surface.                            |
 | Optional built-in helpers | 3            | `grep`, `find`, and `ls` can be selected through Tool options.                                        |
@@ -137,7 +137,7 @@ flowchart TB
 
 `@earendil-works/pi-tui` is orthogonal to the three-layer Agent stack. Its package has no runtime dependency on the other Pi packages, and its source imports none of them. The Coding Agent depends on TUI for interactive presentation, while a server or background worker can use Pi AI and Agent Core without a terminal.
 
-The current workspace also contains `@earendil-works/pi-client`, `@earendil-works/pi-protocol`, `@earendil-works/pi-server`, `@earendil-works/pi-telemetry`, and a separate SQLite session backend. The client/protocol/server trio is an optional experimental sibling boundary for routed Chord services; it is not a fourth mandatory SDK layer. Telemetry and persistence likewise add focused capabilities without replacing the four foundations above. The old experimental `pi-orchestrator` from the baseline chapter is not present at the pinned commit.
+The current workspace also contains `@earendil-works/chord`, `@earendil-works/pi-client`, `@earendil-works/pi-protocol`, `@earendil-works/pi-server`, `@earendil-works/pi-telemetry`, `@earendil-works/pi-durable`, and a separate SQLite session backend. The client/protocol/server trio is an optional experimental sibling boundary for routed Chord services; it is not a fourth mandatory SDK layer. Telemetry, durable execution, and persistence likewise add focused capabilities without replacing the four foundations above. The old experimental `pi-orchestrator` from the baseline chapter is not present at the pinned commit.
 
 ## 3. View 1: as a coding agent: a useful daily tool
 
@@ -298,7 +298,7 @@ A useful reading discipline is to trace one request end to end before cataloging
 
 ### 4.2 What this tutorial covers
 
-The published series contains ten chapters. The first six establish the execution path; the last four isolate runtime concerns that become clearer once messages and Tools are familiar.
+The published series contains eleven chapters. The first six establish the execution path; the last five isolate runtime concerns that become clearer once messages and Tools are familiar.
 
 | Chapter    | Topic                     | Question it answers                                                  | Reading role |
 | ---------- | ------------------------- | -------------------------------------------------------------------- | ------------ |
@@ -312,10 +312,11 @@ The published series contains ten chapters. The first six establish the executio
 | Chapter 8  | Context Engineering       | What enters a finite model context, and where can it be transformed? | Advanced     |
 | Chapter 9  | Context Compaction        | How does Pi continue when active context approaches its limit?       | Advanced     |
 | Chapter 10 | Session Management        | How are sessions appended, restored, navigated, and branched?        | Advanced     |
+| Chapter 11 | Testing and evaluation    | How can Agent behavior be tested and evaluated deterministically?    | Advanced     |
 
 :::tip[Reading path]
 
-Read chapters 1–6 in order when you want the full runtime model. Chapters 7–10 can then be used as focused references. Extension internals, testing patterns, remote protocol packages, and deeper TUI work remain useful follow-on topics in upstream source and documentation, but they are not published chapters in this ten-chapter series.
+Read chapters 1–6 in order when you want the full runtime model. Chapters 7–11 can then be used as focused references. Extension internals, remote protocol packages, and deeper TUI work remain useful follow-on topics in upstream source and documentation, but they are outside this eleven-chapter series.
 
 :::
 
@@ -521,6 +522,6 @@ Pi's subtraction has a price: the team owns more policy, package review, and ope
 
 :::note[Reviewed source]
 
-This chapter describes Pi `0.85.0` at commit [`107d79f1`](https://github.com/earendil-works/pi/tree/107d79f11072bbc8a3a757ed7fd69596bee7d68c). Links in `official_refs` are pinned to that revision so the claims remain auditable after upstream `main` changes.
+This chapter describes Pi `0.87.1` at commit [`f07218c`](https://github.com/earendil-works/pi/tree/f07218c4d4bbc12bef056a7058c3dd49dfe41abe). Links in `official_refs` are pinned to that revision so the claims remain auditable after upstream `main` changes.
 
 :::

@@ -907,7 +907,7 @@ A mixed batch continues. A blocked `beforeToolCall` result participates only if 
 
 Parallel mode deliberately separates preparation from execution. Pi prepares calls in assistant source order and records immediate failures before it launches the allowed calls concurrently. `tool_execution_end` can therefore reflect real completion order, while Tool result messages wait until all launched work settles and then return to source order. The model sees a deterministic transcript even when the UI shows one Tool finishing before another.
 
-The `terminate` flag is runtime-only. `createToolResultMessage()` copies content, details, usage, added Tool names, error state, and identity fields, but not `terminate`. The next provider request never receives a nonstandard termination field in its Tool result. Agent Core consumes the hint while deciding whether automatic continuation is needed.
+The `terminate` flag is runtime-only. `createToolResultMessage()` copies content, details, usage, error state, and identity fields, but not `terminate`. Tool declaration changes remain on the leading `SystemMessage` through `toolsAdded` and `toolsRemoved`; they are not fields of the Tool result. The next provider request never receives a nonstandard termination field in its Tool result. Agent Core consumes the hint while deciding whether automatic continuation is needed.
 
 ### 4.7 `turn_end`, hooks, events, and steering
 

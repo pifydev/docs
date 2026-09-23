@@ -105,6 +105,9 @@ for await (const event of stream) {
     process.stdout.write(event.delta);
   } else if (event.type === "done") {
     console.log("\n[done] reason:", event.reason);
+  } else if (event.type === "error") {
+    console.error("\n[error] reason:", event.reason);
+    process.exitCode = 1;
   }
 }
 ```
@@ -114,7 +117,7 @@ Bốn bước diễn ra trong file này:
 1. `builtinModels()` tạo một `Models` collection và đăng ký các provider có sẵn.
 2. `models.getModel("anthropic", "claude-sonnet-4-5")` lấy model descriptor từ collection đó.
 3. `models.streamSimple(model, context)` mở request streaming và trả về một async iterable.
-4. Vòng `for await` xử lý sự kiện cho đến khi stream kết thúc. `text_delta` chứa từng phần văn bản; `done` là sự kiện cuối.
+4. Vòng `for await` xử lý sự kiện cho đến khi stream kết thúc. `text_delta` chứa từng phần văn bản; `done` và `error` là các sự kiện cuối. Lỗi setup hoặc xác thực có thể đến qua `error`, vì vậy ví dụ báo lỗi và đặt exit code thất bại cho process.
 
 ## 4. Nạp key và chạy
 

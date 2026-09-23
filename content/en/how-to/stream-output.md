@@ -366,4 +366,4 @@ The runtime aborts and disposes the outgoing session before it applies the repla
 ## Next
 
 - [Chapter 6: Message System](../ch06-messages.md) explains the message shapes carried by these events.
-- [Reference: API events](../reference/api.md#events) lists the public event families and fields.
+- [Reference: Stream events](../reference/api.md#stream-events) lists the public stream event families and fields.

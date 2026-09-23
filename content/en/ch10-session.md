@@ -659,7 +659,7 @@ The confirmation flow lets you include or omit the session transcript. If you om
 
 Radius upload does not require login; an authenticated Radius session attributes the report so maintainers can follow up. After upload, Pi records the report ID in the session as a `pi.bug-report` entry. Process crashes are recorded separately in `~/.pi/agent/crashes.json`, announced once at the next startup, and attached to the next report. That crash file is diagnostic state, not a substitute for the session JSONL.
 
-### Session corrections introduced in Pi 0.85.0
+### Session reliability corrections retained in Pi 0.87.1
 
 Four fixes tighten specific workflows without changing the storage model. Imported JSONL with the same filename as an existing destination now receives a numeric suffix instead of overwriting that file. Concurrent session shares do not overwrite one another. A fork now retains the applicable compaction boundary, so its reconstructed context respects the source checkpoint. An in-memory session fork requested before an active turn settles is handled only after runtime teardown has awaited the active response, preserving the completed or aborted turn before the manager is mutated.
 

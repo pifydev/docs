@@ -267,7 +267,7 @@ Trong Pi 0.87.1, `ToolCall.arguments` có kiểu `JsonObject`, còn `ToolResultM
 | `start` | Partial assistant message ban đầu |
 | `text_start` / `text_delta` / `text_end` | Lifecycle của text block và text tăng dần |
 | `thinking_start` / `thinking_delta` / `thinking_end` | Lifecycle của thinking block khi model phát thinking |
-| `toolcall_start` / `toolcall_delta` / `toolcall_end` | Partial argument và tool call cuối đã validate |
+| `toolcall_start` / `toolcall_delta` / `toolcall_end` | Partial argument và Tool call đã parse, hoàn chỉnh; Agent Core validate argument trước khi thực thi |
 | `done` | Terminal event thành công với reason `stop`, `length`, `toolUse` hoặc `deferred` |
 | `error` | Assistant message cuối ở trạng thái `error` hoặc `aborted` |
 

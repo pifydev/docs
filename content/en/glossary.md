@@ -81,7 +81,7 @@ The built-in `read`, `write`, `edit`, and `bash` tools supplied to the coding ag
 
 ## Message
 
-A typed record passed through the model and agent layers. The Pi AI package defines `UserMessage`, `AssistantMessage`, and `ToolResultMessage`; provider adapters translate these records to each provider's wire format.
+A typed record passed through the model and agent layers. The Pi AI package defines `SystemMessage`, `UserMessage`, `AssistantMessage`, and `ToolResultMessage`; provider adapters translate these records to each provider's wire format.
 
 ## Model Provider
 
@@ -129,7 +129,7 @@ The provider-specific implementation that converts Pi messages and options to a 
 
 ## Turn
 
-One user request and the model/tool work required to reach the next stable agent state. A turn may contain multiple model calls when the model invokes tools.
+One assistant response plus the Tool batch accepted from that response, bounded by `turn_start` and `turn_end`. A single Agent run can contain multiple turns and therefore multiple model calls.
 
 ## Verdict
 

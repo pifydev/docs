@@ -232,6 +232,7 @@ Vì vậy, Pi giữ message runtime giàu thông tin hơn rồi chỉ chiếu sa
 ```text
 AgentMessage
 ├─ Message from @earendil-works/pi-ai
+│  ├─ system
 │  ├─ user
 │  ├─ assistant
 │  └─ toolResult
@@ -242,7 +243,7 @@ AgentMessage
    └─ compactionSummary
 ```
 
-Bốn role này mô tả Coding Agent hiện tại, không phải giới hạn cố định của `AgentMessage`. Ứng dụng khác có thể thêm role khác. Ngay trong Coding Agent cũng có các loại session entry chỉ dành cho lưu trữ, hoàn toàn không phải message. Vì thế, “bảy loại message” chỉ là ảnh chụp hữu ích của package augmentation hiện tại, không phải định nghĩa của lớp Agent.
+Bốn role ứng dụng này mô tả phần mở rộng hiện tại của Coding Agent, không phải giới hạn cố định của `AgentMessage`. Khi cộng với bốn role của Pi AI, union hiện có tám loại message. Ứng dụng khác có thể thêm role khác. Ngay trong Coding Agent cũng có các loại session entry chỉ dành cho lưu trữ, hoàn toàn không phải message. Vì thế, “tám loại message” chỉ là ảnh chụp hữu ích của package augmentation hiện tại, không phải định nghĩa của lớp Agent.
 
 Custom role mang lại ba khả năng độc lập. Thứ nhất, UI có thể phân nhánh theo `role` để hiển thị từng trường có cấu trúc. Thứ hai, sản phẩm có thể quy định cách tuần tự hóa và nâng cấp dữ liệu rõ ràng. Thứ ba, `convertToLlm` có thể chuyển đổi hoặc bỏ từng role mà không sửa đối tượng đang lưu. Declaration merging chỉ đưa type vào bước biên dịch; nó không tự triển khai bất kỳ chính sách runtime nào trong ba phần trên.
 
@@ -490,7 +491,8 @@ Hành vi hiện tại của Coding Agent cho thấy rõ sự tách biệt:
 
 | Bản ghi                                                | Agent/runtime context                         | Model sau chuyển đổi | Hội thoại trên TUI                  | Session được lưu                                  |
 | ------------------------------------------------------ | --------------------------------------------- | -------------------- | ----------------------------------- | ------------------------------------------------- |
-| `Message` chuẩn                                        | Có                                            | Có                   | Có                                  | `SessionMessageEntry` sau sự kiện message đã chốt |
+| `UserMessage`, `AssistantMessage`, `ToolResultMessage` | Có                                            | Có                   | Có                                  | `SessionMessageEntry` sau sự kiện message đã chốt |
+| `SystemMessage`                                       | Có; chứa prompt và trạng thái Tool            | Có; được chiếu thành provider prompt | Không; renderer tương tác dùng `case "system": break` | Được dựng lại từ prompt state của sản phẩm, không phải conversation card thông thường |
 | `BashExecutionMessage` thông thường                    | Có; nếu đang chờ thì sau bước flush cuối lượt | Một `UserMessage`    | Có                                  | `SessionMessageEntry` tại cùng ranh giới chèn     |
 | Bash có `excludeFromContext`                           | Có; nếu đang chờ thì sau bước flush cuối lượt | Không                | Có                                  | `SessionMessageEntry` tại cùng ranh giới chèn     |
 | `CustomMessage`, `display: true`                       | Có                                            | Một `UserMessage`    | Có, với cách hiển thị riêng         | `CustomMessageEntry`                              |

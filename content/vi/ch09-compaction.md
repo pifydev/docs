@@ -158,10 +158,10 @@ Pi có ba trường hợp tự động và một đường thủ công:
 | --- | --- | --- |
 | Ngưỡng | Mức sử dụng hợp lệ hoặc giá trị ước lượng vượt ngưỡng nghiêm ngặt | Giữ phản hồi đã hoàn tất; không thử lại |
 | Tràn ngữ cảnh, phản hồi đã hoàn tất | Phản hồi từ cùng mô hình báo tràn nhưng có `stopReason: "stop"` | Giữ phản hồi; không thử lại |
-| Tràn ngữ cảnh hoặc độ dài có thể phục hồi | Lỗi tràn từ cùng mô hình, hoặc lý do dừng `length` có thể phục hồi dưới giới hạn đầu ra mong muốn của mô hình | Bỏ thông điệp trợ lý bị lỗi hoặc bị cắt khỏi trạng thái Agent, nén rồi thử lại một lần |
+| Tràn ngữ cảnh hoặc độ dài có thể phục hồi | Lỗi tràn từ cùng mô hình, hoặc lý do dừng `length` có thể phục hồi dưới giới hạn đầu ra mong muốn của mô hình | Ghi omission edit cho lần thử lỗi, nén projection thu được rồi thử lại một lần |
 | Thủ công | `/compact [instructions]`, RPC/SDK `compact()` hoặc Extension `ctx.compact()` | Hủy lượt chạy hiện tại trước; không tự động tiếp tục lượt đó |
 
-Pi chỉ nén rồi thử lại một lần để phục hồi khi tràn ngữ cảnh. Thông điệp trợ lý bị lỗi hoặc bị cắt đã được lưu qua `message_end`; Pi bỏ nó khỏi ngữ cảnh thử lại trong bộ nhớ, nhưng không xóa khỏi cây phiên. Sau khi dựng lại, Pi tiếp tục bỏ thông điệp trợ lý ở cuối nếu phép chiếu đưa nó trở lại vị trí đó, vì `agent.continue()` cần một trạng thái có thể tiếp tục.
+Pi chỉ nén rồi thử lại một lần để phục hồi khi tràn ngữ cảnh. Thông điệp assistant bị lỗi hoặc bị cắt cùng Tool result của nó có thể đã được lưu qua `message_end`. `_omitRecoveryAttempt()` ghi `ContextEditEntry` qua `appendContextEdit(targetId, null)` cho từng message entry đã phân giải rồi refresh canonical projection. Source entry vẫn còn trong cây append-only, còn các edit bền vững giữ lần thử lỗi đó ngoài những projection về sau và tạo trạng thái mà `agent.continue()` có thể tiếp tục.
 
 Điều kiện cùng mô hình áp dụng khi phát hiện tràn ngữ cảnh và độ dài có thể phục hồi. Việc tính ngưỡng vẫn dùng mức sử dụng do nhà cung cấp trả về hoặc phép ước lượng riêng đã mô tả ở trên. Điều kiện này ngăn lỗi tràn cũ từ một mô hình có cửa sổ nhỏ hơn kích hoạt phục hồi sau khi người dùng đổi mô hình.
 
@@ -248,16 +248,16 @@ suy ra turnStartIndex và isSplitTurn
 trả về firstKeptEntryIndex, turnStartIndex, isSplitTurn
 ```
 
-Trong lần nén đầu, `boundaryStart` là đầu đường dẫn của nhánh đang hoạt động. Ở lần sau, Pi tìm `CompactionEntry` trước đó và bắt đầu tại `firstKeptEntryId` của mục này. Nếu mã đó không có trên nhánh đang hoạt động, Pi dùng mục nằm sau lần nén trước làm phương án dự phòng. Nhờ vậy, thông điệp từng sống sót qua điểm cắt cũ có thể đi vào bản tóm tắt tiếp theo thay vì bị tách khỏi điểm kiểm tra đang được cập nhật.
+Trong lần nén đầu, `boundaryStart` là đầu canonical projected path. Ở lần sau, `prepareCompaction()` gọi `buildSessionProjection()`, tìm `CompactionEntry` mới nhất đang được chiếu rồi đặt `boundaryStart = prevCompactionIndex + 1`. Projection đã áp dụng retained tail của checkpoint đó cùng mọi `context_edit` theo sau, nên bước chuẩn bị không tìm `firstKeptEntryId` cũ trên raw branch. Các message sống sót qua điểm cắt trước vẫn có thể đi vào summary kế tiếp qua canonical projection.
 
 ```text
-điểm kiểm tra trước
-  bản tóm tắt A + mục từ firstKept(A) trở đi
+canonical projection
+  [prevCompactionIndex: bản tóm tắt A] + các projected entry được giữ
 
 chuẩn bị lần tiếp theo
   previousSummary = bản tóm tắt A
-  boundaryStart   = firstKept(A), hoặc mục sau lần nén A nếu phải dự phòng
-  điểm cắt mới    = firstKept(B)
+  boundaryStart   = prevCompactionIndex + 1
+  điểm cắt mới    = firstKept(B) trong projected entry
 
 thông điệp [boundaryStart, điểm cắt mới) → đầu vào cho bản tóm tắt mới
 thông điệp [điểm cắt mới, lá hiện tại]   → vùng giữ lại
@@ -340,7 +340,7 @@ lần nén sau
 
 Chỉ dẫn cập nhật yêu cầu giữ thông tin cũ, thêm tiến độ và quyết định, chuyển phần đã hoàn thành, cập nhật bước tiếp theo, đồng thời cho phép bỏ thông tin không còn liên quan. “Tăng dần” ở đây là bản cập nhật do LLM thực hiện theo chỉ dẫn, không phải phép nối byte nguyên trạng.
 
-Trong lượt bị tách, yêu cầu tóm tắt lịch sử chính chỉ nhận `previousSummary` khi `messagesToSummarize` không rỗng. Nếu đoạn bị tách không có thông điệp cũ hoàn chỉnh, `compact()` hiện dùng nguyên văn `No prior history.` trước bản tóm tắt phần đầu lượt và không tạo yêu cầu riêng để đưa `previousSummary` vào.
+Trong lượt bị tách, `compact()` khởi tạo `historyText` bằng `previousSummary ?? "No prior history."`. Khi `messagesToSummarize` không rỗng, history summary mới sinh sẽ thay giá trị đó. Khi đoạn bị tách không có message cũ hoàn chỉnh, Pi không tạo request lịch sử riêng nhưng vẫn giữ `previousSummary` nếu đã có; literal fallback chỉ xuất hiện khi không có summary trước.
 
 ### Siêu dữ liệu thao tác tệp có phạm vi hẹp và được tích lũy
 
@@ -412,7 +412,7 @@ Yêu cầu cho phần đầu lượt dùng giới hạn đầu ra nhỏ hơn, t�
 Khi có thông điệp cũ hoàn chỉnh, Pi trước tiên tạo hoặc cập nhật bản tóm tắt lịch sử sáu mục. Sau đó, Pi tạo bản tóm tắt phần đầu lượt. Mức sử dụng của hai yêu cầu được cộng theo từng trường. Văn bản được lưu bằng cách nối hai phần qua dấu phân cách và nhãn `Turn Context (split turn)`.
 
 ```text
-[bản tóm tắt lịch sử sáu mục, hoặc "No prior history."]
+[bản tóm tắt lịch sử sáu mục mới, previousSummary, hoặc "No prior history."]
 
 ---
 
@@ -519,7 +519,7 @@ Bộ thực thi Agent dùng chung trong kho mã có lược đồ nén riêng, v
 
 ### Sự kiện công khai và hook Extension phục vụ các thành phần khác nhau
 
-Thành phần đăng ký qua `AgentSession.subscribe()` nhận `compaction_start` và `compaction_end`. Sự kiện bắt đầu có `reason: "manual" | "threshold" | "overflow"`. Sự kiện kết thúc luôn mang cùng `reason`, cùng các trường tùy chọn `result`, `aborted`, `willRetry` và `errorMessage`.
+Thành phần đăng ký qua `AgentSession.subscribe()` nhận `compaction_start` và `compaction_end`. Sự kiện bắt đầu có `reason: "manual" | "threshold" | "overflow"`. Sự kiện kết thúc luôn mang cùng `reason`. Trong declaration, các field còn lại là `result: CompactionResult | undefined`, `aborted: boolean`, `willRetry: boolean` và `errorMessage?: string`; chỉ property cuối là tùy chọn.
 
 Extension có ba hook riêng:
 
@@ -627,10 +627,10 @@ Pi không phát `compaction_start` công khai khi bước chuẩn bị tự đ�
    tràn/độ dài có thể phục hồi từ cùng mô hình HOẶC ngưỡng từ mức sử dụng hiện tại
 
 5. Chuẩn bị
-   dựng đường dẫn của nhánh đang hoạt động
-   → tính lại tokensBefore từ buildSessionContext(path).messages
-   → tìm ranh giới của bản tóm tắt trước
-   → đi ngược tới firstKeptEntryId
+   buildSessionProjection(pathEntries)
+   → tính lại tokensBefore bằng estimateProjectedContextTokens(projection, pathEntries)
+   → tìm ranh giới projected previous-summary
+   → đi ngược qua projected entry để chọn firstKeptEntryId
    → chia messagesToSummarize / turnPrefixMessages / vùng giữ lại
    → thu thập thao tác tệp tích hợp sẵn
 
@@ -649,7 +649,7 @@ Pi không phát `compaction_start` công khai khi bước chuẩn bị tự đ�
    → mục JSONL mới nối với mục cha; mục cũ vẫn còn
 
 9. Chiếu
-   buildSessionContext()
+   buildSessionProjection()
    → CompactionSummaryMessage + mục từ firstKeptEntryId + mục về sau
    → thay agent.state.messages
 

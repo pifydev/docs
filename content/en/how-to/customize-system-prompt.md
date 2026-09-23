@@ -29,7 +29,7 @@ Pi keeps project context, the selected base prompt, appended prompt text, and pe
 | Builder additions | Context files, eligible skills, then the current working directory |
 | Per-turn changes | `before_agent_start` handlers, chained in extension order |
 
-The base chain selects one source. The discovered append chain also selects one file, but repeated CLI append flags supply an ordered list and replace that discovered append source set. The builder still adds context files and, when the `read` tool is active, eligible skills; replacing the base does not remove them.
+The base chain selects one source. The discovered append chain also selects one file, but repeated CLI append flags supply an ordered list and replace that discovered append source set. For skill metadata, the builder computes `skillFileReadTool = ["read", "bash"].find(...)`: `read` is preferred, with `bash` as the fallback. Replacing the base does not remove context files or eligible skills when either reader is active.
 
 Project trust applies to project `.pi` prompt files, settings, extensions, and other protected resources. It does **not** gate `AGENTS.override.md`, `AGENTS.md`, or `CLAUDE.md`: context files load even for an untrusted project unless `--no-context-files` is set.
 
