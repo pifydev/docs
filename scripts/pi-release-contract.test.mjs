@@ -745,6 +745,7 @@ const staleCurrentBaselinePatterns = [
     pattern: /107d79f11072bbc8a3a757ed7fd69596bee7d68c/g,
   },
 ];
+const pi0871AuditDate = "2026-09-23";
 
 const pi0871BilingualAuditSuffixes = [
   "ch01-overview.md",
@@ -848,7 +849,9 @@ function isHistoricalChangelogOccurrence(filename, block) {
     );
   if (forwardMigration) return true;
 
-  const datedHistoricalSection = /^\d{4}-\d{2}-\d{2}$/.test(block.section);
+  const datedHistoricalSection =
+    /^\d{4}-\d{2}-\d{2}$/.test(block.section) &&
+    block.section < pi0871AuditDate;
   return datedHistoricalSection;
 }
 
@@ -856,12 +859,13 @@ function findStaleCurrentBaselineOccurrences(activeSources) {
   const hits = [];
 
   for (const { filename, source } of activeSources) {
+    const normalizedSource = normalizeLineEndings(source);
     for (const { id, pattern } of staleCurrentBaselinePatterns) {
       pattern.lastIndex = 0;
-      for (const match of source.matchAll(pattern)) {
-        const block = markdownOccurrenceBlock(source, match.index);
+      for (const match of normalizedSource.matchAll(pattern)) {
+        const block = markdownOccurrenceBlock(normalizedSource, match.index);
         if (isHistoricalChangelogOccurrence(filename, block)) continue;
-        const line = source.slice(0, match.index).split(/\r?\n/).length;
+        const line = normalizedSource.slice(0, match.index).split("\n").length;
         hits.push({ filename: filename.replaceAll("\\", "/"), line, id });
       }
     }
@@ -2838,6 +2842,167 @@ function extractTypeScriptFenceContaining(source, marker, context) {
     `${context} must contain exactly one TypeScript example for ${marker}`,
   );
   return matches[0][1].replaceAll("\r\n", "\n");
+}
+
+function parseTypeScriptSource(source, label, scriptKind = ts.ScriptKind.TS) {
+  const sourceFile = ts.createSourceFile(
+    label,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    scriptKind,
+  );
+  assert.equal(
+    sourceFile.parseDiagnostics.length,
+    0,
+    `${label} must parse without syntax diagnostics`,
+  );
+  return sourceFile;
+}
+
+function descendantsMatching(root, predicate) {
+  const matches = [];
+  const visit = (node) => {
+    if (predicate(node)) matches.push(node);
+    ts.forEachChild(node, visit);
+  };
+  visit(root);
+  return matches;
+}
+
+function typeAliasUnionMembers(source, aliasName, label) {
+  const sourceFile = parseTypeScriptSource(source, label);
+  const aliases = descendantsMatching(
+    sourceFile,
+    (node) => ts.isTypeAliasDeclaration(node) && node.name.text === aliasName,
+  );
+  assert.equal(aliases.length, 1, `${label}: ${aliasName} type alias`);
+  assert.ok(
+    ts.isUnionTypeNode(aliases[0].type),
+    `${label}: ${aliasName} union`,
+  );
+  return aliases[0].type.types.map((type) => type.getText(sourceFile));
+}
+
+function interfaceMemberShape(source, interfaceName, label) {
+  const sourceFile = parseTypeScriptSource(source, label);
+  const interfaces = descendantsMatching(
+    sourceFile,
+    (node) =>
+      ts.isInterfaceDeclaration(node) && node.name.text === interfaceName,
+  );
+  assert.equal(
+    interfaces.length,
+    1,
+    `${label}: ${interfaceName} interface declaration`,
+  );
+  return {
+    sourceFile,
+    declaration: interfaces[0],
+    members: interfaces[0].members.map((member) => ({
+      name: member.name?.getText(sourceFile),
+      optional: Boolean(member.questionToken),
+      type: member.type,
+    })),
+  };
+}
+
+function stringLiteralUnion(member, sourceFile, label) {
+  assert.ok(member?.type, `${label}: typed member`);
+  const types = ts.isUnionTypeNode(member.type)
+    ? member.type.types
+    : [member.type];
+  const values = types.map((type) => {
+    assert.ok(
+      ts.isLiteralTypeNode(type) && ts.isStringLiteral(type.literal),
+      `${label}: string literal union in ${type.getText(sourceFile)}`,
+    );
+    return type.literal.text;
+  });
+  return values.sort();
+}
+
+function inlineCodeIdentifiers(source) {
+  return [...source.matchAll(/`([A-Za-z][A-Za-z0-9_-]*)`/g)].map(
+    (match) => match[1],
+  );
+}
+
+function inlineToolSet(source, knownTools) {
+  return [
+    ...new Set(
+      inlineCodeIdentifiers(source).filter((identifier) =>
+        knownTools.has(identifier),
+      ),
+    ),
+  ].sort();
+}
+
+function markdownTableRowContaining(source, identifier, label) {
+  const rows = normalizeLineEndings(source)
+    .split("\n")
+    .filter(
+      (line) =>
+        line.startsWith("|") && line.endsWith("|") && line.includes(identifier),
+    );
+  assert.equal(rows.length, 1, `${label}: one table row for ${identifier}`);
+  return rows[0]
+    .slice(1, -1)
+    .split("|")
+    .map((cell) => cell.trim());
+}
+
+function namedArrayLiteral(source, variableName, label) {
+  const sourceFile = parseTypeScriptSource(source, label, ts.ScriptKind.JS);
+  const declarations = descendantsMatching(
+    sourceFile,
+    (node) =>
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.name.text === variableName,
+  );
+  assert.equal(declarations.length, 1, `${label}: ${variableName} declaration`);
+  const arrays = descendantsMatching(declarations[0].initializer, (node) =>
+    ts.isArrayLiteralExpression(node),
+  );
+  assert.equal(arrays.length, 1, `${label}: ${variableName} string array`);
+  return arrays[0].elements.map((element) => {
+    assert.ok(
+      ts.isStringLiteral(element),
+      `${label}: ${variableName} contains strings`,
+    );
+    return element.text;
+  });
+}
+
+function declaredRoleLiterals(source, declarationNames, label) {
+  const sourceFile = parseTypeScriptSource(source, label);
+  return declarationNames.map((declarationName) => {
+    const declarations = descendantsMatching(
+      sourceFile,
+      (node) =>
+        (ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node)) &&
+        node.name.text === declarationName,
+    );
+    assert.equal(
+      declarations.length,
+      1,
+      `${label}: ${declarationName} declaration`,
+    );
+    const roleMembers = descendantsMatching(
+      declarations[0],
+      (node) =>
+        ts.isPropertySignature(node) &&
+        node.name?.getText(sourceFile) === "role",
+    );
+    assert.equal(roleMembers.length, 1, `${label}: ${declarationName}.role`);
+    const [role] = stringLiteralUnion(
+      roleMembers[0],
+      sourceFile,
+      `${label}: ${declarationName}.role`,
+    );
+    return role;
+  });
 }
 
 function extractTextFenceContaining(source, marker, context) {
@@ -9729,6 +9894,61 @@ test("stale current-baseline scanner rejects mixed migration and current claims"
   );
 });
 
+test("stale current-baseline scanner limits historical sections to dates before the audit", () => {
+  const staleVersion = ["0", "85", "0"].join(".");
+  const staleCommit = ["107d79f11072bbc8a3a757ed7fd69596", "bee7d68c"].join("");
+  const sources = [
+    {
+      filename: "content/en/changelog.md",
+      source: [
+        "## 2026-09-23",
+        "",
+        `Plain stale version: ${staleVersion}`,
+        `Plain stale source: ${staleCommit}`,
+      ].join("\n"),
+    },
+    {
+      filename: "content/vi/changelog.md",
+      source: ["## 2026-09-24", "", `Version cũ: ${staleVersion}`].join("\n"),
+    },
+    {
+      filename: "content/en/changelog.md",
+      source: [
+        "## 2026-09-22",
+        "",
+        `Historical version: ${staleVersion}`,
+        `Historical source: ${staleCommit}`,
+      ].join("\n"),
+    },
+  ];
+
+  assert.deepEqual(findStaleCurrentBaselineOccurrences(sources), [
+    { filename: "content/en/changelog.md", line: 3, id: "version" },
+    { filename: "content/en/changelog.md", line: 4, id: "source-commit" },
+    { filename: "content/vi/changelog.md", line: 3, id: "version" },
+  ]);
+});
+
+test("stale current-baseline scanner normalizes CRLF before occurrence blocks", () => {
+  const staleVersion = ["0", "85", "0"].join(".");
+  const source = [
+    "## 2026-09-22",
+    "",
+    ...Array.from({ length: 20 }, (_, index) => `padding ${index}`),
+    "",
+    `Current baseline: ${staleVersion}`,
+    "",
+    "Historical note after the stale claim.",
+  ].join("\r\n");
+
+  assert.deepEqual(
+    findStaleCurrentBaselineOccurrences([
+      { filename: "content/en/changelog.md", source },
+    ]),
+    [{ filename: "content/en/changelog.md", line: 24, id: "version" }],
+  );
+});
+
 test("Pi 0.87.1 bilingual audit ledger covers every public pair with file evidence", async () => {
   const ledger = await readFile(
     new URL("docs/translation-review/2026-09-23-pi-0871.md", repositoryRoot),
@@ -9743,6 +9963,13 @@ test("Pi 0.87.1 bilingual audit ledger covers every public pair with file eviden
   assert.match(ledger, /IT\/Coding terms/);
   assert.match(ledger, /source-proven[^.]*wrong or duplicated/i);
 
+  const markdownUtilities = await import("./lib/markdown.mjs");
+  assert.equal(
+    typeof markdownUtilities.codeFenceBodies,
+    "function",
+    "ledger aggregates require production fence bodies",
+  );
+
   const rows = parsePi0871AuditRows(ledger);
   assert.deepEqual(
     rows.map(({ suffix }) => suffix),
@@ -9750,11 +9977,21 @@ test("Pi 0.87.1 bilingual audit ledger covers every public pair with file eviden
   );
   assert.equal(new Set(rows.map(({ suffix }) => suffix)).size, 43);
 
+  const outcomes = {
+    substantive: 0,
+    "pin-only": 0,
+    "verified unchanged": 0,
+  };
+  const fenceTotals = [0, 0];
+  let identicalFenceBodies = 0;
+  let localizedFenceBodies = 0;
+
   for (const row of rows) {
     assert.ok(
       ["substantive", "pin-only", "verified unchanged"].includes(row.outcome),
       `${row.suffix}: invalid outcome ${row.outcome}`,
     );
+    outcomes[row.outcome] += 1;
     assert.match(
       row.evidence,
       new RegExp(
@@ -9779,11 +10016,28 @@ test("Pi 0.87.1 bilingual audit ledger covers every public pair with file eviden
     const fenceCounts = localizedSources.map(
       (source) => codeFenceLanguages(source).length,
     );
+    fenceTotals[0] += fenceCounts[0];
+    fenceTotals[1] += fenceCounts[1];
     assert.equal(
       row.fences,
       `${fenceCounts[0]}/${fenceCounts[1]} audited`,
       `${row.suffix}: code-fence audit must match both files`,
     );
+    const localizedBodies = localizedSources.map((source) =>
+      markdownUtilities.codeFenceBodies(source),
+    );
+    assert.equal(
+      localizedBodies[0].length,
+      localizedBodies[1].length,
+      `${row.suffix}: paired fence bodies`,
+    );
+    for (let index = 0; index < localizedBodies[0].length; index += 1) {
+      if (localizedBodies[0][index] === localizedBodies[1][index]) {
+        identicalFenceBodies += 1;
+      } else {
+        localizedFenceBodies += 1;
+      }
+    }
     if (row.suffix === "ch03-agent-loop.md") {
       assert.match(row.deletion, /added Tool names/);
       assert.match(
@@ -9796,6 +10050,27 @@ test("Pi 0.87.1 bilingual audit ledger covers every public pair with file eviden
       assert.equal(row.deletion, "none", `${row.suffix}: deletion evidence`);
     }
   }
+
+  assert.deepEqual(outcomes, {
+    substantive: 36,
+    "pin-only": 7,
+    "verified unchanged": 0,
+  });
+  assert.deepEqual(fenceTotals, [434, 434]);
+  assert.equal(identicalFenceBodies, 328);
+  assert.equal(localizedFenceBodies, 106);
+  assert.match(
+    ledger,
+    new RegExp(
+      `All ${fenceTotals[0]} code fences in each locale were inspected: ${identicalFenceBodies} paired bodies are byte-identical and ${localizedFenceBodies} intentionally localize`,
+    ),
+  );
+  assert.match(
+    ledger,
+    new RegExp(
+      `Outcome totals: ${outcomes.substantive} \`substantive\`, ${outcomes["pin-only"]} \`pin-only\`, and ${outcomes["verified unchanged"]} \`verified unchanged\` pairs`,
+    ),
+  );
 });
 
 test("code-fence audit recognizes matching variable-length markers", () => {
@@ -9846,6 +10121,25 @@ test("unclosed code fences keep mixed-marker lines and following Markdown fenced
   }
 });
 
+test("code-fence audit normalizes lone CR and strips opener indentation", () => {
+  const source = [
+    "  ````mermaid",
+    "  flowchart LR",
+    "    A --> B",
+    "  ````",
+    "",
+    " ~~~text",
+    " payload",
+    " ~~~",
+  ].join("\r");
+
+  assert.deepEqual(codeFenceLanguages(source), ["mermaid", "text"]);
+  assert.deepEqual(extractMermaidBlocks(source), [
+    ["flowchart LR", "  A --> B"].join("\n"),
+  ]);
+  assert.equal(withoutFencedCode(source).trim(), "");
+});
+
 test("active docs contain no stale Pi 0.85.0 baseline", async () => {
   const activeSources = await readActiveSources();
   assert.deepEqual(findStaleCurrentBaselineOccurrences(activeSources), []);
@@ -9888,6 +10182,307 @@ test("opening chapters describe the Pi 0.87.1 package and transcript boundaries"
   }
 });
 
+test("opening chapters publish the installed Coding Agent Tool inventory", async () => {
+  const toolsModule = await import(
+    new URL(
+      "node_modules/@earendil-works/pi-coding-agent/dist/core/tools/index.js",
+      repositoryRoot,
+    )
+  );
+  const installedAgentSession = await readFile(
+    new URL(
+      "node_modules/@earendil-works/pi-coding-agent/dist/core/agent-session.js",
+      repositoryRoot,
+    ),
+    "utf8",
+  );
+  const allTools = [...toolsModule.allToolNames].sort();
+  const knownTools = new Set(allTools);
+  const defaultTools = namedArrayLiteral(
+    installedAgentSession,
+    "defaultActiveToolNames",
+    "installed Coding Agent defaults",
+  ).sort();
+  const powerShellTools = ["powershell"];
+  const readOnlyHelpers = allTools.filter(
+    (toolName) =>
+      !defaultTools.includes(toolName) && !powerShellTools.includes(toolName),
+  );
+
+  assert.deepEqual(allTools, [
+    "bash",
+    "edit",
+    "find",
+    "grep",
+    "ls",
+    "powershell",
+    "read",
+    "write",
+  ]);
+  assert.deepEqual(defaultTools, ["bash", "edit", "read", "write"]);
+  assert.deepEqual(readOnlyHelpers, ["find", "grep", "ls"]);
+
+  for (const { locale, source } of await readLocalizedContent(
+    "ch01-overview.md",
+  )) {
+    const tableInventories = normalizeLineEndings(source)
+      .split("\n")
+      .filter((line) => line.startsWith("|") && line.endsWith("|"))
+      .map((line) => inlineToolSet(line, knownTools))
+      .filter((tools) => tools.length > 0);
+    for (const expected of [defaultTools, readOnlyHelpers, powerShellTools]) {
+      assert.ok(
+        tableInventories.some(
+          (inventory) => JSON.stringify(inventory) === JSON.stringify(expected),
+        ),
+        `${locale} Chapter 1 inventory for ${expected.join(", ")}`,
+      );
+    }
+  }
+
+  for (const { locale, source } of await readLocalizedContent(
+    "ch02-three-layer-arch.md",
+  )) {
+    const inventoryLines = normalizeLineEndings(source)
+      .split("\n")
+      .filter((line) => line.startsWith("- "))
+      .map((line) => inlineToolSet(line, knownTools))
+      .filter((tools) => tools.length >= defaultTools.length);
+    assert.equal(
+      inventoryLines.length,
+      1,
+      `${locale} Chapter 2 technical Tool inventory`,
+    );
+    assert.deepEqual(inventoryLines[0], allTools);
+
+    const wrapperInventories = normalizeLineEndings(source)
+      .split(/\n\n+/)
+      .filter((block) => block.includes("wrapRegisteredTools()"))
+      .map((block) => inlineToolSet(block, knownTools))
+      .filter((tools) => tools.length >= defaultTools.length);
+    assert.equal(
+      wrapperInventories.length,
+      1,
+      `${locale} Chapter 2 wrapped built-in Tool inventory`,
+    );
+    assert.deepEqual(wrapperInventories[0], allTools);
+  }
+});
+
+test("Chapter 2 Message and AgentTool excerpts match installed declarations", async () => {
+  const installedAiTypes = await readFile(
+    new URL(
+      "node_modules/@earendil-works/pi-ai/dist/types.d.ts",
+      repositoryRoot,
+    ),
+    "utf8",
+  );
+  const installedAgentTypes = await readFile(
+    new URL(
+      "node_modules/@earendil-works/pi-agent-core/dist/types.d.ts",
+      repositoryRoot,
+    ),
+    "utf8",
+  );
+  const expectedMessageMembers = typeAliasUnionMembers(
+    installedAiTypes,
+    "Message",
+    "installed Pi AI types",
+  );
+  const installedAgentTool = interfaceMemberShape(
+    installedAgentTypes,
+    "AgentTool",
+    "installed Agent Core types",
+  );
+  const expectedAgentToolShape = installedAgentTool.members.map(
+    ({ name, optional }) => ({ name, optional }),
+  );
+  const installedReplay = installedAgentTool.members.find(
+    ({ name }) => name === "replay",
+  );
+  const expectedReplayValues = stringLiteralUnion(
+    installedReplay,
+    installedAgentTool.sourceFile,
+    "installed AgentTool.replay",
+  );
+
+  for (const { locale, source } of await readLocalizedContent(
+    "ch02-three-layer-arch.md",
+  )) {
+    const messageFence = extractTypeScriptFenceContaining(
+      source,
+      "type Message =",
+      `${locale} Chapter 2 Message declaration`,
+    );
+    assert.deepEqual(
+      typeAliasUnionMembers(
+        messageFence,
+        "Message",
+        `${locale} Chapter 2 Message declaration`,
+      ),
+      expectedMessageMembers,
+    );
+
+    const agentToolFence = extractTypeScriptFenceContaining(
+      source,
+      "interface AgentTool<",
+      `${locale} Chapter 2 AgentTool declaration`,
+    );
+    const documentedAgentTool = interfaceMemberShape(
+      agentToolFence,
+      "AgentTool",
+      `${locale} Chapter 2 AgentTool declaration`,
+    );
+    assert.deepEqual(
+      documentedAgentTool.members.map(({ name, optional }) => ({
+        name,
+        optional,
+      })),
+      expectedAgentToolShape,
+    );
+    assert.deepEqual(
+      stringLiteralUnion(
+        documentedAgentTool.members.find(({ name }) => name === "replay"),
+        documentedAgentTool.sourceFile,
+        `${locale} Chapter 2 AgentTool.replay`,
+      ),
+      expectedReplayValues,
+    );
+  }
+});
+
+test("Chapter 6 role tree is derived from installed message declarations", async () => {
+  const installedAiTypes = await readFile(
+    new URL(
+      "node_modules/@earendil-works/pi-ai/dist/types.d.ts",
+      repositoryRoot,
+    ),
+    "utf8",
+  );
+  const installedCodingMessages = await readFile(
+    new URL(
+      "node_modules/@earendil-works/pi-coding-agent/dist/core/messages.d.ts",
+      repositoryRoot,
+    ),
+    "utf8",
+  );
+  const piAiDeclarations = typeAliasUnionMembers(
+    installedAiTypes,
+    "Message",
+    "installed Pi AI Message",
+  );
+  const customAgentMessages = interfaceMemberShape(
+    installedCodingMessages,
+    "CustomAgentMessages",
+    "installed Coding Agent messages",
+  );
+  const codingDeclarations = customAgentMessages.members.map(({ type }) =>
+    type.getText(customAgentMessages.sourceFile),
+  );
+  const installedRoles = [
+    ...declaredRoleLiterals(
+      installedAiTypes,
+      piAiDeclarations,
+      "installed Pi AI roles",
+    ),
+    ...declaredRoleLiterals(
+      installedCodingMessages,
+      codingDeclarations,
+      "installed Coding Agent roles",
+    ),
+  ].sort();
+
+  for (const { locale, source } of await readLocalizedContent(
+    "ch06-messages.md",
+  )) {
+    const roleTree = extractTextFenceContaining(
+      source,
+      "Coding Agent additions",
+      `${locale} Chapter 6 role tree`,
+    );
+    const documentedRoles = normalizeLineEndings(roleTree)
+      .split("\n")
+      .map((line) => line.match(/^[\s│]*[├└]─\s+([a-z][A-Za-z0-9]*)\s*$/)?.[1])
+      .filter(Boolean)
+      .sort();
+    assert.deepEqual(documentedRoles, installedRoles);
+  }
+});
+
+test("Chapter 6 SystemMessage persistence matches the installed session runtime", async () => {
+  const installedAgentSession = await readFile(
+    new URL(
+      "node_modules/@earendil-works/pi-coding-agent/dist/core/agent-session.js",
+      repositoryRoot,
+    ),
+    "utf8",
+  );
+  const agentSessionFile = parseTypeScriptSource(
+    installedAgentSession,
+    "installed AgentSession runtime",
+    ts.ScriptKind.JS,
+  );
+  const systemPersistenceBranches = descendantsMatching(
+    agentSessionFile,
+    (node) => {
+      if (!ts.isIfStatement(node)) return false;
+      const condition = node.expression.getText(agentSessionFile);
+      const body = node.thenStatement.getText(agentSessionFile);
+      return (
+        condition.includes('event.type === "message_end"') &&
+        body.includes('event.message.role === "system"') &&
+        body.includes("this.sessionManager.appendMessage(event.message)")
+      );
+    },
+  );
+  assert.equal(
+    systemPersistenceBranches.length,
+    1,
+    "installed AgentSession persists finalized system messages",
+  );
+
+  const { SessionManager } = await import(
+    new URL(
+      "node_modules/@earendil-works/pi-coding-agent/dist/core/session-manager.js",
+      repositoryRoot,
+    )
+  );
+  const manager = SessionManager.inMemory(fileURLToPath(repositoryRoot));
+  const systemMessage = {
+    role: "system",
+    content: "base prompt",
+    timestamp: 1,
+  };
+  const messageEntryId = manager.appendMessage(systemMessage);
+  const compactionEntryId = manager.appendCompaction("summary", null, 12);
+  const messageEntry = manager.getEntry(messageEntryId);
+  const compactionEntry = manager.getEntry(compactionEntryId);
+
+  assert.equal(messageEntry.type, "message");
+  assert.equal(messageEntry.message.role, "system");
+  assert.equal(compactionEntry.type, "compaction");
+  assert.equal(compactionEntry.systemMessage.role, "system");
+  assert.equal(compactionEntry.systemMessage.content, systemMessage.content);
+  assert.deepEqual(
+    manager.buildSessionProjection().messages.map(({ role }) => role),
+    ["system", "compactionSummary"],
+  );
+
+  for (const { locale, source } of await readLocalizedContent(
+    "ch06-messages.md",
+  )) {
+    const row = markdownTableRowContaining(
+      source,
+      "`SystemMessage`",
+      `${locale} Chapter 6 SystemMessage visibility`,
+    );
+    assert.equal(row.length, 5);
+    assert.match(row[3], /case "system": break/);
+    assert.match(row[4], /SessionMessageEntry/);
+    assert.match(row[4], /CompactionEntry\.systemMessage/);
+  }
+});
+
 test("current API boundaries are accurate across chapters and public entry points", async () => {
   const chapters = await Promise.all(
     [
@@ -9918,7 +10513,6 @@ test("current API boundaries are accurate across chapters and public entry point
   }
 
   for (const { source } of localizedBySuffix.get("ch05-tool-system.md")) {
-    assert.match(source, /eight built-in|Tám định nghĩa dựng sẵn/);
     assert.match(source, /if \(exitCode === null\)/);
     assert.match(source, /Command terminated without an exit code/);
     assert.match(source, /if \(exitCode !== 0\)/);
@@ -9927,7 +10521,6 @@ test("current API boundaries are accurate across chapters and public entry point
 
   for (const { source } of localizedBySuffix.get("ch06-messages.md")) {
     assert.match(source, /│  ├─ system/);
-    assert.match(source, /eight message types|tám loại message/);
     assert.match(source, /SystemMessage/);
     assert.match(source, /case "system": break/);
   }

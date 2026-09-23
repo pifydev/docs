@@ -67,7 +67,7 @@ Each word narrows the design:
 
 - **Coding Agent shell:** Pi joins a model, a system prompt, project context, Tools, and session state into an application that can read and change a codebase. “Shell” describes the frame and connection points while models and policies remain replaceable.
 - **Terminal:** the default interactive interface runs where developers already use shells, version control, and process tools. Regular TUI mode preserves terminal-owned scrollback. Version `0.87.1` also has an experimental fullscreen TUI mode with application-owned scrolling, so “terminal” no longer means only one rendering strategy.
-- **Minimal default:** the model receives four Tools by default: `read`, `write`, `edit`, and `bash`. The built-in read-only helpers `grep`, `find`, and `ls` are available through Tool options. Features such as plan mode and sub-agents live outside the default product surface.
+- **Minimal default:** the model receives four Tools by default: `read`, `write`, `edit`, and `bash`. Three optional built-in read-only helpers, `grep`, `find`, and `ls`, are available through Tool options. The separate optional `powershell` Tool can be selected when native PowerShell is needed. Features such as plan mode and sub-agents live outside the default product surface.
 - **Extensible:** Extensions can register Tools, commands, shortcuts, event hooks, providers, and UI. Skills, Prompt Templates, Themes, and Pi Packages cover reusable instructions, prompts, presentation, and distribution.
 
 Pi works out of the box, but its defaults are a known-good assembly rather than a closed product definition. You can replace individual parts without maintaining a fork of Pi internals.
@@ -82,6 +82,7 @@ Fast-moving popularity and provider counts age badly, so this snapshot records f
 | Node.js runtime           | `>=22.19.0`  | The same engine requirement appears in the foundational package manifests.                            |
 | Default Tools             | 4            | `read`, `write`, `edit`, and `bash` form the default model-facing surface.                            |
 | Optional built-in helpers | 3            | `grep`, `find`, and `ls` can be selected through Tool options.                                        |
+| Optional shell Tool       | 1            | `powershell` is selectable separately and is not enabled by default.                                  |
 | Foundational packages     | 4            | Pi AI, Agent Core, Coding Agent, and TUI divide model, runtime, product, and terminal concerns.       |
 | Execution paths           | 4            | Interactive; print or JSON; RPC; and SDK cover people, scripts, processes, and embedded applications. |
 | Session shape             | JSONL tree   | `id` and `parentId` support in-place branches while preserving prior paths in one session file.       |

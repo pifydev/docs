@@ -1,5 +1,5 @@
 function fencedCodeBlocks(markdown) {
-  const lines = markdown.replaceAll("\r\n", "\n").split("\n");
+  const lines = markdown.replace(/\r\n?/g, "\n").split("\n");
   const blocks = [];
   let open;
 
@@ -14,7 +14,13 @@ function fencedCodeBlocks(markdown) {
       ) {
         blocks.push({
           language: open.language,
-          body: lines.slice(open.startLine + 1, index).join("\n"),
+          body: lines
+            .slice(open.startLine + 1, index)
+            .map((bodyLine) => {
+              const leadingSpaces = bodyLine.match(/^ */)[0].length;
+              return bodyLine.slice(Math.min(open.indent, leadingSpaces));
+            })
+            .join("\n"),
           startLine: open.startLine,
           endLine: index,
         });
@@ -23,13 +29,14 @@ function fencedCodeBlocks(markdown) {
       continue;
     }
 
-    const opening = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+    const opening = line.match(/^( {0,3})(`{3,}|~{3,})(.*)$/);
     if (!opening) continue;
-    const info = opening[2].trim();
-    if (opening[1][0] === "`" && info.includes("`")) continue;
+    const info = opening[3].trim();
+    if (opening[2][0] === "`" && info.includes("`")) continue;
     open = {
-      marker: opening[1][0],
-      length: opening[1].length,
+      marker: opening[2][0],
+      length: opening[2].length,
+      indent: opening[1].length,
       language: info.split(/\s+/, 1)[0] ?? "",
       startLine: index,
     };
@@ -38,7 +45,13 @@ function fencedCodeBlocks(markdown) {
   if (open) {
     blocks.push({
       language: open.language,
-      body: lines.slice(open.startLine + 1).join("\n"),
+      body: lines
+        .slice(open.startLine + 1)
+        .map((bodyLine) => {
+          const leadingSpaces = bodyLine.match(/^ */)[0].length;
+          return bodyLine.slice(Math.min(open.indent, leadingSpaces));
+        })
+        .join("\n"),
       startLine: open.startLine,
       endLine: lines.length - 1,
     });
@@ -63,6 +76,10 @@ export function withoutFencedCode(markdown) {
 
 export function codeFenceLanguages(markdown) {
   return fencedCodeBlocks(markdown).blocks.map(({ language }) => language);
+}
+
+export function codeFenceBodies(markdown) {
+  return fencedCodeBlocks(markdown).blocks.map(({ body }) => body);
 }
 
 export function headingShape(markdown) {

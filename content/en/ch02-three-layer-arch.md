@@ -137,7 +137,7 @@ The loop receives a `StreamFn`. `models.streamSimple.bind(models)` satisfies tha
 Its manifest says “Coding agent CLI with read, bash, edit, write tools and session management.” This package owns product policy and assembly:
 
 - CLI parsing and interactive, print, JSON, RPC, and SDK entry paths;
-- the built-in `read`, `bash`, `edit`, `write`, `grep`, `find`, and `ls` Tool definitions;
+- the eight built-in `read`, `bash`, `powershell`, `edit`, `write`, `grep`, `find`, and `ls` Tool definitions;
 - `AgentSession`, `SessionManager`, session entries, branching, compaction integration, and persistence choices;
 - credentials, settings, model resolution, project trust, and project/global instruction loading;
 - Extensions, Skills, prompt templates, themes, Pi Packages, and resource discovery;
@@ -309,7 +309,7 @@ Dependency arrows show who may know whom. Type definitions show what each layer 
 Pi AI declares the smallest provider-neutral shapes. The following excerpt is shortened, but every shown member matches the pinned source:
 
 ```typescript
-type Message = UserMessage | AssistantMessage | ToolResultMessage;
+type Message = SystemMessage | UserMessage | AssistantMessage | ToolResultMessage;
 
 interface Model<TApi extends Api> {
   id: string;
@@ -354,11 +354,12 @@ interface AgentTool<
     signal?: AbortSignal,
     onUpdate?: AgentToolUpdateCallback<TDetails>,
   ): Promise<AgentToolResult<TDetails>>;
+  replay?: "never" | "safe";
   executionMode?: "sequential" | "parallel";
 }
 ```
 
-`AgentMessage` opens the transcript to application-defined messages through declaration merging. Before an LLM call, `convertToLlm` must turn that broader union back into Pi AI's `Message[]`. `AgentTool` extends the model-facing schema with a label, optional argument preparation, execution, streaming updates, and a per-Tool execution mode. The Agent loop can now run what the model requested.
+`AgentMessage` opens the transcript to application-defined messages through declaration merging. Before an LLM call, `convertToLlm` must turn that broader union back into Pi AI's `Message[]`. `AgentTool` extends the model-facing schema with a label, optional argument preparation, execution, streaming updates, a recovery policy, and a per-Tool execution mode. Its `replay` field applies when durable intent exists but the outcome is unknown: omitting it or setting `never` prevents replay, while `safe` permits recovery only when the persisted call state also records a safe replay. The Agent loop can now run what the model requested.
 
 ### Layer 3: pi-coding-agent builds molecules into materials
 
@@ -437,7 +438,7 @@ const tool = wrapToolDefinition(registeredTool.definition, () =>
 );
 ```
 
-The adapter copies the `AgentTool` fields and replaces `execute` with a function that supplies `ExtensionContext`. `wrapRegisteredTool()` provides `runner.createContext()` for Extension Tools; `wrapRegisteredTools()` applies that conversion to a list. `AgentSession._refreshToolRegistry()` collects registered and SDK Tool definitions, wraps them, and places the resulting `AgentTool`s in the runtime registry. Built-in factories use the same wrapper for the seven coding Tools: `read`, `bash`, `edit`, `write`, `grep`, `find`, and `ls`.
+The adapter copies the `AgentTool` fields and replaces `execute` with a function that supplies `ExtensionContext`. `wrapRegisteredTool()` provides `runner.createContext()` for Extension Tools; `wrapRegisteredTools()` applies that conversion to a list. `AgentSession._refreshToolRegistry()` collects registered and SDK Tool definitions, wraps them, and places the resulting `AgentTool`s in the runtime registry. Built-in factories use the same wrapper for the eight coding Tools: `read`, `bash`, `powershell`, `edit`, `write`, `grep`, `find`, and `ls`.
 
 The loader also preserves the registrations from each loaded Extension as one aggregate. This is the current interface, with no fields omitted:
 

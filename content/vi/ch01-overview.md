@@ -67,7 +67,7 @@ Mỗi từ trong định nghĩa đều thu hẹp phạm vi thiết kế:
 
 - **Coding Agent shell:** Pi nối Model, system prompt, context của dự án, Tool và session state thành một ứng dụng có thể đọc rồi thay đổi codebase. Từ “shell” mô tả bộ khung và các điểm kết nối, còn Model và policy vẫn có thể thay thế.
 - **Terminal:** giao diện tương tác mặc định chạy ngay nơi developer đã dùng shell, version control và công cụ quản lý process. TUI mode thông thường giữ terminal-owned scrollback. Version `0.87.1` còn có fullscreen TUI mode thử nghiệm với application-owned scrolling, vì vậy “terminal” không còn đồng nghĩa với một chiến lược render duy nhất.
-- **Mặc định tối giản:** Model nhận bốn Tool theo mặc định: `read`, `write`, `edit` và `bash`. Ba helper chỉ đọc `grep`, `find` và `ls` có sẵn qua Tool options. Các tính năng như plan mode và sub-agent nằm ngoài bề mặt sản phẩm mặc định.
+- **Mặc định tối giản:** Model nhận bốn Tool theo mặc định: `read`, `write`, `edit` và `bash`. Ba helper tích hợp chỉ đọc tùy chọn, `grep`, `find` và `ls`, có sẵn qua Tool options. Tool `powershell` tùy chọn được chọn riêng khi cần PowerShell native. Các tính năng như plan mode và sub-agent nằm ngoài bề mặt sản phẩm mặc định.
 - **Có thể mở rộng:** Extension có thể đăng ký Tool, command, shortcut, event hook, Provider và UI. Skill, Prompt Template, Theme và Pi Package lần lượt phụ trách instruction tái sử dụng, prompt, presentation và distribution.
 
 Pi chạy được ngay sau khi cài, nhưng defaults của nó là một tổ hợp đã biết là hoạt động, không phải định nghĩa sản phẩm đóng kín. Bạn có thể thay từng bộ phận mà không phải duy trì một fork của Pi internals.
@@ -82,6 +82,7 @@ Số star hay số lượng Provider thay đổi nhanh, nên ảnh chụp này c
 | Node.js runtime          | `>=22.19.0`    | Cùng yêu cầu engine xuất hiện trong manifest của các package nền tảng.                               |
 | Tool mặc định            | 4              | `read`, `write`, `edit` và `bash` tạo thành bề mặt mặc định mà Model nhìn thấy.                      |
 | Helper tích hợp tùy chọn | 3              | Có thể chọn `grep`, `find` và `ls` qua Tool options.                                                 |
+| Shell Tool tùy chọn      | 1              | `powershell` được chọn riêng và không bật theo mặc định.                                             |
 | Package nền tảng         | 4              | Pi AI, Agent Core, Coding Agent và TUI tách model, runtime, product và terminal concern.             |
 | Đường chạy               | 4              | Interactive; print hoặc JSON; RPC; và SDK phục vụ người dùng, script, process và ứng dụng nhúng.     |
 | Hình dạng session        | Cây JSONL      | `id` và `parentId` cho phép rẽ nhánh tại chỗ nhưng vẫn giữ các đường cũ trong cùng một session file. |

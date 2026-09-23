@@ -137,7 +137,7 @@ Vòng lặp nhận một `StreamFn`. `models.streamSimple.bind(models)` thỏa c
 Manifest mô tả “Coding agent CLI with read, bash, edit, write tools and session management”. Package này sở hữu product policy và khâu lắp ráp:
 
 - phân tích CLI cùng các entry path interactive, print, JSON, RPC và SDK;
-- definition của bảy Tool tích hợp `read`, `bash`, `edit`, `write`, `grep`, `find` và `ls`;
+- definition của tám Tool tích hợp `read`, `bash`, `powershell`, `edit`, `write`, `grep`, `find` và `ls`;
 - `AgentSession`, `SessionManager`, session entry, branching, tích hợp compaction và lựa chọn persistence;
 - credential, setting, model resolution, project trust và việc nạp chỉ dẫn ở cấp project/global;
 - Extension, Skill, prompt template, theme, Pi Package và resource discovery;
@@ -309,7 +309,7 @@ Mũi tên dependency cho biết ai được phép biết ai. Type definition cho
 Pi AI khai báo các shape nhỏ nhất không phụ thuộc provider cụ thể. Đoạn sau đã rút gọn, nhưng mọi member được hiển thị đều khớp source đã ghim:
 
 ```typescript
-type Message = UserMessage | AssistantMessage | ToolResultMessage;
+type Message = SystemMessage | UserMessage | AssistantMessage | ToolResultMessage;
 
 interface Model<TApi extends Api> {
   id: string;
@@ -354,11 +354,12 @@ interface AgentTool<
     signal?: AbortSignal,
     onUpdate?: AgentToolUpdateCallback<TDetails>,
   ): Promise<AgentToolResult<TDetails>>;
+  replay?: "never" | "safe";
   executionMode?: "sequential" | "parallel";
 }
 ```
 
-`AgentMessage` mở transcript cho message do ứng dụng định nghĩa qua declaration merging. Trước khi gọi LLM, `convertToLlm` phải chuyển union rộng hơn ấy về `Message[]` của Pi AI. `AgentTool` mở rộng schema hướng model bằng label, bước chuẩn bị argument tùy chọn, execution, streaming update và execution mode riêng cho từng Tool. Agent Loop giờ có thể chạy điều model yêu cầu.
+`AgentMessage` mở transcript cho message do ứng dụng định nghĩa qua declaration merging. Trước khi gọi LLM, `convertToLlm` phải chuyển union rộng hơn ấy về `Message[]` của Pi AI. `AgentTool` mở rộng schema hướng model bằng label, bước chuẩn bị argument tùy chọn, execution, streaming update, recovery policy và execution mode riêng cho từng Tool. Field `replay` áp dụng khi durable intent đã tồn tại nhưng kết quả thực thi chưa xác định (unknown outcome): bỏ field này hoặc đặt `never` sẽ ngăn replay, còn `safe` chỉ cho phép recovery khi trạng thái call đã lưu cũng ghi nhận safe replay. Agent Loop giờ có thể chạy điều model yêu cầu.
 
 ### Lớp 3: pi-coding-agent kết hợp phân tử thành vật liệu
 
@@ -437,7 +438,7 @@ const tool = wrapToolDefinition(registeredTool.definition, () =>
 );
 ```
 
-Adapter sao chép các field của `AgentTool` rồi thay `execute` bằng function có nhiệm vụ cung cấp `ExtensionContext`. `wrapRegisteredTool()` truyền `runner.createContext()` cho Extension Tool; `wrapRegisteredTools()` áp dụng phép chuyển ấy cho cả danh sách. `AgentSession._refreshToolRegistry()` thu thập Tool definition từ Extension và SDK, wrap chúng rồi đặt các `AgentTool` thu được vào runtime registry. Factory tích hợp cũng dùng wrapper này cho bảy coding Tool: `read`, `bash`, `edit`, `write`, `grep`, `find` và `ls`.
+Adapter sao chép các field của `AgentTool` rồi thay `execute` bằng function có nhiệm vụ cung cấp `ExtensionContext`. `wrapRegisteredTool()` truyền `runner.createContext()` cho Extension Tool; `wrapRegisteredTools()` áp dụng phép chuyển ấy cho cả danh sách. `AgentSession._refreshToolRegistry()` thu thập Tool definition từ Extension và SDK, wrap chúng rồi đặt các `AgentTool` thu được vào runtime registry. Factory tích hợp cũng dùng wrapper này cho tám coding Tool: `read`, `bash`, `powershell`, `edit`, `write`, `grep`, `find` và `ls`.
 
 Loader còn giữ các registration của từng Extension đã nạp trong một aggregate. Đây là interface hiện hành, không lược bỏ field nào:
 
