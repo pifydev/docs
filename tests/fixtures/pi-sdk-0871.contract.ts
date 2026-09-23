@@ -6,24 +6,29 @@ import {
   fauxProvider,
   fauxText,
   fauxToolCall,
+  getCurrentSystemPrompt,
+  getCurrentTools,
   Type,
   type AnthropicMessagesCompat,
-  type Context,
   type GoogleApiThinkingLevel,
   type GoogleOptions,
   type OpenAICompletionsCompat,
   type OpenAIResponsesCompat,
   type ResolvedGoogleThinkingLevel,
+  type TranscriptContext,
 } from "@earendil-works/pi-ai";
 import {
   Agent,
   type AgentEvent,
   type AgentTool,
+  type FinishTurn,
 } from "@earendil-works/pi-agent-core";
 import {
+  type AgentBeforeSettleEvent,
   type AgentSession,
   type AgentSessionRuntime,
   type AgentSessionRuntimeDiagnostic,
+  type ContextEditEntry,
   type CreateAgentSessionRuntimeFactory,
   type CreateAgentSessionServicesOptions,
   createAgentSession,
@@ -36,6 +41,7 @@ import {
   type PowerShellOperations,
   type PowerShellToolOptions,
   SessionManager,
+  type TurnEndEvent,
   type UIPromptEndEvent,
   type UIPromptKind,
   type UIPromptStartEvent,
@@ -108,6 +114,25 @@ const promptEnd: UIPromptEndEvent = {
 const imageMimeDetector =
   detectSupportedImageMimeTypeFromFile satisfies typeof detectSupportedImageMimeTypeFromFile;
 
+const finishAfterNormalResponse: FinishTurn = ({ message }) => {
+  if (message.stopReason === "error" || message.stopReason === "aborted") {
+    return undefined;
+  }
+  return { action: "end" };
+};
+
+const boundaryTypes = {
+  beforeSettle: undefined as AgentBeforeSettleEvent | undefined,
+  turnEnd: undefined as TurnEndEvent | undefined,
+};
+
+export function omitEntryFromFutureContext(
+  manager: SessionManager,
+  targetId: string,
+): ContextEditEntry["id"] {
+  return manager.appendContextEdit(targetId, null);
+}
+
 export function restoreExternalSessionEntries(
   sessionId: string,
   entries: FileEntry[],
@@ -117,11 +142,13 @@ export function restoreExternalSessionEntries(
 }
 
 async function verifyDeterministicAgentRoundTrip(): Promise<void> {
-  const requests: Array<{
-    roles: Array<Context["messages"][number]["role"]>;
+  type ProviderRequestSummary = {
+    roles: Array<TranscriptContext["messages"][number]["role"]>;
+    systemPrompt: string;
     toolNames: string[];
-    messages: Context["messages"];
-  }> = [];
+    messages: TranscriptContext["messages"];
+  };
+  const requests: ProviderRequestSummary[] = [];
   const models = createModels();
   const faux = fauxProvider({
     provider: "chapter-11-faux",
@@ -145,17 +172,21 @@ async function verifyDeterministicAgentRoundTrip(): Promise<void> {
     },
   };
 
-  const captureRequest = (context: Context) => {
+  function captureTranscriptRequest(
+    requests: ProviderRequestSummary[],
+    context: TranscriptContext,
+  ): void {
     requests.push({
       roles: context.messages.map((message) => message.role),
-      toolNames: context.tools?.map((tool) => tool.name) ?? [],
+      systemPrompt: getCurrentSystemPrompt(context.messages),
+      toolNames: getCurrentTools(context.messages).map((tool) => tool.name),
       messages: structuredClone(context.messages),
     });
-  };
+  }
 
   faux.setResponses([
     (context) => {
-      captureRequest(context);
+      captureTranscriptRequest(requests, context);
       return fauxAssistantMessage(
         [
           fauxText("I will use the add Tool."),
@@ -165,7 +196,7 @@ async function verifyDeterministicAgentRoundTrip(): Promise<void> {
       );
     },
     (context) => {
-      captureRequest(context);
+      captureTranscriptRequest(requests, context);
       return fauxAssistantMessage(fauxText("The total is 42."));
     },
   ]);
@@ -191,11 +222,18 @@ async function verifyDeterministicAgentRoundTrip(): Promise<void> {
 
     assert.equal(faux.state.callCount, 2);
     assert.equal(faux.getPendingResponseCount(), 0);
-    assert.deepEqual(requests[0]?.roles, ["user"]);
+    assert.deepEqual(requests[0]?.roles, ["system", "user"]);
+    assert.equal(requests[0]?.systemPrompt, "Use the add Tool for arithmetic.");
     assert.deepEqual(requests[0]?.toolNames, ["add"]);
-    assert.deepEqual(requests[1]?.roles, ["user", "assistant", "toolResult"]);
+    assert.deepEqual(requests[1]?.toolNames, ["add"]);
+    assert.deepEqual(requests[1]?.roles, [
+      "system",
+      "user",
+      "assistant",
+      "toolResult",
+    ]);
 
-    const requestToolResult = requests[1]?.messages[2];
+    const requestToolResult = requests[1]?.messages[3];
     assert.equal(requestToolResult?.role, "toolResult");
     if (requestToolResult?.role !== "toolResult") {
       throw new Error("second provider request must contain a Tool result");
@@ -207,7 +245,7 @@ async function verifyDeterministicAgentRoundTrip(): Promise<void> {
 
     assert.deepEqual(
       agent.state.messages.map((message) => message.role),
-      ["user", "assistant", "toolResult", "assistant"],
+      ["system", "user", "assistant", "toolResult", "assistant"],
     );
     const finalMessage = agent.state.messages.at(-1);
     assert.equal(finalMessage?.role, "assistant");
@@ -223,11 +261,13 @@ async function verifyDeterministicAgentRoundTrip(): Promise<void> {
 }
 
 export async function verifyDeterministicAgentTestingGuide(): Promise<void> {
-  const requests: Array<{
-    roles: Array<Context["messages"][number]["role"]>;
-    messages: Context["messages"];
+  type ProviderRequestSummary = {
+    roles: Array<TranscriptContext["messages"][number]["role"]>;
+    systemPrompt: string;
     toolNames: string[];
-  }> = [];
+    messages: TranscriptContext["messages"];
+  };
+  const requests: ProviderRequestSummary[] = [];
   const executedCalls: Array<{
     toolCallId: string;
     args: { left: number; right: number };
@@ -309,17 +349,21 @@ export async function verifyDeterministicAgentTestingGuide(): Promise<void> {
     unsubscribe = agent.subscribe((event) => {
       eventTypes.push(event.type);
     });
-    const captureRequest = (context: Context) => {
+    function captureTranscriptRequest(
+      requests: ProviderRequestSummary[],
+      context: TranscriptContext,
+    ): void {
       requests.push({
         roles: context.messages.map((message) => message.role),
+        systemPrompt: getCurrentSystemPrompt(context.messages),
+        toolNames: getCurrentTools(context.messages).map((tool) => tool.name),
         messages: structuredClone(context.messages),
-        toolNames: context.tools?.map((tool) => tool.name) ?? [],
       });
-    };
+    }
 
     faux.setResponses([
       (context) => {
-        captureRequest(context);
+        captureTranscriptRequest(requests, context);
         return fauxAssistantMessage(
           [
             fauxText("I will call the add Tool."),
@@ -329,7 +373,7 @@ export async function verifyDeterministicAgentTestingGuide(): Promise<void> {
         );
       },
       (context) => {
-        captureRequest(context);
+        captureTranscriptRequest(requests, context);
         return fauxAssistantMessage(fauxText("The total is 42."));
       },
     ]);
@@ -342,14 +386,21 @@ export async function verifyDeterministicAgentTestingGuide(): Promise<void> {
 
     assert.equal(faux.state.callCount, 2);
     assert.equal(faux.getPendingResponseCount(), 0);
-    assert.deepEqual(requests[0]?.roles, ["user"]);
+    assert.deepEqual(requests[0]?.roles, ["system", "user"]);
+    assert.equal(requests[0]?.systemPrompt, "Use the add Tool for arithmetic.");
     assert.deepEqual(requests[0]?.toolNames, ["add"]);
-    assert.deepEqual(requests[1]?.roles, ["user", "assistant", "toolResult"]);
+    assert.deepEqual(requests[1]?.toolNames, ["add"]);
+    assert.deepEqual(requests[1]?.roles, [
+      "system",
+      "user",
+      "assistant",
+      "toolResult",
+    ]);
     assert.deepEqual(executedCalls, [
       { toolCallId: "sum-1", args: { left: 20, right: 22 } },
     ]);
 
-    const requestToolResult = requests[1]?.messages[2];
+    const requestToolResult = requests[1]?.messages[3];
     assert.equal(requestToolResult?.role, "toolResult");
     if (requestToolResult?.role !== "toolResult") {
       throw new Error("the second provider request must contain a Tool result");
@@ -361,7 +412,7 @@ export async function verifyDeterministicAgentTestingGuide(): Promise<void> {
 
     assert.deepEqual(
       agent.state.messages.map((message) => message.role),
-      ["user", "assistant", "toolResult", "assistant"],
+      ["system", "user", "assistant", "toolResult", "assistant"],
     );
     const finalMessage = agent.state.messages.at(-1);
     assert.equal(finalMessage?.role, "assistant");
@@ -789,6 +840,8 @@ export async function createSerializedSessionRuntimeHost(
 }
 
 void [
+  finishAfterNormalResponse,
+  boundaryTypes,
   agentConstructor,
   fauxProviderFactory,
   fauxAssistantMessageFactory,
