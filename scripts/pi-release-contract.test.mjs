@@ -7,7 +7,11 @@ import { fileURLToPath } from "node:url";
 
 import ts from "typescript";
 
-import { codeFenceLanguages } from "./lib/markdown.mjs";
+import {
+  codeFenceLanguages,
+  extractMermaidBlocks,
+  withoutFencedCode,
+} from "./lib/markdown.mjs";
 
 const repositoryRoot = new URL("../", import.meta.url);
 const releaseFixtureURL = new URL(
@@ -829,6 +833,12 @@ function isHistoricalChangelogOccurrence(filename, block) {
     return false;
   }
 
+  const explicitCurrentClaim =
+    /(?:is authoritative|current baseline|baseline hiện tại|là authoritative|Compare with|So sánh với)/i.test(
+      block.source,
+    );
+  if (explicitCurrentClaim) return false;
+
   const forwardMigration =
     /(?:from|từ)[\s\S]*0\.85\.0[\s\S]*(?:to|lên)[\s\S]*0\.87\.1/i.test(
       block.source,
@@ -839,11 +849,7 @@ function isHistoricalChangelogOccurrence(filename, block) {
   if (forwardMigration) return true;
 
   const datedHistoricalSection = /^\d{4}-\d{2}-\d{2}$/.test(block.section);
-  const explicitCurrentClaim =
-    /(?:is authoritative|current baseline|baseline hiện tại|là authoritative|Compare with|So sánh với)/i.test(
-      block.source,
-    );
-  return datedHistoricalSection && !explicitCurrentClaim;
+  return datedHistoricalSection;
 }
 
 function findStaleCurrentBaselineOccurrences(activeSources) {
@@ -9707,6 +9713,22 @@ test("stale current-baseline scanner evaluates each changelog occurrence", () =>
   ]);
 });
 
+test("stale current-baseline scanner rejects mixed migration and current claims", () => {
+  const staleVersion = ["0", "85", "0"].join(".");
+  const source = [
+    "## 2026-09-23",
+    "",
+    `Pify moves its documentation baseline from \`${staleVersion}\` to Pi \`0.87.1\`, but still says it is authoritative for current guidance.`,
+  ].join("\n");
+
+  assert.deepEqual(
+    findStaleCurrentBaselineOccurrences([
+      { filename: "content/en/changelog.md", source },
+    ]),
+    [{ filename: "content/en/changelog.md", line: 3, id: "version" }],
+  );
+});
+
 test("Pi 0.87.1 bilingual audit ledger covers every public pair with file evidence", async () => {
   const ledger = await readFile(
     new URL("docs/translation-review/2026-09-23-pi-0871.md", repositoryRoot),
@@ -9789,6 +9811,39 @@ test("code-fence audit recognizes matching variable-length markers", () => {
   ].join("\n");
 
   assert.deepEqual(codeFenceLanguages(nested), ["markdown", "text"]);
+});
+
+test("code-fence audit ignores mixed-marker closers", () => {
+  const source = [
+    "````mermaid",
+    "flowchart LR",
+    "  A --> B",
+    "````~",
+    "  B --> C",
+    "````",
+    "~~~~mermaid",
+    "flowchart TB",
+    "  X --> Y",
+    "~~~~`",
+    "  Y --> Z",
+    "~~~~",
+  ].join("\n");
+
+  assert.deepEqual(codeFenceLanguages(source), ["mermaid", "mermaid"]);
+  assert.deepEqual(extractMermaidBlocks(source), [
+    ["flowchart LR", "  A --> B", "````~", "  B --> C"].join("\n"),
+    ["flowchart TB", "  X --> Y", "~~~~`", "  Y --> Z"].join("\n"),
+  ]);
+});
+
+test("unclosed code fences keep mixed-marker lines and following Markdown fenced", () => {
+  for (const source of [
+    ["````text", "payload", "````~", "# still fenced"].join("\n"),
+    ["~~~~text", "payload", "~~~~`", "# still fenced"].join("\n"),
+  ]) {
+    assert.deepEqual(codeFenceLanguages(source), ["text"]);
+    assert.equal(withoutFencedCode(source).trim(), "");
+  }
 });
 
 test("active docs contain no stale Pi 0.85.0 baseline", async () => {

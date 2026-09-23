@@ -6,7 +6,7 @@ function fencedCodeBlocks(markdown) {
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
     if (open) {
-      const closing = line.match(/^ {0,3}([`~]{3,})[ \t]*$/);
+      const closing = line.match(/^ {0,3}(`{3,}|~{3,})[ \t]*$/);
       if (
         closing &&
         closing[1][0] === open.marker &&
