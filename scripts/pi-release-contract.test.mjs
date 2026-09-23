@@ -1100,15 +1100,6 @@ function assertTextContentMessageRoles(source, locale) {
   return cells[2];
 }
 
-const agentProviderBoundaryIdentifiers = [
-  "`AgentContext`",
-  "`AgentTool`",
-  "`convertToLlm`",
-  "`Message[]`",
-  "`normalizeContext()`",
-  "`TranscriptContext`",
-];
-
 function assertAgentProviderOpening(source, locale) {
   const section = extractMarkdownSection(
     source,
@@ -1118,16 +1109,14 @@ function assertAgentProviderOpening(source, locale) {
     `${locale} Chapter 4 opening boundary`,
   );
   const [paragraph] = section.body.split(/\n\s*\n/);
-  let previousIndex = -1;
-  for (const identifier of agentProviderBoundaryIdentifiers) {
-    const index = paragraph.indexOf(identifier);
-    assert.notEqual(index, -1, `${locale} opening must include ${identifier}`);
-    assert.ok(
-      index > previousIndex,
-      `${locale} opening must preserve the Agent-to-provider order at ${identifier}`,
-    );
-    previousIndex = index;
-  }
+  // Validate the explicit technical pipeline; surrounding prose needs editorial review.
+  const pipeline = paragraph.match(
+    /`AgentContext`\s*\(\s*`AgentMessage\[\]`\s*,\s*`AgentTool\[\]`\s*\)\s*→\s*`convertToLlm`\s*→\s*`Message\[\]`\s*→\s*`normalizeContext\(\)`\s*→\s*`TranscriptContext`/,
+  );
+  assert.ok(
+    pipeline,
+    `${locale} opening must include the Agent-to-provider pipeline`,
+  );
   return paragraph;
 }
 
@@ -1147,15 +1136,24 @@ test("0.86.0 provider and tool contracts preserve the Agent conversion boundary"
   }
 });
 
+const agentProviderPipelineStages = [
+  "`AgentContext` (`AgentMessage[]`, `AgentTool[]`)",
+  "`convertToLlm`",
+  "`Message[]`",
+  "`normalizeContext()`",
+  "`TranscriptContext`",
+];
+const agentProviderPipeline = agentProviderPipelineStages.join(" → ");
+
 test("0.86.0 provider and tool contracts accept paraphrased Agent boundaries in both locales", () => {
   const rewrites = {
     en: [
       "## 1. The problem: one conversation, different provider dialects",
-      "`AgentContext` holds runtime state alongside executable `AgentTool` values. Pi calls `convertToLlm` to obtain `Message[]`, followed by `normalizeContext()` to supply `TranscriptContext` to the provider.",
+      `The Agent Loop keeps runtime state and executable Tools in Agent core. The request follows ${agentProviderPipeline}. The provider receives the normalized transcript.`,
     ],
     vi: [
       "## 1. Vấn đề: một cuộc hội thoại, nhiều provider dialect",
-      "`AgentContext` giữ trạng thái runtime cùng các `AgentTool` thực thi được. Từ đó, `convertToLlm` trả về `Message[]`; bước `normalizeContext()` chuẩn hóa dữ liệu thành `TranscriptContext` dành cho provider.",
+      `Agent Loop giữ trạng thái runtime và Tool thực thi trong Agent core. Request đi qua ${agentProviderPipeline}. Provider nhận transcript đã chuẩn hóa.`,
     ],
   };
   for (const [locale, [heading, paragraph]] of Object.entries(rewrites)) {
@@ -1167,6 +1165,32 @@ test("0.86.0 provider and tool contracts accept paraphrased Agent boundaries in 
         `${heading}\n\n${paragraph.replaceAll(". ", ".\n")}`,
         locale,
       ),
+    );
+    assert.doesNotThrow(() =>
+      assertAgentProviderOpening(
+        `${heading}\n\n${paragraph.replaceAll(" → ", "\n→\t")}`,
+        locale,
+      ),
+    );
+  }
+});
+
+test("0.86.0 provider and tool contracts reject inverted prose without the Agent pipeline", () => {
+  const inverted = {
+    en: [
+      "## 1. The problem: one conversation, different provider dialects",
+      "`AgentContext` contains `AgentMessage[]` and `AgentTool[]`, but `convertToLlm` is skipped; `Message[]` is never produced, `normalizeContext()` is never called, and no `TranscriptContext` reaches the provider.",
+    ],
+    vi: [
+      "## 1. Vấn đề: một cuộc hội thoại, nhiều provider dialect",
+      "`AgentContext` chứa `AgentMessage[]` và `AgentTool[]`, nhưng bỏ qua `convertToLlm`; `Message[]` không được tạo, `normalizeContext()` không được gọi và không có `TranscriptContext` nào đến provider.",
+    ],
+  };
+  for (const [locale, [heading, paragraph]] of Object.entries(inverted)) {
+    assert.throws(
+      () => assertAgentProviderOpening(`${heading}\n\n${paragraph}`, locale),
+      assert.AssertionError,
+      `${locale} identifier order alone cannot replace the structural pipeline`,
     );
   }
 });
@@ -1196,7 +1220,8 @@ test("0.86.0 provider and tool contracts reject omitted system text and bypassed
     const paragraph = assertAgentProviderOpening(source, locale);
     for (const [from, to] of [
       ["`AgentContext`", "`Context`"],
-      ["`AgentTool`", "`Tool`"],
+      ["`AgentMessage[]`", "`Message[]`"],
+      ["`AgentTool[]`", "`Tool[]`"],
       ["`convertToLlm`", "`serialize`"],
       ["`Message[]`", "`AgentMessage[]`"],
       ["`normalizeContext()`", "`castContext()`"],
@@ -1204,7 +1229,7 @@ test("0.86.0 provider and tool contracts reject omitted system text and bypassed
     ]) {
       const withoutIdentifier = paragraph.replaceAll(from, "");
       const reordered =
-        from === agentProviderBoundaryIdentifiers.at(-1)
+        from === "`TranscriptContext`"
           ? `${from} ${withoutIdentifier}`
           : `${withoutIdentifier} ${from}`;
       for (const [mutation, changedParagraph] of [
@@ -1222,6 +1247,47 @@ test("0.86.0 provider and tool contracts reject omitted system text and bypassed
           `${locale} rejects ${mutation} ${from}`,
         );
       }
+    }
+    const mutations = [];
+    for (let index = 0; index < agentProviderPipelineStages.length; index++) {
+      const skipped = agentProviderPipelineStages.filter(
+        (_, i) => i !== index,
+      );
+      mutations.push([`skipped stage ${index}`, skipped.join(" → ")]);
+      if (index + 1 < agentProviderPipelineStages.length) {
+        const swapped = [...agentProviderPipelineStages];
+        [swapped[index], swapped[index + 1]] = [
+          swapped[index + 1],
+          swapped[index],
+        ];
+        mutations.push([
+          `swapped stages ${index}/${index + 1}`,
+          swapped.join(" → "),
+        ]);
+        const connectors = Array(agentProviderPipelineStages.length - 1).fill(
+          " → ",
+        );
+        for (const connector of [" ", " ← "]) {
+          connectors[index] = connector;
+          mutations.push([
+            `invalid arrow ${index}: ${JSON.stringify(connector)}`,
+            agentProviderPipelineStages
+              .map((stage, i) => stage + (connectors[i] ?? ""))
+              .join(""),
+          ]);
+        }
+      }
+    }
+    for (const [mutation, pipeline] of mutations) {
+      assert.throws(
+        () =>
+          assertAgentProviderOpening(
+            source.replace(agentProviderPipeline, pipeline),
+            locale,
+          ),
+        assert.AssertionError,
+        `${locale} rejects ${mutation}`,
+      );
     }
     assert.throws(
       () =>

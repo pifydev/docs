@@ -33,7 +33,7 @@ This chapter opens that boundary without replacing it with a short usage sample.
 
 ## 1. The problem: one conversation, different provider dialects
 
-The Agent Loop operates on Agent core's `AgentContext`, which holds `AgentMessage[]` and executable `AgentTool` values. Before each provider call, `convertToLlm` projects those messages to Pi AI `Message[]`; `normalizeContext()` then produces the provider's `TranscriptContext`. The API adapter serializes that transcript into the wire format. Anthropic Messages, OpenAI Chat Completions or Responses, Google Generative AI, and Amazon Bedrock Converse describe equivalent turns with different roles, block names, fields, and continuity metadata.
+The Agent Loop operates on Agent core's context and executable Tools. Before each provider call, the message path is `AgentContext` (`AgentMessage[]`, `AgentTool[]`) → `convertToLlm` → `Message[]` → `normalizeContext()` → `TranscriptContext`. `convertToLlm` projects the messages to Pi AI types; normalization produces the provider transcript. The API adapter serializes that transcript into the wire format. Anthropic Messages, OpenAI Chat Completions or Responses, Google Generative AI, and Amazon Bedrock Converse describe equivalent turns with different roles, block names, fields, and continuity metadata.
 
 Suppose a user asks the Agent to read `main.ts`. Pi can persist that user turn in its provider-neutral form:
 
