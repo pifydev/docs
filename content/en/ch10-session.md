@@ -619,14 +619,15 @@ The generic Pi Agent Core `JsonlSessionStorage` has different safety code: it se
 
 `/bug [description]` prepares a private diagnostic bundle for Pi's developers. It collects environment, model, provider, Extension, and settings metadata with secret values redacted, plus recorded assistant-message and error diagnostics. Redaction reduces accidental exposure, but you should still inspect the report because prompts and Tool output can contain sensitive values that are not recognizable as credentials.
 
-The confirmation flow lets you include the session transcript, omit it, or ask the current model for a model-written summary instead. Review an included transcript or generated summary before sharing it. A report may be uploaded to Radius, or exported as a local ZIP for inspection and manual transfer. In offline mode, local ZIP export remains available but Pi cannot upload the report to Radius.
+The confirmation flow lets you include or omit the session transcript. If you omit it, you can ask the current model to write a summary instead. Generating that summary sends selected transcript messages to the current model provider with your credentials and tokens. Pi attaches the generated summary to the bug report, not the transcript. Review an included transcript or generated summary before sharing it. A report may be uploaded to Radius, or exported as a local ZIP for inspection and manual transfer. In offline mode, local ZIP export remains available but Pi cannot upload the report to Radius.
 
 | Diagnostic boundary | Mode | Result |
 |---|---|---|
 | `metadata.secrets` | `all` | `redacted` |
 | `transcript` | `consent: include` | `attached` |
 | `transcript` | `consent: omit` | `not attached` |
-| `summary` | `consent: model-written` | `attached; transcript stays local` |
+| `model summary request` | `consent: model-written` | `transcript sent to current provider` |
+| `bug-report attachment` | `model-written summary` | `summary attached; transcript not attached` |
 | `Radius upload` | `online` | `allowed` |
 | `Radius upload` | `offline` | `blocked` |
 | `local ZIP` | `online` | `allowed` |

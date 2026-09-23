@@ -194,7 +194,7 @@ Giới hạn output kiểm soát nội dung đi vào context sau khi Tool chạy
 | `powershell` | `strict-prefer` |
 | `edit` | `strict-prefer` |
 | `write` | `strict-prefer` |
-| `extension replacement` | `constrainedSampling: false` |
+| `extension replacement with explicit opt-out` | `constrainedSampling: false` |
 
 ## 4. Phòng thủ đầu vào 2: ghép system prompt và tài nguyên
 

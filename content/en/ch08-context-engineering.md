@@ -194,7 +194,7 @@ Output limits constrain what enters context after a Tool runs. Pi also constrain
 | `powershell` | `strict-prefer` |
 | `edit` | `strict-prefer` |
 | `write` | `strict-prefer` |
-| `extension replacement` | `constrainedSampling: false` |
+| `extension replacement with explicit opt-out` | `constrainedSampling: false` |
 
 ## 4. Input defense 2: system-prompt and resource assembly
 

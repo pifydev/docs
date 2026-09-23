@@ -1892,6 +1892,21 @@ several sentences without changing the machine-checked contract below.
       broken: "| `local ZIP` | `offline` | `blocked` |",
     },
     {
+      label: "model summary provider boundary",
+      expected: [
+        [
+          "model summary request",
+          "consent: model-written",
+          "transcript sent to current provider",
+        ],
+      ],
+      source: `| Boundary | Mode | Result |
+|---|---|---|
+| \`model summary request\` | \`consent: model-written\` | \`transcript sent to current provider\` |`,
+      broken:
+        "| `model summary request` | `consent: model-written` | `transcript not sent to current provider` |",
+    },
+    {
       label: "RPC handler ordering",
       expected: [
         ["steer", "streaming", '"rpc"', '"steer"', "Extension input → queue"],
@@ -1909,6 +1924,19 @@ several sentences without changing the machine-checked contract below.
 |---|---|
 | \`read\` | \`strict-prefer\` |`,
       broken: "| `read` | `do not use strict-prefer` |",
+    },
+    {
+      label: "explicit replacement opt-out",
+      expected: [
+        [
+          "extension replacement with explicit opt-out",
+          "constrainedSampling: false",
+        ],
+      ],
+      source: `| Scope | Contract |
+|---|---|
+| \`extension replacement with explicit opt-out\` | \`constrainedSampling: false\` |`,
+      broken: "| `extension replacement` | `constrainedSampling: false` |",
     },
   ];
 
@@ -2009,9 +2037,14 @@ test("0.86.x operational features preserve runtime boundaries in both locales", 
         ["transcript", "consent: include", "attached"],
         ["transcript", "consent: omit", "not attached"],
         [
-          "summary",
+          "model summary request",
           "consent: model-written",
-          "attached; transcript stays local",
+          "transcript sent to current provider",
+        ],
+        [
+          "bug-report attachment",
+          "model-written summary",
+          "summary attached; transcript not attached",
         ],
         ["Radius upload", "online", "allowed"],
         ["Radius upload", "offline", "blocked"],
@@ -2094,7 +2127,10 @@ test("0.86.x operational features preserve runtime boundaries in both locales", 
         ["powershell", "strict-prefer"],
         ["edit", "strict-prefer"],
         ["write", "strict-prefer"],
-        ["extension replacement", "constrainedSampling: false"],
+        [
+          "extension replacement with explicit opt-out",
+          "constrainedSampling: false",
+        ],
       ],
       `${locale} built-in constrained sampling`,
     );

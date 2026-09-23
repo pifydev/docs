@@ -619,14 +619,15 @@ Manager của Coding Agent gọi API file đồng bộ và không có khóa file
 
 `/bug [description]` chuẩn bị một bundle chẩn đoán riêng tư cho đội ngũ phát triển Pi. Bundle thu thập metadata về environment, model, provider, Extension và setting sau khi che secret, cùng các chẩn đoán từ assistant message và error đã ghi nhận. Redaction giảm nguy cơ lộ dữ liệu ngoài ý muốn, nhưng bạn vẫn cần kiểm tra report vì prompt và Tool output có thể chứa giá trị nhạy cảm không có hình dạng credential quen thuộc.
 
-Flow xác nhận cho phép kèm transcript của session, bỏ transcript, hoặc yêu cầu model hiện tại viết một summary thay thế. Hãy đọc transcript hoặc summary do model tạo trước khi chia sẻ. Report có thể được upload lên Radius hoặc xuất thành ZIP local để tự kiểm tra và chuyển giao. Trong offline mode, Pi vẫn cho xuất ZIP local nhưng không thể upload report lên Radius.
+Flow xác nhận cho phép kèm hoặc bỏ transcript của session. Nếu bỏ transcript, bạn có thể yêu cầu model hiện tại viết một summary thay thế. Việc tạo summary sẽ gửi các message được chọn từ transcript tới provider của model hiện tại, dùng credential và token của bạn. Pi đính kèm summary đã tạo vào bug report, không đính kèm transcript. Hãy đọc transcript hoặc summary do model tạo trước khi chia sẻ. Report có thể được upload lên Radius hoặc xuất thành ZIP local để tự kiểm tra và chuyển giao. Trong offline mode, Pi vẫn cho xuất ZIP local nhưng không thể upload report lên Radius.
 
 | Ranh giới chẩn đoán | Chế độ | Kết quả |
 |---|---|---|
 | `metadata.secrets` | `all` | `redacted` |
 | `transcript` | `consent: include` | `attached` |
 | `transcript` | `consent: omit` | `not attached` |
-| `summary` | `consent: model-written` | `attached; transcript stays local` |
+| `model summary request` | `consent: model-written` | `transcript sent to current provider` |
+| `bug-report attachment` | `model-written summary` | `summary attached; transcript not attached` |
 | `Radius upload` | `online` | `allowed` |
 | `Radius upload` | `offline` | `blocked` |
 | `local ZIP` | `online` | `allowed` |
