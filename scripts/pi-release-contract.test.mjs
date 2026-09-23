@@ -2062,6 +2062,60 @@ test("first bilingual changelog guard rejects deleted or reordered reliability t
   }
 });
 
+function assertRollupPublicationScope(entryBody, locale, context) {
+  const scope = extractMarkdownSection(
+    entryBody,
+    currentRollupHeadings[locale].scope,
+    context,
+  ).body.replace(/\n(?=- )/g, "\n\n");
+  const anchors =
+    locale === "en"
+      ? {
+          published: [
+            /\b(?:publish(?:es|ed)?|records?|pins?|establish(?:es)?)\b/i,
+            /\b(?:authority|source|revision|commit)\b/i,
+            /\b(?:rollup|summary)\b/i,
+            /\breleases?\b/i,
+          ],
+          deferred: [
+            /\bchapters?\b/i,
+            /How-to|\bguides?\b/i,
+            /\breferences?\b/i,
+            /\bsource\b/i,
+            /migrat|updat/i,
+            /\b(?:scheduled|planned|deferred|pending|will)\b/i,
+            /\b(?:later|remaining|subsequent|future|follow-up)\b/i,
+          ],
+        }
+      : {
+          published: [
+            /công bố|xuất bản|ghi nhận|ghim|xác định/i,
+            /nguồn|commit|revision/i,
+            /tóm tắt|tổng hợp|rollup/i,
+            /release/i,
+          ],
+          deferred: [
+            /chương|chapter/i,
+            /hướng dẫn|How-to|guide/i,
+            /tham khảo|reference/i,
+            /source|nguồn/i,
+            /cập nhật|migration/i,
+            /dự kiến|sẽ|để lại|chờ/i,
+            /còn lại|tiếp theo|sau/i,
+          ],
+        };
+  assertParagraphContainsAll(
+    scope,
+    [/\bPi(?:fy)?\b/i, /\b0\.87\.1\b/, /baseline/i, ...anchors.published],
+    `${context} current baseline authority and rollup`,
+  );
+  assertParagraphContainsAll(
+    scope,
+    [/\bcommits?\b/i, ...anchors.deferred],
+    `${context} detailed migrations deferred to later commits`,
+  );
+}
+
 test("first bilingual changelog distinguishes publication scope and includes GPT-6 Astra", async () => {
   for (const { locale, source } of await readLocalizedContent("changelog.md")) {
     const context = `${locale} rollup publication scope`;
@@ -2071,18 +2125,59 @@ test("first bilingual changelog distinguishes publication scope and includes GPT
       [/`0\.85\.1`/, /GPT-6 Astra/, /OpenAI API/, /OpenAI Codex/],
       `${context} 0.85.1 model addition`,
     );
-    assertContainsAll(
+    assertRollupPublicationScope(entry.body, locale, context);
+  }
+});
+
+test("first bilingual changelog publication guard allows editorial rewrites and rejects completed migration claims", async () => {
+  const rewrites = {
+    en: {
+      published:
+        "Pify now records the source authority for baseline 0.87.1 and a summary of the releases.",
+      deferred:
+        "Later commits will migrate the chapters, guides, references, and source-review records.",
+      completed:
+        "The chapters, guides, references, and source-review records are already migrated.",
+    },
+    vi: {
+      published:
+        "Pify công bố nguồn xác thực cho baseline 0.87.1 và bản tổng hợp release.",
+      deferred:
+        "Các chương, hướng dẫn, trang tham khảo cùng hồ sơ nguồn sẽ được cập nhật trong những commit tiếp theo.",
+      completed:
+        "Các chương, hướng dẫn, trang tham khảo cùng hồ sơ nguồn đã cập nhật xong.",
+    },
+  };
+  for (const { locale, source } of await readLocalizedContent("changelog.md")) {
+    const context = `${locale} publication guard editorial variants`;
+    const entry = extractMarkdownSection(source, "## 2026-09-23", context);
+    const scope = extractMarkdownSection(
       entry.body,
-      locale === "en"
-        ? [
-            /This entry publishes[^\n]*baseline authority and release rollup/i,
-            /Detailed[^\n]*migrations are scheduled[^\n]*remaining commits/i,
-          ]
-        : [
-            /Mục này công bố[^\n]*baseline[^\n]*tóm tắt release/i,
-            /cập nhật chi tiết[^\n]*dự kiến[^\n]*commit còn lại/i,
-          ],
+      currentRollupHeadings[locale].scope,
       context,
+    );
+    const firstBullet = scope.body.split(/\n(?=- )/)[0];
+    const { published, deferred, completed } = rewrites[locale];
+    const rewrite = entry.body.replace(
+      firstBullet,
+      `- ${published} ${deferred}`,
+    );
+    assert.doesNotThrow(() =>
+      assertRollupPublicationScope(rewrite, locale, context),
+    );
+    assert.throws(
+      () =>
+        assertRollupPublicationScope(
+          rewrite.replace(deferred, completed),
+          locale,
+          context,
+        ),
+      { name: "AssertionError" },
+    );
+    const wrongSection = `${published} ${deferred}\n\n${entry.body.replace(firstBullet, `- ${completed}`)}`;
+    assert.throws(
+      () => assertRollupPublicationScope(wrongSection, locale, context),
+      { name: "AssertionError" },
     );
   }
 });
