@@ -7,7 +7,7 @@ import ts from "typescript";
 
 const repositoryRoot = new URL("../", import.meta.url);
 const releaseFixtureURL = new URL(
-  "fixtures/pi-release-0850.json",
+  "fixtures/pi-release-0871.json",
   import.meta.url,
 );
 const releaseContractPackages = [
@@ -1482,15 +1482,24 @@ function invalidPiSourceLinks(sources, release) {
   );
 }
 
-test("release fixture identifies published Pi 0.85.0 authority", async () => {
+test("release fixture identifies published Pi 0.87.1 authority", async () => {
   const release = await readReleaseFixture();
-  assert.equal(release.packageVersion, "0.85.0");
-  assert.equal(release.tag, "v0.85.0");
-  assert.equal(release.commit, "107d79f11072bbc8a3a757ed7fd69596bee7d68c");
-  assert.equal(release.publishedAt, "2026-09-04T10:18:28Z");
+  assert.equal(release.packageVersion, "0.87.1");
+  assert.equal(release.tag, "v0.87.1");
+  assert.equal(
+    release.commit,
+    "f07218c4d4bbc12bef056a7058c3dd49dfe41abe",
+  );
+  assert.equal(release.publishedAt, "2026-09-22T19:43:43Z");
   assert.equal(release.nodeRequirement, ">=22.19.0");
-  assert.equal(release.previousDocumentationVersion, "0.84.3");
-  assert.deepEqual(release.includedReleaseTags, ["v0.84.4", "v0.85.0"]);
+  assert.equal(release.previousDocumentationVersion, "0.85.0");
+  assert.deepEqual(release.includedReleaseTags, [
+    "v0.85.1",
+    "v0.86.0",
+    "v0.86.1",
+    "v0.87.0",
+    "v0.87.1",
+  ]);
   assert.equal(release.sourceStatus, "published");
 });
 
