@@ -829,7 +829,6 @@ function withoutAllowedStaleBaselineSelfTestLiterals(
 
 function tokenizeShellCommands(source, language = "shell") {
   const cmdShell = /^(?:cmd|bat)$/.test(language);
-  const powerShell = /^(?:powershell|pwsh|ps1)$/.test(language);
   const commands = [];
   let command = [];
   let argument = "";
@@ -861,9 +860,7 @@ function tokenizeShellCommands(source, language = "shell") {
     } else if (character === '"' || (!cmdShell && character === "'")) {
       quote = character;
       atTokenBoundary = false;
-    } else if (
-      !cmdShell && character === "#" && (powerShell || atTokenBoundary)
-    ) {
+    } else if (!cmdShell && character === "#" && atTokenBoundary) {
       comment = true;
     } else if (/[\n;&|]/.test(character)) {
       endCommand();
@@ -3247,15 +3244,17 @@ test("SDK install recipes ignore shell comments without stripping quoted hashes"
   }
 });
 
-test("SDK install recipes preserve Bash hashes within unquoted arguments", () => {
+test("SDK install recipes preserve Bash and PowerShell hashes within unquoted arguments", () => {
   const source =
     'import { createAgentSession } from "@earendil-works/pi-coding-agent";';
-  const scope = [
-    "```bash",
-    "npm install --cache=/tmp/build#1 @earendil-works/pi-coding-agent@0.87.1",
-    "```",
-  ].join("\n");
-  assert.doesNotThrow(() => assertSdkInstallPackages(source, scope, "Bash hash"));
+  for (const language of ["bash", "powershell", "pwsh"]) {
+    const scope = [
+      `\`\`\`${language}`,
+      "npm install --cache=/tmp/build#1 @earendil-works/pi-coding-agent@0.87.1",
+      "```",
+    ].join("\n");
+    assert.doesNotThrow(() => assertSdkInstallPackages(source, scope, language));
+  }
 });
 
 test("external-session restoration examples stay synchronized with the compile fixture", async () => {
