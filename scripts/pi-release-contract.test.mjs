@@ -1100,6 +1100,15 @@ function assertTextContentMessageRoles(source, locale) {
   return cells[2];
 }
 
+const agentProviderBoundaryIdentifiers = [
+  "`AgentContext`",
+  "`AgentTool`",
+  "`convertToLlm`",
+  "`Message[]`",
+  "`normalizeContext()`",
+  "`TranscriptContext`",
+];
+
 function assertAgentProviderOpening(source, locale) {
   const section = extractMarkdownSection(
     source,
@@ -1108,27 +1117,18 @@ function assertAgentProviderOpening(source, locale) {
       : "## 1. Vấn đề: một cuộc hội thoại, nhiều provider dialect",
     `${locale} Chapter 4 opening boundary`,
   );
-  const paragraph = assertParagraphContainsAll(
-    section.body,
-    [
-      locale === "en"
-        ? /Agent Loop operates on Agent core's `AgentContext`[^.]*`AgentMessage\[\]`[^.]*`AgentTool`/
-        : /Agent Loop làm việc với `AgentContext` của Agent core[^.]*`AgentMessage\[\]`[^.]*`AgentTool`/,
-      locale === "en"
-        ? /`convertToLlm`[^.;]*to Pi AI `Message\[\]`/
-        : /`convertToLlm`[^.;]*thành `Message\[\]` của Pi AI/,
-      locale === "en"
-        ? /`normalizeContext\(\)` then produces[^.]*provider[^.]*`TranscriptContext`/
-        : /`normalizeContext\(\)` sau đó tạo `TranscriptContext` cho provider/,
-    ],
-    `${locale} AgentContext to provider transcript`,
-  );
-  assert.ok(
-    paragraph.indexOf("`AgentContext`") < paragraph.indexOf("`convertToLlm`") &&
-      paragraph.indexOf("`convertToLlm`") <
-        paragraph.indexOf("`normalizeContext()`"),
-    `${locale} conversion precedes provider normalization`,
-  );
+  const [paragraph] = section.body.split(/\n\s*\n/);
+  let previousIndex = -1;
+  for (const identifier of agentProviderBoundaryIdentifiers) {
+    const index = paragraph.indexOf(identifier);
+    assert.notEqual(index, -1, `${locale} opening must include ${identifier}`);
+    assert.ok(
+      index > previousIndex,
+      `${locale} opening must preserve the Agent-to-provider order at ${identifier}`,
+    );
+    previousIndex = index;
+  }
+  return paragraph;
 }
 
 test("0.86.0 provider and tool contracts preserve system text in content positions", async () => {
@@ -1144,6 +1144,30 @@ test("0.86.0 provider and tool contracts preserve the Agent conversion boundary"
     "ch04-model-invocation.md",
   )) {
     assertAgentProviderOpening(source, locale);
+  }
+});
+
+test("0.86.0 provider and tool contracts accept paraphrased Agent boundaries in both locales", () => {
+  const rewrites = {
+    en: [
+      "## 1. The problem: one conversation, different provider dialects",
+      "`AgentContext` holds runtime state alongside executable `AgentTool` values. Pi calls `convertToLlm` to obtain `Message[]`, followed by `normalizeContext()` to supply `TranscriptContext` to the provider.",
+    ],
+    vi: [
+      "## 1. Vấn đề: một cuộc hội thoại, nhiều provider dialect",
+      "`AgentContext` giữ trạng thái runtime cùng các `AgentTool` thực thi được. Từ đó, `convertToLlm` trả về `Message[]`; bước `normalizeContext()` chuẩn hóa dữ liệu thành `TranscriptContext` dành cho provider.",
+    ],
+  };
+  for (const [locale, [heading, paragraph]] of Object.entries(rewrites)) {
+    assert.doesNotThrow(() =>
+      assertAgentProviderOpening(`${heading}\n\n${paragraph}`, locale),
+    );
+    assert.doesNotThrow(() =>
+      assertAgentProviderOpening(
+        `${heading}\n\n${paragraph.replaceAll(". ", ".\n")}`,
+        locale,
+      ),
+    );
   }
 });
 
@@ -1169,7 +1193,7 @@ test("0.86.0 provider and tool contracts reject omitted system text and bypassed
   for (const { locale, source } of await readLocalizedContent(
     "ch04-model-invocation.md",
   )) {
-    assertAgentProviderOpening(source, locale);
+    const paragraph = assertAgentProviderOpening(source, locale);
     for (const [from, to] of [
       ["`AgentContext`", "`Context`"],
       ["`AgentTool`", "`Tool`"],
@@ -1178,13 +1202,36 @@ test("0.86.0 provider and tool contracts reject omitted system text and bypassed
       ["`normalizeContext()`", "`castContext()`"],
       ["`TranscriptContext`", "`Context`"],
     ]) {
-      assert.ok(source.includes(from), `${locale} mutation target ${from}`);
-      assert.throws(
-        () => assertAgentProviderOpening(source.replace(from, to), locale),
-        assert.AssertionError,
-        `${locale} preserve the boundary for ${from}`,
-      );
+      const withoutIdentifier = paragraph.replaceAll(from, "");
+      const reordered =
+        from === agentProviderBoundaryIdentifiers.at(-1)
+          ? `${from} ${withoutIdentifier}`
+          : `${withoutIdentifier} ${from}`;
+      for (const [mutation, changedParagraph] of [
+        ["removed", withoutIdentifier],
+        ["replaced", paragraph.replaceAll(from, to)],
+        ["reordered", reordered],
+      ]) {
+        assert.throws(
+          () =>
+            assertAgentProviderOpening(
+              source.replace(paragraph, changedParagraph),
+              locale,
+            ),
+          assert.AssertionError,
+          `${locale} rejects ${mutation} ${from}`,
+        );
+      }
     }
+    assert.throws(
+      () =>
+        assertAgentProviderOpening(
+          source.replace(paragraph, `Boundary omitted.\n\n${paragraph}`),
+          locale,
+        ),
+      assert.AssertionError,
+      `${locale} the boundary must appear in the opening paragraph`,
+    );
   }
 });
 
