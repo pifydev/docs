@@ -1628,7 +1628,82 @@ function assertReleaseRollupAccuracy(entryBody, locale, context) {
   );
 }
 
+const currentRollupHeadings = {
+  en: {
+    coverage: "### Release coverage",
+    migrations: "### Breaking API migrations",
+    capabilities: "### New capabilities",
+    reliability: "### Reliability, provider, and CLI fixes",
+    scope: "### Documentation and verification scope",
+  },
+  vi: {
+    coverage: "### Phạm vi release",
+    migrations: "### Các thay đổi API không tương thích",
+    capabilities: "### Khả năng mới",
+    reliability: "### Bản sửa lỗi về độ tin cậy, provider và CLI",
+    scope: "### Phạm vi tài liệu và kiểm chứng",
+  },
+};
+
+const currentRollupTopics = {
+  coverage: [],
+  migrations: [
+    /`TranscriptContext`/,
+    /`ToolCall\.arguments`/,
+    /`user_bash`/,
+    /`finishTurn`/,
+    /`SessionManager`/,
+    /`ContextEditEntry`/,
+    /`TurnEndEvent`/,
+  ],
+  capabilities: [
+    /GPT-6 Astra/,
+    /cache warming/,
+    /Meta Muse/,
+    /`compaction\.modelOverrides`/,
+    /`context_with_system`/,
+    /Claude Opus 5\.5/,
+  ],
+  reliability: [
+    /root-import/,
+    /`0\.86\.x`/,
+    /`0\.87\.0`/,
+    /split-turn compaction/,
+    /image-only/,
+  ],
+  scope: [
+    /Pify/,
+    /`scripts\/fixtures\/pi-release-0871\.json`/,
+    /`@earendil-works\/pi-client`/,
+  ],
+};
+
 function assertCurrentRollupAccuracy(entryBody, locale, context) {
+  const headings = currentRollupHeadings[locale];
+  const structures = Object.entries(currentRollupTopics).map(
+    ([key, topics]) => {
+      const section = extractMarkdownSection(entryBody, headings[key], context);
+      const bullets = section.body
+        .split(/(?=^- )/m)
+        .filter((block) => block.startsWith("- "));
+      assert.equal(
+        bullets.length,
+        topics.length,
+        `${context} ${key} must preserve its bullet count`,
+      );
+      for (const [index, topic] of topics.entries()) {
+        assert.match(
+          bullets[index],
+          topic,
+          `${context} ${key} bullet ${index + 1} must cover ${topic}`,
+        );
+      }
+      return {
+        ...sectionStructure(section),
+        bulletTopics: topics.map((topic) => topic.source),
+      };
+    },
+  );
   const boundaries =
     locale === "en"
       ? {
@@ -1657,7 +1732,7 @@ function assertCurrentRollupAccuracy(entryBody, locale, context) {
         };
   const migrations = extractMarkdownSection(
     entryBody,
-    "### Breaking API migrations",
+    headings.migrations,
     context,
   ).body;
   for (const patterns of [
@@ -1714,9 +1789,14 @@ function assertCurrentRollupAccuracy(entryBody, locale, context) {
   }
   const capabilities = extractMarkdownSection(
     entryBody,
-    "### New capabilities",
+    headings.capabilities,
     context,
   ).body;
+  assertParagraphContainsAll(
+    capabilities,
+    [/`0\.85\.1`/, /GPT-6 Astra/, /OpenAI API/, /OpenAI Codex/],
+    `${context} 0.85.1 model addition`,
+  );
   assertParagraphContainsAll(
     capabilities,
     [/`context_with_system`/, boundaries.transcript],
@@ -1738,7 +1818,7 @@ function assertCurrentRollupAccuracy(entryBody, locale, context) {
   );
   const reliability = extractMarkdownSection(
     entryBody,
-    "### Reliability, provider, and CLI fixes",
+    headings.reliability,
     context,
   ).body;
   assertParagraphContainsAll(
@@ -1760,14 +1840,10 @@ function assertCurrentRollupAccuracy(entryBody, locale, context) {
     [/`--mode`/, /missing or invalid|thiếu hoặc không hợp lệ/i, /nonzero/],
     `${context} CLI failure`,
   );
-  const scope = extractMarkdownSection(
-    entryBody,
-    "### Documentation and verification scope",
-    context,
-  ).body;
+  const scope = extractMarkdownSection(entryBody, headings.scope, context).body;
   assertContainsAll(
     scope,
-    [boundaries.experimental, /commit series|chuỗi commit/i],
+    [boundaries.experimental, /release series|đợt cập nhật/i],
     `${context} publication scope`,
   );
   assert.doesNotMatch(
@@ -1775,6 +1851,7 @@ function assertCurrentRollupAccuracy(entryBody, locale, context) {
     /all providers support|mọi provider đều hỗ trợ|safe image rendering|render image an toàn/i,
     `${context} must not overclaim support or safety`,
   );
+  return structures;
 }
 
 test("the first bilingual changelog entry is the structured Pi 0.87.1 documentation rollup", async () => {
@@ -1793,11 +1870,11 @@ test("the first bilingual changelog entry is the structured Pi 0.87.1 documentat
   ];
   const sections = [
     {
-      heading: "### Release coverage",
+      key: "coverage",
       patterns: [/Pify/, /`0\.85\.0`/, /Pi `0\.87\.1`/],
     },
     {
-      heading: "### Breaking API migrations",
+      key: "migrations",
       patterns: [
         /`TurnEndEvent`/,
         /`AgentBeforeSettleEvent`/,
@@ -1806,8 +1883,9 @@ test("the first bilingual changelog entry is the structured Pi 0.87.1 documentat
       ],
     },
     {
-      heading: "### New capabilities",
+      key: "capabilities",
       patterns: [
+        /GPT-6 Astra/,
         /cache warming/,
         /`\/bug`/,
         /Radius/,
@@ -1828,7 +1906,7 @@ test("the first bilingual changelog entry is the structured Pi 0.87.1 documentat
       ],
     },
     {
-      heading: "### Reliability, provider, and CLI fixes",
+      key: "reliability",
       patterns: [
         /split-turn compaction/,
         /Claude Fable 5\.1/,
@@ -1840,7 +1918,7 @@ test("the first bilingual changelog entry is the structured Pi 0.87.1 documentat
       ],
     },
     {
-      heading: "### Documentation and verification scope",
+      key: "scope",
       patterns: [
         /`@earendil-works\/pi-ai`/,
         /`@earendil-works\/pi-agent-core`/,
@@ -1862,6 +1940,7 @@ test("the first bilingual changelog entry is the structured Pi 0.87.1 documentat
   const structures = [];
   for (const { locale, source } of references) {
     const context = `${locale} first changelog entry`;
+    const headings = currentRollupHeadings[locale];
     assert.equal(
       source.match(/^## ([^\r\n]+)$/m)?.[1],
       "2026-09-23",
@@ -1882,16 +1961,14 @@ test("the first bilingual changelog entry is the structured Pi 0.87.1 documentat
     }
     assert.deepEqual(
       [...entry.body.matchAll(/^### [^\r\n]+$/gm)].map((match) => match[0]),
-      sections.map(({ heading }) => heading),
+      sections.map(({ key }) => headings[key]),
     );
-    structures.push(
-      sections.map(({ heading, patterns }) =>
-        sectionStructure(
-          assertContainsAll(entry.body, patterns, context, { heading }),
-        ),
-      ),
-    );
-    assertCurrentRollupAccuracy(entry.body, locale, context);
+    for (const { key, patterns } of sections) {
+      assertContainsAll(entry.body, patterns, context, {
+        heading: headings[key],
+      });
+    }
+    structures.push(assertCurrentRollupAccuracy(entry.body, locale, context));
   }
   assert.deepEqual(structures[0], structures[1]);
 });
@@ -1937,6 +2014,75 @@ test("first bilingual changelog accuracy guard rejects migration and scope regre
           pattern,
         ),
       { name: "AssertionError" },
+    );
+  }
+});
+
+test("first bilingual changelog guard rejects deleted or reordered reliability topics", async () => {
+  for (const { locale, source } of await readLocalizedContent("changelog.md")) {
+    const context = `${locale} rollup topic mutations`;
+    const entry = extractMarkdownSection(source, "## 2026-09-23", context);
+    assertCurrentRollupAccuracy(entry.body, locale, context);
+    const reliability = extractMarkdownSection(
+      entry.body,
+      currentRollupHeadings[locale].reliability,
+      context,
+    );
+    const bullets = reliability.body
+      .split(/(?=^- )/m)
+      .map((bullet) => bullet.trim());
+    for (let index = 0; index < bullets.length; index += 1) {
+      const deleted = bullets.filter((_, candidate) => candidate !== index);
+      assert.throws(
+        () =>
+          assertCurrentRollupAccuracy(
+            entry.body.replace(reliability.body, deleted.join("\n")),
+            locale,
+            `${context} deleted bullet ${index + 1}`,
+          ),
+        { name: "AssertionError" },
+      );
+      if (index + 1 < bullets.length) {
+        const reordered = [...bullets];
+        [reordered[index], reordered[index + 1]] = [
+          reordered[index + 1],
+          reordered[index],
+        ];
+        assert.throws(
+          () =>
+            assertCurrentRollupAccuracy(
+              entry.body.replace(reliability.body, reordered.join("\n")),
+              locale,
+              `${context} reordered bullet ${index + 1}`,
+            ),
+          { name: "AssertionError" },
+        );
+      }
+    }
+  }
+});
+
+test("first bilingual changelog distinguishes publication scope and includes GPT-6 Astra", async () => {
+  for (const { locale, source } of await readLocalizedContent("changelog.md")) {
+    const context = `${locale} rollup publication scope`;
+    const entry = extractMarkdownSection(source, "## 2026-09-23", context);
+    assertParagraphContainsAll(
+      entry.body,
+      [/`0\.85\.1`/, /GPT-6 Astra/, /OpenAI API/, /OpenAI Codex/],
+      `${context} 0.85.1 model addition`,
+    );
+    assertContainsAll(
+      entry.body,
+      locale === "en"
+        ? [
+            /This entry publishes[^\n]*baseline authority and release rollup/i,
+            /Detailed[^\n]*migrations are scheduled[^\n]*remaining commits/i,
+          ]
+        : [
+            /Mục này công bố[^\n]*baseline[^\n]*tóm tắt release/i,
+            /cập nhật chi tiết[^\n]*dự kiến[^\n]*commit còn lại/i,
+          ],
+      context,
     );
   }
 });

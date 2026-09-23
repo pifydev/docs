@@ -27,6 +27,7 @@ Pify moves its documentation baseline from `0.85.0` to [Pi `0.87.1`](https://git
 
 ### New capabilities
 
+- `0.85.1` adds GPT-6 Astra through OpenAI API keys and OpenAI Codex subscriptions.
 - `0.86.0` adds cost-aware prompt cache warming during long Tool runs, with optional idle warming and a `cache_warming_decision` hook. `/bug` gathers redacted diagnostics with an optional transcript or summary for upload to Radius or local ZIP export.
 - Radius gains an offline model catalog, supplemented by cached and live discovery. In `0.86.1`, Meta Muse supports `/login meta` with key refresh and direct `META_API_KEY` authentication.
 - Per-model compaction budgets use `compaction.modelOverrides` with `reserveTokens` and `keepRecentTokens`. Extensions can call configured models through `ctx.modelRegistry.stream()` and `streamSimple()` with resolved authentication. `pi.on()` returns an unsubscribe function; registration changes during dispatch affect subsequent dispatches.
@@ -43,7 +44,7 @@ Pify moves its documentation baseline from `0.85.0` to [Pi `0.87.1`](https://git
 
 ### Documentation and verification scope
 
-- This Pify commit series publishes the migration across chapters, How-to guides, references, Quickstart, FAQ, and source-review records. Entry points and install commands now identify `0.87.1`; later commits in the series carry the detailed provider, session, model, and extension guide migrations. The Course implementation remains an independent teaching implementation with no promise of Pi API compatibility.
+- This entry publishes Pify's `0.87.1` baseline authority and release rollup. Detailed chapter, How-to, reference, and source-review migrations are scheduled for the remaining commits in this release series. The Course implementation remains an independent teaching implementation with no promise of Pi API compatibility.
 - Package verification pins `@earendil-works/pi-ai`, `@earendil-works/pi-agent-core`, `@earendil-works/pi-coding-agent`, and `@earendil-works/pi-server` to `0.87.1`. `scripts/fixtures/pi-release-0871.json` records release authority; `tests/fixtures/pi-sdk-0871.contract.ts` checks public declarations and supplies offline deterministic Agent, session restoration, and runtime-host checks. Content checks cover release links, migration claims, bilingual structure, `lint:sync`, `lint:frontmatter`, `lint:editorial`, and `test:preservation`; these checks do not exercise live provider accounts.
 - `@earendil-works/pi-client`, `@earendil-works/pi-protocol`, and `@earendil-works/pi-server` remain experimental, with no stable API or compatibility guarantee. Pinning a package or describing a source contract does not change that boundary.
 
