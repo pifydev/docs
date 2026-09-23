@@ -4,8 +4,8 @@ description: Định nghĩa Tool có type, đăng ký với agent core hoặc Co
 translation_key: how-to-add-custom-tool
 language: vi
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/README.md#tools"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/docs/extensions.md#custom-tools"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/README.md#tools"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/extensions.md#custom-tools"
 terms_used:
   - AgentTool
   - ToolDefinition
@@ -159,6 +159,12 @@ execute: (
 `params` đã qua schema validation. Chuyển tiếp `signal` tới các thao tác I/O có thể hủy và kiểm tra tín hiệu quanh những bước không nhận signal. Gọi `onUpdate` bằng một `AgentToolResult` tạm thời đầy đủ: cả `content` lẫn `details` đều bắt buộc. Callback này tạo event `tool_execution_update`; chỉ kết quả cuối được trả về mới chuyển tới model.
 
 Ném `Error` khi thực thi thất bại. Agent core bắt lỗi, phát `tool_execution_end` với `isError: true` và tạo một `ToolResultMessage` lỗi. Chỉ trả content bình thường khi thành công. Thông báo lỗi sẽ được model nhìn thấy, nên hãy bỏ credential, header, đường dẫn riêng tư và body nguyên gốc từ upstream trước khi ném lỗi.
+
+Trong Pi 0.87.1, `ToolCall.arguments` có kiểu `JsonObject`, còn `ToolResultMessage.details` chứa dữ liệu tương thích JSON. Giữ input và details cần lưu của custom Tool ở dạng tuần tự hóa được: mã hóa ngày thành chuỗi, để function, class instance và process handle ngoài transcript. Schema của Tool vẫn quyết định những dạng đối số JSON được chấp nhận.
+
+`ToolResultMessage<TDetails = JsonValue>` là kiểu có điều kiện. Với kiểu details tương thích, nó có `details?: JsonRepresentation<TDetails>`; kiểu không tương thích cho kết quả `never`. Dùng kiểu details cụ thể tương thích JSON và xử lý trường hợp không có `details`. `AgentToolResult<TDetails>` ở runtime vẫn là contract generic riêng; gán kiểu details ở đó không chứng minh dữ liệu có thể được lưu thành Tool result message.
+
+`JsonValue` chứa `readonly JsonValue[]`. Consumer phải sao chép mảng trước khi sửa, hoặc nhận parameter readonly. Khi xử lý đầy đủ các nhánh trong TypeScript, cần bao quát `null`, kiểu nguyên thủy, mảng readonly và object; dùng type guard thu hẹp về `readonly JsonValue[]` khi cần. Các declaration này không bổ sung kiểm tra dữ liệu ở runtime hay đóng băng object: vẫn phải kiểm tra dữ liệu không đáng tin cậy và từ chối vòng tham chiếu hoặc giá trị cơ chế tuần tự hóa không biểu diễn được.
 
 ## 3. Đăng ký Tool với agent
 
@@ -344,6 +350,10 @@ export default function weatherExtension(pi: ExtensionAPI): void {
 
 API hiện tại không có trường Tool `requiresPermission`. Host phải quyết định policy trong hook và từ chối khi cần xác nhận nhưng `ctx.hasUI` là false. Lời gọi bị chặn trở thành Tool result lỗi, nhờ đó model có thể giải thích việc từ chối hoặc chọn thao tác khác. Với agent core, truyền policy tương đương của ứng dụng qua `new Agent({ beforeToolCall })`.
 
+`user_bash` chặn các lệnh `!` / `!!` do người dùng nhập. Handler trả `undefined` chỉ để tiếp tục truyền event. Response đã xử lý phải là đúng một object hợp lệ `{ operations }` hoặc `{ result }`: `operations` cung cấp `BashOperations`, còn `result` cung cấp một `BashResult` đầy đủ. Nếu mọi handler đều trả `undefined`, Pi có thể thực thi lệnh cục bộ.
+
+Với `user_bash`, exception hoặc giá trị đã định nghĩa không hợp lệ sẽ hủy lệnh; không handler tiếp theo hay thực thi cục bộ nào được chạy sau lỗi đó. Các giá trị như `null`, `false`, `{}` hoặc object chứa cả hai phương án đều không hợp lệ. Event Extension này có ranh giới lỗi riêng. Bash Tool dựng sẵn tuân theo `AgentTool.execute`: lỗi thực thi trở thành Tool result lỗi như mô tả ở trên.
+
 ## Kiểm soát lifecycle và ranh giới bảo mật
 
 ### Kích hoạt, chạy đồng thời và kết thúc
@@ -360,7 +370,7 @@ Dùng cơ chế điều khiển Tool đang hoạt động cho hành vi của ses
 
 Coi đối số từ model là dữ liệu không tin cậy ngay cả sau schema validation. TypeBox kiểm tra shape, giới hạn và literal; nó không quyết định một customer ID, đường dẫn, URL hay shell command có được phép hay không. Kiểm tra lại các quy tắc đó ngay cạnh thao tác tạo side effect. Handler của Extension `tool_call` có thể sửa `event.input`, và Pi không kiểm tra schema lại sau thay đổi này, nên handler sửa input phải giữ hoặc tự kiểm tra lại các bất biến của schema.
 
-Đừng suy ra working directory cố định từ đối số của built-in Tool factory. Trong Pi 0.85.0, `bash`, `edit`, `find`, `grep`, `ls`, `read` và `write` dùng `ctx.cwd` của lời gọi hiện tại để xác định working directory và phân giải relative path; `cwd` truyền vào factory chỉ là fallback khi không có execution context, nên các Tool này không bị cố định vĩnh viễn tại thời điểm load. Custom Tool vẫn phải tự bảo vệ ranh giới authorization: dùng context hiện tại không khiến một path bất kỳ trở nên an toàn.
+Đừng suy ra working directory cố định từ đối số của built-in Tool factory. Trong Pi 0.87.1, `bash`, `edit`, `find`, `grep`, `ls`, `read` và `write` dùng `ctx.cwd` của lời gọi hiện tại để xác định working directory và phân giải relative path; `cwd` truyền vào factory chỉ là fallback khi không có execution context, nên các Tool này không bị cố định vĩnh viễn tại thời điểm load. Custom Tool vẫn phải tự bảo vệ ranh giới authorization: dùng context hiện tại không khiến một path bất kỳ trở nên an toàn.
 
 Với Tool đọc một file đã tồn tại trong project, phân giải cả thư mục gốc lẫn file đích bằng `realpath()` rồi kiểm tra containment. Đoạn sau là mã ứng dụng, không phải helper của Pi:
 
@@ -465,7 +475,7 @@ Không chạy `agent-session.ts` cho cách này. Từ thư mục gốc của d�
 node --env-file=.env ./node_modules/@earendil-works/pi-coding-agent/dist/cli.js "What is the weather in Tokyo?"
 ```
 
-Khi CLI khởi động ở chế độ interactive, chỉ chấp nhận project-trust prompt sau khi review các resource của dự án; nếu từ chối, Pi sẽ bỏ qua Extension cục bộ. [Hướng dẫn Extensions](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/docs/extensions.md#extension-locations) đã ghim mô tả các vị trí được phát hiện, cách reload và ranh giới trust đó.
+Khi CLI khởi động ở chế độ interactive, chỉ chấp nhận project-trust prompt sau khi review các resource của dự án; nếu từ chối, Pi sẽ bỏ qua Extension cục bộ. [Hướng dẫn Extensions](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/extensions.md#extension-locations) đã ghim mô tả các vị trí được phát hiện, cách reload và ranh giới trust đó.
 
 Khi debug toàn bộ loop, hãy subscribe trước khi gọi `prompt()`. Ghi log `tool_execution_start`, `tool_execution_update` và `tool_execution_end`; che payload nếu chúng có thể chứa dữ liệu người dùng hoặc credential.
 

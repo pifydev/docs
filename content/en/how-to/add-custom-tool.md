@@ -4,8 +4,8 @@ description: Define a typed Tool, register it with agent core or Coding Agent, a
 translation_key: how-to-add-custom-tool
 language: en
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/README.md#tools"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/docs/extensions.md#custom-tools"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/README.md#tools"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/extensions.md#custom-tools"
 terms_used:
   - AgentTool
   - ToolDefinition
@@ -159,6 +159,12 @@ execute: (
 `params` has already passed schema validation. Forward `signal` to cancellable I/O and check it around work that cannot accept a signal. Call `onUpdate` with a complete partial `AgentToolResult`: both `content` and `details` are required. The callback produces `tool_execution_update` events; only the final returned result is sent to the model.
 
 Throw an `Error` when execution fails. Agent core catches it, emits `tool_execution_end` with `isError: true`, and creates an error `ToolResultMessage`. Return ordinary content only for success. Error messages are model-visible, so remove credentials, headers, private paths, and raw upstream response bodies before throwing.
+
+In Pi 0.87.1, `ToolCall.arguments` is a `JsonObject`, and `ToolResultMessage.details` contains JSON-compatible data. Keep custom Tool inputs and persisted details serializable: encode dates as strings and keep functions, class instances, and process handles outside the transcript. The Tool's schema still determines which JSON argument shapes it accepts.
+
+`ToolResultMessage<TDetails = JsonValue>` is a conditional type. For a compatible detail type it exposes `details?: JsonRepresentation<TDetails>`; an incompatible type resolves to `never`. Use a concrete JSON-compatible detail type and handle an absent `details` value. The runtime `AgentToolResult<TDetails>` remains a separate generic contract; assigning a detail type there does not prove that it can be persisted as a Tool result message.
+
+`JsonValue` includes `readonly JsonValue[]`. Consumers must copy an array before mutating it, or accept a readonly parameter. Exhaustive TypeScript handling must cover `null`, primitives, readonly arrays, and objects; use a type guard that narrows to `readonly JsonValue[]` when needed. These declarations add no runtime validation or freezing: still check untrusted values and reject cycles or other data your serialization cannot represent.
 
 ## 3. Register the Tool with the agent
 
@@ -344,6 +350,10 @@ export default function weatherExtension(pi: ExtensionAPI): void {
 
 There is no current `requiresPermission` Tool field. Decide policy in the host hook and fail closed when approval is required but `ctx.hasUI` is false. A blocked call becomes an error Tool result, so the model can explain the denial or choose another action. For agent core, supply the equivalent application policy through `new Agent({ beforeToolCall })`.
 
+`user_bash` intercepts user-entered `!` / `!!` commands. A handler returns `undefined` only to continue propagation. A handled response is exactly one valid `{ operations }` or `{ result }` object: `operations` supplies `BashOperations`, while `result` supplies a complete `BashResult`. If all handlers return `undefined`, Pi may execute the command locally.
+
+For `user_bash`, an exception or invalid defined value aborts the command; no later handler or local execution may run after that failure. Values such as `null`, `false`, `{}`, or an object containing both alternatives are invalid. This Extension event has its own failure boundary. The built-in Bash Tool follows `AgentTool.execute`: its execution failures become error Tool results as described above.
+
 ## Control lifecycle and security boundaries
 
 ### Activation, concurrency, and termination
@@ -360,7 +370,7 @@ Use active-Tool controls for session behavior, not as a substitute for authoriza
 
 Treat model arguments as untrusted even after schema validation. TypeBox checks shape, bounds, and literals; it cannot decide whether a customer ID, filesystem path, URL, or shell command is authorized. Recheck those rules next to the effect. An Extension `tool_call` handler may mutate `event.input`, and Pi does not revalidate after that mutation, so a mutating handler must preserve or recheck the schema invariants.
 
-Do not infer a permanent working directory from the built-in Tool factory argument. In Pi 0.85.0, `bash`, `edit`, `find`, `grep`, `ls`, `read`, and `write` use the live invocation `ctx.cwd` for working-directory and relative-path resolution, with their factory `cwd` only as the fallback when no execution context is present. A custom Tool still owns its authorization boundary: using the current context does not make an arbitrary path safe.
+Do not infer a permanent working directory from the built-in Tool factory argument. In Pi 0.87.1, `bash`, `edit`, `find`, `grep`, `ls`, `read`, and `write` use the live invocation `ctx.cwd` for working-directory and relative-path resolution, with their factory `cwd` only as the fallback when no execution context is present. A custom Tool still owns its authorization boundary: using the current context does not make an arbitrary path safe.
 
 For a Tool that reads an existing project file, resolve both the root and target through `realpath()` and then enforce containment. The following is application code, not a Pi helper:
 
@@ -465,7 +475,7 @@ Do not run `agent-session.ts` for this route. From the project root, first revie
 node --env-file=.env ./node_modules/@earendil-works/pi-coding-agent/dist/cli.js "What is the weather in Tokyo?"
 ```
 
-At interactive startup, approve the project-trust prompt only after reviewing the project resources; declining trust skips the project-local Extension. The pinned [Extensions guide](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/docs/extensions.md#extension-locations) documents discovery locations, reload behavior, and the same trust boundary.
+At interactive startup, approve the project-trust prompt only after reviewing the project resources; declining trust skips the project-local Extension. The pinned [Extensions guide](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/extensions.md#extension-locations) documents discovery locations, reload behavior, and the same trust boundary.
 
 Subscribe before calling `prompt()` when debugging the full loop. Log `tool_execution_start`, `tool_execution_update`, and `tool_execution_end`; redact the payloads if they can contain user data or credentials.
 

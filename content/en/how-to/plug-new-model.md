@@ -4,9 +4,9 @@ description: Add a model through models.json or a Provider, and implement a stre
 translation_key: how-to-plug-new-model
 language: en
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/docs/models.md"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/docs/custom-provider.md"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/README.md#custom-providers"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/models.md"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/custom-provider.md"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/README.md#custom-providers"
 terms_used:
   - Models
   - Provider
@@ -298,24 +298,43 @@ export default function nativeLocalProvider(pi: ExtensionAPI) {
 }
 ```
 
-`envApiKeyAuth()` checks a stored credential first, then the listed environment variables. For a custom resolver, implement the public `ApiKeyAuth.resolve({ ctx, credential, signal })` method and read environment values through `ctx.env()`. Its `AuthResult` can return request auth, provider-scoped `env`, and a source label. There is no public `AuthResolver` type in `0.85.0`; do not import or invent one. SDK callers can inspect resolved state with `Models.getAuth()`.
+`envApiKeyAuth()` checks a stored credential first, then the listed environment variables. For a custom resolver, implement the public `ApiKeyAuth.resolve({ ctx, credential, signal })` method and read environment values through `ctx.env()`. Its `AuthResult` can return request auth, provider-scoped `env`, and a source label. There is no public `AuthResolver` type in `0.87.1`; do not import or invent one. SDK callers can inspect resolved state with `Models.getAuth()`.
 
 Built-in factories follow the same contract. For example, `openaiProvider()` is exported from `@earendil-works/pi-ai/providers/openai`. Use a factory when its catalog, auth, and API mix already match your service; use `createProvider()` for your own composition.
 
 ## 5. Implement an API adapter only for a new protocol
 
-An API adapter converts Pi `Context` messages and Tools into the remote payload, then converts the response into one `AssistantMessageEventStream`. Model metadata stays in `Model`. This method surface is a reference excerpt, not a runnable adapter:
+`ProviderStreams.stream()` and `streamSimple()` receive a normalized `TranscriptContext`. Only Pi normalization through `normalizeContext()` produces this branded type; callers must not cast a raw `Context` into it. `Models.stream*()` accepts the public `Context` shorthand and performs normalization before dispatching to the provider.
+
+The transcript's `system` messages carry prompt and Tool declarations. Replay them in order: `content` adds instructions, `sections` replaces or removes named prompt sections, and `toolsAdded` / `toolsRemoved` changes the available Tool set. Use `getCurrentSystemPrompt(context.messages)` and `getCurrentTools(context.messages)` to derive current request state. Preserve system-message positions when the transport supports them; Pi's transcript helpers can collapse that state for APIs that do not.
+
+```ts title="provider-context.ts"
+import {
+  getCurrentSystemPrompt,
+  getCurrentTools,
+  type TranscriptContext,
+} from "@earendil-works/pi-ai";
+
+function inspectProviderContext(context: TranscriptContext) {
+  return {
+    systemPrompt: getCurrentSystemPrompt(context.messages),
+    tools: getCurrentTools(context.messages),
+  };
+}
+```
+
+An API adapter converts that transcript into the remote payload, then converts the response into one `AssistantMessageEventStream`. Model metadata stays in `Model`. This method surface is a reference excerpt, not a runnable adapter:
 
 ```ts title="ProviderStreams contract (reference excerpt)"
 interface ProviderStreams {
-  stream(model, context, options?): AssistantMessageEventStream;
-  streamSimple(model, context, options?): AssistantMessageEventStream;
+  stream(model: Model<Api>, context: TranscriptContext, options?: StreamOptions): AssistantMessageEventStream;
+  streamSimple(model: Model<Api>, context: TranscriptContext, options?: SimpleStreamOptions): AssistantMessageEventStream;
   fetchDeferred?(model, handle, options?): AssistantMessageEventStream;
   cancelDeferred?(model, handle, options?): Promise<void>;
 }
 ```
 
-Source: pinned [`ProviderStreams`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/src/types.ts). Parameter types are omitted in the excerpt; import the published interface for the exact signatures.
+Source: pinned [`ProviderStreams`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/types.ts). The deferred-method parameter types and imports are omitted; import the published interface for the full contract.
 
 `streamSimple()` is the provider-neutral entry point: it maps Pi reasoning levels, `toolChoice`, and optional thinking budgets before delegating to the adapter. A production adapter must preserve ordered `start`, indexed `text_*`, `thinking_*`, and `toolcall_*` events and finish with exactly one `done` or `error`. It must also report usage, classify context overflow, keep Tool-call IDs stable across replay, invoke request/response hooks, and stop network and parser work when `options.signal` aborts.
 
@@ -371,7 +390,7 @@ Run every check that applies before claiming support:
 | One retry | Local fixture | One `429` produces exactly two attempts, then content and `"stop"`. |
 | Delayed abort | Local fixture | The result is `"aborted"` and the connection closes without hanging. |
 
-`supportsMidConvoEffort` belongs in `AnthropicMessagesCompat` and defaults to `false`. For built-in models in the Pi 0.85.0 generated catalog, automatic detection lowercases `modelId` first, then strips one optional prefix matching `^~?anthropic/` (`anthropic/` or `~anthropic/`). Pi auto-enables the flag only when `provider` is exactly `anthropic` or `openrouter`. The normalized ID must match exactly `^claude-opus-5(?:-\d{8})?$` or `^claude-(?:fable|mythos)-5(?:[.-]1)(?:-\d{8})?$`. The exact supported model must still use a faithful Anthropic Messages transport; this is not support for all Anthropic-compatible providers or an API that merely imitates the Messages shape.
+`supportsMidConvoEffort` belongs in `AnthropicMessagesCompat` and defaults to `false`. For built-in models in the Pi 0.87.1 generated catalog, automatic detection lowercases `modelId` first, then strips one optional prefix matching `^~?anthropic/` (`anthropic/` or `~anthropic/`). Pi auto-enables the flag only when `provider` is exactly `anthropic` or `openrouter`. The normalized ID must match exactly `^claude-opus-5(?:-\d{8})?$` or `^claude-(?:fable|mythos)-5(?:[.-]1)(?:-\d{8})?$`. The exact supported model must still use a faithful Anthropic Messages transport; this is not support for all Anthropic-compatible providers or an API that merely imitates the Messages shape.
 
 The accepted normalized variants are `claude-opus-5`, optionally followed by `-YYYYMMDD`; `claude-fable-5.1` or `claude-fable-5-1`, each optionally dated; and `claude-mythos-5.1` or `claude-mythos-5-1`, each optionally dated.
 

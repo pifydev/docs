@@ -6,11 +6,11 @@ language: en
 chapter: 6
 source_url: "https://www.dgzhuya.com/modules/ch06-messages"
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/src/types.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/types.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/agent-loop.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/messages.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/session-manager.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/types.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/types.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent-loop.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/messages.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/session-manager.ts"
 terms_used:
   - Message
   - AgentMessage
@@ -18,14 +18,14 @@ terms_used:
   - ToolCall
   - ToolResultMessage
 status: reviewed
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
 
 Chapter 5 ended with a `ToolResultMessage`: the model requested a Tool, Agent core validated and executed it, and the result re-entered the conversation. That explanation used the word _message_ at several different boundaries. A provider request, the Agent's live transcript, the Coding Agent's terminal view, and a resumed JSONL session do not all consume the same representation.
 
-This chapter follows one Bash command across those boundaries. The route exposes a reusable design: keep the richest useful source representation in the application, then derive the narrower model representation immediately before a call. Pi `0.85.0` implements that design with `Message`, extensible `AgentMessage`, Coding Agent `SessionEntry` records, `transformContext`, and `convertToLlm`.
+This chapter follows one Bash command across those boundaries. The route exposes a reusable design: keep the richest useful source representation in the application, then derive the narrower model representation immediately before a call. Pi `0.87.1` implements that design with `Message`, extensible `AgentMessage`, Coding Agent `SessionEntry` records, `transformContext`, and `convertToLlm`.
 
 ## 1. Opening: follow one Bash message
 
@@ -54,22 +54,25 @@ Coding Agent session entries
   -> reconstructed AgentMessage[]
   -> transformContext()          // AgentMessage[] -> AgentMessage[]
   -> convertToLlm()              // AgentMessage[] -> Message[]
-  -> Pi AI provider conversion   // Message[] -> provider wire payload
+  -> normalizeContext()         // { messages: Message[] } -> TranscriptContext
+  -> Pi AI provider conversion   // TranscriptContext -> provider wire payload
 ```
 
 ## 2. Layer one: provider-facing `Message`
 
-`@earendil-works/pi-ai` owns the normalized model-layer contract. Its `Message` union has three roles:
+`@earendil-works/pi-ai` owns the normalized model-layer contract. Its `Message` union has four roles:
 
 ```typescript
-export type Message = UserMessage | AssistantMessage | ToolResultMessage;
+export type Message = SystemMessage | UserMessage | AssistantMessage | ToolResultMessage;
 ```
 
-“Provider-facing” does not mean “identical to an Anthropic, OpenAI, or Google request object.” It means every Pi AI API implementation accepts the same `Context.messages: Message[]`. The selected API implementation then serializes that array into its provider's wire format, including provider-specific rules for Tool results, reasoning replay, images, empty blocks, and role ordering.
+“Provider-facing” does not mean “identical to an Anthropic, OpenAI, or Google request object.” It means every Pi AI API implementation accepts the same `TranscriptContext.messages: Message[]`. The selected API implementation then serializes that array into its provider's wire format, including provider-specific rules for Tool results, reasoning replay, images, empty blocks, and role ordering.
+
+The message IR now includes `SystemMessage`, so prompt and Tool state travel with the conversation. A leading `system` message carries the initial instructions; later system messages append `content`, patch named `sections`, and update `toolsAdded` / `toolsRemoved`. Preserve these messages through `convertToLlm`; an exhaustive `Message.role` switch must handle `system`. Provider adapters receive the normalized `TranscriptContext` and replay system messages to derive request state.
 
 ### The exact message and content shapes
 
-The following complete interface from `packages/ai/src/types.ts` at pinned commit `107d79f1` shows the user-side shape:
+The following complete interface from `packages/ai/src/types.ts` at pinned commit `f07218c4` shows the user-side shape:
 
 ```typescript
 export interface UserMessage {
@@ -101,7 +104,7 @@ export interface ToolCall {
   type: "toolCall";
   id: string;
   name: string;
-  arguments: Record<string, any>;
+  arguments: JsonObject;
   thoughtSignature?: string;
   namespace?: string;
 }
@@ -127,6 +130,7 @@ export interface AssistantMessage {
   model: string;
   responseModel?: string;
   responseId?: string;
+  providerThinkingLevel?: string;
   diagnostics?: AssistantMessageDiagnostic[];
   usage: Usage;
   stopReason: StopReason;
@@ -142,23 +146,31 @@ export interface AssistantMessage {
 
 Opaque continuity values need literal preservation. `textSignature`, `thinkingSignature`, `thoughtSignature`, and `responseId` may encode provider state that a later turn must replay. Application code should not parse or translate them unless the owning Pi AI implementation documents that representation. Content order matters for the same reason: moving a Tool call ahead of its reasoning or text may change both provider replay and what the UI shows.
 
-The Tool result closes the identity edge created by `ToolCall.id`. This is the complete current interface with comments removed:
+The Tool result closes the identity edge created by `ToolCall.id`. This source excerpt preserves the conditional type; `IsJsonCompatible` is an internal predicate whose definition is omitted, not a public import:
 
 ```typescript
-export interface ToolResultMessage<TDetails = any> {
-  role: "toolResult";
-  toolCallId: string;
-  toolName: string;
-  content: (TextContent | ImageContent)[];
-  details?: TDetails;
-  usage?: Usage;
-  addedToolNames?: string[];
-  isError: boolean;
-  timestamp: number;
-}
+export type ToolResultMessage<TDetails = JsonValue> =
+  IsJsonCompatible<TDetails> extends true
+    ? {
+        role: "toolResult";
+        toolCallId: string;
+        toolName: string;
+        content: (TextContent | ImageContent)[];
+        details?: JsonRepresentation<TDetails>;
+        usage?: Usage;
+        isError: boolean;
+        timestamp: number;
+      }
+    : never;
 ```
 
-`toolCallId` must match the originating `ToolCall.id`. `details` remains available to the runtime and UI but provider encoders build the remote Tool result from the content and linkage fields. `usage` can account for work done by the Tool itself. `addedToolNames` marks Tools that became available at this transcript point; providers with native deferred Tool loading consume it, while other providers ignore it.
+`toolCallId` must match the originating `ToolCall.id`; preserve that pairing when filtering or transforming the transcript. `details` remains available to the runtime and UI but provider encoders build the remote Tool result from content and linkage fields. `usage` can account for work done by the Tool itself. Tool availability is recorded on system messages through `toolsAdded` and `toolsRemoved`.
+
+In Pi 0.87.1, `ToolCall.arguments` is a `JsonObject`, and `ToolResultMessage.details` contains JSON-compatible data. Keep custom Tool inputs and persisted details serializable: encode dates as strings and keep functions, class instances, and process handles outside the transcript. The Tool's schema still determines which JSON argument shapes it accepts.
+
+`ToolResultMessage<TDetails = JsonValue>` is a conditional type. For a compatible detail type it exposes `details?: JsonRepresentation<TDetails>`; an incompatible type resolves to `never`. Use a concrete JSON-compatible detail type and handle an absent `details` value. The runtime `AgentToolResult<TDetails>` remains a separate generic contract; assigning a detail type there does not prove that it can be persisted as a Tool result message.
+
+`JsonValue` includes `readonly JsonValue[]`. Consumers must copy an array before mutating it, or accept a readonly parameter. Exhaustive TypeScript handling must cover `null`, primitives, readonly arrays, and objects; use a type guard that narrows to `readonly JsonValue[]` when needed. These declarations add no runtime validation or freezing: still check untrusted values and reject cycles or other data your serialization cannot represent.
 
 ### A complete Tool exchange
 
@@ -213,9 +225,9 @@ The assistant may place text, thinking, and several Tool calls in one ordered co
 
 An Agent product has readers beyond the provider. A terminal wants command, output, status, and truncation fields. A context compactor needs a structured summary record. A branch operation needs to remember where it came from. An extension may need data that persists but never enters a prompt.
 
-Flattening all of that into `UserMessage.content` at creation time would make the model call easy and every later consumer poorer. A resumed UI could not recover the original exit code or decide how to render a summary. Keeping only custom objects would fail in the other direction because Pi AI accepts only the three shared roles.
+Flattening all of that into `UserMessage.content` at creation time would make the model call easy and every later consumer poorer. A resumed UI could not recover the original exit code or decide how to render a summary. Keeping only custom objects would fail in the other direction because Pi AI accepts only the four shared roles.
 
-Pi therefore keeps richer runtime messages and projects them late. In Coding Agent `0.85.0`, the four application roles declared in `packages/coding-agent/src/core/messages.ts` are:
+Pi therefore keeps richer runtime messages and projects them late. In Coding Agent `0.87.1`, the four application roles declared in `packages/coding-agent/src/core/messages.ts` are:
 
 ```text
 AgentMessage
@@ -303,7 +315,7 @@ Agent core never teaches provider adapters about arbitrary application roles. Im
 
 ### When conversion runs and how failures cross the boundary
 
-`AgentLoopConfig.convertToLlm` is required and accepts a synchronous or asynchronous result. `AgentOptions.convertToLlm` is optional because the `Agent` class supplies a default converter that keeps only `user`, `assistant`, and `toolResult`. That default is safe for UI-only roles, but it also means a custom role is invisible to the model unless the application provides a conversion.
+`AgentLoopConfig.convertToLlm` is required and accepts a synchronous or asynchronous result. `AgentOptions.convertToLlm` is optional because the `Agent` class supplies a default converter that keeps only `system`, `user`, `assistant`, and `toolResult`. That default is safe for UI-only roles, but it also means a custom role is invisible to the model unless the application provides a conversion.
 
 The low-level contract says `convertToLlm` must not throw or reject. It should return a safe fallback, normally the standard messages it can prove valid. Throwing interrupts the low-level loop before a normal provider event sequence can be produced.
 
@@ -317,7 +329,7 @@ At the pinned revision, the base Coding Agent converter applies these rules:
 
 | Input role                        | Model-context result                                                                               |
 | --------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `user`, `assistant`, `toolResult` | Passed through as the same `Message` object                                                        |
+| `system`, `user`, `assistant`, `toolResult` | Passed through as the same `Message` object                                                        |
 | `bashExecution`                   | Omitted when `excludeFromContext`; otherwise one `UserMessage` containing formatted command output |
 | `custom`                          | One `UserMessage`; string content becomes one `TextContent`, array content stays an array          |
 | `branchSummary`                   | One `UserMessage` with `BRANCH_SUMMARY_PREFIX`, the summary, and closing `</summary>`              |
@@ -371,6 +383,7 @@ export function convertToLlm(messages: AgentMessage[]): Message[] {
             ],
             timestamp: m.timestamp,
           };
+        case "system":
         case "user":
         case "assistant":
         case "toolResult":
@@ -430,11 +443,7 @@ if (config.transformContext) {
 
 const llmMessages = await config.convertToLlm(messages);
 
-const llmContext: Context = {
-  systemPrompt: context.systemPrompt,
-  messages: llmMessages,
-  tools: context.tools,
-};
+const llmContext = normalizeContext({ messages: llmMessages });
 
 const response = await streamFunction(config.model, llmContext, {
   ...config,
@@ -445,7 +454,7 @@ const response = await streamFunction(config.model, llmContext, {
 
 `transformContext` is optional and its public signature returns `Promise<AgentMessage[]>`; the loop always awaits it. It can prune history, inject retrieved context, or apply an application context policy while custom fields still exist. Its contract says to return the original messages or another safe fallback rather than reject.
 
-Coding Agent uses this hook for Extension `context` handlers. `ExtensionRunner.emitContext()` starts from a structured clone, awaits handlers in registration order, feeds each returned `messages` array to the next handler, and catches an individual extension error so the remaining pipeline can continue. Coding Agent compaction itself belongs to session reconstruction: a `CompactionEntry` determines which historical entries become the next runtime transcript before this hook runs.
+Coding Agent uses this hook for Extension `context` and `context_with_system` handlers. `ExtensionRunner.emitContext()` starts from a structured clone. It runs `context` handlers on the conversation without system messages and restores prompt and Tool state after each; `context_with_system` handlers then receive the full transcript. Each phase awaits handlers in registration order and catches individual handler errors. Coding Agent compaction belongs to session reconstruction: a `CompactionEntry` determines which historical entries become the next runtime transcript before this hook runs.
 
 `convertToLlm` can also be async, and the loop awaits it after transformation. At that point the application decides model visibility and performs lossy role conversion. Provider selection still happens later. Switching from Anthropic to OpenAI should not require changing an application role converter because Pi AI owns `Message[]`-to-wire conversion.
 
@@ -566,7 +575,7 @@ EACH MODEL CALL
        BashExecutionMessage -> UserMessage, or filter
        branch/compaction/custom -> UserMessage
        standard Message -> pass through
-    -> Context { systemPrompt, messages: Message[], tools }
+    -> normalizeContext({ messages: Message[] }) -> TranscriptContext
     -> streamFunction(model, context, options)
     -> Pi AI API implementation converts Message[] to provider wire data
     -> provider stream becomes one settled AssistantMessage
@@ -593,7 +602,7 @@ Before accepting a custom message path, test these invariants:
 
 ### The stored source and model projection serve different readers
 
-The baseline described “two readers”: the model and the functional layer. Pi `0.85.0` makes the storage boundary explicit enough to name three views:
+The baseline described “two readers”: the model and the functional layer. Pi `0.87.1` makes the storage boundary explicit enough to name three views:
 
 | View                  | Primary reader                                 | Shape                       | May be lossy?                                                        |
 | --------------------- | ---------------------------------------------- | --------------------------- | -------------------------------------------------------------------- |
@@ -625,4 +634,4 @@ The same route emits `message_start`, `message_update`, `message_end`, Tool exec
 
 > Before moving on, trace one `ToolCall` through its ordered `ToolResultMessage`, then through session persistence, `transformContext`, and the next `convertToLlm` pass. If every boundary and owner is clear, the event sequence in Chapter 7 has a concrete data path to attach to.
 
-Source review for this chapter is pinned to Pi `0.85.0` at commit `107d79f11072bbc8a3a757ed7fd69596bee7d68c`. Primary paths are `packages/ai/src/types.ts`, `packages/ai/src/api/transform-messages.ts`, the provider API implementations under `packages/ai/src/api/`, `packages/agent/src/types.ts`, `packages/agent/src/agent-loop.ts`, `packages/agent/src/agent.ts`, `packages/coding-agent/src/core/messages.ts`, `packages/coding-agent/src/core/session-manager.ts`, `packages/coding-agent/src/core/sdk.ts`, `packages/coding-agent/src/core/agent-session.ts`, and `packages/coding-agent/src/core/extensions/runner.ts`.
+Source review for this chapter is pinned to Pi `0.87.1` at commit `f07218c4d4bbc12bef056a7058c3dd49dfe41abe`. Primary paths are `packages/ai/src/types.ts`, `packages/ai/src/api/transform-messages.ts`, the provider API implementations under `packages/ai/src/api/`, `packages/agent/src/types.ts`, `packages/agent/src/agent-loop.ts`, `packages/agent/src/agent.ts`, `packages/coding-agent/src/core/messages.ts`, `packages/coding-agent/src/core/session-manager.ts`, `packages/coding-agent/src/core/sdk.ts`, `packages/coding-agent/src/core/agent-session.ts`, and `packages/coding-agent/src/core/extensions/runner.ts`.

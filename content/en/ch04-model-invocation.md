@@ -6,15 +6,15 @@ language: en
 chapter: 4
 source_url: "https://www.dgzhuya.com/modules/ch04-model-invocation"
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/README.md"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/src/types.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/README.md"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/types.ts"
 terms_used:
   - Model
   - Provider
   - Provider Adapter
   - Stream
 status: reviewed
-last_updated: "2026-09-04"
+last_updated: '2026-09-23'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -27,7 +27,7 @@ Pseudocode: `model`, `context`, and `options` are inputs owned by the caller.
 const stream = models.streamSimple(model, context, options);
 ```
 
-That line crosses a substantial boundary. Pi AI must find the provider that owns the model, resolve its credentials, turn Pi messages and Tools into the provider's request format, consume the provider's streaming dialect, and return one stable event protocol. The implementation at the pinned Pi `0.85.0` revision divides that work among a `Models` collection, provider objects, and API implementations. The old global descriptor/translator registry is available only from the compatibility entry point and is covered later as migration context.
+That line crosses a substantial boundary. Pi AI must find the provider that owns the model, resolve its credentials, turn Pi messages and Tools into the provider's request format, consume the provider's streaming dialect, and return one stable event protocol. The implementation at the pinned Pi `0.87.1` revision divides that work among a `Models` collection, provider objects, and API implementations. The old global descriptor/translator registry is available only from the compatibility entry point and is covered later as migration context.
 
 This chapter opens that boundary without replacing it with a short usage sample. It starts with the provider differences, follows the current dispatch path, then examines streaming, reasoning, caching, aborts, retries, and the work required to add a provider.
 
@@ -113,7 +113,7 @@ A model call cannot branch through all of these rules in Agent Loop code. Pi kee
 
 ## 2. Three boundaries, each with one responsibility
 
-The historical implementation used a global API registry and described API files as translators. Pi `0.85.0` makes ownership explicit. Applications build a `Models` collection from provider factories. Each `Provider` owns a model catalog, authentication behavior, and stream dispatch. API implementations own the wire protocol and normalization. Pseudocode: this boundary map is architectural, not executable syntax.
+The historical implementation used a global API registry and described API files as translators. Pi `0.87.1` makes ownership explicit. Applications build a `Models` collection from provider factories. Each `Provider` owns a model catalog, authentication behavior, and stream dispatch. API implementations own the wire protocol and normalization. Pseudocode: this boundary map is architectural, not executable syntax.
 
 ```text
 Agent Loop or application
@@ -131,14 +131,15 @@ The translation-company analogy still helps if its limits are clear. `Models` is
 
 Dispatch begins with `model.provider`, not `model.api`. The collection looks up that provider, resolves auth, applies an auth-derived `baseUrl` when present, merges request options, and calls the provider. The provider created by `createProvider()` then selects its single API implementation or a map entry keyed by `model.api`.
 
-The following non-self-contained excerpt is from `packages/ai/src/models.ts` at `107d79f11072bbc8a3a757ed7fd69596bee7d68c`. It is the exact `ModelsImpl.streamSimple()` body and depends on private class methods and imported types from that file.
+The following non-self-contained excerpt is from `packages/ai/src/models.ts` at `f07218c4d4bbc12bef056a7058c3dd49dfe41abe`. It is the exact `ModelsImpl.streamSimple()` body and depends on private class methods and imported types from that file.
 
 ```typescript
 streamSimple(model: Model<Api>, context: Context, options?: ModelsSimpleStreamOptions): AssistantMessageEventStream {
+  const transcript = normalizeContext(context);
   return lazyStream(model, async () => {
     const provider = this.requireProvider(model);
     const { requestModel, requestOptions } = await this.applyAuth(model, options);
-    return provider.streamSimple(requestModel, context, requestOptions as SimpleStreamOptions);
+    return provider.streamSimple(requestModel, transcript, requestOptions as SimpleStreamOptions);
   });
 }
 ```
@@ -184,7 +185,7 @@ The provider and API implementation divide a model call into five stages. Pseudo
 ```text
 1. Models resolves provider auth and request headers
 2. Provider selects the API implementation for model.api
-3. API implementation converts Context, messages, Tools, and options
+3. API implementation converts TranscriptContext and options
 4. Provider SDK, HTTP stream, WebSocket, or Bedrock command returns frames
 5. API implementation updates AssistantMessage and emits done or error
 ```
@@ -211,18 +212,18 @@ Pi emits `start` before it begins iterating the SSE body. `message_start` initia
 
 ### The contracts an API implementation must satisfy
 
-The following non-self-contained, source-faithful abridgement contains the exact required stream members from `packages/ai/src/types.ts` at `107d79f11072bbc8a3a757ed7fd69596bee7d68c`. Imported types and the optional deferred methods described above are outside this excerpt.
+The following non-self-contained, source-faithful abridgement contains the exact required stream members from `packages/ai/src/types.ts` at `f07218c4d4bbc12bef056a7058c3dd49dfe41abe`. Imported types and the optional deferred methods described above are outside this excerpt.
 
 ```typescript
 export interface ProviderStreams {
   stream(
     model: Model<Api>,
-    context: Context,
+    context: TranscriptContext,
     options?: StreamOptions,
   ): AssistantMessageEventStream;
   streamSimple(
     model: Model<Api>,
-    context: Context,
+    context: TranscriptContext,
     options?: SimpleStreamOptions,
   ): AssistantMessageEventStream;
 }
@@ -232,12 +233,16 @@ export type StreamFunction<
   TOptions extends StreamOptions = StreamOptions,
 > = (
   model: Model<TApi>,
-  context: Context,
+  context: TranscriptContext,
   options?: TOptions,
 ) => AssistantMessageEventStream;
 ```
 
-The contract has three consequences. An implementation accepts a `Model`, a provider-neutral `Context`, and its option type. Its successful return value is `AssistantMessageEventStream`, regardless of transport. Request, model, and runtime failures after that return belong in the stream as a terminal `error` event whose final message has `stopReason: "error"` or `"aborted"` and an `errorMessage`.
+`ProviderStreams.stream()` and `streamSimple()` receive a normalized `TranscriptContext`. Only Pi normalization through `normalizeContext()` produces this branded type; callers must not cast a raw `Context` into it. `Models.stream*()` accepts the public `Context` shorthand and performs normalization before dispatching to the provider.
+
+The transcript's `system` messages carry prompt and Tool declarations. Replay them in order: `content` adds instructions, `sections` replaces or removes named prompt sections, and `toolsAdded` / `toolsRemoved` changes the available Tool set. Use `getCurrentSystemPrompt(context.messages)` and `getCurrentTools(context.messages)` to derive current request state. Preserve system-message positions when the transport supports them; Pi's transcript helpers can collapse that state for APIs that do not.
+
+An implementation accepts a `Model`, the normalized transcript, and its option type. Its successful return value is `AssistantMessageEventStream`, regardless of transport. Request, model, and runtime failures after that return belong in the stream as a terminal `error` event whose final message has `stopReason: "error"` or `"aborted"` and an `errorMessage`.
 
 `Models.stream*()` also invokes the provider inside `lazyStream()` setup. That wrapper converts provider lookup, auth, lazy import, and synchronous provider-call failures into the outer stream. Direct imports from `@earendil-works/pi-ai/api/*` are lower-level: they bypass `Models` auth and some implementations synchronously reject missing request credentials before returning a stream. Applications that need the normalized setup-error contract should call through `Models`.
 
@@ -249,7 +254,7 @@ The public API supports two distinct tasks. Most applications assemble known pro
 
 ### Scenario 1: call an existing model
 
-This example is self-contained application code for `@earendil-works/pi-ai` `0.85.0`. It uses one tree-shakeable provider factory and only public exports.
+This example is self-contained application code for `@earendil-works/pi-ai` `0.87.1`. It uses one tree-shakeable provider factory and only public exports.
 
 ```typescript
 import { createModels, type Context } from "@earendil-works/pi-ai";
@@ -316,7 +321,7 @@ A `Model` records both routing keys. `provider` names the collection owner; `api
 
 ### Scenario 2: add a provider or a new wire protocol
 
-For an OpenAI-compatible endpoint, reuse the existing lazy API implementation and define only provider-owned concerns. This self-contained construction example compiles against the public `0.85.0` exports; it creates the provider and catalog without making a network request.
+For an OpenAI-compatible endpoint, reuse the existing lazy API implementation and define only provider-owned concerns. This self-contained construction example compiles against the public `0.87.1` exports; it creates the provider and catalog without making a network request.
 
 ```typescript
 import {
@@ -370,7 +375,7 @@ A genuinely new wire protocol requires more work than registering a model. Pseud
 ```text
 define the API ID and typed options
   -> implement ProviderStreams.stream and streamSimple
-  -> convert Context, messages, Tools, and options into the wire request
+  -> convert TranscriptContext and options into the wire request
   -> convert every response path into normalized Pi events
   -> wrap the implementation lazily when SDK loading is expensive
   -> createProvider({ id, auth, models, api })
@@ -419,7 +424,7 @@ googleThinking.thinkingConfig = {
 };
 ```
 
-Pi 0.85.0 exports two Google-specific types from the side-effect-free package root, and their casing marks different semantic boundaries. `GoogleApiThinkingLevel` is the API-facing enum-like union `"THINKING_LEVEL_UNSPECIFIED" | "MINIMAL" | "LOW" | "MEDIUM" | "HIGH"`; it belongs in `GoogleOptions.thinking.level` and `GoogleVertexOptions.thinking.level`. `ResolvedGoogleThinkingLevel` is the adapter's normalized union `"minimal" | "low" | "medium" | "high"`, produced after Pi resolves a model's semantic `ModelThinkingLevel`. It deliberately excludes `off`, `xhigh`, and `max` because resolution maps or rejects those before request construction.
+Pi 0.87.1 exports two Google-specific types from the side-effect-free package root, and their casing marks different semantic boundaries. `GoogleApiThinkingLevel` is the API-facing enum-like union `"THINKING_LEVEL_UNSPECIFIED" | "MINIMAL" | "LOW" | "MEDIUM" | "HIGH"`; it belongs in `GoogleOptions.thinking.level` and `GoogleVertexOptions.thinking.level`. `ResolvedGoogleThinkingLevel` is the adapter's normalized union `"minimal" | "low" | "medium" | "high"`, produced after Pi resolves a model's semantic `ModelThinkingLevel`. It deliberately excludes `off`, `xhigh`, and `max` because resolution maps or rejects those before request construction.
 
 ```typescript
 import type {
@@ -437,7 +442,7 @@ const adapterLevel: ResolvedGoogleThinkingLevel = "high";
 void [googleOptions, adapterLevel];
 ```
 
-`supportsMidConvoEffort` belongs to `AnthropicMessagesCompat` and defaults to `false`. For built-in models in the Pi 0.85.0 generated catalog, automatic detection lowercases `modelId` first, then strips one optional prefix matching `^~?anthropic/` (`anthropic/` or `~anthropic/`). Pi auto-enables the flag only when `provider` is exactly `anthropic` or `openrouter`. The normalized ID must match exactly `^claude-opus-5(?:-\d{8})?$` or `^claude-(?:fable|mythos)-5(?:[.-]1)(?:-\d{8})?$`. The exact supported model must still use a faithful Anthropic Messages transport; this is not support for all Anthropic-compatible providers or an API that merely imitates the Messages shape.
+`supportsMidConvoEffort` belongs to `AnthropicMessagesCompat` and defaults to `false`. For built-in models in the Pi 0.87.1 generated catalog, automatic detection lowercases `modelId` first, then strips one optional prefix matching `^~?anthropic/` (`anthropic/` or `~anthropic/`). Pi auto-enables the flag only when `provider` is exactly `anthropic` or `openrouter`. The normalized ID must match exactly `^claude-opus-5(?:-\d{8})?$` or `^claude-(?:fable|mythos)-5(?:[.-]1)(?:-\d{8})?$`. The exact supported model must still use a faithful Anthropic Messages transport; this is not support for all Anthropic-compatible providers or an API that merely imitates the Messages shape.
 
 The accepted normalized variants are `claude-opus-5`, optionally followed by `-YYYYMMDD`; `claude-fable-5.1` or `claude-fable-5-1`, each optionally dated; and `claude-mythos-5.1` or `claude-mythos-5-1`, each optionally dated.
 
@@ -474,7 +479,7 @@ Agent turns normally resend a growing conversation prefix. Prompt caching can av
 export type CacheRetention = "none" | "short" | "long";
 ```
 
-This source-faithful declaration is from `packages/ai/src/types.ts` at `107d79f11072bbc8a3a757ed7fd69596bee7d68c`. Resolution has three steps: an explicit `cacheRetention` option wins; otherwise the compatibility override `PI_CACHE_RETENTION=long` selects `long`; otherwise the adapter uses `short`. A provider-scoped value in `options.env` takes precedence over `process.env`. The resolved `long` preference is honored only where model and API compatibility metadata support it.
+This source-faithful declaration is from `packages/ai/src/types.ts` at `f07218c4d4bbc12bef056a7058c3dd49dfe41abe`. Resolution has three steps: an explicit `cacheRetention` option wins; otherwise the compatibility override `PI_CACHE_RETENTION=long` selects `long`; otherwise the adapter uses `short`. A provider-scoped value in `options.env` takes precedence over `process.env`. The resolved `long` preference is honored only where model and API compatibility metadata support it.
 
 | Adapter family                     | `none`                                                                            | `short`                                                                                                                                                                   | `long` and placement                                                                                                                  |
 | ---------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
@@ -489,7 +494,7 @@ The baseline's fixed pricing ratios and savings estimate are not part of Pi's AP
 
 ### Errors, retry boundaries, abort, and overflow
 
-The following non-self-contained excerpt is from `packages/ai/src/api/lazy.ts` at `107d79f11072bbc8a3a757ed7fd69596bee7d68c`. It shows the exact setup-error path; `setup`, `forwardStream`, `createSetupErrorMessage`, and `outer` are defined in the surrounding function.
+The following non-self-contained excerpt is from `packages/ai/src/api/lazy.ts` at `f07218c4d4bbc12bef056a7058c3dd49dfe41abe`. It shows the exact setup-error path; `setup`, `forwardStream`, `createSetupErrorMessage`, and `outer` are defined in the surrounding function.
 
 ```typescript
 setup()
@@ -519,11 +524,12 @@ The complete route can now be read without the retired global registry. Pseudoco
 
 ```text
 models.streamSimple(model, context, sharedOptions)
+  -> Models normalizes Context into TranscriptContext
   -> Models locates model.provider
   -> Models resolves auth and final request headers
   -> Provider selects ProviderStreams for model.api
   -> streamSimple translates reasoning and shared options
-  -> API adapter converts Context and sends the provider request
+  -> API adapter converts TranscriptContext and sends the provider request
   -> adapter normalizes streaming blocks, usage, stop reasons, and errors
   -> AssistantMessageEventStream exposes events and result()
   -> Agent Loop consumes only Pi messages and Pi event types
@@ -545,6 +551,6 @@ Compatibility APIs can preserve an old call shape during migration, but they sho
 
 The model boundary returns normalized `ToolCall` blocks, but it does not execute them. The next chapter follows a Tool call through schema validation, scheduling, safety hooks, execution, progress, and the `ToolResultMessage` sent back to the model.
 
-Source review for this chapter is pinned to Pi `0.85.0` at commit `107d79f11072bbc8a3a757ed7fd69596bee7d68c`. The primary files are `packages/ai/src/models.ts`, `types.ts`, `api/lazy.ts`, `api/simple-options.ts`, the Anthropic/OpenAI/Google/Bedrock API implementations, `utils/event-stream.ts`, `utils/provider-retry.ts`, `utils/overflow.ts`, and the provider factories under `packages/ai/src/providers/`.
+Source review for this chapter is pinned to Pi `0.87.1` at commit `f07218c4d4bbc12bef056a7058c3dd49dfe41abe`. The primary files are `packages/ai/src/models.ts`, `types.ts`, `api/lazy.ts`, `api/simple-options.ts`, the Anthropic/OpenAI/Google/Bedrock API implementations, `utils/event-stream.ts`, `utils/provider-retry.ts`, `utils/overflow.ts`, and the provider factories under `packages/ai/src/providers/`.
 
 [Chapter 5: Tool system](ch05-tool-system.md)

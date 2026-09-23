@@ -1,27 +1,27 @@
 ---
 title: Tham chiếu API
-description: Bản đồ chọn lọc các entry point của package Pi lõi và thử nghiệm ở phiên bản 0.85.0.
+description: Bản đồ chọn lọc các entry point của package Pi lõi và thử nghiệm ở phiên bản 0.87.1.
 translation_key: reference-api
 language: vi
 official_refs:
-  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/src/types.ts'
-  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/settings-manager.ts'
-  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/extensions/types.ts'
-  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/modes/interactive/components/custom-editor.ts'
-  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/modes/rpc/rpc-types.ts'
-  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/utils/mime.ts'
-  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/client/src/index.ts'
-  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/client/README.md'
-  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/protocol/src/index.ts'
-  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/protocol/README.md'
-  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/server/src/index.ts'
-  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/server/README.md'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/types.ts'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/settings-manager.ts'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/extensions/types.ts'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/modes/interactive/components/custom-editor.ts'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/modes/rpc/rpc-types.ts'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/utils/mime.ts'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/client/src/index.ts'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/client/README.md'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/protocol/src/index.ts'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/protocol/README.md'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/server/src/index.ts'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/server/README.md'
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 ---
 
-Tài liệu tham chiếu tích hợp có chọn lọc này không liệt kê toàn bộ export chuyên biệt và UI. Nội dung áp dụng cho upstream commit `107d79f11072bbc8a3a757ed7fd69596bee7d68c`, các package root ở phiên bản `0.85.0` và Node.js `22.19` trở lên.
+Tài liệu tham chiếu tích hợp có chọn lọc này không liệt kê toàn bộ export chuyên biệt và UI. Nội dung áp dụng cho upstream commit `f07218c4d4bbc12bef056a7058c3dd49dfe41abe`, các package root ở phiên bản `0.87.1` và Node.js `22.19` trở lên.
 
 - `@earendil-works/pi-ai` quản lý provider collection, metadata của model, authentication, message và LLM stream.
 - `@earendil-works/pi-agent-core` bổ sung agent loop, thực thi tool, state, queue và lifecycle event.
@@ -109,6 +109,25 @@ models.setProvider(local);
 
 Một `Provider` native cung cấp identity, auth, `getModels()`, `refreshModels()` tùy chọn và các stream method. `createProvider({ fetchModels })` quản lý dynamic overlay. Adapter cho protocol mới phải trả về `AssistantMessageEventStream` và tuân thủ terminal-event contract.
 
+`ProviderStreams.stream()` và `streamSimple()` nhận `TranscriptContext` đã chuẩn hóa. Chỉ bước chuẩn hóa của Pi qua `normalizeContext()` tạo ra kiểu có brand này; caller không được ép kiểu một `Context` thô thành nó. `Models.stream*()` nhận dạng viết gọn `Context` công khai và chuẩn hóa trước khi chuyển cho provider.
+
+Các message `system` trong transcript chứa prompt và khai báo Tool. Phát lại chúng theo thứ tự: `content` thêm chỉ dẫn, `sections` thay hoặc xóa các phần prompt có tên, còn `toolsAdded` / `toolsRemoved` thay đổi tập Tool khả dụng. Dùng `getCurrentSystemPrompt(context.messages)` và `getCurrentTools(context.messages)` để lấy trạng thái request hiện tại. Giữ vị trí system message khi transport hỗ trợ; các transcript helper của Pi có thể gộp trạng thái này cho API không hỗ trợ.
+
+```ts title="provider-context.ts"
+import {
+  getCurrentSystemPrompt,
+  getCurrentTools,
+  type TranscriptContext,
+} from "@earendil-works/pi-ai";
+
+function inspectProviderContext(context: TranscriptContext) {
+  return {
+    systemPrompt: getCurrentSystemPrompt(context.messages),
+    tools: getCurrentTools(context.messages),
+  };
+}
+```
+
 ### Streaming và completion
 
 `stream()` và `complete()` nhận option riêng của từng API. `streamSimple()` và `completeSimple()` nhận các option portable cho reasoning, retry, transport, abort cùng payload/response hook, rồi chuyển chúng sang API được chọn.
@@ -183,7 +202,7 @@ const normalizedBudgets: Record<ResolvedGoogleThinkingLevel, number> = {
 void [options, normalizedBudgets];
 ```
 
-Các declaration chọn lọc dưới đây giữ nguyên chữ ký member tùy chọn được Pi 0.85.0 phát hành; chúng không lặp lại những member khác của các interface:
+Các declaration chọn lọc dưới đây giữ nguyên chữ ký member tùy chọn được Pi 0.87.1 phát hành; chúng không lặp lại những member khác của các interface:
 
 ```ts title="compatibility-types.ts"
 export interface OpenAICompletionsCompat {
@@ -201,7 +220,7 @@ export interface AnthropicMessagesCompat {
 
 `vllmPriority` chỉ thuộc `OpenAICompletionsCompat`: giá trị thấp hơn được xử lý sớm hơn, mặc định của vLLM server là `0`, và field chỉ có ý nghĩa với `--scheduling-policy priority`. Tính năng này tắt theo mặc định và không được đặt trong generated model catalog.
 
-`supportsMaxOutputTokens` thuộc `OpenAIResponsesCompat` và mặc định là `true`; đặt thành `false` khi gateway tương thích Responses từ chối `max_output_tokens`. `supportsMidConvoEffort` thuộc `AnthropicMessagesCompat` và mặc định là `false`. Với model tích hợp sẵn trong generated catalog của Pi 0.85.0, automatic detection chuyển `modelId` thành chữ thường trước, sau đó bỏ một prefix tùy chọn khớp `^~?anthropic/` (`anthropic/` hoặc `~anthropic/`). Pi chỉ tự động bật cờ khi `provider` chính xác là `anthropic` hoặc `openrouter`. ID đã chuẩn hóa phải khớp chính xác `^claude-opus-5(?:-\d{8})?$` hoặc `^claude-(?:fable|mythos)-5(?:[.-]1)(?:-\d{8})?$`. Đúng model được hỗ trợ vẫn phải chạy trên transport Anthropic Messages trung thực; điều này không có nghĩa mọi provider tương thích Anthropic hoặc API chỉ bắt chước hình dạng Messages đều được hỗ trợ.
+`supportsMaxOutputTokens` thuộc `OpenAIResponsesCompat` và mặc định là `true`; đặt thành `false` khi gateway tương thích Responses từ chối `max_output_tokens`. `supportsMidConvoEffort` thuộc `AnthropicMessagesCompat` và mặc định là `false`. Với model tích hợp sẵn trong generated catalog của Pi 0.87.1, automatic detection chuyển `modelId` thành chữ thường trước, sau đó bỏ một prefix tùy chọn khớp `^~?anthropic/` (`anthropic/` hoặc `~anthropic/`). Pi chỉ tự động bật cờ khi `provider` chính xác là `anthropic` hoặc `openrouter`. ID đã chuẩn hóa phải khớp chính xác `^claude-opus-5(?:-\d{8})?$` hoặc `^claude-(?:fable|mythos)-5(?:[.-]1)(?:-\d{8})?$`. Đúng model được hỗ trợ vẫn phải chạy trên transport Anthropic Messages trung thực; điều này không có nghĩa mọi provider tương thích Anthropic hoặc API chỉ bắt chước hình dạng Messages đều được hỗ trợ.
 
 Các biến thể ID đã chuẩn hóa được chấp nhận gồm `claude-opus-5`, có thể kèm `-YYYYMMDD`; `claude-fable-5.1` hoặc `claude-fable-5-1`, mỗi ID có thể kèm ngày; và `claude-mythos-5.1` hoặc `claude-mythos-5-1`, mỗi ID có thể kèm ngày.
 
@@ -211,7 +230,7 @@ Khi có cost tier, hệ thống so sánh `input + cacheRead + cacheWrite` với 
 
 ### Context, message và tool
 
-`Context` chứa `systemPrompt` tùy chọn, `Message[]` và `Tool[]` tùy chọn. `Message` là provider-facing union của user message, assistant message và tool-result message. Parameter của tool là schema TypeBox; khi làm việc bên dưới Agent Core, hãy validate argument trước khi chạy tool.
+`Context` chứa `systemPrompt` tùy chọn, `Message[]` và `Tool[]` tùy chọn. `Message` là union của system message, user message, assistant message và tool-result message. Phần triển khai provider nhận các message đó trong `TranscriptContext`. Parameter của tool là schema TypeBox; khi làm việc bên dưới Agent Core, hãy validate argument trước khi chạy tool.
 
 ```ts title="context.ts"
 import { Type, type Context, type Tool } from "@earendil-works/pi-ai";
@@ -232,6 +251,12 @@ console.log(context.tools?.[0]?.name);
 ```
 
 Content của `AssistantMessage` gồm text, thinking hoặc tool-call block, kèm usage, cost, stop reason và metadata tùy chọn cho error hoặc deferred response. Khi replay conversation, hãy persist opaque signature nguyên vẹn.
+
+Trong Pi 0.87.1, `ToolCall.arguments` có kiểu `JsonObject`, còn `ToolResultMessage.details` chứa dữ liệu tương thích JSON. Giữ input và details cần lưu của custom Tool ở dạng tuần tự hóa được: mã hóa ngày thành chuỗi, để function, class instance và process handle ngoài transcript. Schema của Tool vẫn quyết định những dạng đối số JSON được chấp nhận.
+
+`ToolResultMessage<TDetails = JsonValue>` là kiểu có điều kiện. Với kiểu details tương thích, nó có `details?: JsonRepresentation<TDetails>`; kiểu không tương thích cho kết quả `never`. Dùng kiểu details cụ thể tương thích JSON và xử lý trường hợp không có `details`. `AgentToolResult<TDetails>` ở runtime vẫn là contract generic riêng; gán kiểu details ở đó không chứng minh dữ liệu có thể được lưu thành Tool result message.
+
+`JsonValue` chứa `readonly JsonValue[]`. Consumer phải sao chép mảng trước khi sửa, hoặc nhận parameter readonly. Khi xử lý đầy đủ các nhánh trong TypeScript, cần bao quát `null`, kiểu nguyên thủy, mảng readonly và object; dùng type guard thu hẹp về `readonly JsonValue[]` khi cần. Các declaration này không bổ sung kiểm tra dữ liệu ở runtime hay đóng băng object: vẫn phải kiểm tra dữ liệu không đáng tin cậy và từ chối vòng tham chiếu hoặc giá trị cơ chế tuần tự hóa không biểu diễn được.
 
 ### Stream event
 
@@ -293,7 +318,7 @@ const events = agentLoop(
     convertToLlm: (messages) =>
       messages.filter(
         (message): message is Message =>
-          message.role === "user" || message.role === "assistant" || message.role === "toolResult",
+          message.role === "system" || message.role === "user" || message.role === "assistant" || message.role === "toolResult",
       ),
   },
   undefined,
@@ -322,7 +347,7 @@ const config = {
   convertToLlm: (messages) =>
     messages.filter(
       (message): message is Message =>
-        message.role === "user" || message.role === "assistant" || message.role === "toolResult",
+        message.role === "system" || message.role === "user" || message.role === "assistant" || message.role === "toolResult",
     ),
   toolExecution: "parallel",
   shouldStopAfterTurn: ({ toolResults }) => toolResults.some((result) => result.isError),
@@ -449,7 +474,7 @@ Truyền `entries` sẽ khôi phục parent-linked tree mà không bật cơ ch�
 
 Package root export `DEFAULT_COMPACTION_SETTINGS`, `shouldCompact()`, `compact()`, `generateSummary()`, `generateSummaryWithUsage()`, `generateBranchSummary()` cùng các type public liên quan đến result, setting, preparation và file operation. Package không export helper nội bộ `getSummarizationFailure()`. Tuy vậy, các đường generation tích hợp sẵn cho compaction, turn-prefix và branch summary đều áp dụng phép kiểm tra đó bên trong: response kết thúc bằng `stopReason: "length"` là chưa hoàn chỉnh và không được lưu thành summary checkpoint. Branch summary generation hiện yêu cầu tối đa 4.096 output token, đồng thời bị giới hạn thêm bởi model limit dương nhỏ hơn.
 
-Fragment `Settings` dưới đây là shape source-level internal của `settings.json` được trích chính xác; nó không được export hay import như public API, còn `SettingsManager` và các settings type chọn lọc là public surface có thể import của `@earendil-works/pi-coding-agent` 0.85.0.
+Fragment `Settings` dưới đây là shape source-level internal của `settings.json` được trích chính xác; nó không được export hay import như public API, còn `SettingsManager` và các settings type chọn lọc là public surface có thể import của `@earendil-works/pi-coding-agent` 0.87.1.
 
 ```ts title="thinking-settings-types.ts"
 interface Settings {
@@ -528,6 +553,12 @@ Editor mặc định tự động nhúng working indicator vào viền editor. C
 | Entry từ extension hoặc `customTools` | Do host đăng ký; vẫn được lọc bởi `tools`, `excludeTools` và `noTools` |
 
 Quyền truy cập tool là policy của ứng dụng. SDK hiện tại không cung cấp switch `--yolo` trong baseline.
+
+#### Event `user_bash`
+
+`user_bash` chặn các lệnh `!` / `!!` do người dùng nhập. Handler trả `undefined` chỉ để tiếp tục truyền event. Response đã xử lý phải là đúng một object hợp lệ `{ operations }` hoặc `{ result }`: `operations` cung cấp `BashOperations`, còn `result` cung cấp một `BashResult` đầy đủ. Nếu mọi handler đều trả `undefined`, Pi có thể thực thi lệnh cục bộ.
+
+Với `user_bash`, exception hoặc giá trị đã định nghĩa không hợp lệ sẽ hủy lệnh; không handler tiếp theo hay thực thi cục bộ nào được chạy sau lỗi đó. Các giá trị như `null`, `false`, `{}` hoặc object chứa cả hai phương án đều không hợp lệ. Event Extension này có ranh giới lỗi riêng. Bash Tool dựng sẵn tuân theo `AgentTool.execute`: lỗi thực thi trở thành Tool result lỗi như mô tả ở trên.
 
 ### Queue RPC và thao tác hủy
 
@@ -621,7 +652,7 @@ Extension có thể đăng ký thêm flag, vì vậy `parseArgs()` giữ unknown
 
 ## Các package routed-service thử nghiệm
 
-Các package-root export dưới đây là boundary hiện hành của `0.85.0`, không phải công thức remote Agent ổn định. Ứng dụng vẫn sở hữu service contract, authentication cho transport, Session discovery, vòng đời worker và retry policy. Những subpath export như `@earendil-works/pi-client/unix`, `@earendil-works/pi-server/unix` và `@earendil-works/pi-server/testing` tách khỏi các root được tóm tắt ở đây.
+Các package-root export dưới đây là boundary hiện hành của `0.87.1`, không phải công thức remote Agent ổn định. Ứng dụng vẫn sở hữu service contract, authentication cho transport, Session discovery, vòng đời worker và retry policy. Những subpath export như `@earendil-works/pi-client/unix`, `@earendil-works/pi-server/unix` và `@earendil-works/pi-server/testing` tách khỏi các root được tóm tắt ở đây.
 
 ### `@earendil-works/pi-client`
 

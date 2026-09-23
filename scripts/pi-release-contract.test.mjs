@@ -1054,6 +1054,474 @@ function assertParagraphContainsAll(source, patterns, context) {
   return matchingParagraph;
 }
 
+const providerContractTerms = [
+  "TranscriptContext",
+  "getCurrentSystemPrompt",
+  "getCurrentTools",
+];
+const toolContractTerms = [
+  "ToolCall.arguments",
+  "ToolResultMessage.details",
+  "JsonValue",
+  "readonly",
+  "user_bash",
+  "undefined",
+  "operations",
+  "result",
+];
+
+function assertProviderTranscriptContract(
+  source,
+  locale,
+  label,
+  example = false,
+) {
+  for (const term of providerContractTerms)
+    assert.ok(source.includes(term), `${label}: ${term}`);
+  assertParagraphContainsAll(
+    source,
+    [
+      /TranscriptContext/,
+      /normalizeContext/,
+      /brand/i,
+      locale === "en" ? /must not cast/ : /không được ép kiểu/,
+    ],
+    `${label} normalization boundary`,
+  );
+  assertParagraphContainsAll(
+    source,
+    [
+      /system/,
+      /toolsAdded/,
+      /toolsRemoved/,
+      /sections/,
+      locale === "en" ? /replay|in order/ : /phát lại|theo thứ tự/,
+    ],
+    `${label} transcript state`,
+  );
+  if (example) {
+    const code = providerContextExample(source, label);
+    assert.match(code, /context: TranscriptContext/);
+    assert.match(
+      code,
+      /systemPrompt: getCurrentSystemPrompt\(context\.messages\)/,
+    );
+    assert.match(code, /tools: getCurrentTools\(context\.messages\)/);
+    assert.doesNotMatch(
+      code,
+      /context\.(?:systemPrompt|tools)\b|\bas\s+(?:unknown|any|TranscriptContext)\b/,
+    );
+    return code;
+  }
+}
+
+function providerContextExample(source, label) {
+  const matches = [
+    ...source.matchAll(/^```(?:ts|typescript)[^\n]*\r?\n([\s\S]*?)\r?\n```/gm),
+  ].filter((match) => match[1].includes("function inspectProviderContext"));
+  assert.equal(matches.length, 1, `${label} provider context example`);
+  return normalizeLineEndings(matches[0][1]);
+}
+
+function assertJsonToolContract(source, locale, label) {
+  assertParagraphContainsAll(
+    source,
+    [
+      /ToolCall\.arguments/,
+      /JsonObject/,
+      /ToolResultMessage\.details/,
+      locale === "en" ? /JSON-compatible/ : /tương thích JSON/,
+    ],
+    `${label} JSON values`,
+  );
+  assertParagraphContainsAll(
+    source,
+    [
+      /ToolResultMessage/,
+      /JsonRepresentation/,
+      locale === "en"
+        ? /incompatible type resolves to `never`/
+        : /kiểu không tương thích cho kết quả `never`/,
+      locale === "en" ? /conditional type/ : /kiểu có điều kiện/,
+    ],
+    `${label} conditional details`,
+  );
+  assertParagraphContainsAll(
+    source,
+    [
+      /JsonValue/,
+      /readonly/,
+      locale === "en" ? /copy/ : /sao chép/,
+      locale === "en"
+        ? /add no runtime validation or freezing/
+        : /không bổ sung kiểm tra.*runtime hay đóng băng/,
+    ],
+    `${label} readonly and runtime boundary`,
+  );
+}
+
+function assertUserBashFailureContract(source, locale, label) {
+  assertParagraphContainsAll(
+    source,
+    [
+      /user_bash/,
+      /undefined/,
+      locale === "en"
+        ? /only[^.]*continue propagation/
+        : /chỉ[^.]*tiếp tục truyền event/,
+      /\{ operations \}/,
+      /\{ result \}/,
+      locale === "en" ? /exactly one valid/ : /đúng một object hợp lệ/,
+    ],
+    `${label} user_bash handled result`,
+  );
+  assertParagraphContainsAll(
+    source,
+    [
+      /user_bash/,
+      locale === "en"
+        ? /exception or invalid defined value aborts the command/
+        : /exception hoặc giá trị đã định nghĩa không hợp lệ sẽ hủy lệnh/,
+      locale === "en"
+        ? /no later handler or local execution may run/
+        : /không handler tiếp theo hay thực thi cục bộ nào được chạy/,
+    ],
+    `${label} user_bash fail closed`,
+  );
+}
+
+test("0.86.0 provider and tool contracts are explained in paired guides, API reference, and chapters", async () => {
+  const headings = {
+    "how-to/plug-new-model.md": [
+      "## 5. Implement an API adapter only for a new protocol",
+      "## 5. Chỉ triển khai API adapter cho protocol mới",
+    ],
+    "reference/api.md": [
+      "### Provider factories and adapters",
+      "### Provider factory và adapter",
+    ],
+    "ch04-model-invocation.md": [
+      "### The contracts an API implementation must satisfy",
+      "### Contract mà API implementation phải tuân theo",
+    ],
+  };
+  for (const filename of [
+    "how-to/plug-new-model.md",
+    "reference/api.md",
+    "ch04-model-invocation.md",
+  ]) {
+    for (const { locale, source } of await readLocalizedContent(filename)) {
+      const section = extractMarkdownSection(
+        source,
+        headings[filename][locale === "en" ? 0 : 1],
+        filename,
+      );
+      assertProviderTranscriptContract(
+        section.body,
+        locale,
+        `${locale} ${filename}`,
+        filename !== "ch04-model-invocation.md",
+      );
+    }
+  }
+  const toolHeadings = {
+    "how-to/add-custom-tool.md": [
+      "## 2. Understand the handler contract",
+      "## 2. Hiểu contract thực thi của handler",
+    ],
+    "reference/api.md": [
+      "### Context, messages, and tools",
+      "### Context, message và tool",
+    ],
+    "ch05-tool-system.md": [
+      "### Layer 2: `AgentTool` adds an executable contract",
+      "### Lớp 2: `AgentTool` bổ sung ràng buộc thực thi",
+    ],
+    "ch06-messages.md": [
+      "### The exact message and content shapes",
+      "### Cấu trúc chính xác của message và content",
+    ],
+  };
+  const bashHeadings = {
+    "how-to/add-custom-tool.md": [
+      "## 4. Add a permission gate",
+      "## 4. Thêm permission gate",
+    ],
+    "reference/api.md": ["#### `user_bash` event", "#### Event `user_bash`"],
+    "ch05-tool-system.md": [
+      "### The error contract ends at a finalized Tool call",
+      "### Ràng buộc lỗi kết thúc tại lời gọi Tool đã được chốt",
+    ],
+  };
+  for (const filename of [
+    "how-to/add-custom-tool.md",
+    "reference/api.md",
+    "ch05-tool-system.md",
+    "ch06-messages.md",
+  ]) {
+    for (const { locale, source } of await readLocalizedContent(filename)) {
+      const label = `${locale} ${filename}`;
+      const section = extractMarkdownSection(
+        source,
+        toolHeadings[filename][locale === "en" ? 0 : 1],
+        label,
+      );
+      assertJsonToolContract(section.body, locale, label);
+      if (filename !== "ch06-messages.md") {
+        for (const term of toolContractTerms)
+          assert.ok(source.includes(term), `${label}: ${term}`);
+        const bashSection = extractMarkdownSection(
+          source,
+          bashHeadings[filename][locale === "en" ? 0 : 1],
+          label,
+        );
+        assertUserBashFailureContract(bashSection.body, locale, label);
+      } else {
+        assert.match(
+          source,
+          /Message = SystemMessage \| UserMessage \| AssistantMessage \| ToolResultMessage/,
+        );
+        assertParagraphContainsAll(
+          source,
+          [
+            /toolCallId/,
+            /ToolCall\.id/,
+            locale === "en" ? /preserve/ : /giữ nguyên/,
+          ],
+          `${label} call/result pairing`,
+        );
+        assert.doesNotMatch(
+          source,
+          /interface ToolResultMessage|arguments: Record<string, any>|addedToolNames/,
+        );
+      }
+    }
+  }
+});
+
+test("0.86.0 provider and tool contracts pages pin current sources and review date", async () => {
+  const release = await readReleaseFixture();
+  for (const filename of [
+    "ch04-model-invocation.md",
+    "ch05-tool-system.md",
+    "ch06-messages.md",
+    "how-to/add-custom-tool.md",
+    "how-to/plug-new-model.md",
+    "reference/api.md",
+  ]) {
+    for (const { locale, source } of await readLocalizedContent(filename)) {
+      const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---/.exec(source)?.[1];
+      assert.ok(frontmatter, `${locale} ${filename} frontmatter`);
+      assert.match(frontmatter, /^last_updated: '2026-09-23'$/m);
+      assert.deepEqual(
+        invalidPiSourceLinks([{ filename, source }], release),
+        [],
+      );
+    }
+  }
+});
+
+test("0.86.0 provider and tool contracts mutation guards reject broken relationships", async () => {
+  for (const { locale, source } of await readLocalizedContent(
+    "reference/api.md",
+  )) {
+    assertProviderTranscriptContract(source, locale, locale, true);
+    assertJsonToolContract(source, locale, locale);
+    assertUserBashFailureContract(source, locale, locale);
+    for (const [from, to, check] of [
+      [
+        "getCurrentTools(context.messages)",
+        "getCurrentTools([])",
+        (text) => assertProviderTranscriptContract(text, locale, locale, true),
+      ],
+      [
+        "getCurrentSystemPrompt(context.messages)",
+        "getCurrentSystemPrompt([])",
+        (text) => assertProviderTranscriptContract(text, locale, locale, true),
+      ],
+      [
+        locale === "en" ? "must not cast" : "không được ép kiểu",
+        locale === "en" ? "may cast" : "có thể ép kiểu",
+        (text) => assertProviderTranscriptContract(text, locale, locale),
+      ],
+      [
+        locale === "en" ? "conditional type" : "kiểu có điều kiện",
+        "interface",
+        (text) => assertJsonToolContract(text, locale, locale),
+      ],
+      [
+        locale === "en"
+          ? "incompatible type resolves to `never`"
+          : "kiểu không tương thích cho kết quả `never`",
+        "compatible types resolve to never",
+        (text) => assertJsonToolContract(text, locale, locale),
+      ],
+      [
+        locale === "en"
+          ? "add no runtime validation or freezing"
+          : "không bổ sung kiểm tra dữ liệu ở runtime hay đóng băng",
+        "validate and freeze values at runtime",
+        (text) => assertJsonToolContract(text, locale, locale),
+      ],
+      [
+        locale === "en"
+          ? "`ToolCall.arguments` is a `JsonObject`"
+          : "`ToolCall.arguments` có kiểu `JsonObject`",
+        "`ToolCall.arguments` accepts arbitrary values",
+        (text) => assertJsonToolContract(text, locale, locale),
+      ],
+      [
+        locale === "en"
+          ? "copy an array before mutating"
+          : "sao chép mảng trước khi sửa",
+        "mutate arrays freely",
+        (text) => assertJsonToolContract(text, locale, locale),
+      ],
+      [
+        locale === "en" ? "exactly one valid" : "đúng một object hợp lệ",
+        "both",
+        (text) => assertUserBashFailureContract(text, locale, locale),
+      ],
+      [
+        locale === "en"
+          ? "no later handler or local execution may run"
+          : "không handler tiếp theo hay thực thi cục bộ nào được chạy",
+        "later handlers may continue",
+        (text) => assertUserBashFailureContract(text, locale, locale),
+      ],
+    ]) {
+      assert.ok(source.includes(from), `${locale} mutation target: ${from}`);
+      assert.throws(
+        () => check(source.replaceAll(from, to)),
+        assert.AssertionError,
+        `${locale}: ${from}`,
+      );
+    }
+  }
+});
+
+test("0.86.0 provider and tool contracts provider examples typecheck against public 0.87.1 declarations", async () => {
+  const examples = [];
+  for (const filename of ["how-to/plug-new-model.md", "reference/api.md"]) {
+    for (const { locale, source } of await readLocalizedContent(filename)) {
+      examples.push(providerContextExample(source, `${locale} ${filename}`));
+    }
+  }
+  assert.ok(
+    examples.every((source) => source === examples[0]),
+    "all locales use the same provider example",
+  );
+  const filename = fileURLToPath(
+    new URL("tests/fixtures/provider-context-example.ts", repositoryRoot),
+  );
+  const options = {
+    target: ts.ScriptTarget.ES2022,
+    module: ts.ModuleKind.ESNext,
+    moduleResolution: ts.ModuleResolutionKind.Bundler,
+    strict: true,
+    noEmit: true,
+    skipLibCheck: true,
+    types: ["node"],
+  };
+  const host = ts.createCompilerHost(options);
+  const readSource = host.getSourceFile.bind(host);
+  host.getSourceFile = (file, languageVersion, ...args) =>
+    path.resolve(file) === path.resolve(filename)
+      ? ts.createSourceFile(file, examples[0], languageVersion, true)
+      : readSource(file, languageVersion, ...args);
+  const program = ts.createProgram([filename], options, host);
+  const diagnostics = ts.getPreEmitDiagnostics(program);
+  assert.equal(
+    diagnostics.length,
+    0,
+    ts.formatDiagnostics(diagnostics, {
+      getCanonicalFileName: (file) => file,
+      getCurrentDirectory: () => fileURLToPath(repositoryRoot),
+      getNewLine: () => "\n",
+    }),
+  );
+});
+
+test("0.86.0 provider and tool contracts Tool examples typecheck against public 0.87.1 declarations", async () => {
+  const files = new Map();
+  for (const { locale, source } of await readLocalizedContent(
+    "how-to/add-custom-tool.md",
+  )) {
+    let extensionIndex = 0;
+    for (const match of source.matchAll(
+      /^```ts title="([^"]+\.ts)"\r?\n([\s\S]*?)\r?\n```/gm,
+    )) {
+      const title =
+        match[1] === ".pi/extensions/weather.ts"
+          ? `.pi/extensions/weather-${extensionIndex++}.ts`
+          : match[1];
+      const filename = fileURLToPath(
+        new URL(`tests/fixtures/tool-guide-${locale}/${title}`, repositoryRoot),
+      );
+      files.set(path.resolve(filename), match[2]);
+    }
+    assert.equal(
+      extensionIndex,
+      2,
+      `${locale} both Extension registration routes`,
+    );
+  }
+  for (const { locale, source } of await readLocalizedContent(
+    "reference/api.md",
+  )) {
+    for (const title of ["tool.ts", "extension.ts"]) {
+      const code = [
+        ...source.matchAll(/^```ts title="([^"]+)"\r?\n([\s\S]*?)\r?\n```/gm),
+      ].find((match) => match[1] === title)?.[2];
+      assert.ok(code, `${locale} API ${title}`);
+      const filename = fileURLToPath(
+        new URL(`tests/fixtures/tool-api-${locale}/${title}`, repositoryRoot),
+      );
+      files.set(path.resolve(filename), code);
+    }
+  }
+  const options = {
+    target: ts.ScriptTarget.ES2022,
+    module: ts.ModuleKind.ESNext,
+    moduleResolution: ts.ModuleResolutionKind.Bundler,
+    strict: true,
+    noEmit: true,
+    skipLibCheck: true,
+    esModuleInterop: true,
+    types: ["node"],
+  };
+  const host = ts.createCompilerHost(options);
+  const originalExists = host.fileExists.bind(host);
+  const originalDirectoryExists = host.directoryExists.bind(host);
+  const originalSourceFile = host.getSourceFile.bind(host);
+  host.fileExists = (file) =>
+    files.has(path.resolve(file)) || originalExists(file);
+  host.directoryExists = (directory) =>
+    [...files.keys()].some((file) =>
+      file.startsWith(path.resolve(directory) + path.sep),
+    ) || originalDirectoryExists(directory);
+  host.getSourceFile = (file, languageVersion, ...args) =>
+    files.has(path.resolve(file))
+      ? ts.createSourceFile(
+          file,
+          files.get(path.resolve(file)),
+          languageVersion,
+          true,
+        )
+      : originalSourceFile(file, languageVersion, ...args);
+  const program = ts.createProgram([...files.keys()], options, host);
+  const diagnostics = ts.getPreEmitDiagnostics(program);
+  assert.equal(
+    diagnostics.length,
+    0,
+    ts.formatDiagnostics(diagnostics, {
+      getCanonicalFileName: (file) => file,
+      getCurrentDirectory: () => fileURLToPath(repositoryRoot),
+      getNewLine: () => "\n",
+    }),
+  );
+});
+
 function assertMidRunCompactionLifecycle(source, locale, context) {
   const contract =
     locale === "en"
@@ -4867,7 +5335,7 @@ test("Pi 0.85 custom Tool guidance preserves live cwd and authorization boundari
   );
 });
 
-test("Pi 0.85 Tool and terminal pages use the current baseline metadata", async () => {
+test("Tool and terminal pages use the current baseline metadata", async () => {
   const paths = [
     "ch05-tool-system.md",
     "how-to/add-custom-tool.md",
@@ -4887,14 +5355,14 @@ test("Pi 0.85 Tool and terminal pages use the current baseline metadata", async 
       );
       assert.match(
         source,
-        /last_updated:\s*["']2026-09-04["']/,
-        `${locale} ${relativePath} must record the Pi 0.85 review date`,
+        /last_updated:\s*["']2026-09-23["']/,
+        `${locale} ${relativePath} must record the Pi 0.87.1 review date`,
       );
       const links = piSourceLinks([{ filename: relativePath, source }]);
       for (const { link } of links) {
         assert.ok(
           isPublishedReleaseSourceLink(link, release),
-          `${locale} ${relativePath} must pin Pi source links to 0.85.0`,
+          `${locale} ${relativePath} must pin Pi source links to ${release.packageVersion}`,
         );
       }
     }
@@ -5708,7 +6176,7 @@ test("all model docs separate generated-catalog detection from verified custom-m
   const localeContracts = {
     en: {
       automaticDetection: [
-        /built-in models?[^.]*Pi 0\.85\.0 generated catalog/i,
+        /built-in models?[^.]*Pi 0\.87\.1 generated catalog/i,
         /automatic detection[^.]*lowercases `modelId` first[^.]*then strips/i,
         /only when `provider` is exactly `anthropic` or `openrouter`\./,
       ],
@@ -5722,11 +6190,11 @@ test("all model docs separate generated-catalog detection from verified custom-m
       exactProviders:
         /only when `provider` is exactly `anthropic` or `openrouter`\./,
       overbroadProhibition:
-        /Outside that Pi 0\.85\.0 provider\/ID set[^.]*do not manually opt in/i,
+        /Outside that Pi 0\.87\.1 provider\/ID set[^.]*do not manually opt in/i,
     },
     vi: {
       automaticDetection: [
-        /model tích hợp sẵn[^.]*generated catalog của Pi 0\.85\.0/i,
+        /model tích hợp sẵn[^.]*generated catalog của Pi 0\.87\.1/i,
         /automatic detection[^.]*chuyển `modelId` thành chữ thường trước[^.]*sau đó bỏ/i,
         /chỉ tự động bật[^.]*`provider` chính xác là `anthropic` hoặc `openrouter`\./i,
       ],
@@ -5740,7 +6208,7 @@ test("all model docs separate generated-catalog detection from verified custom-m
       exactProviders:
         /chỉ tự động bật[^.]*`provider` chính xác là `anthropic` hoặc `openrouter`\./i,
       overbroadProhibition:
-        /Ngoài tập provider\/ID của Pi 0\.85\.0[^.]*không bật thủ công/i,
+        /Ngoài tập provider\/ID của Pi 0\.87\.1[^.]*không bật thủ công/i,
     },
   };
   const exactIdPatterns = [
@@ -5797,7 +6265,7 @@ test("all model docs separate generated-catalog detection from verified custom-m
   }
 });
 
-test("both model guides record the Pi 0.85 review date in frontmatter", async () => {
+test("both model guides record the Pi 0.87.1 review date in frontmatter", async () => {
   const guides = await readLocalizedContent("how-to/plug-new-model.md");
 
   for (const { locale, source } of guides) {
@@ -5811,8 +6279,8 @@ test("both model guides record the Pi 0.85 review date in frontmatter", async ()
 
     assert.deepEqual(
       reviewDates,
-      ["2026-09-04"],
-      `${locale} model guide must record exactly one Pi 0.85 review date`,
+      ["2026-09-23"],
+      `${locale} model guide must record exactly one Pi 0.87.1 review date`,
     );
   }
 });
