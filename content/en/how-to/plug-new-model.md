@@ -690,7 +690,7 @@ An aborted request terminates with an assistant message whose `stopReason` is `"
 
 ## Troubleshooting
 
-Two adapter edges are easy to miss when testing image-only requests:
+For image-only requests, the OpenAI-compatible adapter follows this payload rule:
 
 | Request shape | Text-part behavior | Required payload |
 |---|---|---|

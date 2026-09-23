@@ -1131,6 +1131,25 @@ function assertContractTableRows(source, expectedRows, context, options = {}) {
   return table;
 }
 
+function assertLocalizedContractTable(
+  source,
+  { header: expectedHeader, rows: expectedRows },
+  context,
+  options = {},
+) {
+  const table = parseMarkdownContractTableDefinitions(source).find(
+    ({ header, rows }) =>
+      header.length === expectedHeader.length &&
+      header.every((cell, index) => cell === expectedHeader[index]) &&
+      contractTableContainsRows(rows, expectedRows, options),
+  );
+  assert.ok(
+    table,
+    `${context} must preserve its localized header and technical relationships`,
+  );
+  return table;
+}
+
 function assertTechnicalContractRows(
   source,
   expectedRows,
@@ -1185,7 +1204,7 @@ async function readModelConfigurationContent() {
   return new Map(entries);
 }
 
-const currentCatalogRouteRows = [
+const englishCatalogRouteRows = [
   [
     "Claude Opus 5.5",
     "anthropic",
@@ -1227,7 +1246,7 @@ const currentCatalogRouteRows = [
   ["Grok 4.7", "xai", "XAI_API_KEY", "default for new xAI sessions"],
 ];
 
-const imageIngressRows = [
+const englishImageIngressRows = [
   [
     "file attachment",
     "selected model.inputLimits.images.resize",
@@ -1243,6 +1262,271 @@ const imageIngressRows = [
   ["model switch", "historical images", "not rewritten"],
   ["provider-side transform", "outside Pi resize profile", "not controlled"],
 ];
+
+const sharedQuickstartRouteRows = [
+  ["anthropic/claude-opus-5-5", "Claude Opus 5.5", "ANTHROPIC_API_KEY"],
+  ["openai/gpt-6-sol", "GPT-6 Sol", "OPENAI_API_KEY"],
+  ["openai/gpt-6-luna", "GPT-6 Luna", "OPENAI_API_KEY"],
+  ["xai/grok-4.7", "Grok 4.7", "XAI_API_KEY"],
+];
+
+const modelConfigurationContracts = {
+  en: {
+    catalog: {
+      header: [
+        "Model",
+        "Provider route",
+        "Credential path",
+        "Catalog behavior",
+      ],
+      rows: englishCatalogRouteRows,
+    },
+    imageIngress: {
+      header: ["Image ingress", "Resize source", "History effect"],
+      rows: englishImageIngressRows,
+    },
+    imageOnly: {
+      header: ["Request shape", "Text-part behavior", "Required payload"],
+      rows: [
+        [
+          "OpenAI-compatible + image-only user message",
+          "omit empty text part",
+          "send image block",
+        ],
+      ],
+    },
+    quickstart: {
+      header: ["Provider/model ID", "Catalog name", "Environment credential"],
+      rows: sharedQuickstartRouteRows,
+    },
+    faqRoutes: {
+      header: ["Model", "Current routes", "Route behavior"],
+      rows: [
+        [
+          "Claude Opus 5.5",
+          "anthropic + github-copilot",
+          "adaptive thinking + supported Copilot route",
+        ],
+        [
+          "GPT-6 Sol",
+          "openai + openai-codex + github-copilot",
+          "API key + OpenAI Codex subscription + supported Copilot route",
+        ],
+        [
+          "GPT-6 Luna",
+          "openai + openai-codex + github-copilot",
+          "API key + OpenAI Codex subscription + supported Copilot route",
+        ],
+        ["Grok 4.7", "xai", "default for new xAI sessions"],
+      ],
+    },
+    faqEdges: {
+      header: ["Case", "Boundary", "Expected behavior"],
+      rows: [
+        [
+          "OpenAI-compatible + image-only user message",
+          "omit empty text part",
+          "request contains image block",
+        ],
+        [
+          "Claude Fable 5.1 + split-turn compaction",
+          "separate conversation",
+          "continuation-oriented instructions",
+        ],
+      ],
+    },
+    xaiDefault: {
+      header: ["Provider", "Resolution scope", "Catalog default"],
+      rows: [["xai", "new session", "grok-4.7"]],
+    },
+    imageBoundary: {
+      header: ["Control or event", "Scope", "Effect"],
+      rows: [
+        ["images.autoResize", "global gate", "enable or disable resizing"],
+        [
+          "inputLimits.images.resize",
+          "per-model profile",
+          "new images before history",
+        ],
+        ["model switch", "stored image", "do not rewrite"],
+      ],
+    },
+    cliMode: {
+      header: ["Invocation", "Result", "Process outcome"],
+      rows: [
+        ["--mode <missing>", "error", "exit status=1"],
+        ["--mode invalid", "error", "exit status=1"],
+      ],
+    },
+    credentials: {
+      header: ["Model", "Provider route", "Credential path"],
+      rows: englishCatalogRouteRows.map((row) => row.slice(0, 3)),
+    },
+  },
+  vi: {
+    catalog: {
+      header: [
+        "Model",
+        "Route của provider",
+        "Đường xác thực",
+        "Hành vi trong catalog",
+      ],
+      rows: [
+        [
+          "Claude Opus 5.5",
+          "anthropic",
+          "ANTHROPIC_API_KEY",
+          "adaptive thinking; contextWindow=1000000",
+        ],
+        ["GPT-6 Sol", "openai", "OPENAI_API_KEY", "OpenAI API key"],
+        ["GPT-6 Luna", "openai", "OPENAI_API_KEY", "OpenAI API key"],
+        [
+          "GPT-6 Sol",
+          "openai-codex",
+          "OpenAI Codex subscription",
+          "route dùng subscription",
+        ],
+        [
+          "GPT-6 Luna",
+          "openai-codex",
+          "OpenAI Codex subscription",
+          "route dùng subscription",
+        ],
+        [
+          "Claude Opus 5.5",
+          "github-copilot",
+          "GitHub Copilot subscription",
+          "route được hỗ trợ",
+        ],
+        [
+          "GPT-6 Sol",
+          "github-copilot",
+          "GitHub Copilot subscription",
+          "route được hỗ trợ",
+        ],
+        [
+          "GPT-6 Luna",
+          "github-copilot",
+          "GitHub Copilot subscription",
+          "route được hỗ trợ",
+        ],
+        ["Grok 4.7", "xai", "XAI_API_KEY", "default cho xAI session mới"],
+      ],
+    },
+    imageIngress: {
+      header: [
+        "Điểm image đi vào history",
+        "Nguồn cấu hình resize",
+        "Tác động lên history",
+      ],
+      rows: [
+        [
+          "file đính kèm",
+          "inputLimits.images.resize của model đã chọn",
+          "resize một lần trước khi append vào history",
+        ],
+        [
+          "read",
+          "ctx.model.inputLimits.images.resize",
+          "resize một lần trong Tool result",
+        ],
+        [
+          "image trong Tool result",
+          "inputLimits.images.resize của model đang active",
+          "normalize một lần sau hook tool_result",
+        ],
+        ["phạm vi profile", "theo từng model", "không có giới hạn chung"],
+        ["chuyển model", "image trong history", "không ghi lại"],
+        [
+          "transform phía provider",
+          "ngoài resize profile của Pi",
+          "Pi không kiểm soát",
+        ],
+      ],
+    },
+    imageOnly: {
+      header: ["Hình dạng request", "Cách xử lý text part", "Payload bắt buộc"],
+      rows: [
+        [
+          "OpenAI-compatible + user message chỉ có image",
+          "không gửi empty text part",
+          "gửi image block",
+        ],
+      ],
+    },
+    quickstart: {
+      header: [
+        "Provider/model ID",
+        "Tên trong catalog",
+        "Credential trong environment",
+      ],
+      rows: sharedQuickstartRouteRows,
+    },
+    faqRoutes: {
+      header: ["Model", "Route hiện tại", "Hành vi của route"],
+      rows: [
+        [
+          "Claude Opus 5.5",
+          "anthropic + github-copilot",
+          "adaptive thinking + route Copilot được hỗ trợ",
+        ],
+        [
+          "GPT-6 Sol",
+          "openai + openai-codex + github-copilot",
+          "API key + OpenAI Codex subscription + route Copilot được hỗ trợ",
+        ],
+        [
+          "GPT-6 Luna",
+          "openai + openai-codex + github-copilot",
+          "API key + OpenAI Codex subscription + route Copilot được hỗ trợ",
+        ],
+        ["Grok 4.7", "xai", "default cho xAI session mới"],
+      ],
+    },
+    faqEdges: {
+      header: ["Trường hợp", "Boundary", "Hành vi mong đợi"],
+      rows: [
+        [
+          "OpenAI-compatible + user message chỉ có image",
+          "không gửi empty text part",
+          "request chứa image block",
+        ],
+        [
+          "Claude Fable 5.1 + split-turn compaction",
+          "tách conversation",
+          "chỉ dẫn để tiếp tục conversation",
+        ],
+      ],
+    },
+    xaiDefault: {
+      header: ["Provider", "Phạm vi resolution", "Default trong catalog"],
+      rows: [["xai", "session mới", "grok-4.7"]],
+    },
+    imageBoundary: {
+      header: ["Cấu hình hoặc event", "Phạm vi", "Tác động"],
+      rows: [
+        ["images.autoResize", "gate toàn cục", "bật hoặc tắt resize"],
+        [
+          "inputLimits.images.resize",
+          "profile theo từng model",
+          "image mới trước khi vào history",
+        ],
+        ["chuyển model", "image đã lưu", "không ghi lại"],
+      ],
+    },
+    cliMode: {
+      header: ["Cách gọi", "Kết quả", "Trạng thái process"],
+      rows: [
+        ["--mode <missing>", "error", "exit status=1"],
+        ["--mode invalid", "error", "exit status=1"],
+      ],
+    },
+    credentials: {
+      header: ["Model", "Route của provider", "Đường xác thực"],
+      rows: englishCatalogRouteRows.map((row) => row.slice(0, 3)),
+    },
+  },
+};
 
 function validateModelConfigurationContracts(localized) {
   for (const locale of ["en", "vi"]) {
@@ -1273,121 +1557,72 @@ function validateModelConfigurationContracts(localized) {
             configInterface: "## Interface và output",
             credentials: "## Provider credential",
           };
+    const contracts = modelConfigurationContracts[locale];
 
     const chapter = localized.get(`${locale}/ch04-model-invocation.md`);
-    assertContractTableRows(
+    assertLocalizedContractTable(
       extractMarkdownSection(chapter, headings.auth, context).body,
-      currentCatalogRouteRows,
+      contracts.catalog,
       `${context} catalog routes`,
       { ordered: true },
     );
 
     const providerGuide = localized.get(`${locale}/how-to/plug-new-model.md`);
-    assertContractTableRows(
+    assertLocalizedContractTable(
       extractMarkdownSection(providerGuide, headings.metadata, context).body,
-      imageIngressRows,
+      contracts.imageIngress,
       `${context} image ingress`,
       { ordered: true },
     );
-    assertContractTableRows(
+    assertLocalizedContractTable(
       extractMarkdownSection(providerGuide, headings.troubleshooting, context)
         .body,
-      [
-        [
-          "OpenAI-compatible + image-only user message",
-          "omit empty text part",
-          "send image block",
-        ],
-      ],
+      contracts.imageOnly,
       `${context} image-only request edge`,
     );
 
-    assertContractTableRows(
+    assertLocalizedContractTable(
       extractMarkdownSection(
         localized.get(`${locale}/quickstart.md`),
         headings.quickstart,
         context,
       ).body,
-      [
-        ["anthropic/claude-opus-5-5", "Claude Opus 5.5", "ANTHROPIC_API_KEY"],
-        ["openai/gpt-6-sol", "GPT-6 Sol", "OPENAI_API_KEY"],
-        ["openai/gpt-6-luna", "GPT-6 Luna", "OPENAI_API_KEY"],
-        ["xai/grok-4.7", "Grok 4.7", "XAI_API_KEY"],
-      ],
+      contracts.quickstart,
       `${context} quickstart API-key routes`,
       { ordered: true },
     );
 
     const faq = localized.get(`${locale}/help/faq.md`);
-    assertContractTableRows(
+    assertLocalizedContractTable(
       extractMarkdownSection(faq, headings.providers, context).body,
-      [
-        [
-          "Claude Opus 5.5",
-          "anthropic + github-copilot",
-          "adaptive thinking + supported Copilot route",
-        ],
-        [
-          "GPT-6 Sol",
-          "openai + openai-codex + github-copilot",
-          "API key + OpenAI Codex subscription + supported Copilot route",
-        ],
-        [
-          "GPT-6 Luna",
-          "openai + openai-codex + github-copilot",
-          "API key + OpenAI Codex subscription + supported Copilot route",
-        ],
-        ["Grok 4.7", "xai", "default for new xAI sessions"],
-      ],
+      contracts.faqRoutes,
       `${context} FAQ provider routes`,
       { ordered: true },
     );
-    assertContractTableRows(
+    assertLocalizedContractTable(
       extractMarkdownSection(faq, headings.pitfalls, context).body,
-      [
-        [
-          "OpenAI-compatible + image-only user message",
-          "omit empty text part",
-          "request contains image block",
-        ],
-        [
-          "Claude Fable 5.1 + split-turn compaction",
-          "separate conversation",
-          "continuation-oriented instructions",
-        ],
-      ],
+      contracts.faqEdges,
       `${context} provider troubleshooting edges`,
       { ordered: true },
     );
 
     const configuration = localized.get(`${locale}/reference/configuration.md`);
-    assertContractTableRows(
+    assertLocalizedContractTable(
       extractMarkdownSection(configuration, headings.configModel, context).body,
-      [["xai", "new session", "grok-4.7"]],
+      contracts.xaiDefault,
       `${context} xAI default`,
     );
-    assertContractTableRows(
+    assertLocalizedContractTable(
       extractMarkdownSection(configuration, headings.configImages, context)
         .body,
-      [
-        ["images.autoResize", "global gate", "enable or disable resizing"],
-        [
-          "inputLimits.images.resize",
-          "per-model profile",
-          "new images before history",
-        ],
-        ["model switch", "stored image", "do not rewrite"],
-      ],
+      contracts.imageBoundary,
       `${context} configuration image boundary`,
       { ordered: true },
     );
-    assertContractTableRows(
+    assertLocalizedContractTable(
       extractMarkdownSection(configuration, headings.configInterface, context)
         .body,
-      [
-        ["--mode <missing>", "error", "exit status=1"],
-        ["--mode invalid", "error", "exit status=1"],
-      ],
+      contracts.cliMode,
       `${context} CLI mode validation`,
       { ordered: true },
     );
@@ -1395,9 +1630,9 @@ function validateModelConfigurationContracts(localized) {
     const environment = localized.get(
       `${locale}/reference/environment-variables.md`,
     );
-    assertContractTableRows(
+    assertLocalizedContractTable(
       extractMarkdownSection(environment, headings.credentials, context).body,
-      currentCatalogRouteRows.map((row) => row.slice(0, 3)),
+      contracts.credentials,
       `${context} credential routes`,
       { ordered: true },
     );
@@ -1573,6 +1808,18 @@ test("0.87.1 models and image limits mutation guards reject wrong routes and edg
       "en/reference/environment-variables.md",
       "| `GPT-6 Sol` | `openai-codex` | `OpenAI Codex subscription` |",
       "| `GPT-6 Sol` | `openai-codex` | `OPENAI_API_KEY` |",
+    ],
+    [
+      "Vietnamese catalog header localization",
+      "vi/ch04-model-invocation.md",
+      "| Model | Route của provider | Đường xác thực | Hành vi trong catalog |",
+      "| Model | Provider route | Credential path | Catalog behavior |",
+    ],
+    [
+      "Vietnamese image boundary localization",
+      "vi/reference/configuration.md",
+      "| `chuyển model` | `image đã lưu` | `không ghi lại` |",
+      "| `model switch` | `stored image` | `do not rewrite` |",
     ],
   ];
 

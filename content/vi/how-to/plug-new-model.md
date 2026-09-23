@@ -141,12 +141,12 @@ Image normalization cũng lấy cấu hình từ model metadata. Trong `0.87.1`,
 
 | Điểm image đi vào history | Nguồn cấu hình resize | Tác động lên history |
 |---|---|---|
-| `file attachment` | `selected model.inputLimits.images.resize` | `resize once before history append` |
-| `read` | `ctx.model.inputLimits.images.resize` | `resize once in Tool result` |
-| `Tool-result image` | `active model.inputLimits.images.resize` | `normalize once after tool_result hooks` |
-| `profile scope` | `per model` | `no uniform limit` |
-| `model switch` | `historical images` | `not rewritten` |
-| `provider-side transform` | `outside Pi resize profile` | `not controlled` |
+| `file đính kèm` | `inputLimits.images.resize của model đã chọn` | `resize một lần trước khi append vào history` |
+| `read` | `ctx.model.inputLimits.images.resize` | `resize một lần trong Tool result` |
+| `image trong Tool result` | `inputLimits.images.resize của model đang active` | `normalize một lần sau hook tool_result` |
+| `phạm vi profile` | `theo từng model` | `không có giới hạn chung` |
+| `chuyển model` | `image trong history` | `không ghi lại` |
+| `transform phía provider` | `ngoài resize profile của Pi` | `Pi không kiểm soát` |
 
 Profile có thể đặt `maxWidth`, `maxHeight`, `maxBytes` và `jpegQuality`. Hãy dùng giá trị phù hợp với model đã chọn rồi kiểm tra toàn bộ đường đi; provider vẫn có thể áp dụng hard limit hoặc biến đổi image đã encode sau khi Pi chuyển request cho nó. Pi chỉ normalize mỗi image mới một lần khi image đi vào history, nhờ đó input đã lưu vẫn cache-safe. Đổi model về sau không re-encode image đã lưu trong transcript.
 
@@ -694,7 +694,7 @@ Khi kiểm tra request chỉ có image, cần chú ý edge case sau của adapte
 
 | Hình dạng request | Cách xử lý text part | Payload bắt buộc |
 |---|---|---|
-| `OpenAI-compatible + image-only user message` | `omit empty text part` | `send image block` |
+| `OpenAI-compatible + user message chỉ có image` | `không gửi empty text part` | `gửi image block` |
 
 Đây là hành vi của adapter trong `0.87.1`, không phải public option mới. Custom adapter tương thích OpenAI phải giữ image content nhưng không tự tạo empty text item mà endpoint có thể từ chối.
 

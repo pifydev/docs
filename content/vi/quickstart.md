@@ -21,7 +21,7 @@ Một file TypeScript gọi model qua `Models.streamSimple()`. Từ đây, bạn
 
 Ví dụ bên dưới vẫn dùng Anthropic Claude Sonnet để lần chạy đầu tiên gọn và dễ theo dõi. Nếu chọn một direct API-key route mới trong catalog `0.87.1`, hãy dùng đúng provider/model ID và credential tương ứng:
 
-| Provider/model ID | Tên trong catalog | Environment credential |
+| Provider/model ID | Tên trong catalog | Credential trong environment |
 |---|---|---|
 | `anthropic/claude-opus-5-5` | `Claude Opus 5.5` | `ANTHROPIC_API_KEY` |
 | `openai/gpt-6-sol` | `GPT-6 Sol` | `OPENAI_API_KEY` |

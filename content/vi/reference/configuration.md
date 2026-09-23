@@ -83,7 +83,7 @@ Model resolver cung cấp fallback khi cả lựa chọn tường minh lẫn tr�
 
 | Provider | Phạm vi resolution | Default trong catalog |
 |---|---|---|
-| `xai` | `new session` | `grok-4.7` |
+| `xai` | `session mới` | `grok-4.7` |
 
 Đây là default cho xAI session mới hoặc trường hợp cần default resolution trong `0.87.1`. Nó không thay thế model được chọn qua `--model`, chọn tương tác, cấu hình bằng `defaultModel` hoặc khôi phục từ session được resume.
 
@@ -213,11 +213,11 @@ Không có setting tích hợp `sessions.retention` hoặc `sessions.redactSecre
 
 `images.autoResize` là global gate để bật hoặc tắt. Resize profile thực tế lấy từ `inputLimits.images.resize` của model đã chọn, vì vậy không có một giới hạn chung cho mọi model:
 
-| Control hoặc event | Phạm vi | Tác động |
+| Cấu hình hoặc event | Phạm vi | Tác động |
 |---|---|---|
-| `images.autoResize` | `global gate` | `enable or disable resizing` |
-| `inputLimits.images.resize` | `per-model profile` | `new images before history` |
-| `model switch` | `stored image` | `do not rewrite` |
+| `images.autoResize` | `gate toàn cục` | `bật hoặc tắt resize` |
+| `inputLimits.images.resize` | `profile theo từng model` | `image mới trước khi vào history` |
+| `chuyển model` | `image đã lưu` | `không ghi lại` |
 
 Profile đang active được dùng cho file attachment, image do `read` trả về và Tool-result image. Mỗi image mới chỉ được normalize một lần khi đi vào history; việc chọn model khác về sau không ghi lại nội dung đã lưu. Provider-side transformation và hard limit nằm ngoài profile này của Pi, vì vậy cần kiểm tra riêng theo từng route.
 
@@ -265,7 +265,7 @@ Force capability không được hỗ trợ ở bất kỳ đoạn nào trên đ
 
 `--mode` nhận `text`, `json` hoặc `rpc`. Pi `0.87.1` coi cả giá trị bị thiếu lẫn giá trị không hợp lệ là CLI error thay vì fallback sang interactive mode:
 
-| Invocation | Kết quả | Trạng thái process |
+| Cách gọi | Kết quả | Trạng thái process |
 |---|---|---|
 | `--mode <missing>` | `error` | `exit status=1` |
 | `--mode invalid` | `error` | `exit status=1` |

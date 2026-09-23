@@ -42,7 +42,7 @@ Với built-in provider của Pi, thứ tự credential là CLI `--api-key` ho�
 
 Các catalog entry chọn lọc dưới đây phân biệt direct API-key route với subscription authentication. Cột credential đặt tên cho route, không phải giá trị cần sao chép vào environment variable:
 
-| Model | Provider route | Credential path |
+| Model | Route của provider | Đường xác thực |
 |---|---|---|
 | `Claude Opus 5.5` | `anthropic` | `ANTHROPIC_API_KEY` |
 | `GPT-6 Sol` | `openai` | `OPENAI_API_KEY` |

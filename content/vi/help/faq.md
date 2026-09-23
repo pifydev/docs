@@ -27,10 +27,10 @@ Các bổ sung chọn lọc của `0.87.1` dưới đây cho thấy một tên t
 
 | Model | Route hiện tại | Hành vi của route |
 |---|---|---|
-| `Claude Opus 5.5` | `anthropic + github-copilot` | `adaptive thinking + supported Copilot route` |
-| `GPT-6 Sol` | `openai + openai-codex + github-copilot` | `API key + OpenAI Codex subscription + supported Copilot route` |
-| `GPT-6 Luna` | `openai + openai-codex + github-copilot` | `API key + OpenAI Codex subscription + supported Copilot route` |
-| `Grok 4.7` | `xai` | `default for new xAI sessions` |
+| `Claude Opus 5.5` | `anthropic + github-copilot` | `adaptive thinking + route Copilot được hỗ trợ` |
+| `GPT-6 Sol` | `openai + openai-codex + github-copilot` | `API key + OpenAI Codex subscription + route Copilot được hỗ trợ` |
+| `GPT-6 Luna` | `openai + openai-codex + github-copilot` | `API key + OpenAI Codex subscription + route Copilot được hỗ trợ` |
+| `Grok 4.7` | `xai` | `default cho xAI session mới` |
 
 Đây không phải toàn bộ catalog. Dùng `/model` hoặc `pi --list-models` để xem bản đã cài, và lưu ý model được chọn tường minh hoặc model đã lưu trong session được resume có độ ưu tiên cao hơn xAI default dành cho session mới.
 
@@ -76,8 +76,8 @@ Hai bản sửa trong `0.87.1` cần được tính đến khi chẩn đoán l�
 
 | Trường hợp | Boundary | Hành vi mong đợi |
 |---|---|---|
-| `OpenAI-compatible + image-only user message` | `omit empty text part` | `request contains image block` |
-| `Claude Fable 5.1 + split-turn compaction` | `separate conversation` | `continuation-oriented instructions` |
+| `OpenAI-compatible + user message chỉ có image` | `không gửi empty text part` | `request chứa image block` |
+| `Claude Fable 5.1 + split-turn compaction` | `tách conversation` | `chỉ dẫn để tiếp tục conversation` |
 
 Đây là các sửa đổi implementation, không phải public API. Nếu endpoint tương thích OpenAI vẫn từ chối lượt chỉ có image, hãy kiểm tra các content part đã serialize. Nếu Claude Fable 5.1 hiểu split-turn compaction summary thành task mới, hãy xác nhận conversation trước đó được tách khỏi continuation instruction; không có public compaction option để tinh chỉnh hành vi này.
 
