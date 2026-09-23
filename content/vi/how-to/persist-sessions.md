@@ -135,12 +135,12 @@ export function omitFromFutureProviderContext(
 }
 ```
 
-| Operation | Thay đổi được lưu | Ảnh hưởng lên projection |
+| Thao tác | Thay đổi được lưu | Ảnh hưởng lên projection |
 | --- | --- | --- |
-| `appendContextEdit(targetEntryId, null)` | `append context_edit` | `omit target from future provider context` |
-| `appendContextEdit(targetEntryId, { content })` | `append context_edit` | `replace target content in future provider context` |
-| `raw transcript / UI history` | `append-only` | `unchanged` |
-| `returned editId` | `new context_edit entry` | `not target entry` |
+| `appendContextEdit(targetEntryId, null)` | `thêm entry context_edit` | `loại entry đích khỏi provider context về sau` |
+| `appendContextEdit(targetEntryId, { content })` | `thêm entry context_edit` | `thay content của entry đích trong provider context về sau` |
+| `transcript thô / lịch sử UI` | `chỉ ghi thêm (append-only)` | `không đổi` |
+| `editId trả về` | `entry context_edit mới` | `không phải entry đích` |
 
 Replacement khác null phải có shape `{ content }`, không truyền content value trực tiếp. Method trả ID của edit entry vừa append. Target entry, raw transcript và UI history vẫn nguyên vẹn; chỉ model projection thay đổi. Mọi switch exhaustive trên `SessionEntry` phải có nhánh `context_edit`.
 

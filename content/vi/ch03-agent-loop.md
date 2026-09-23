@@ -808,11 +808,11 @@ const finishTurn: FinishTurn = ({ message }) => {
 
 Callback chạy trước `turn_end`; Agent Core lưu quyết định rồi áp dụng sau `turn_end`. Response error và aborted vẫn đi qua callback nhưng luôn là hard exit. Trả `undefined` cho hai trường hợp này giữ nguyên xử lý mặc định và không cho predicate dành cho response bình thường chạy trên failure object.
 
-| Callback / result | Response | Runtime boundary |
+| Callback / kết quả | Phản hồi | Ranh giới runtime |
 | --- | --- | --- |
-| `finishTurn` | `normal, error, aborted` | `runs before turn_end; decision applies after turn_end` |
-| `normal + { action: "end" }` | `turn_end` | `agent_end before queue polling` |
-| `error / aborted + undefined` | `turn_end` | `hard exit` |
+| `finishTurn` | `normal, error, aborted` | `chạy trước turn_end; quyết định có hiệu lực sau turn_end` |
+| `normal + { action: "end" }` | `turn_end` | `agent_end trước khi poll queue` |
+| `error / aborted + undefined` | `turn_end` | `thoát bắt buộc` |
 
 Với mọi final reason không phải hard exit, loop kiểm tra Tool block thật. `length` là safety branch riêng: argument có thể parse được nhưng chưa đầy đủ, nên Pi phát failed Tool result cho từng call và không thực thi call nào. `{ action: "continue" }` bảo đảm có một provider request kế tiếp; Tool, steering hoặc follow-up continuation đã tồn tại sẽ đáp ứng quyết định này mà không thêm request thừa. Chỉ inner loop đang tiếp tục mới chuẩn bị request trước `turn_start` kế tiếp.
 

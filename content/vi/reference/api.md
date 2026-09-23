@@ -490,12 +490,12 @@ Truyền `entries` sẽ khôi phục parent-linked tree mà không bật cơ ch�
 
 `SessionManager` sở hữu projection chuẩn dùng cho provider request về sau. Dùng `session.navigateTree()` khi di chuyển trong tree. Sau khi application append trực tiếp qua `session.sessionManager`, hãy gọi `session.refreshContext()`; gán message array trên Agent bên dưới không thay thế projection của manager.
 
-| Operation | Thay đổi được lưu | Ảnh hưởng lên projection |
+| Thao tác | Thay đổi được lưu | Ảnh hưởng lên projection |
 | --- | --- | --- |
-| `appendContextEdit(targetEntryId, null)` | `append context_edit` | `omit target from future provider context` |
-| `appendContextEdit(targetEntryId, { content })` | `append context_edit` | `replace target content in future provider context` |
-| `raw transcript / UI history` | `append-only` | `unchanged` |
-| `returned editId` | `new context_edit entry` | `not target entry` |
+| `appendContextEdit(targetEntryId, null)` | `thêm entry context_edit` | `loại entry đích khỏi provider context về sau` |
+| `appendContextEdit(targetEntryId, { content })` | `thêm entry context_edit` | `thay content của entry đích trong provider context về sau` |
+| `transcript thô / lịch sử UI` | `chỉ ghi thêm (append-only)` | `không đổi` |
+| `editId trả về` | `entry context_edit mới` | `không phải entry đích` |
 
 `ContextEditEntry` thuộc union `SessionEntry` đã export, vì vậy switch exhaustive phải xử lý `context_edit`. Replacement object có đúng shape `{ content }`; `null` nghĩa là omission. Cả hai dạng đều append một edit entry và giữ nguyên target entry. `appendCompaction(summary, null, tokensBefore)` là dạng retain-none: ID của compaction entry vừa sinh trở thành retained boundary có hiệu lực, nên projection kế tiếp không giữ entry nào đứng trước nó.
 

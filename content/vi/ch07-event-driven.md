@@ -252,11 +252,11 @@ Một số tên trùng với sự kiện lõi, nhưng payload và bảo đảm d
 
 `turn_end` và `agent_before_settle` là actionable boundary. `TurnEndEvent` yêu cầu `turnIndex`, `message`, `toolResults`, `messageEntryId`, `toolResultEntryIds`, `outcome`, `entries`, `continue` cùng context preview. `AgentBeforeSettleEvent` mang boundary state dùng chung và thuộc union `ExtensionEvent` đã export. Host integration dispatch cả hai qua `emitBoundary(baseEvent, buildContext)`, nơi các entry draft nối tiếp được preview trước khi commit.
 
-| Extension event | Contract | Cách host lên lịch |
+| Sự kiện Extension | Hợp đồng | Cách host lên lịch |
 | --- | --- | --- |
-| `turn_end` | `actionable` | `emitBoundary(baseEvent, buildContext)` |
-| `agent_before_settle` | `actionable` | `emitBoundary(baseEvent, buildContext)` |
-| `agent_settled` | `requested runs` | `after all settled handlers finish` |
+| `turn_end` | `cho phép trả kết quả điều khiển` | `emitBoundary(baseEvent, buildContext)` |
+| `agent_before_settle` | `cho phép trả kết quả điều khiển` | `emitBoundary(baseEvent, buildContext)` |
+| `agent_settled` | `các lượt chạy được yêu cầu` | `sau khi mọi settled handler hoàn tất` |
 
 Actionable handler có thể append một context omission rồi yêu cầu đúng một provider request kế tiếp. Cần guard điều kiện continuation; luôn trả `continue: true` sẽ tạo loop.
 

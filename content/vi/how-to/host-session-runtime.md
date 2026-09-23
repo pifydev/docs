@@ -457,11 +457,11 @@ Runtime cập nhật `session`, `services`, `diagnostics` và `modelFallbackMess
 
 Mỗi replacement session lấy provider context từ `SessionManager` của chính nó. Khi khôi phục entry do external store sở hữu, factory dựng `SessionManager.inMemory(cwd, { id: sessionId }, entries)`. Sau rebind, mọi thay đổi context phải đi qua public session operation thay vì gán transcript của Agent bên dưới.
 
-| Operation của host | Public API | Kết quả context |
+| Thao tác của host | Public API | Kết quả context |
 | --- | --- | --- |
-| `external restore` | `SessionManager.inMemory(cwd, { id: sessionId }, entries)` | `canonical provider context` |
-| `tree navigation` | `session.navigateTree(targetId)` | `refreshes canonical projection` |
-| `manual append` | `session.sessionManager append operation → session.refreshContext()` | `refreshes canonical projection` |
+| `khôi phục từ nguồn ngoài` | `SessionManager.inMemory(cwd, { id: sessionId }, entries)` | `provider context chuẩn` |
+| `điều hướng tree` | `session.navigateTree(targetId)` | `làm mới projection chuẩn` |
+| `append thủ công` | `thao tác append qua session.sessionManager → session.refreshContext()` | `làm mới projection chuẩn` |
 
 `navigateTree()` di chuyển leaf đã chọn rồi dựng lại finalized context cùng Tool state. Nếu host chủ động append qua `session.sessionManager`, host phải gọi `session.refreshContext()` trước request kế tiếp. `ContextEditEntry` chỉ đổi future provider projection; raw transcript và UI history vẫn append-only. Binding dùng để render hoặc persist raw tree nên tiếp tục dựa trên session event cùng manager entry, không dùng projected message array hiện tại như audit record.
 

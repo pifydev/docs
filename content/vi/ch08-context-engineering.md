@@ -546,11 +546,11 @@ Các lớp phòng thủ xuất hiện vào những thời điểm khác nhau. Lu
 
 Coding Agent chạy request transform của Extension theo hai phase. Handler `context` thông thường không nhìn thấy system message. Sau khi handler trả về, Pi khôi phục leading system message chứa provider prompt cùng Tool declaration ban đầu. Tiếp theo, `context_with_system` nhận full transcript có cả system message, và array mà handler trả về được chuyển sang bước convert kế tiếp theo đúng nguyên trạng.
 
-| Phase của Extension | Input của handler | Cách runtime xử lý |
+| Pha Extension | Đầu vào handler | Cách runtime xử lý |
 | --- | --- | --- |
-| `context` | `conversation without system messages` | `Pi restores leading prompt and tool state` |
-| `context_with_system` | `full transcript including system messages` | `returned messages are sent verbatim` |
-| `context_with_system without leading system message` | `provider prompt and initial tool declarations` | `removed` |
+| `context` | `hội thoại không có system message` | `Pi khôi phục leading prompt và trạng thái Tool` |
+| `context_with_system` | `toàn bộ transcript có system message` | `các message trả về được gửi nguyên văn` |
+| `context_with_system không có system message đứng đầu` | `provider prompt và khai báo Tool ban đầu` | `bị loại bỏ` |
 
 Dùng `context` cho phép lọc cục bộ theo request thông thường vì phase này không thể vô tình làm mất prompt hoặc Tool state. Chỉ dùng `context_with_system` khi Extension chủ động sở hữu toàn bộ provider transcript. Nếu xóa hoặc thay system message đầu tiên, Extension sẽ đổi nội dung provider nhận trong request đó; Pi không dựng lại message này sau handler.
 

@@ -51,10 +51,10 @@ Với `message_update`, hãy kiểm tra `assistantMessageEvent.type`. Text, thin
 
 `SessionManager` sở hữu projection chuẩn được gửi tới provider. Một entry `context_edit` có thể bỏ qua hoặc thay nội dung trong projection về sau mà không xóa entry gốc. Giữ transcript và UI event log theo nguyên tắc append-only: message đã render vẫn có thể được kiểm tra và audit ngay cả khi nó không còn xuất hiện trong provider request tiếp theo.
 
-| View | Owner | Behavior |
+| Góc nhìn | Nguồn quản lý | Hành vi |
 | --- | --- | --- |
-| `provider context` | `SessionManager projection` | `may omit or replace content` |
-| `raw transcript / UI history` | `append-only` | `still observable` |
+| `provider context` | `projection của SessionManager` | `có thể bỏ hoặc thay content` |
+| `transcript thô / lịch sử UI` | `chỉ ghi thêm (append-only)` | `vẫn quan sát được` |
 
 Sau khi append edit qua `session.sessionManager`, gọi `session.refreshContext()` trước prompt tiếp theo. Khi điều hướng cây bằng `session.navigateTree(targetId)`, Pi sẽ tự refresh projection.
 

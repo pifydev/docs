@@ -480,10 +480,10 @@ sessionManager.appendCompaction(summary, null, tokensBefore);
 
 | Tình huống | Cách projection/accounting xử lý | Kết quả |
 | --- | --- | --- |
-| `appendCompaction(summary, null, tokensBefore)` | `compaction entry ID` | `retain no preceding entries` |
-| `context_edit present` | `projected context estimate` | `usage accounting` |
-| `abandoned retry / recovery attempt` | `context_edit omission` | `excluded from future provider context` |
-| `raw history` | `append-only` | `preserved` |
+| `appendCompaction(summary, null, tokensBefore)` | `ID của compaction entry` | `không giữ entry nào đứng trước` |
+| `có context_edit` | `ước lượng projected context` | `tính toán usage` |
+| `lượt retry / recovery đã bị bỏ` | `context_edit với replacement: null` | `bị loại khỏi provider context về sau` |
+| `lịch sử thô` | `chỉ ghi thêm (append-only)` | `được giữ nguyên` |
 
 Khi retry sau overflow hoặc recoverable length, Coding Agent append omission edit cho failed assistant attempt cùng Tool result trước khi compact. Provider context về sau loại bỏ attempt đã bỏ đó, nhưng raw session tree và UI history vẫn còn. Các omission entry cũng đi qua đường compact-and-retry, nên failed attempt không xuất hiện lại sau khi context được dựng lại.
 

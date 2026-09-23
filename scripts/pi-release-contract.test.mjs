@@ -1062,7 +1062,7 @@ function normalizeContractCell(cell) {
   return cell.trim().replaceAll("`", "").replace(/\s+/g, " ");
 }
 
-function parseMarkdownContractTables(source) {
+function parseMarkdownContractTableDefinitions(source) {
   const lines = source.replaceAll("\r\n", "\n").split("\n");
   const tables = [];
 
@@ -1074,6 +1074,7 @@ function parseMarkdownContractTables(source) {
 
     const parseRow = (line) =>
       line.trim().slice(1, -1).split("|").map(normalizeContractCell);
+    const header = parseRow(lines[index]);
     const rows = [];
     index += 2;
     while (index < lines.length && /^\s*\|.*\|\s*$/.test(lines[index])) {
@@ -1081,10 +1082,14 @@ function parseMarkdownContractTables(source) {
       index += 1;
     }
     index -= 1;
-    tables.push(rows);
+    tables.push({ header, rows });
   }
 
   return tables;
+}
+
+function parseMarkdownContractTables(source) {
+  return parseMarkdownContractTableDefinitions(source).map(({ rows }) => rows);
 }
 
 function contractTableContainsRows(
@@ -1113,6 +1118,25 @@ function assertContractTableRows(source, expectedRows, context, options = {}) {
   assert.ok(
     table,
     `${context} must preserve the required technical relationships`,
+  );
+  return table;
+}
+
+function assertContractTable(
+  source,
+  { header: expectedHeader, rows: expectedRows },
+  context,
+  options = {},
+) {
+  const table = parseMarkdownContractTableDefinitions(source).find(
+    ({ header, rows }) =>
+      header.length === expectedHeader.length &&
+      header.every((cell, index) => cell === expectedHeader[index]) &&
+      contractTableContainsRows(rows, expectedRows, options),
+  );
+  assert.ok(
+    table,
+    `${context} must preserve the localized header and technical relationships`,
   );
   return table;
 }
@@ -1906,11 +1930,94 @@ function assertVirtualTypeScriptCompiles(virtualSources, context) {
   );
 }
 
-test("0.87.0 session context and lifecycle removes obsolete current guidance", async () => {
-  const activeSources = await readActiveSources();
+function splitMarkdownGuidanceBlocks(source) {
+  const blocks = [];
+  let lines = [];
+  let inFence = false;
+
+  const flush = (kind = "prose") => {
+    if (lines.length > 0) {
+      blocks.push({ kind, source: lines.join("\n") });
+      lines = [];
+    }
+  };
+
+  for (const line of source.replaceAll("\r\n", "\n").split("\n")) {
+    if (/^\s*(```|~~~)/.test(line)) {
+      if (inFence) {
+        lines.push(line);
+        flush("code");
+        inFence = false;
+      } else {
+        flush();
+        lines.push(line);
+        inFence = true;
+      }
+      continue;
+    }
+    if (inFence) {
+      lines.push(line);
+      continue;
+    }
+    if (/^\s*$/.test(line)) {
+      flush();
+      continue;
+    }
+    if (/^\s*\|.*\|\s*$/.test(line)) {
+      flush();
+      blocks.push({ kind: "table-row", source: line });
+      continue;
+    }
+    if (/^\s*(?:[-*+] |\d+[.)] )/.test(line) || /^\s*#{1,6}\s+/.test(line)) {
+      flush();
+    }
+    lines.push(line);
+  }
+  flush(inFence ? "code" : "prose");
+  return blocks;
+}
+
+function stripAllowedLifecycleMigration(block, patternIndex) {
+  if (block.kind === "code") return block.source;
+
+  const oldTurnPredicate = "`?shouldStopAfterTurn`?";
+  const finishTurn = "`?finishTurn`?";
+  const oldTurnBoundary =
+    "`?ExtensionRunner\\.emit\\(\\s*[\"']turn_end[\"']\\s*,[^)\\n]*\\)`?";
+  const emitBoundary = "`?emitBoundary\\([^)\\n]*\\)`?";
+  const migrations =
+    patternIndex === 0
+      ? [
+          new RegExp(
+            `\\breplace\\s+${oldTurnPredicate}\\s+with\\s+${finishTurn}`,
+            "giu",
+          ),
+          new RegExp(
+            `\\bthay\\s+${oldTurnPredicate}\\s+bằng\\s+${finishTurn}`,
+            "giu",
+          ),
+        ]
+      : [
+          new RegExp(
+            `\\breplace\\s+${oldTurnBoundary}\\s+with\\s+${emitBoundary}`,
+            "giu",
+          ),
+          new RegExp(
+            `\\bthay\\s+${oldTurnBoundary}\\s+bằng\\s+${emitBoundary}`,
+            "giu",
+          ),
+        ];
+
+  return migrations.reduce(
+    (remaining, migration) => remaining.replace(migration, ""),
+    block.source,
+  );
+}
+
+function findStaleLifecycleGuidance(activeSources) {
   const removedCurrentApiPatterns = [
     /\bshouldStopAfterTurn\b/,
-    /ExtensionRunner\.emit\(["']turn_end["']/,
+    /ExtensionRunner\.emit\(\s*["']turn_end["']/,
     /session\.agent\.state\.messages\s*=/,
   ];
   const stale = [];
@@ -1923,21 +2030,25 @@ test("0.87.0 session context and lifecycle removes obsolete current guidance", a
     ) {
       continue;
     }
-    for (const [index, pattern] of removedCurrentApiPatterns.entries()) {
-      let currentGuidance = source;
-      if (normalized.endsWith("/changelog.md") && index < 2) {
-        const migration = extractMarkdownSection(
-          source,
-          "## 2026-09-23",
-          `${normalized} lifecycle migration history`,
-        ).body;
-        currentGuidance = source.replace(migration, "");
-      }
-      if (pattern.test(currentGuidance)) {
-        stale.push(`${normalized}: ${pattern}`);
+    for (const block of splitMarkdownGuidanceBlocks(source)) {
+      for (const [index, pattern] of removedCurrentApiPatterns.entries()) {
+        const currentGuidance =
+          normalized.endsWith("/changelog.md") && index < 2
+            ? stripAllowedLifecycleMigration(block, index)
+            : block.source;
+        if (pattern.test(currentGuidance)) {
+          stale.push(`${normalized}: ${pattern}: ${block.source.trim()}`);
+        }
       }
     }
   }
+
+  return stale;
+}
+
+test("0.87.0 session context and lifecycle removes obsolete current guidance", async () => {
+  const activeSources = await readActiveSources();
+  const stale = findStaleLifecycleGuidance(activeSources);
 
   assert.deepEqual(
     stale,
@@ -1958,105 +2069,341 @@ test("0.87.0 session context and lifecycle removes obsolete current guidance", a
     assert.match(migration, /\bshouldStopAfterTurn\b/);
     assert.match(migration, /\bfinishTurn\b/);
   }
+
+  const changelogFixture = (body) => `# Changelog
+
+## 2026-09-23
+
+${body}
+
+## 2026-09-22
+
+Previous release.`;
+  const scanFixture = (body) =>
+    findStaleLifecycleGuidance([
+      {
+        filename: "content/en/changelog.md",
+        source: changelogFixture(body),
+      },
+    ]);
+
+  assert.deepEqual(
+    scanFixture(`- Replace \`shouldStopAfterTurn\` with \`finishTurn\`.
+- Replace \`ExtensionRunner.emit("turn_end", event)\` with \`emitBoundary(baseEvent, buildContext)\`.`),
+    [],
+    "directed changelog migration rows remain valid historical guidance",
+  );
+
+  for (const [label, body] of [
+    [
+      "unrelated obsolete guidance inside the release section",
+      `- Replace \`shouldStopAfterTurn\` with \`finishTurn\`.
+
+- Configure \`shouldStopAfterTurn\` for current agent loops.`,
+    ],
+    [
+      "second obsolete occurrence in the migration paragraph",
+      "- Replace `shouldStopAfterTurn` with `finishTurn`. Keep `shouldStopAfterTurn` enabled for compatibility.",
+    ],
+    [
+      "missing shouldStopAfterTurn replacement target",
+      "- Continue using `shouldStopAfterTurn` after upgrading.",
+    ],
+    [
+      "reversed shouldStopAfterTurn migration",
+      "- Replace `finishTurn` with `shouldStopAfterTurn`.",
+    ],
+    [
+      "missing ExtensionRunner.emit replacement target",
+      '- Keep calling `ExtensionRunner.emit("turn_end", event)` directly.',
+    ],
+    [
+      "obsolete ExtensionRunner.emit with ordinary call spacing",
+      '- Keep calling `ExtensionRunner.emit( "turn_end", event )` directly.',
+    ],
+    [
+      "reversed ExtensionRunner.emit migration",
+      '- Replace `emitBoundary(baseEvent, buildContext)` with `ExtensionRunner.emit("turn_end", event)`.',
+    ],
+    [
+      "obsolete executable example adjacent to valid migration prose",
+      `- Replace \`ExtensionRunner.emit("turn_end", event)\` with \`emitBoundary(baseEvent, buildContext)\`.
+
+\`\`\`typescript
+await runner.ExtensionRunner.emit("turn_end", event);
+\`\`\``,
+    ],
+  ]) {
+    assert.notDeepEqual(
+      scanFixture(body),
+      [],
+      `${label} must be rejected even under the dated changelog heading`,
+    );
+  }
 });
 
 test("0.87.0 session context and lifecycle preserves exact bilingual boundary relationships", async () => {
   const localized = await readLifecycleScopedContent();
-  const lifecycleRows = [
-    [
-      "finishTurn",
-      "normal, error, aborted",
-      "runs before turn_end; decision applies after turn_end",
-    ],
-    [
-      'normal + { action: "end" }',
-      "turn_end",
-      "agent_end before queue polling",
-    ],
-    ["error / aborted + undefined", "turn_end", "hard exit"],
-  ];
-  const boundaryRows = [
-    ["turn_end", "actionable", "emitBoundary(baseEvent, buildContext)"],
-    [
-      "agent_before_settle",
-      "actionable",
-      "emitBoundary(baseEvent, buildContext)",
-    ],
-    ["agent_settled", "requested runs", "after all settled handlers finish"],
-  ];
-  const contextRows = [
-    [
-      "context",
-      "conversation without system messages",
-      "Pi restores leading prompt and tool state",
-    ],
-    [
-      "context_with_system",
-      "full transcript including system messages",
-      "returned messages are sent verbatim",
-    ],
-    [
-      "context_with_system without leading system message",
-      "provider prompt and initial tool declarations",
-      "removed",
-    ],
-  ];
-  const sessionRows = [
-    [
-      "appendContextEdit(targetEntryId, null)",
-      "append context_edit",
-      "omit target from future provider context",
-    ],
-    [
-      "appendContextEdit(targetEntryId, { content })",
-      "append context_edit",
-      "replace target content in future provider context",
-    ],
-    ["raw transcript / UI history", "append-only", "unchanged"],
-    ["returned editId", "new context_edit entry", "not target entry"],
-  ];
-  const compactionRows = [
-    [
-      "appendCompaction(summary, null, tokensBefore)",
-      "compaction entry ID",
-      "retain no preceding entries",
-    ],
-    ["context_edit present", "projected context estimate", "usage accounting"],
-    [
-      "abandoned retry / recovery attempt",
-      "context_edit omission",
-      "excluded from future provider context",
-    ],
-    ["raw history", "append-only", "preserved"],
-  ];
-  const hostRows = [
-    [
-      "external restore",
-      "SessionManager.inMemory(cwd, { id: sessionId }, entries)",
-      "canonical provider context",
-    ],
-    [
-      "tree navigation",
-      "session.navigateTree(targetId)",
-      "refreshes canonical projection",
-    ],
-    [
-      "manual append",
-      "session.sessionManager append operation → session.refreshContext()",
-      "refreshes canonical projection",
-    ],
-  ];
-  const streamRows = [
-    [
-      "provider context",
-      "SessionManager projection",
-      "may omit or replace content",
-    ],
-    ["raw transcript / UI history", "append-only", "still observable"],
-  ];
+  const contractsByLocale = {
+    en: {
+      lifecycle: {
+        header: ["Callback / result", "Responses", "Runtime boundary"],
+        rows: [
+          [
+            "finishTurn",
+            "normal, error, aborted",
+            "runs before turn_end; decision applies after turn_end",
+          ],
+          [
+            'normal + { action: "end" }',
+            "turn_end",
+            "agent_end before queue polling",
+          ],
+          ["error / aborted + undefined", "turn_end", "hard exit"],
+        ],
+      },
+      boundary: {
+        header: ["Extension event", "Contract", "Host scheduling"],
+        rows: [
+          ["turn_end", "actionable", "emitBoundary(baseEvent, buildContext)"],
+          [
+            "agent_before_settle",
+            "actionable",
+            "emitBoundary(baseEvent, buildContext)",
+          ],
+          [
+            "agent_settled",
+            "requested runs",
+            "after all settled handlers finish",
+          ],
+        ],
+      },
+      context: {
+        header: ["Extension phase", "Handler input", "Runtime handling"],
+        rows: [
+          [
+            "context",
+            "conversation without system messages",
+            "Pi restores leading prompt and tool state",
+          ],
+          [
+            "context_with_system",
+            "full transcript including system messages",
+            "returned messages are sent verbatim",
+          ],
+          [
+            "context_with_system without leading system message",
+            "provider prompt and initial tool declarations",
+            "removed",
+          ],
+        ],
+      },
+      session: {
+        header: ["Operation", "Stored change", "Projection effect"],
+        rows: [
+          [
+            "appendContextEdit(targetEntryId, null)",
+            "append context_edit",
+            "omit target from future provider context",
+          ],
+          [
+            "appendContextEdit(targetEntryId, { content })",
+            "append context_edit",
+            "replace target content in future provider context",
+          ],
+          ["raw transcript / UI history", "append-only", "unchanged"],
+          ["returned editId", "new context_edit entry", "not target entry"],
+        ],
+      },
+      compaction: {
+        header: ["Situation", "Projection/accounting action", "Result"],
+        rows: [
+          [
+            "appendCompaction(summary, null, tokensBefore)",
+            "compaction entry ID",
+            "retain no preceding entries",
+          ],
+          [
+            "context_edit present",
+            "projected context estimate",
+            "usage accounting",
+          ],
+          [
+            "abandoned retry / recovery attempt",
+            "context_edit omission",
+            "excluded from future provider context",
+          ],
+          ["raw history", "append-only", "preserved"],
+        ],
+      },
+      host: {
+        header: ["Host operation", "Public API", "Context result"],
+        rows: [
+          [
+            "external restore",
+            "SessionManager.inMemory(cwd, { id: sessionId }, entries)",
+            "canonical provider context",
+          ],
+          [
+            "tree navigation",
+            "session.navigateTree(targetId)",
+            "refreshes canonical projection",
+          ],
+          [
+            "manual append",
+            "session.sessionManager append operation → session.refreshContext()",
+            "refreshes canonical projection",
+          ],
+        ],
+      },
+      stream: {
+        header: ["View", "Owner", "Behavior"],
+        rows: [
+          [
+            "provider context",
+            "SessionManager projection",
+            "may omit or replace content",
+          ],
+          ["raw transcript / UI history", "append-only", "still observable"],
+        ],
+      },
+    },
+    vi: {
+      lifecycle: {
+        header: ["Callback / kết quả", "Phản hồi", "Ranh giới runtime"],
+        rows: [
+          [
+            "finishTurn",
+            "normal, error, aborted",
+            "chạy trước turn_end; quyết định có hiệu lực sau turn_end",
+          ],
+          [
+            'normal + { action: "end" }',
+            "turn_end",
+            "agent_end trước khi poll queue",
+          ],
+          ["error / aborted + undefined", "turn_end", "thoát bắt buộc"],
+        ],
+      },
+      boundary: {
+        header: ["Sự kiện Extension", "Hợp đồng", "Cách host lên lịch"],
+        rows: [
+          [
+            "turn_end",
+            "cho phép trả kết quả điều khiển",
+            "emitBoundary(baseEvent, buildContext)",
+          ],
+          [
+            "agent_before_settle",
+            "cho phép trả kết quả điều khiển",
+            "emitBoundary(baseEvent, buildContext)",
+          ],
+          [
+            "agent_settled",
+            "các lượt chạy được yêu cầu",
+            "sau khi mọi settled handler hoàn tất",
+          ],
+        ],
+      },
+      context: {
+        header: ["Pha Extension", "Đầu vào handler", "Cách runtime xử lý"],
+        rows: [
+          [
+            "context",
+            "hội thoại không có system message",
+            "Pi khôi phục leading prompt và trạng thái Tool",
+          ],
+          [
+            "context_with_system",
+            "toàn bộ transcript có system message",
+            "các message trả về được gửi nguyên văn",
+          ],
+          [
+            "context_with_system không có system message đứng đầu",
+            "provider prompt và khai báo Tool ban đầu",
+            "bị loại bỏ",
+          ],
+        ],
+      },
+      session: {
+        header: ["Thao tác", "Thay đổi được lưu", "Ảnh hưởng lên projection"],
+        rows: [
+          [
+            "appendContextEdit(targetEntryId, null)",
+            "thêm entry context_edit",
+            "loại entry đích khỏi provider context về sau",
+          ],
+          [
+            "appendContextEdit(targetEntryId, { content })",
+            "thêm entry context_edit",
+            "thay content của entry đích trong provider context về sau",
+          ],
+          [
+            "transcript thô / lịch sử UI",
+            "chỉ ghi thêm (append-only)",
+            "không đổi",
+          ],
+          ["editId trả về", "entry context_edit mới", "không phải entry đích"],
+        ],
+      },
+      compaction: {
+        header: ["Tình huống", "Cách projection/accounting xử lý", "Kết quả"],
+        rows: [
+          [
+            "appendCompaction(summary, null, tokensBefore)",
+            "ID của compaction entry",
+            "không giữ entry nào đứng trước",
+          ],
+          ["có context_edit", "ước lượng projected context", "tính toán usage"],
+          [
+            "lượt retry / recovery đã bị bỏ",
+            "context_edit với replacement: null",
+            "bị loại khỏi provider context về sau",
+          ],
+          ["lịch sử thô", "chỉ ghi thêm (append-only)", "được giữ nguyên"],
+        ],
+      },
+      host: {
+        header: ["Thao tác của host", "Public API", "Kết quả context"],
+        rows: [
+          [
+            "khôi phục từ nguồn ngoài",
+            "SessionManager.inMemory(cwd, { id: sessionId }, entries)",
+            "provider context chuẩn",
+          ],
+          [
+            "điều hướng tree",
+            "session.navigateTree(targetId)",
+            "làm mới projection chuẩn",
+          ],
+          [
+            "append thủ công",
+            "thao tác append qua session.sessionManager → session.refreshContext()",
+            "làm mới projection chuẩn",
+          ],
+        ],
+      },
+      stream: {
+        header: ["Góc nhìn", "Nguồn quản lý", "Hành vi"],
+        rows: [
+          [
+            "provider context",
+            "projection của SessionManager",
+            "có thể bỏ hoặc thay content",
+          ],
+          [
+            "transcript thô / lịch sử UI",
+            "chỉ ghi thêm (append-only)",
+            "vẫn quan sát được",
+          ],
+        ],
+      },
+    },
+  };
 
   for (const locale of ["en", "vi"]) {
     const get = (filename) => localized.get(`${locale}/${filename}`);
+    const contracts = contractsByLocale[locale];
     const agentLoop = extractMarkdownSection(
       get("ch03-agent-loop.md"),
       locale === "en"
@@ -2064,9 +2411,9 @@ test("0.87.0 session context and lifecycle preserves exact bilingual boundary re
         : "### 4.5 Kiểm tra dừng và kết thúc",
       `${locale} finishTurn lifecycle`,
     );
-    assertContractTableRows(
+    assertContractTable(
       agentLoop.body,
-      lifecycleRows,
+      contracts.lifecycle,
       `${locale} finishTurn order`,
     );
 
@@ -2077,9 +2424,9 @@ test("0.87.0 session context and lifecycle preserves exact bilingual boundary re
         : "### Sự kiện Extension có hợp đồng riêng",
       `${locale} actionable Extension boundaries`,
     );
-    assertContractTableRows(
+    assertContractTable(
       extensionEvents.body,
-      boundaryRows,
+      contracts.boundary,
       `${locale} Extension boundary dispatch`,
     );
 
@@ -2090,9 +2437,9 @@ test("0.87.0 session context and lifecycle preserves exact bilingual boundary re
         : "### Biến đổi request: `context` và `context_with_system`",
       `${locale} request context phases`,
     );
-    assertContractTableRows(
+    assertContractTable(
       contextTransforms.body,
-      contextRows,
+      contracts.context,
       `${locale} context phase ownership`,
     );
 
@@ -2103,9 +2450,9 @@ test("0.87.0 session context and lifecycle preserves exact bilingual boundary re
         : "### `CompactionEntry` là điểm kiểm tra được lưu",
       `${locale} compaction projection semantics`,
     );
-    assertContractTableRows(
+    assertContractTable(
       compaction.body,
-      compactionRows,
+      contracts.compaction,
       `${locale} compaction boundaries`,
     );
 
@@ -2116,9 +2463,9 @@ test("0.87.0 session context and lifecycle preserves exact bilingual boundary re
         : "### Mười một loại entry của Coding Agent",
       `${locale} context edit entries`,
     );
-    assertContractTableRows(
+    assertContractTable(
       sessionEntries.body,
-      sessionRows,
+      contracts.session,
       `${locale} append-only context edits`,
     );
 
@@ -2129,9 +2476,9 @@ test("0.87.0 session context and lifecycle preserves exact bilingual boundary re
         : "### Giữ `SessionManager` làm nguồn chuẩn sau khi thay session",
       `${locale} hosted session context ownership`,
     );
-    assertContractTableRows(
+    assertContractTable(
       host.body,
-      hostRows,
+      contracts.host,
       `${locale} host canonical projection`,
     );
 
@@ -2142,9 +2489,9 @@ test("0.87.0 session context and lifecycle preserves exact bilingual boundary re
         : "## Chỉnh provider context về sau mà không viết lại history",
       `${locale} persisted context edits`,
     );
-    assertContractTableRows(
+    assertContractTable(
       persisted.body,
-      sessionRows,
+      contracts.session,
       `${locale} persisted append-only context edits`,
     );
 
@@ -2155,9 +2502,9 @@ test("0.87.0 session context and lifecycle preserves exact bilingual boundary re
         : "### Provider context đã chiếu không phải raw UI history",
       `${locale} streamed history boundary`,
     );
-    assertContractTableRows(
+    assertContractTable(
       streamed.body,
-      streamRows,
+      contracts.stream,
       `${locale} stream projection boundary`,
     );
 
@@ -2168,12 +2515,28 @@ test("0.87.0 session context and lifecycle preserves exact bilingual boundary re
         : "#### Provider context chuẩn và append-only edit",
       `${locale} API session lifecycle`,
     );
-    assertContractTableRows(
+    assertContractTable(
       api.body,
-      sessionRows,
+      contracts.session,
       `${locale} API context edits`,
     );
   }
+
+  const englishLifecycleFixture = `| Callback / result | Responses | Runtime boundary |
+| --- | --- | --- |
+| \`finishTurn\` | \`normal, error, aborted\` | \`runs before turn_end; decision applies after turn_end\` |
+| \`normal + { action: "end" }\` | \`turn_end\` | \`agent_end before queue polling\` |
+| \`error / aborted + undefined\` | \`turn_end\` | \`hard exit\` |`;
+  assert.throws(
+    () =>
+      assertContractTable(
+        englishLifecycleFixture,
+        contractsByLocale.vi.lifecycle,
+        "Vietnamese lifecycle localization guard",
+      ),
+    assert.AssertionError,
+    "English descriptive text must not satisfy the Vietnamese table contract",
+  );
 });
 
 test("0.87.0 session context and lifecycle examples typecheck against Pi 0.87.1", async () => {
