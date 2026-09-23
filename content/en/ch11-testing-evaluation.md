@@ -97,11 +97,11 @@ Use contract fixtures for supported protocol variants and a small integration te
 
 ## 3. Script deterministic turns with the public faux provider
 
-`fauxProvider()` is the public Pi AI test double for an explicit `Models` collection. It owns one or more faux models and consumes scripted assistant responses in request-start order. A response may be a ready `AssistantMessage` or a factory that receives the actual `Context`, stream options, provider state, and selected model. That factory is the seam for request assertions.
+`fauxProvider()` is the public Pi AI test double for an explicit `Models` collection. It owns one or more faux models and consumes scripted assistant responses in request-start order. A response may be a ready `AssistantMessage` or a factory that receives the actual `TranscriptContext`, stream options, provider state, and selected model. That factory is the seam for request assertions.
 
 The handle exposes `setResponses()`, `appendResponses()`, `getPendingResponseCount()`, `getModel()`, and counters in `state`. Unlike the legacy compatibility registration, this explicit handle has no `unregister()` method. Cleanup removes its provider from the isolated collection with `models.deleteProvider(faux.provider.id)`.
 
-The following compile-checked function covers one complete Tool round trip. It uses no API key, environment secret, timer, filesystem, or network request. The first scripted response contains explanatory text and a `ToolCall`; the second is the final assistant response. Assertions inspect both provider requests and the Agent transcript.
+The following compile-checked function covers one complete Tool round trip. It uses no API key, environment secret, filesystem, or network request; its only timer is a failure-only watchdog that aborts and drains a stalled Agent. The first scripted response contains explanatory text and a `ToolCall`; the second is the final assistant response. Assertions inspect both provider requests and the Agent transcript.
 
 ```typescript
 import assert from "node:assert/strict";
@@ -112,17 +112,21 @@ import {
   fauxProvider,
   fauxText,
   fauxToolCall,
+  getCurrentSystemPrompt,
+  getCurrentTools,
   Type,
-  type Context,
+  type TranscriptContext,
 } from "@earendil-works/pi-ai";
 import { Agent, type AgentTool } from "@earendil-works/pi-agent-core";
 
 async function verifyDeterministicAgentRoundTrip(): Promise<void> {
-  const requests: Array<{
-    roles: Array<Context["messages"][number]["role"]>;
+  type ProviderRequestSummary = {
+    roles: Array<TranscriptContext["messages"][number]["role"]>;
+    systemPrompt: string;
     toolNames: string[];
-    messages: Context["messages"];
-  }> = [];
+    messages: TranscriptContext["messages"];
+  };
+  const requests: ProviderRequestSummary[] = [];
   const models = createModels();
   const faux = fauxProvider({
     provider: "chapter-11-faux",
@@ -146,17 +150,21 @@ async function verifyDeterministicAgentRoundTrip(): Promise<void> {
     },
   };
 
-  const captureRequest = (context: Context) => {
+  function captureTranscriptRequest(
+    requests: ProviderRequestSummary[],
+    context: TranscriptContext,
+  ): void {
     requests.push({
       roles: context.messages.map((message) => message.role),
-      toolNames: context.tools?.map((tool) => tool.name) ?? [],
+      systemPrompt: getCurrentSystemPrompt(context.messages),
+      toolNames: getCurrentTools(context.messages).map((tool) => tool.name),
       messages: structuredClone(context.messages),
     });
-  };
+  }
 
   faux.setResponses([
     (context) => {
-      captureRequest(context);
+      captureTranscriptRequest(requests, context);
       return fauxAssistantMessage(
         [
           fauxText("I will use the add Tool."),
@@ -166,11 +174,39 @@ async function verifyDeterministicAgentRoundTrip(): Promise<void> {
       );
     },
     (context) => {
-      captureRequest(context);
+      captureTranscriptRequest(requests, context);
       return fauxAssistantMessage(fauxText("The total is 42."));
     },
   ]);
 
+  const WATCHDOG_MS = 2_000;
+  const awaitWithFailureWatchdog = async <T>(
+    operation: Promise<T>,
+    label: string,
+    onTimeout: () => void,
+  ): Promise<T> => {
+    let watchdog: ReturnType<typeof setTimeout> | undefined;
+    const timeoutFailure = new Promise<never>((_, reject) => {
+      watchdog = setTimeout(() => {
+        const message = `${label} did not settle within ${WATCHDOG_MS} ms`;
+        try {
+          onTimeout();
+        } catch (cause) {
+          reject(new Error(`${message}; timeout cleanup failed`, { cause }));
+          return;
+        }
+        reject(new Error(message));
+      }, WATCHDOG_MS);
+    });
+
+    try {
+      return await Promise.race([operation, timeoutFailure]);
+    } finally {
+      if (watchdog !== undefined) clearTimeout(watchdog);
+    }
+  };
+
+  let agent: Agent | undefined;
   try {
     const model = models.getModel("chapter-11-faux", "chapter-11-model");
     assert.ok(
@@ -178,7 +214,7 @@ async function verifyDeterministicAgentRoundTrip(): Promise<void> {
       "the isolated Models collection must expose the faux model",
     );
 
-    const agent = new Agent({
+    agent = new Agent({
       streamFn: models.streamSimple.bind(models),
       initialState: {
         systemPrompt: "Use the add Tool for arithmetic.",
@@ -188,15 +224,26 @@ async function verifyDeterministicAgentRoundTrip(): Promise<void> {
       },
     });
 
-    await agent.prompt("What is 20 + 22?");
+    await awaitWithFailureWatchdog(
+      agent.prompt("What is 20 + 22?"),
+      "Chapter 11 Agent run",
+      () => agent?.abort(),
+    );
 
     assert.equal(faux.state.callCount, 2);
     assert.equal(faux.getPendingResponseCount(), 0);
-    assert.deepEqual(requests[0]?.roles, ["user"]);
+    assert.deepEqual(requests[0]?.roles, ["system", "user"]);
+    assert.equal(requests[0]?.systemPrompt, "Use the add Tool for arithmetic.");
     assert.deepEqual(requests[0]?.toolNames, ["add"]);
-    assert.deepEqual(requests[1]?.roles, ["user", "assistant", "toolResult"]);
+    assert.deepEqual(requests[1]?.toolNames, ["add"]);
+    assert.deepEqual(requests[1]?.roles, [
+      "system",
+      "user",
+      "assistant",
+      "toolResult",
+    ]);
 
-    const requestToolResult = requests[1]?.messages[2];
+    const requestToolResult = requests[1]?.messages[3];
     assert.equal(requestToolResult?.role, "toolResult");
     if (requestToolResult?.role !== "toolResult") {
       throw new Error("second provider request must contain a Tool result");
@@ -208,7 +255,7 @@ async function verifyDeterministicAgentRoundTrip(): Promise<void> {
 
     assert.deepEqual(
       agent.state.messages.map((message) => message.role),
-      ["user", "assistant", "toolResult", "assistant"],
+      ["system", "user", "assistant", "toolResult", "assistant"],
     );
     const finalMessage = agent.state.messages.at(-1);
     assert.equal(finalMessage?.role, "assistant");
@@ -218,19 +265,30 @@ async function verifyDeterministicAgentRoundTrip(): Promise<void> {
     assert.equal(finalMessage.stopReason, "stop");
     assert.deepEqual(finalMessage.content, [fauxText("The total is 42.")]);
   } finally {
-    models.deleteProvider(faux.provider.id);
-    assert.equal(models.getProvider(faux.provider.id), undefined);
+    try {
+      agent?.abort();
+      if (agent) {
+        await awaitWithFailureWatchdog(
+          agent.waitForIdle(),
+          "Chapter 11 Agent cleanup",
+          () => agent?.abort(),
+        );
+      }
+    } finally {
+      models.deleteProvider(faux.provider.id);
+      assert.equal(models.getProvider(faux.provider.id), undefined);
+    }
   }
 }
 ```
 
-The response factories record data-only message snapshots instead of cloning the whole `Context`: an `AgentTool` contains its `execute` function, and functions are not structured-cloneable. The assertions deliberately avoid stream chunk counts. `fauxProvider()` generates the scripted semantic response deterministically, but its default chunk sizes may vary; set equal `tokenSize.min` and `tokenSize.max` only when a test genuinely owns delta granularity.
+The response factories clone only `TranscriptContext.messages`, which is data-only. They recover the active system prompt and transcript Tool declarations with `getCurrentSystemPrompt()` and `getCurrentTools()`; the executable `AgentTool` remains Agent-owned and is not part of this provider context. The assertions deliberately avoid stream chunk counts. `fauxProvider()` generates the scripted semantic response deterministically, but its default chunk sizes may vary; set equal `tokenSize.min` and `tokenSize.max` only when a test genuinely owns delta granularity.
 
 An exhausted faux queue produces a final assistant error response whose message explains that no responses remain. It is useful as a negative test: prompt once more, then assert `stopReason === "error"`, a useful `errorMessage`, and a settled Agent. Do not accidentally treat queue exhaustion as a failed task verdict; it means the test fixture was incomplete.
 
 ## 4. Assert Agent Loop and Tool round-trip invariants
 
-The deterministic example proves more than the string `42`. It proves the causal shape of one Agent run. The first provider request contains the user message and advertised Tool. The assistant then requests `add` with ID `add-1`. Agent core validates the arguments, calls `execute()`, appends a `ToolResultMessage` with the same ID and Tool name, and sends the expanded context to the provider. Only the second assistant response ends the run.
+The deterministic example proves more than the string `42`. It proves the causal shape of one Agent run. The first provider request starts with a `SystemMessage` that carries the prompt and Tool declarations, followed by the user message. The assistant then requests `add` with ID `add-1`. Agent core validates the arguments, calls `execute()`, appends a `ToolResultMessage` with the same ID and Tool name, and sends the expanded context to the provider. Only the second assistant response ends the run.
 
 A focused Agent Loop suite should assert these invariants independently of answer prose:
 

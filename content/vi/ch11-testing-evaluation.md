@@ -97,11 +97,11 @@ Dùng contract fixture cho các biến thể protocol được hỗ trợ và m�
 
 ## 3. Lập kịch bản turn deterministic bằng faux provider công khai
 
-`fauxProvider()` là test double công khai của Pi AI cho một collection `Models` tường minh. Nó sở hữu một hoặc nhiều faux model và tiêu thụ assistant response theo kịch bản, theo thứ tự request bắt đầu. Một response có thể là `AssistantMessage` đã dựng sẵn hoặc một factory nhận `Context`, stream options, provider state và model được chọn trong thực tế. Factory đó là seam để đặt assertion cho request.
+`fauxProvider()` là test double công khai của Pi AI cho một collection `Models` tường minh. Nó sở hữu một hoặc nhiều faux model và tiêu thụ assistant response theo kịch bản, theo thứ tự request bắt đầu. Một response có thể là `AssistantMessage` đã dựng sẵn hoặc một factory nhận `TranscriptContext`, stream options, provider state và model được chọn trong thực tế. Factory đó là seam để đặt assertion cho request.
 
 Handle cung cấp `setResponses()`, `appendResponses()`, `getPendingResponseCount()`, `getModel()` và các counter trong `state`. Khác với cơ chế đăng ký compatibility cũ, handle tường minh này không có method `unregister()`. Khi cleanup, hãy xóa provider của nó khỏi collection cô lập bằng `models.deleteProvider(faux.provider.id)`.
 
-Function dưới đây được kiểm tra bằng bước biên dịch và bao phủ trọn một vòng khứ hồi qua Tool. Nó không dùng API key, environment secret, timer, filesystem hay network request. Scripted response đầu chứa text giải thích và một `ToolCall`; response thứ hai là assistant response cuối. Các assertion kiểm tra cả provider request lẫn transcript của Agent.
+Function dưới đây được kiểm tra bằng bước biên dịch và bao phủ trọn một vòng khứ hồi qua Tool. Nó không dùng API key, environment secret, filesystem hay network request; timer duy nhất là failure-only watchdog dùng để abort rồi chờ một Agent bị treo settle hoàn toàn. Scripted response đầu chứa text giải thích và một `ToolCall`; response thứ hai là assistant response cuối. Các assertion kiểm tra cả provider request lẫn transcript của Agent.
 
 ```typescript
 import assert from "node:assert/strict";
@@ -112,17 +112,21 @@ import {
   fauxProvider,
   fauxText,
   fauxToolCall,
+  getCurrentSystemPrompt,
+  getCurrentTools,
   Type,
-  type Context,
+  type TranscriptContext,
 } from "@earendil-works/pi-ai";
 import { Agent, type AgentTool } from "@earendil-works/pi-agent-core";
 
 async function verifyDeterministicAgentRoundTrip(): Promise<void> {
-  const requests: Array<{
-    roles: Array<Context["messages"][number]["role"]>;
+  type ProviderRequestSummary = {
+    roles: Array<TranscriptContext["messages"][number]["role"]>;
+    systemPrompt: string;
     toolNames: string[];
-    messages: Context["messages"];
-  }> = [];
+    messages: TranscriptContext["messages"];
+  };
+  const requests: ProviderRequestSummary[] = [];
   const models = createModels();
   const faux = fauxProvider({
     provider: "chapter-11-faux",
@@ -146,17 +150,21 @@ async function verifyDeterministicAgentRoundTrip(): Promise<void> {
     },
   };
 
-  const captureRequest = (context: Context) => {
+  function captureTranscriptRequest(
+    requests: ProviderRequestSummary[],
+    context: TranscriptContext,
+  ): void {
     requests.push({
       roles: context.messages.map((message) => message.role),
-      toolNames: context.tools?.map((tool) => tool.name) ?? [],
+      systemPrompt: getCurrentSystemPrompt(context.messages),
+      toolNames: getCurrentTools(context.messages).map((tool) => tool.name),
       messages: structuredClone(context.messages),
     });
-  };
+  }
 
   faux.setResponses([
     (context) => {
-      captureRequest(context);
+      captureTranscriptRequest(requests, context);
       return fauxAssistantMessage(
         [
           fauxText("I will use the add Tool."),
@@ -166,11 +174,39 @@ async function verifyDeterministicAgentRoundTrip(): Promise<void> {
       );
     },
     (context) => {
-      captureRequest(context);
+      captureTranscriptRequest(requests, context);
       return fauxAssistantMessage(fauxText("The total is 42."));
     },
   ]);
 
+  const WATCHDOG_MS = 2_000;
+  const awaitWithFailureWatchdog = async <T>(
+    operation: Promise<T>,
+    label: string,
+    onTimeout: () => void,
+  ): Promise<T> => {
+    let watchdog: ReturnType<typeof setTimeout> | undefined;
+    const timeoutFailure = new Promise<never>((_, reject) => {
+      watchdog = setTimeout(() => {
+        const message = `${label} did not settle within ${WATCHDOG_MS} ms`;
+        try {
+          onTimeout();
+        } catch (cause) {
+          reject(new Error(`${message}; timeout cleanup failed`, { cause }));
+          return;
+        }
+        reject(new Error(message));
+      }, WATCHDOG_MS);
+    });
+
+    try {
+      return await Promise.race([operation, timeoutFailure]);
+    } finally {
+      if (watchdog !== undefined) clearTimeout(watchdog);
+    }
+  };
+
+  let agent: Agent | undefined;
   try {
     const model = models.getModel("chapter-11-faux", "chapter-11-model");
     assert.ok(
@@ -178,7 +214,7 @@ async function verifyDeterministicAgentRoundTrip(): Promise<void> {
       "the isolated Models collection must expose the faux model",
     );
 
-    const agent = new Agent({
+    agent = new Agent({
       streamFn: models.streamSimple.bind(models),
       initialState: {
         systemPrompt: "Use the add Tool for arithmetic.",
@@ -188,15 +224,26 @@ async function verifyDeterministicAgentRoundTrip(): Promise<void> {
       },
     });
 
-    await agent.prompt("What is 20 + 22?");
+    await awaitWithFailureWatchdog(
+      agent.prompt("What is 20 + 22?"),
+      "Chapter 11 Agent run",
+      () => agent?.abort(),
+    );
 
     assert.equal(faux.state.callCount, 2);
     assert.equal(faux.getPendingResponseCount(), 0);
-    assert.deepEqual(requests[0]?.roles, ["user"]);
+    assert.deepEqual(requests[0]?.roles, ["system", "user"]);
+    assert.equal(requests[0]?.systemPrompt, "Use the add Tool for arithmetic.");
     assert.deepEqual(requests[0]?.toolNames, ["add"]);
-    assert.deepEqual(requests[1]?.roles, ["user", "assistant", "toolResult"]);
+    assert.deepEqual(requests[1]?.toolNames, ["add"]);
+    assert.deepEqual(requests[1]?.roles, [
+      "system",
+      "user",
+      "assistant",
+      "toolResult",
+    ]);
 
-    const requestToolResult = requests[1]?.messages[2];
+    const requestToolResult = requests[1]?.messages[3];
     assert.equal(requestToolResult?.role, "toolResult");
     if (requestToolResult?.role !== "toolResult") {
       throw new Error("second provider request must contain a Tool result");
@@ -208,7 +255,7 @@ async function verifyDeterministicAgentRoundTrip(): Promise<void> {
 
     assert.deepEqual(
       agent.state.messages.map((message) => message.role),
-      ["user", "assistant", "toolResult", "assistant"],
+      ["system", "user", "assistant", "toolResult", "assistant"],
     );
     const finalMessage = agent.state.messages.at(-1);
     assert.equal(finalMessage?.role, "assistant");
@@ -218,19 +265,30 @@ async function verifyDeterministicAgentRoundTrip(): Promise<void> {
     assert.equal(finalMessage.stopReason, "stop");
     assert.deepEqual(finalMessage.content, [fauxText("The total is 42.")]);
   } finally {
-    models.deleteProvider(faux.provider.id);
-    assert.equal(models.getProvider(faux.provider.id), undefined);
+    try {
+      agent?.abort();
+      if (agent) {
+        await awaitWithFailureWatchdog(
+          agent.waitForIdle(),
+          "Chapter 11 Agent cleanup",
+          () => agent?.abort(),
+        );
+      }
+    } finally {
+      models.deleteProvider(faux.provider.id);
+      assert.equal(models.getProvider(faux.provider.id), undefined);
+    }
   }
 }
 ```
 
-Các response factory ghi snapshot message chỉ chứa data thay vì clone toàn bộ `Context`: một `AgentTool` chứa function `execute`, mà function thì không thể structured-clone. Các assertion chủ động không kiểm tra số chunk của stream. `fauxProvider()` tạo semantic response theo kịch bản một cách deterministic, nhưng kích thước chunk mặc định có thể thay đổi; chỉ đặt `tokenSize.min` bằng `tokenSize.max` khi test thực sự sở hữu delta granularity.
+Các response factory chỉ clone `TranscriptContext.messages`, vốn chỉ chứa data. Chúng lấy system prompt và Tool declaration hiện hành bằng `getCurrentSystemPrompt()` cùng `getCurrentTools()`; `AgentTool` có thể thực thi vẫn do Agent sở hữu và không nằm trong provider context này. Các assertion chủ động không kiểm tra số chunk của stream. `fauxProvider()` tạo semantic response theo kịch bản một cách deterministic, nhưng kích thước chunk mặc định có thể thay đổi; chỉ đặt `tokenSize.min` bằng `tokenSize.max` khi test thực sự sở hữu delta granularity.
 
 Khi hàng đợi faux cạn, kết quả là một assistant error response cuối với message giải thích rằng không còn response. Trường hợp này hữu ích cho negative test: prompt thêm một lần, rồi assert `stopReason === "error"`, một `errorMessage` hữu ích và Agent đã settle. Đừng vô tình xem việc cạn hàng đợi là verdict tác vụ thất bại; nó cho biết test fixture chưa đầy đủ.
 
 ## 4. Assert các bất biến của Agent Loop và vòng khứ hồi Tool
 
-Ví dụ deterministic chứng minh nhiều hơn chuỗi `42`. Nó chứng minh hình dạng nhân quả của một lần chạy Agent. Provider request đầu chứa user message và Tool được khai báo trong request. Sau đó assistant yêu cầu `add` với ID `add-1`. Agent core xác thực arguments, gọi `execute()`, append một `ToolResultMessage` có cùng ID và tên Tool, rồi gửi context đã mở rộng cho provider. Chỉ assistant response thứ hai mới kết thúc lần chạy.
+Ví dụ deterministic chứng minh nhiều hơn chuỗi `42`. Nó chứng minh hình dạng nhân quả của một lần chạy Agent. Provider request đầu bắt đầu bằng `SystemMessage` chứa prompt và Tool declaration, sau đó mới đến user message. Tiếp theo, assistant yêu cầu `add` với ID `add-1`. Agent core xác thực arguments, gọi `execute()`, append một `ToolResultMessage` có cùng ID và tên Tool, rồi gửi context đã mở rộng cho provider. Chỉ assistant response thứ hai mới kết thúc lần chạy.
 
 Một test suite tập trung cho Agent Loop nên assert riêng các bất biến sau, độc lập với câu chữ của answer:
 

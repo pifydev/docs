@@ -67,26 +67,26 @@ Hãy giữ Tool deterministic không phụ thuộc clock, giá trị random, fil
 
 ## 3. Xếp hàng một Tool call rồi đến final answer
 
-`faux.setResponses()` thay thế hàng đợi đang chờ. Response factory đầu tiên nhận đúng `Context` của provider, ghi data-only snapshot và trả về `fauxAssistantMessage()` gồm phần giải thích cùng `fauxToolCall()`. `stopReason` của nó là `"toolUse"`, nên Agent Loop thực thi Tool rồi tiếp tục.
+`faux.setResponses()` thay thế hàng đợi đang chờ. Response factory đầu tiên nhận đúng `TranscriptContext` của provider, ghi data-only snapshot và trả về `fauxAssistantMessage()` gồm phần giải thích cùng `fauxToolCall()`. `stopReason` của nó là `"toolUse"`, nên Agent Loop thực thi Tool rồi tiếp tục.
 
-Factory thứ hai nhận request kế tiếp; request này phải chứa sẵn user message, assistant Tool call và Tool result. Factory trả về final text response. Hai factory tốt hơn một fixture không quan sát được vì mỗi factory có thể kiểm tra đúng context tại protocol boundary tương ứng.
+Factory thứ hai nhận request kế tiếp; request này phải chứa sẵn system message đứng đầu, user message, assistant Tool call và Tool result. Factory trả về final text response. Hai factory tốt hơn một fixture không quan sát được vì mỗi factory có thể kiểm tra đúng context tại protocol boundary tương ứng.
 
 ## 4. Chạy Agent và ghi event cùng transcript
 
 Hãy subscribe trước `prompt()`. Ví dụ ghi loại event thay vì nội dung từng stream chunk: thứ tự semantic là phần quan trọng, còn kích thước token chunk của faux provider không thuộc Agent contract. Sau khi run kết thúc, `agent.state.messages` là transcript hoàn chỉnh mà host nhìn thấy.
 
-Provider request snapshot chỉ chứa message, role và tên Tool. Không `structuredClone()` toàn bộ `Context`: Tool definition trong đó có function thực thi nên không thể structured-clone.
+Provider request snapshot chứa message, role, system prompt hiện hành và tên Tool trong transcript. Chỉ clone `TranscriptContext.messages`; các definition `AgentTool` có thể thực thi vẫn do Agent sở hữu và không nằm trong provider context này.
 
 ## 5. Assert toàn bộ round-trip contract
 
 Các assertion quan trọng đi xuyên qua nhiều boundary thay vì chỉ kiểm tra một layer:
 
 - provider call count chính xác là hai và hàng đợi response đã rỗng;
-- request đầu chứa user và quảng bá `add`;
-- request thứ hai có các role `user`, `assistant`, `toolResult`;
+- request đầu có các role `system`, `user`, cho thấy system prompt đã cấu hình và quảng bá `add`;
+- request thứ hai có các role `system`, `user`, `assistant`, `toolResult`;
 - Tool nhận `{ left: 20, right: 22 }` cho call `sum-1`;
 - Tool result liên kết ngược qua cả `toolCallId: "sum-1"` và `toolName: "add"`;
-- thứ tự transcript là `user`, `assistant`, `toolResult`, `assistant`;
+- thứ tự transcript là `system`, `user`, `assistant`, `toolResult`, `assistant`;
 - nội dung cuối là `The total is 42.` với `stopReason: "stop"`;
 - Tool execution bắt đầu trước khi kết thúc, còn Agent run được bao bởi `agent_start` và `agent_end`.
 
@@ -106,8 +106,10 @@ import {
   fauxProvider,
   fauxText,
   fauxToolCall,
+  getCurrentSystemPrompt,
+  getCurrentTools,
   Type,
-  type Context,
+  type TranscriptContext,
 } from "@earendil-works/pi-ai";
 import {
   Agent,
@@ -116,11 +118,13 @@ import {
 } from "@earendil-works/pi-agent-core";
 
 export async function verifyDeterministicAgentTestingGuide(): Promise<void> {
-  const requests: Array<{
-    roles: Array<Context["messages"][number]["role"]>;
-    messages: Context["messages"];
+  type ProviderRequestSummary = {
+    roles: Array<TranscriptContext["messages"][number]["role"]>;
+    systemPrompt: string;
     toolNames: string[];
-  }> = [];
+    messages: TranscriptContext["messages"];
+  };
+  const requests: ProviderRequestSummary[] = [];
   const executedCalls: Array<{
     toolCallId: string;
     args: { left: number; right: number };
@@ -202,17 +206,21 @@ export async function verifyDeterministicAgentTestingGuide(): Promise<void> {
     unsubscribe = agent.subscribe((event) => {
       eventTypes.push(event.type);
     });
-    const captureRequest = (context: Context) => {
+    function captureTranscriptRequest(
+      requests: ProviderRequestSummary[],
+      context: TranscriptContext,
+    ): void {
       requests.push({
         roles: context.messages.map((message) => message.role),
+        systemPrompt: getCurrentSystemPrompt(context.messages),
+        toolNames: getCurrentTools(context.messages).map((tool) => tool.name),
         messages: structuredClone(context.messages),
-        toolNames: context.tools?.map((tool) => tool.name) ?? [],
       });
-    };
+    }
 
     faux.setResponses([
       (context) => {
-        captureRequest(context);
+        captureTranscriptRequest(requests, context);
         return fauxAssistantMessage(
           [
             fauxText("I will call the add Tool."),
@@ -222,7 +230,7 @@ export async function verifyDeterministicAgentTestingGuide(): Promise<void> {
         );
       },
       (context) => {
-        captureRequest(context);
+        captureTranscriptRequest(requests, context);
         return fauxAssistantMessage(fauxText("The total is 42."));
       },
     ]);
@@ -235,14 +243,21 @@ export async function verifyDeterministicAgentTestingGuide(): Promise<void> {
 
     assert.equal(faux.state.callCount, 2);
     assert.equal(faux.getPendingResponseCount(), 0);
-    assert.deepEqual(requests[0]?.roles, ["user"]);
+    assert.deepEqual(requests[0]?.roles, ["system", "user"]);
+    assert.equal(requests[0]?.systemPrompt, "Use the add Tool for arithmetic.");
     assert.deepEqual(requests[0]?.toolNames, ["add"]);
-    assert.deepEqual(requests[1]?.roles, ["user", "assistant", "toolResult"]);
+    assert.deepEqual(requests[1]?.toolNames, ["add"]);
+    assert.deepEqual(requests[1]?.roles, [
+      "system",
+      "user",
+      "assistant",
+      "toolResult",
+    ]);
     assert.deepEqual(executedCalls, [
       { toolCallId: "sum-1", args: { left: 20, right: 22 } },
     ]);
 
-    const requestToolResult = requests[1]?.messages[2];
+    const requestToolResult = requests[1]?.messages[3];
     assert.equal(requestToolResult?.role, "toolResult");
     if (requestToolResult?.role !== "toolResult") {
       throw new Error("the second provider request must contain a Tool result");
@@ -254,7 +269,7 @@ export async function verifyDeterministicAgentTestingGuide(): Promise<void> {
 
     assert.deepEqual(
       agent.state.messages.map((message) => message.role),
-      ["user", "assistant", "toolResult", "assistant"],
+      ["system", "user", "assistant", "toolResult", "assistant"],
     );
     const finalMessage = agent.state.messages.at(-1);
     assert.equal(finalMessage?.role, "assistant");
