@@ -7,9 +7,9 @@ translation_key: quickstart
 language: vi
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 ---
-Hướng dẫn này dùng [release Pi `0.85.0` chính thức](https://github.com/earendil-works/pi/releases/tag/v0.85.0) để tạo một chương trình TypeScript nhỏ nhận phản hồi streaming từ model. Bạn sẽ cài `@earendil-works/pi-ai`, đăng ký các provider có sẵn, chọn một model và xử lý luồng sự kiện. Bạn không cần biết Pi từ trước.
+Hướng dẫn này dùng [release Pi `0.87.1` chính thức](https://github.com/earendil-works/pi/releases/tag/v0.87.1), được review tại [`f07218c`](https://github.com/earendil-works/pi/commit/f07218c4d4bbc12bef056a7058c3dd49dfe41abe), để tạo một chương trình TypeScript nhỏ nhận phản hồi streaming từ model. Bạn sẽ cài `@earendil-works/pi-ai`, đăng ký các provider có sẵn, chọn một model và xử lý luồng sự kiện. Bạn không cần biết Pi từ trước.
 
 :::tip[Kết quả]
 
@@ -37,7 +37,7 @@ Hướng dẫn này gọi API thật. Hãy đặt giới hạn chi tiêu thấp 
 mkdir pi-quickstart && cd pi-quickstart
 npm init -y
 npm pkg set type=module
-npm install @earendil-works/pi-ai@0.85.0
+npm install @earendil-works/pi-ai@0.87.1
 npm install --save-dev tsx
 ```
 

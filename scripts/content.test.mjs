@@ -324,10 +324,10 @@ test("README and bilingual changelog describe the complete SDK and course releas
   assert.match(changelog.vi, /workshop TypeScript offline/i);
 });
 
-test("release entry points publish the Pi 0.85.0 baseline and exact review authority", async () => {
+test("release entry points publish the Pi 0.87.1 baseline and exact review authority", async () => {
   const releaseURL =
-    "https://github.com/earendil-works/pi/releases/tag/v0.85.0";
-  const commit = "107d79f11072bbc8a3a757ed7fd69596bee7d68c";
+    "https://github.com/earendil-works/pi/releases/tag/v0.87.1";
+  const releaseCommit = "f07218c4d4bbc12bef056a7058c3dd49dfe41abe";
   const pages = await Promise.all(
     [
       "content/en/index.mdx",
@@ -346,20 +346,20 @@ test("release entry points publish the Pi 0.85.0 baseline and exact review autho
   for (const { relativePath, source } of pages) {
     assert.match(
       source,
-      /last_updated: '2026-09-04'/,
+      /last_updated: '2026-09-23'/,
       `${relativePath} must carry the publication baseline date`,
     );
     assert.ok(
       source.includes(releaseURL),
-      `${relativePath} must link the official Pi 0.85.0 release`,
+      `${relativePath} must link the official Pi 0.87.1 release`,
     );
   }
 
-  for (const { relativePath, source } of pages.filter(({ relativePath }) =>
-    /(?:index\.mdx|faq\.md)$/.test(relativePath),
-  )) {
+  for (const { relativePath, source } of pages) {
     assert.ok(
-      source.includes(`https://github.com/earendil-works/pi/commit/${commit}`),
+      source.includes(
+        `https://github.com/earendil-works/pi/commit/${releaseCommit}`,
+      ),
       `${relativePath} must link the exact reviewed Pi commit`,
     );
   }
@@ -369,17 +369,19 @@ test("release entry points publish the Pi 0.85.0 baseline and exact review autho
   )) {
     assert.match(
       source,
-      /npm install @earendil-works\/pi-ai@0\.85\.0/,
+      /npm install @earendil-works\/pi-ai@0\.87\.1/,
       `${relativePath} must pin its SDK install command`,
     );
   }
 
-  assert.match(readme, /Pi SDK `0\.85\.0`/);
+  assert.match(readme, /Pi SDK `0\.87\.1`/);
   assert.ok(readme.includes(releaseURL));
   assert.ok(
-    readme.includes(`https://github.com/earendil-works/pi/commit/${commit}`),
+    readme.includes(
+      `https://github.com/earendil-works/pi/commit/${releaseCommit}`,
+    ),
   );
-  assert.match(readme, /reviewed[\s\S]{0,160}2026-09-04/i);
+  assert.match(readme, /reviewed[\s\S]{0,160}2026-09-23/i);
 });
 
 test("Chinese references remain internal provenance only", async () => {

@@ -5,9 +5,47 @@ translation_key: changelog
 language: en
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 ---
 This page records changes to the Pify documentation site. For Pi releases, use the [upstream release history](https://github.com/earendil-works/pi/releases).
+
+## 2026-09-23
+
+### Release coverage
+
+Pify moves its documentation baseline from `0.85.0` to [Pi `0.87.1`](https://github.com/earendil-works/pi/releases/tag/v0.87.1). This rollup includes [Pi `0.85.1`](https://github.com/earendil-works/pi/releases/tag/v0.85.1), [Pi `0.86.0`](https://github.com/earendil-works/pi/releases/tag/v0.86.0), [Pi `0.86.1`](https://github.com/earendil-works/pi/releases/tag/v0.86.1), and [Pi `0.87.0`](https://github.com/earendil-works/pi/releases/tag/v0.87.0), with source review pinned to [`f07218c`](https://github.com/earendil-works/pi/commit/f07218c4d4bbc12bef056a7058c3dd49dfe41abe).
+
+### Breaking API migrations
+
+- In `0.86.0`, provider streams receive normalized `TranscriptContext`. Custom providers read the prompt and tool declarations from `context.messages` through `getCurrentSystemPrompt()` and `getCurrentTools()`.
+- `ToolCall.arguments` and `ToolResultMessage.details` accept JSON-compatible values; `ToolResultMessage` is now a conditional type, and `JsonValue` arrays are readonly.
+- The `user_bash` hook is fail-closed: errors or invalid defined results stop the command before later handlers or local execution. Return `undefined` to continue dispatch, or return `{ operations }` or `{ result }` to handle the command.
+- In `0.87.0`, replace `shouldStopAfterTurn` with `finishTurn` and return `{ action: "end" }` to stop after the turn. The hook runs before `turn_end`, but its decision applies afterward. It also receives error and aborted responses; a predicate intended only for normal responses must return `undefined` for those hard exits.
+- `SessionManager` now owns canonical provider context for `AgentSession`; assigning `session.agent.state.messages` no longer replaces future request history. Restore entries with `SessionManager.inMemory()`, navigate with `session.navigateTree()`, or append through the session manager and call `session.refreshContext()`.
+- Exhaustive `SessionEntry` switches must handle `ContextEditEntry` with type `context_edit`. Use `replacement: null` to omit an entry from future provider context, or supply replacement content; raw history stays intact.
+- Extension integrations must account for the required boundary fields on `TurnEndEvent` and the new `AgentBeforeSettleEvent` in `ExtensionEvent`. Dispatch actionable `turn_end` and `agent_before_settle` boundaries through `emitBoundary()`; handlers can return entries and request continuation. Runs requested during `agent_settled` wait until all settled handlers finish.
+
+### New capabilities
+
+- `0.86.0` adds cost-aware prompt cache warming during long Tool runs, with optional idle warming and a `cache_warming_decision` hook. `/bug` gathers redacted diagnostics with an optional transcript or summary for upload to Radius or local ZIP export.
+- Radius gains an offline model catalog, supplemented by cached and live discovery. In `0.86.1`, Meta Muse supports `/login meta` with key refresh and direct `META_API_KEY` authentication.
+- Per-model compaction budgets use `compaction.modelOverrides` with `reserveTokens` and `keepRecentTokens`. Extensions can call configured models through `ctx.modelRegistry.stream()` and `streamSimple()` with resolved authentication. `pi.on()` returns an unsubscribe function; registration changes during dispatch affect subsequent dispatches.
+- In `0.87.0`, `context_with_system` runs after `context` on the full transcript, including system messages, and sends its result verbatim. Per-model `inputLimits.images.resize` profiles in `models.json` apply to attachments, `read`, and Tool-result images.
+- `0.87.1` adds Claude Opus 5.5 through Anthropic, GPT-6 Sol and GPT-6 Luna through OpenAI API keys and OpenAI Codex subscriptions, and all three through supported GitHub Copilot routes. New xAI sessions default to Grok 4.7.
+
+### Reliability, provider, and CLI fixes
+
+- The root-import packaging workaround needed for `0.85.0` is no longer needed after `0.85.1` fixes accidental publication of internal experimental dependencies. The experimental `client` and `experimental/plugin` subpaths and server/client commands become source-only through `pi-test.sh`; the supported local SDK and stdio RPC API keep their existing contracts.
+- The `0.86.x` fixes cover GitHub Copilot GPT routing through Responses, provider reasoning and cache metadata, compaction/cancellation races, signal-terminated shell commands, clipboard fallbacks, and `/bug` diagnostics. `0.86.1` also enables Node's persistent compile cache before CLI startup.
+- `0.87.0` repairs context-edit accounting and recovery omissions, restores prompt and Tool state after `context` handlers, and avoids rebuilding expired caches during delayed idle warming. Offline `/bug` permits local ZIP export while blocking uploads; unknown OpenAI-compatible endpoints receive strict Tool schemas only when they advertise support.
+- In `0.87.1`, split-turn compaction prompts separate the conversation from continuation instructions so Claude Fable 5.1 can summarize it. A missing or invalid `--mode` value now reports an error and exits with a nonzero status.
+- The image-only message fix omits an empty text part that some OpenAI-compatible providers reject. Anthropic OAuth requests also report the corrected Claude Code version.
+
+### Documentation and verification scope
+
+- This Pify commit series publishes the migration across chapters, How-to guides, references, Quickstart, FAQ, and source-review records. Entry points and install commands now identify `0.87.1`; later commits in the series carry the detailed provider, session, model, and extension guide migrations. The Course implementation remains an independent teaching implementation with no promise of Pi API compatibility.
+- Package verification pins `@earendil-works/pi-ai`, `@earendil-works/pi-agent-core`, `@earendil-works/pi-coding-agent`, and `@earendil-works/pi-server` to `0.87.1`. `scripts/fixtures/pi-release-0871.json` records release authority; `tests/fixtures/pi-sdk-0871.contract.ts` checks public declarations and supplies offline deterministic Agent, session restoration, and runtime-host checks. Content checks cover release links, migration claims, bilingual structure, `lint:sync`, `lint:frontmatter`, `lint:editorial`, and `test:preservation`; these checks do not exercise live provider accounts.
+- `@earendil-works/pi-client`, `@earendil-works/pi-protocol`, and `@earendil-works/pi-server` remain experimental, with no stable API or compatibility guarantee. Pinning a package or describing a source contract does not change that boundary.
 
 ## 2026-09-04
 

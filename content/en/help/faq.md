@@ -5,7 +5,7 @@ translation_key: faq
 language: en
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 ---
 These answers cover Pi and this documentation project. Open a [GitHub issue](https://github.com/pifydev/docs/issues) if your question is not listed.
 
@@ -35,7 +35,7 @@ Read chapters 1 through 3 in order for the project overview, package architectur
 
 ### Which Pi revision does this documentation describe?
 
-The current documentation baseline is the official [Pi `0.85.0` release](https://github.com/earendil-works/pi/releases/tag/v0.85.0). The editorial review ledger pins verification to [`107d79f`](https://github.com/earendil-works/pi/commit/107d79f11072bbc8a3a757ed7fd69596bee7d68c). Recheck the upstream source before relying on a version-sensitive API or default.
+The current documentation baseline is the official [Pi `0.87.1` release](https://github.com/earendil-works/pi/releases/tag/v0.87.1). The editorial review ledger pins verification to [`f07218c`](https://github.com/earendil-works/pi/commit/f07218c4d4bbc12bef056a7058c3dd49dfe41abe). Recheck the upstream source before relying on a version-sensitive API or default.
 
 ### Why do examples use TypeScript?
 

@@ -5,7 +5,7 @@ translation_key: faq
 language: vi
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 ---
 Các câu trả lời dưới đây đề cập tới Pi và dự án tài liệu này. Hãy mở [GitHub issue](https://github.com/pifydev/docs/issues) nếu câu hỏi của bạn chưa có trong danh sách.
 
@@ -35,7 +35,7 @@ Hãy đọc chương 1 đến 3 theo thứ tự để nắm tổng quan dự án
 
 ### Tài liệu này mô tả revision nào của Pi?
 
-Baseline hiện tại của tài liệu là [release Pi `0.85.0` chính thức](https://github.com/earendil-works/pi/releases/tag/v0.85.0). Review ledger ghim việc kiểm chứng tại [`107d79f`](https://github.com/earendil-works/pi/commit/107d79f11072bbc8a3a757ed7fd69596bee7d68c). Hãy kiểm tra lại upstream trước khi phụ thuộc vào API hoặc giá trị mặc định có thể thay đổi theo version.
+Baseline hiện tại của tài liệu là [release Pi `0.87.1` chính thức](https://github.com/earendil-works/pi/releases/tag/v0.87.1). Review ledger ghim việc kiểm chứng tại [`f07218c`](https://github.com/earendil-works/pi/commit/f07218c4d4bbc12bef056a7058c3dd49dfe41abe). Hãy kiểm tra lại upstream trước khi phụ thuộc vào API hoặc giá trị mặc định có thể thay đổi theo version.
 
 ### Vì sao ví dụ dùng TypeScript?
 

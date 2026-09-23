@@ -34,12 +34,15 @@ This is a community-maintained learning resource. For authoritative product
 behavior, cross-check the [official Pi documentation](https://pi.dev/docs/latest)
 and [Pi source code](https://github.com/earendil-works/pi).
 
-The current documentation baseline is Pi SDK `0.85.0`: see the
-[official release notes](https://github.com/earendil-works/pi/releases/tag/v0.85.0).
+The current documentation baseline is Pi SDK `0.87.1`: see the
+[official release notes](https://github.com/earendil-works/pi/releases/tag/v0.87.1).
 Technical claims were reviewed against
-[`107d79f`](https://github.com/earendil-works/pi/commit/107d79f11072bbc8a3a757ed7fd69596bee7d68c)
-on 2026-09-04; the rollup also includes the intervening
-[`0.84.4` release](https://github.com/earendil-works/pi/releases/tag/v0.84.4).
+[`f07218c`](https://github.com/earendil-works/pi/commit/f07218c4d4bbc12bef056a7058c3dd49dfe41abe)
+on 2026-09-23; the rollup also includes the intervening releases
+[`0.85.1`](https://github.com/earendil-works/pi/releases/tag/v0.85.1),
+[`0.86.0`](https://github.com/earendil-works/pi/releases/tag/v0.86.0),
+[`0.86.1`](https://github.com/earendil-works/pi/releases/tag/v0.86.1), and
+[`0.87.0`](https://github.com/earendil-works/pi/releases/tag/v0.87.0).
 
 ## What is included
 
@@ -69,7 +72,7 @@ on 2026-09-04; the rollup also includes the intervening
 | Delivery               | Vercel Preview and Production deployments                                   |
 | Continuous integration | GitHub Actions on Node.js 22                                                |
 
-Node.js 22 and npm are the supported development environment.
+Node.js 22.19 or later in the Node.js 22 line and npm are the supported development environment.
 `package-lock.json` is the authoritative dependency lockfile.
 
 ## Quick start

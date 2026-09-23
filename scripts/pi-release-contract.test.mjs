@@ -1628,7 +1628,320 @@ function assertReleaseRollupAccuracy(entryBody, locale, context) {
   );
 }
 
-test("the first bilingual changelog entry is the structured Pi 0.85.0 documentation rollup", async () => {
+function assertCurrentRollupAccuracy(entryBody, locale, context) {
+  const boundaries =
+    locale === "en"
+      ? {
+          failClosed:
+            /errors or invalid defined results stop the command before later handlers or local execution/i,
+          finishTurn: /runs before `turn_end`[^\n]*decision applies afterward/i,
+          canonical:
+            /assigning `session\.agent\.state\.messages` no longer replaces future request history/i,
+          edits: /raw history stays intact/i,
+          transcript:
+            /after `context`[^\n]*including system messages[^\n]*verbatim/i,
+          experimental:
+            /remain experimental[^\n]*no stable API or compatibility guarantee/i,
+        }
+      : {
+          failClosed:
+            /lỗi hoặc result khác `undefined` nhưng không hợp lệ dừng command trước khi gọi handler tiếp theo hoặc thực thi local/i,
+          finishTurn:
+            /chạy trước `turn_end`[^\n]*quyết định được áp dụng sau đó/i,
+          canonical:
+            /gán `session\.agent\.state\.messages` không còn thay thế history cho request tiếp theo/i,
+          edits: /raw history được giữ nguyên/i,
+          transcript: /sau `context`[^\n]*gồm system message[^\n]*nguyên vẹn/i,
+          experimental:
+            /vẫn ở trạng thái thử nghiệm[^\n]*không cam kết API ổn định hay compatibility/i,
+        };
+  const migrations = extractMarkdownSection(
+    entryBody,
+    "### Breaking API migrations",
+    context,
+  ).body;
+  for (const patterns of [
+    [
+      /`TranscriptContext`/,
+      /`context\.messages`/,
+      /`getCurrentSystemPrompt\(\)`/,
+      /`getCurrentTools\(\)`/,
+    ],
+    [
+      /`ToolCall\.arguments`/,
+      /`ToolResultMessage\.details`/,
+      /JSON-compatible/,
+      /`JsonValue`/,
+      /readonly/,
+    ],
+    [
+      /`user_bash`/,
+      /fail-closed/,
+      boundaries.failClosed,
+      /`undefined`/,
+      /`\{ operations \}`/,
+      /`\{ result \}`/,
+    ],
+    [
+      /`shouldStopAfterTurn`/,
+      /`finishTurn`/,
+      /`\{ action: "end" \}`/,
+      boundaries.finishTurn,
+      /error/,
+      /aborted/,
+      /`undefined`/,
+    ],
+    [
+      /`SessionManager`/,
+      boundaries.canonical,
+      /`SessionManager\.inMemory\(\)`/,
+      /`session\.navigateTree\(\)`/,
+      /`session\.refreshContext\(\)`/,
+    ],
+    [
+      /`ContextEditEntry`/,
+      /`SessionEntry`/,
+      /`context_edit`/,
+      /`replacement: null`/,
+      boundaries.edits,
+    ],
+  ]) {
+    assertParagraphContainsAll(
+      migrations,
+      patterns,
+      `${context} migration boundary`,
+    );
+  }
+  const capabilities = extractMarkdownSection(
+    entryBody,
+    "### New capabilities",
+    context,
+  ).body;
+  assertParagraphContainsAll(
+    capabilities,
+    [/`context_with_system`/, boundaries.transcript],
+    `${context} full transcript boundary`,
+  );
+  assertParagraphContainsAll(
+    capabilities,
+    [
+      /Claude Opus 5\.5/,
+      /Anthropic/,
+      /GPT-6 Sol/,
+      /GPT-6 Luna/,
+      /OpenAI API/,
+      /OpenAI Codex/,
+      /GitHub Copilot/,
+      /supported|được hỗ trợ/i,
+    ],
+    `${context} supported model routes`,
+  );
+  const reliability = extractMarkdownSection(
+    entryBody,
+    "### Reliability, provider, and CLI fixes",
+    context,
+  ).body;
+  assertParagraphContainsAll(
+    reliability,
+    [
+      /`0\.85\.1`/,
+      /`0\.85\.0`/,
+      /root-import/,
+      /workaround/i,
+      /no longer needed|không còn cần/i,
+      /source-only/,
+      /`pi-test\.sh`/,
+      /stdio RPC/,
+    ],
+    `${context} packaging fix and experimental boundary`,
+  );
+  assertParagraphContainsAll(
+    reliability,
+    [/`--mode`/, /missing or invalid|thiếu hoặc không hợp lệ/i, /nonzero/],
+    `${context} CLI failure`,
+  );
+  const scope = extractMarkdownSection(
+    entryBody,
+    "### Documentation and verification scope",
+    context,
+  ).body;
+  assertContainsAll(
+    scope,
+    [boundaries.experimental, /commit series|chuỗi commit/i],
+    `${context} publication scope`,
+  );
+  assert.doesNotMatch(
+    entryBody,
+    /all providers support|mọi provider đều hỗ trợ|safe image rendering|render image an toàn/i,
+    `${context} must not overclaim support or safety`,
+  );
+}
+
+test("the first bilingual changelog entry is the structured Pi 0.87.1 documentation rollup", async () => {
+  const references = await readLocalizedContent("changelog.md");
+  const requiredReleaseTokens = [
+    "TranscriptContext",
+    "user_bash",
+    "finishTurn",
+    "ContextEditEntry",
+    "context_with_system",
+    "inputLimits.images.resize",
+    "Claude Opus 5.5",
+    "GPT-6 Sol",
+    "GPT-6 Luna",
+    "Grok 4.7",
+  ];
+  const sections = [
+    {
+      heading: "### Release coverage",
+      patterns: [/Pify/, /`0\.85\.0`/, /Pi `0\.87\.1`/],
+    },
+    {
+      heading: "### Breaking API migrations",
+      patterns: [
+        /`TurnEndEvent`/,
+        /`AgentBeforeSettleEvent`/,
+        /`ExtensionEvent`/,
+        /`emitBoundary\(\)`/,
+      ],
+    },
+    {
+      heading: "### New capabilities",
+      patterns: [
+        /cache warming/,
+        /`\/bug`/,
+        /Radius/,
+        /Meta Muse/,
+        /`\/login meta`/,
+        /`META_API_KEY`/,
+        /`compaction\.modelOverrides`/,
+        /`reserveTokens`/,
+        /`keepRecentTokens`/,
+        /`ctx\.modelRegistry\.stream\(\)`/,
+        /`streamSimple\(\)`/,
+        /`pi\.on\(\)`/,
+        /unsubscribe/,
+        /`inputLimits\.images\.resize`/,
+        /`models\.json`/,
+        /Grok 4\.7/,
+        /xAI/,
+      ],
+    },
+    {
+      heading: "### Reliability, provider, and CLI fixes",
+      patterns: [
+        /split-turn compaction/,
+        /Claude Fable 5\.1/,
+        /image-only/,
+        /empty text part/,
+        /OpenAI-compatible/,
+        /Anthropic OAuth/,
+        /Claude Code version/,
+      ],
+    },
+    {
+      heading: "### Documentation and verification scope",
+      patterns: [
+        /`@earendil-works\/pi-ai`/,
+        /`@earendil-works\/pi-agent-core`/,
+        /`@earendil-works\/pi-coding-agent`/,
+        /`@earendil-works\/pi-server`/,
+        /`@earendil-works\/pi-client`/,
+        /`@earendil-works\/pi-protocol`/,
+        /`0\.87\.1`/,
+        /`scripts\/fixtures\/pi-release-0871\.json`/,
+        /`tests\/fixtures\/pi-sdk-0871\.contract\.ts`/,
+        /offline/,
+        /`lint:sync`/,
+        /`lint:frontmatter`/,
+        /`lint:editorial`/,
+        /`test:preservation`/,
+      ],
+    },
+  ];
+  const structures = [];
+  for (const { locale, source } of references) {
+    const context = `${locale} first changelog entry`;
+    assert.equal(
+      source.match(/^## ([^\r\n]+)$/m)?.[1],
+      "2026-09-23",
+      `${context} must be dated 2026-09-23`,
+    );
+    assert.match(source, /last_updated: '2026-09-23'/);
+    const entry = extractMarkdownSection(source, "## 2026-09-23", context);
+    for (const tag of ["v0.85.1", "v0.86.0", "v0.86.1", "v0.87.0", "v0.87.1"]) {
+      assert.ok(
+        entry.body.includes(
+          `https://github.com/earendil-works/pi/releases/tag/${tag}`,
+        ),
+        `${context} must link ${tag}`,
+      );
+    }
+    for (const token of requiredReleaseTokens) {
+      assert.ok(entry.body.includes(token), `${context} must cover ${token}`);
+    }
+    assert.deepEqual(
+      [...entry.body.matchAll(/^### [^\r\n]+$/gm)].map((match) => match[0]),
+      sections.map(({ heading }) => heading),
+    );
+    structures.push(
+      sections.map(({ heading, patterns }) =>
+        sectionStructure(
+          assertContainsAll(entry.body, patterns, context, { heading }),
+        ),
+      ),
+    );
+    assertCurrentRollupAccuracy(entry.body, locale, context);
+  }
+  assert.deepEqual(structures[0], structures[1]);
+});
+
+test("first bilingual changelog accuracy guard rejects migration and scope regressions", async () => {
+  const [{ source }] = await readLocalizedContent("changelog.md");
+  const entry = extractMarkdownSection(
+    source,
+    "## 2026-09-23",
+    "EN current rollup mutation baseline",
+  );
+  assertCurrentRollupAccuracy(
+    entry.body,
+    "en",
+    "EN current rollup mutation baseline",
+  );
+  const mutations = [
+    ["`TranscriptContext`", "`Context`"],
+    [
+      "errors or invalid defined results stop the command before later handlers or local execution",
+      "errors allow later handlers or local execution",
+    ],
+    ["decision applies afterward", "decision applies beforehand"],
+    [
+      "assigning `session.agent.state.messages` no longer replaces future request history",
+      "assigning `session.agent.state.messages` replaces future request history",
+    ],
+    ["raw history stays intact", "raw history is rewritten"],
+    ["verbatim", "after rebuilding it"],
+    ["no longer needed", "still required"],
+    [
+      "no stable API or compatibility guarantee",
+      "a stable API and compatibility guarantee",
+    ],
+  ];
+  for (const [pattern, replacement] of mutations) {
+    assert.ok(entry.body.includes(pattern), `${pattern} mutation must apply`);
+    assert.throws(
+      () =>
+        assertCurrentRollupAccuracy(
+          entry.body.replace(pattern, replacement),
+          "en",
+          pattern,
+        ),
+      { name: "AssertionError" },
+    );
+  }
+});
+
+test("the historical bilingual changelog preserves the structured Pi 0.85.0 documentation rollup", async () => {
   const references = await readLocalizedContent("changelog.md");
   const release0850 =
     "https://github.com/earendil-works/pi/releases/tag/v0.85.0";
@@ -1703,13 +2016,7 @@ test("the first bilingual changelog entry is the structured Pi 0.85.0 documentat
   const structures = [];
 
   for (const { locale, source } of references) {
-    const context = `${locale} first changelog entry`;
-    const firstH2 = source.match(/^## ([^\r\n]+)$/m);
-    assert.equal(
-      firstH2?.[1],
-      "2026-09-04",
-      `${context} must be dated 2026-09-04`,
-    );
+    const context = `${locale} historical 0.85.0 changelog entry`;
     const entry = extractMarkdownSection(source, "## 2026-09-04", context);
     const contract = contracts[locale];
 
@@ -1783,7 +2090,7 @@ test("the first bilingual changelog entry is the structured Pi 0.85.0 documentat
   assert.deepEqual(structures[0], structures[1]);
 });
 
-test("first-entry rollup accuracy guard rejects attribution and resilience regressions", async () => {
+test("historical rollup accuracy guard rejects attribution and resilience regressions", async () => {
   const [{ source }] = await readLocalizedContent("changelog.md");
   const entry = extractMarkdownSection(
     source,

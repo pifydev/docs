@@ -5,9 +5,47 @@ translation_key: changelog
 language: vi
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 ---
 Trang này ghi các thay đổi của website tài liệu Pify. Để xem release của Pi, hãy dùng [lịch sử release upstream](https://github.com/earendil-works/pi/releases).
+
+## 2026-09-23
+
+### Release coverage
+
+Pify chuyển baseline tài liệu từ `0.85.0` lên [Pi `0.87.1`](https://github.com/earendil-works/pi/releases/tag/v0.87.1). Đợt cập nhật này bao gồm [Pi `0.85.1`](https://github.com/earendil-works/pi/releases/tag/v0.85.1), [Pi `0.86.0`](https://github.com/earendil-works/pi/releases/tag/v0.86.0), [Pi `0.86.1`](https://github.com/earendil-works/pi/releases/tag/v0.86.1) và [Pi `0.87.0`](https://github.com/earendil-works/pi/releases/tag/v0.87.0), với source review ghim tại [`f07218c`](https://github.com/earendil-works/pi/commit/f07218c4d4bbc12bef056a7058c3dd49dfe41abe).
+
+### Breaking API migrations
+
+- Từ `0.86.0`, provider stream nhận `TranscriptContext` đã chuẩn hóa. Custom provider đọc prompt và khai báo Tool từ `context.messages` qua `getCurrentSystemPrompt()` và `getCurrentTools()`.
+- `ToolCall.arguments` và `ToolResultMessage.details` nhận các giá trị JSON-compatible; `ToolResultMessage` trở thành conditional type, còn array trong `JsonValue` là readonly.
+- Hook `user_bash` dùng cơ chế fail-closed: lỗi hoặc result khác `undefined` nhưng không hợp lệ dừng command trước khi gọi handler tiếp theo hoặc thực thi local. Trả về `undefined` để tiếp tục dispatch, hoặc trả về `{ operations }` hay `{ result }` để xử lý command.
+- Từ `0.87.0`, thay `shouldStopAfterTurn` bằng `finishTurn` và trả về `{ action: "end" }` để dừng sau lượt hiện tại. Hook chạy trước `turn_end`, nhưng quyết định được áp dụng sau đó. Hook cũng nhận response có trạng thái error và aborted; predicate chỉ dành cho response bình thường phải trả về `undefined` ở các trường hợp kết thúc bắt buộc này.
+- `SessionManager` nay quản lý provider context chuẩn của `AgentSession`; gán `session.agent.state.messages` không còn thay thế history cho request tiếp theo. Khôi phục entry bằng `SessionManager.inMemory()`, điều hướng bằng `session.navigateTree()`, hoặc append qua session manager rồi gọi `session.refreshContext()`.
+- Switch xử lý đầy đủ `SessionEntry` phải bổ sung `ContextEditEntry` với type `context_edit`. Dùng `replacement: null` để bỏ một entry khỏi provider context về sau, hoặc cung cấp content thay thế; raw history được giữ nguyên.
+- Extension integration phải xử lý các boundary field bắt buộc của `TurnEndEvent` và `AgentBeforeSettleEvent` mới trong `ExtensionEvent`. Dùng `emitBoundary()` để dispatch các actionable boundary `turn_end` và `agent_before_settle`; handler có thể trả về entry và yêu cầu chạy tiếp. Run được yêu cầu trong `agent_settled` chờ đến khi mọi settled handler hoàn tất.
+
+### New capabilities
+
+- `0.86.0` bổ sung prompt cache warming có cân nhắc chi phí trong các Tool run dài, kèm tùy chọn warming khi idle và hook `cache_warming_decision`. `/bug` thu thập diagnostic đã che secret, có thể kèm transcript hoặc summary để upload lên Radius hay xuất ZIP local.
+- Radius bổ sung model catalog offline, kết hợp với catalog đã cache và kết quả discovery trực tiếp. Trong `0.86.1`, Meta Muse hỗ trợ `/login meta` với key refresh và xác thực trực tiếp bằng `META_API_KEY`.
+- Compaction budget theo model dùng `compaction.modelOverrides` với `reserveTokens` và `keepRecentTokens`. Extension có thể gọi model đã cấu hình qua `ctx.modelRegistry.stream()` và `streamSimple()` với thông tin xác thực tương ứng. `pi.on()` trả về hàm unsubscribe; thay đổi đăng ký trong lúc dispatch có hiệu lực ở những lần dispatch tiếp theo.
+- Trong `0.87.0`, `context_with_system` chạy sau `context` trên toàn bộ transcript, gồm system message, và gửi kết quả nguyên vẹn. Profile `inputLimits.images.resize` theo model trong `models.json` áp dụng cho attachment, `read` và image trong Tool result.
+- `0.87.1` bổ sung Claude Opus 5.5 qua Anthropic, GPT-6 Sol và GPT-6 Luna qua OpenAI API key cùng OpenAI Codex subscription, và cả ba model qua các route GitHub Copilot được hỗ trợ. Session xAI mới mặc định dùng Grok 4.7.
+
+### Reliability, provider, and CLI fixes
+
+- Workaround root-import dành cho `0.85.0` không còn cần sau khi `0.85.1` sửa lỗi phát hành nhầm các dependency thử nghiệm nội bộ. Các subpath thử nghiệm `client`, `experimental/plugin` và command server/client chuyển sang source-only qua `pi-test.sh`; local SDK và stdio RPC API được hỗ trợ giữ nguyên contract.
+- Các bản sửa trong `0.86.x` bao gồm định tuyến model GPT của GitHub Copilot qua Responses, metadata reasoning và cache của provider, race giữa compaction/cancellation, shell command bị kết thúc bởi signal, clipboard fallback và diagnostic của `/bug`. `0.86.1` cũng bật persistent compile cache của Node trước khi khởi động CLI.
+- `0.87.0` sửa cách tính context sau edit và việc bỏ model attempt khi recovery, khôi phục prompt cùng trạng thái Tool sau các handler `context`, và tránh dựng lại cache đã hết hạn khi idle warming bị trễ. `/bug` ở chế độ offline cho phép xuất ZIP local nhưng chặn upload; endpoint OpenAI-compatible chưa xác định chỉ nhận strict Tool schema khi công bố hỗ trợ.
+- Trong `0.87.1`, prompt cho split-turn compaction tách conversation khỏi chỉ dẫn tiếp tục để Claude Fable 5.1 có thể tạo summary. Giá trị `--mode` bị thiếu hoặc không hợp lệ nay báo lỗi và thoát với status nonzero.
+- Bản sửa message image-only bỏ empty text part mà một số provider OpenAI-compatible từ chối. Request Anthropic OAuth cũng gửi đúng Claude Code version.
+
+### Documentation and verification scope
+
+- Chuỗi commit này của Pify xuất bản phần migration cho các chương, hướng dẫn How-to, trang tham khảo, Quickstart, FAQ và source-review record. Các trang đầu và lệnh cài đặt nay dùng `0.87.1`; các commit tiếp theo trong chuỗi cập nhật chi tiết các hướng dẫn về provider, session, model và extension. Course implementation vẫn là implementation độc lập để học, không cam kết tương thích API của Pi.
+- Phần kiểm chứng package ghim `@earendil-works/pi-ai`, `@earendil-works/pi-agent-core`, `@earendil-works/pi-coding-agent` và `@earendil-works/pi-server` ở `0.87.1`. `scripts/fixtures/pi-release-0871.json` ghi nguồn xác thực release; `tests/fixtures/pi-sdk-0871.contract.ts` kiểm tra public declaration và cung cấp các bài kiểm tra offline cho deterministic Agent, session restoration và runtime host. Content check bao gồm release link, các mô tả migration, cấu trúc song ngữ, `lint:sync`, `lint:frontmatter`, `lint:editorial` và `test:preservation`; các kiểm tra này không gọi tài khoản provider thật.
+- `@earendil-works/pi-client`, `@earendil-works/pi-protocol` và `@earendil-works/pi-server` vẫn ở trạng thái thử nghiệm, không cam kết API ổn định hay compatibility. Ghim package hoặc mô tả source contract không thay đổi ranh giới này.
 
 ## 2026-09-04
 

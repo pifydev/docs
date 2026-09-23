@@ -64,6 +64,6 @@ shell interpolation or platform-specific utilities.
 
 Exports under `course/src/` are the **Course implementation**: simplified,
 educational APIs owned by this workshop. They are not Pi APIs and are not
-promised to be API-compatible with Pi. References labeled **Pi SDK 0.85.0**
+promised to be API-compatible with Pi. References labeled **Pi SDK 0.87.1**
 describe the separately published production SDK release and only its verified
 public exports.
