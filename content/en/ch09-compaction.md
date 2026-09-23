@@ -121,6 +121,11 @@ Coding Agent loads global settings from `~/.pi/agent/settings.json`. A trusted p
 
 Within `compaction.modelOverrides`, each `reserveTokens` and `keepRecentTokens` value falls back independently from the matching model override to the ordinary compaction setting, then to the built-in default. In this example, the named model reserves 400,000 tokens but keeps the ordinary 20,000-token recent suffix. Omitted values fall back; invalid values do not. Both ordinary and override values must be non-negative safe integers.
 
+| Field | Resolution order |
+|---|---|
+| `reserveTokens` | `compaction.modelOverrides[provider/modelId].reserveTokens → compaction.reserveTokens → 16384` |
+| `keepRecentTokens` | `compaction.modelOverrides[provider/modelId].keepRecentTokens → compaction.keepRecentTokens → 20000` |
+
 `enabled: false` disables the automatic threshold and overflow paths because `_checkCompaction()` returns immediately. It does not disable `AgentSession.compact()`, `/compact`, RPC `compact`, or an Extension call to `ctx.compact()`.
 
 ### Current usage comes from provider data first
@@ -180,6 +185,11 @@ Pi `0.87.1` can keep an eligible provider prompt cache alive while a long Tool e
 The decision is cost-aware. Pi compares the estimated cost of a cache read plus one output token with the expected extra cost of a later cache miss, and warms only when estimated savings reach the pinned runtime's threshold. Warming usage counts toward session totals but does not enter model context. This does not eliminate provider charges and cannot guarantee a cache hit: the provider still owns cache admission, expiry, and billing.
 
 `/session` shows whether warming is inactive, scheduled, or refreshing and includes the next cost decision. Successful refresh usage can appear as a transcript notice when cache notices are enabled. Before every scheduled refresh in both `streaming` and `idle`, Extensions receive `cache_warming_decision`; returning `warm` or `stop` overrides that decision, with the last handler action winning. If the session transcript changes, including through compaction, Pi stops treating the earlier request as current instead of warming a stale prefix.
+
+| Runtime phase | Decision hook |
+|---|---|
+| `streaming` | `cache_warming_decision` |
+| `idle` | `cache_warming_decision` |
 
 ## 3. Where Pi cuts the active path
 

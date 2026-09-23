@@ -310,7 +310,7 @@ Một delta có thể vượt quá ngưỡng, còn `flush()` vẫn gọi `append
 
 ## 6. Stream model call lồng trong Extension
 
-Extension đã có `ExtensionContext` có thể mở provider stream trực tiếp mà không cần dựng thêm `AgentSession`. Dùng `ctx.modelRegistry.stream()` cho request option riêng của API và `streamSimple()` cho option trung lập với provider; cả hai method gọi provider đã cấu hình với authentication đã được resolve tại thời điểm gửi request. Consume `AssistantMessageEventStream` trả về bằng cùng pattern `for await` của Pi AI, rồi await `.result()` khi cần assistant message đầy đủ và usage.
+Extension đã có `ExtensionContext` có thể mở provider stream trực tiếp mà không cần dựng thêm `AgentSession`. Dùng `ctx.modelRegistry.stream()` cho request option riêng của API và `ctx.modelRegistry.streamSimple()` cho option trung lập với provider; cả hai method gọi provider đã cấu hình với authentication đã được resolve tại thời điểm gửi request. Consume `AssistantMessageEventStream` trả về bằng cùng pattern `for await` của Pi AI, rồi await `.result()` khi cần assistant message đầy đủ và usage.
 
 Nested stream đó thuộc Extension. Low-level Pi AI event của nó không tự động được chép vào `AgentSessionEvent` stream của session cha. Chỉ forward UI state mà Extension sở hữu, đồng thời đưa usage của nested call vào custom Tool result khi Tool contract yêu cầu session accounting.
 

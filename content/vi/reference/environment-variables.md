@@ -44,6 +44,11 @@ Amazon Bedrock và Google Vertex AI còn nhận ambient cloud credential đượ
 
 Meta Muse hỗ trợ `/login meta`; flow này lưu login credential và tự động refresh Muse Model API key. `META_API_KEY` cung cấp trực tiếp Model API key đó khi interactive login không phù hợp. Hai đường có contract riêng: environment value đã là request credential và không tạo stored Meta login.
 
+| Đường xác thực Meta | Ranh giới credential |
+|---|---|
+| `/login meta` | `stored login → automatic Muse Model API key refresh` |
+| `META_API_KEY` | `direct Muse Model API key → no stored login` |
+
 ## Runtime flag
 
 ### Directory và runtime asset

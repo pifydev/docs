@@ -102,6 +102,12 @@ void [directRequestLevel, resolvedAdapterLevel];
 
 Radius model discovery uses three layers: the bundled offline catalog is available immediately, cached gateway metadata overlays it when present, and a live gateway refresh overlays both when network access succeeds. A custom Radius gateway configured in `models.json` uses its own catalog instead of inheriting the public `radius.pi.dev` catalog.
 
+| Priority | Radius catalog layer |
+|---|---|
+| `1` | `bundled offline catalog` |
+| `2` | `cached gateway catalog` |
+| `3` | `live gateway catalog` |
+
 ```json title="thinking-settings.json"
 {
   "defaultProvider": "anthropic",

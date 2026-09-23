@@ -102,6 +102,12 @@ void [directRequestLevel, resolvedAdapterLevel];
 
 Radius model discovery dùng ba lớp: catalog offline tích hợp sẵn có ngay, metadata gateway đã cache overlay lên lớp đó, rồi live gateway refresh overlay lên cả hai khi network thành công. Custom Radius gateway trong `models.json` dùng catalog riêng thay vì kế thừa catalog public của `radius.pi.dev`.
 
+| Độ ưu tiên | Lớp catalog của Radius |
+|---|---|
+| `1` | `bundled offline catalog` |
+| `2` | `cached gateway catalog` |
+| `3` | `live gateway catalog` |
+
 ```json title="thinking-settings.json"
 {
   "defaultProvider": "anthropic",

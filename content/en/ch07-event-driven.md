@@ -265,7 +265,14 @@ export default function temporaryInputHandler(pi: ExtensionAPI) {
 }
 ```
 
-An Extension can also make nested model calls through `ctx.modelRegistry.stream()` for API-specific options or `streamSimple()` for provider-neutral options. Both routes use the configured provider and resolved authentication at request time. They do not require an Extension to read `auth.json` or copy an API key into the handler.
+An Extension can also make nested model calls through `ctx.modelRegistry.stream()` for API-specific options or `ctx.modelRegistry.streamSimple()` for provider-neutral options. Both routes use the configured provider and resolved authentication at request time. They do not require an Extension to read `auth.json` or copy an API key into the handler.
+
+| API boundary | Runtime contract |
+|---|---|
+| `ctx.modelRegistry.stream()` | `configured provider → resolved authentication` |
+| `ctx.modelRegistry.streamSimple()` | `configured provider → resolved authentication` |
+| `pi.on()` | `returns () => void` |
+| `dispatch` | `handler snapshot → registration changes apply to later dispatches` |
 
 At the Pi `0.87.1` baseline, `cache_warming_decision` runs before each scheduled prompt-cache refresh in both the active `streaming` phase and the optional `idle` phase. A handler may return `{ action: "warm" }` or `{ action: "stop" }`; the last returned action wins for that decision. The hook changes whether that refresh is sent, not the model's advertised cache lifetime or the provider's cache behavior.
 

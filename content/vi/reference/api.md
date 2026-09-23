@@ -543,7 +543,7 @@ export default extension;
 
 Mọi overload của `pi.on()` đều trả về hàm unsubscribe. Pi chụp snapshot các handler khớp trước một dispatch, vì vậy việc thêm handler hoặc gọi hàm unsubscribe của nó trong dispatch đó chỉ ảnh hưởng dispatch sau, không đổi snapshot đang chạy. `cache_warming_decision` là actionable hook: trước một refresh đã lên lịch, handler có thể trả `{ action: "warm" }` hoặc `{ action: "stop" }`.
 
-`ExtensionContext.modelRegistry` cung cấp `ctx.modelRegistry.stream()` cho option riêng của API và `streamSimple()` cho option trung lập với provider. Cả hai method gọi provider đã cấu hình với authentication đã được resolve tại thời điểm gửi request; method `complete()` tương ứng chờ assistant message đầy đủ. Facade này giữ Extension trên cùng đường provider và credential của Coding Agent thay vì tự đọc secret.
+`ExtensionContext.modelRegistry` cung cấp `ctx.modelRegistry.stream()` cho option riêng của API và `ctx.modelRegistry.streamSimple()` cho option trung lập với provider. Cả hai method gọi provider đã cấu hình với authentication đã được resolve tại thời điểm gửi request; method `complete()` tương ứng chờ assistant message đầy đủ. Facade này giữ Extension trên cùng đường provider và credential của Coding Agent thay vì tự đọc secret.
 
 `pi.setModel()` đổi model của session hiện tại. Lựa chọn thành công được ghi vào lịch sử session và được khôi phục khi session đó được resume, nhưng không thay đổi `defaultProvider` hoặc `defaultModel` đã cấu hình cho session mới. Promise trả về `false` khi provider được chọn chưa có authentication.
 
@@ -584,6 +584,13 @@ Giao thức RPC headless nhận correlation ID không bắt buộc. Đây là c�
 ```
 
 Các lệnh RPC trực tiếp `steer` và `follow_up` đi qua handler `input` của Extension trước khi được đưa vào queue. Cả hai input event đều đặt `source` thành `"rpc"`. Khi session đang stream, `steer` đặt `streamingBehavior` thành `"steer"`, còn `follow_up` đặt `streamingBehavior` thành `"followUp"`; khi idle, field này là `undefined`. Vì vậy, handler có thể transform hoặc handle RPC input trước khi Pi thêm nó vào queue tương ứng.
+
+| Lệnh RPC | Trạng thái session | `source` | `streamingBehavior` | Thứ tự handler |
+|---|---|---|---|---|
+| `steer` | `streaming` | `"rpc"` | `"steer"` | `Extension input → queue` |
+| `follow_up` | `streaming` | `"rpc"` | `"followUp"` | `Extension input → queue` |
+| `steer` | `idle` | `"rpc"` | `undefined` | `Extension input → queue` |
+| `follow_up` | `idle` | `"rpc"` | `undefined` | `Extension input → queue` |
 
 `clear_queue` loại bỏ nguyên tử công việc trong queue và trả về phần text đã loại bỏ, vẫn tách riêng message steering và follow-up. RPC `abort` hủy thao tác đang hoạt động, nay bao gồm cả compaction thủ công đang chạy, rồi chờ tới khi session idle mới phản hồi. Công việc trong queue vẫn có thể tiếp tục trừ khi `clear_queue` đã loại bỏ nó; thao tác hủy và dọn queue là hai việc riêng.
 

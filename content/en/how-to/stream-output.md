@@ -310,7 +310,7 @@ A single delta may exceed the threshold, and `flush()` still calls `append()` sy
 
 ## 6. Stream a nested Extension model call
 
-An Extension that already has an `ExtensionContext` can open a direct provider stream without constructing another `AgentSession`. Use `ctx.modelRegistry.stream()` for API-specific request options and `streamSimple()` for provider-neutral options; both methods call the configured provider with resolved authentication at request time. Consume the returned `AssistantMessageEventStream` with the same `for await` pattern used by Pi AI, then await `.result()` when the complete assistant message and usage are needed.
+An Extension that already has an `ExtensionContext` can open a direct provider stream without constructing another `AgentSession`. Use `ctx.modelRegistry.stream()` for API-specific request options and `ctx.modelRegistry.streamSimple()` for provider-neutral options; both methods call the configured provider with resolved authentication at request time. Consume the returned `AssistantMessageEventStream` with the same `for await` pattern used by Pi AI, then await `.result()` when the complete assistant message and usage are needed.
 
 That nested stream belongs to the Extension. Its low-level Pi AI events are not automatically copied into the parent session's `AgentSessionEvent` stream. Forward only the UI state you own, and include nested-call usage in a custom Tool result when the Tool contract requires session accounting.
 

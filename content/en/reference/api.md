@@ -543,7 +543,7 @@ export default extension;
 
 Every `pi.on()` overload returns an unsubscribe function. Pi snapshots matching handlers before a dispatch, so adding a handler or calling its unsubscribe function during that dispatch affects later dispatches rather than the snapshot already running. `cache_warming_decision` is an actionable hook: before a scheduled refresh, a handler may return `{ action: "warm" }` or `{ action: "stop" }`.
 
-`ExtensionContext.modelRegistry` exposes `ctx.modelRegistry.stream()` for API-specific options and `streamSimple()` for provider-neutral options. Both methods call the configured provider with resolved authentication at request time; the matching `complete()` method waits for the full assistant message. This facade keeps Extensions on Coding Agent's provider and credential path instead of reading secrets directly.
+`ExtensionContext.modelRegistry` exposes `ctx.modelRegistry.stream()` for API-specific options and `ctx.modelRegistry.streamSimple()` for provider-neutral options. Both methods call the configured provider with resolved authentication at request time; the matching `complete()` method waits for the full assistant message. This facade keeps Extensions on Coding Agent's provider and credential path instead of reading secrets directly.
 
 `pi.setModel()` changes the current session's model. A successful selection is recorded in session history and restored when that session is resumed, but it does not change the configured `defaultProvider` or `defaultModel` used by new sessions. The Promise resolves to `false` when the selected provider lacks authentication.
 
@@ -584,6 +584,13 @@ The headless RPC protocol accepts an optional correlation ID. Its exact `clear_q
 ```
 
 Direct RPC `steer` and `follow_up` commands go through Extension `input` handlers before anything is queued. Both input events set `source` to `"rpc"`. When the session is already streaming, `steer` sets `streamingBehavior` to `"steer"`, while `follow_up` sets `streamingBehavior` to `"followUp"`; the field is `undefined` while idle. A handler can therefore transform or handle RPC input before Pi adds it to the corresponding queue.
+
+| RPC command | Session state | `source` | `streamingBehavior` | Handler order |
+|---|---|---|---|---|
+| `steer` | `streaming` | `"rpc"` | `"steer"` | `Extension input → queue` |
+| `follow_up` | `streaming` | `"rpc"` | `"followUp"` | `Extension input → queue` |
+| `steer` | `idle` | `"rpc"` | `undefined` | `Extension input → queue` |
+| `follow_up` | `idle` | `"rpc"` | `undefined` | `Extension input → queue` |
 
 `clear_queue` atomically removes queued work and returns the removed text, keeping steering and follow-up messages separate. RPC `abort` cancels the active operation, now including active manual compaction, and waits until the session is idle before responding. Queued work can continue unless `clear_queue` removed it; cancellation and queue disposal are distinct operations.
 

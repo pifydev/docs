@@ -121,6 +121,11 @@ Coding Agent đọc thiết lập toàn cục từ `~/.pi/agent/settings.json`. 
 
 Trong `compaction.modelOverrides`, mỗi giá trị `reserveTokens` và `keepRecentTokens` fallback độc lập từ model override khớp sang compaction setting thông thường, rồi mới đến built-in default. Trong ví dụ này, model được đặt tên chừa 400.000 token nhưng vẫn giữ recent suffix 20.000 token của setting thông thường. Field bị bỏ qua sẽ fallback; field không hợp lệ thì không. Cả giá trị thông thường lẫn override đều phải là số nguyên an toàn không âm.
 
+| Field | Thứ tự resolve |
+|---|---|
+| `reserveTokens` | `compaction.modelOverrides[provider/modelId].reserveTokens → compaction.reserveTokens → 16384` |
+| `keepRecentTokens` | `compaction.modelOverrides[provider/modelId].keepRecentTokens → compaction.keepRecentTokens → 20000` |
+
 `enabled: false` tắt đường ngưỡng và tràn ngữ cảnh tự động vì `_checkCompaction()` trả về ngay. Thiết lập này không tắt `AgentSession.compact()`, `/compact`, RPC/SDK `compact()` hoặc lời gọi `ctx.compact()` từ Extension.
 
 ### Mức sử dụng hiện tại ưu tiên dữ liệu từ nhà cung cấp
@@ -180,6 +185,11 @@ Pi `0.87.1` có thể giữ prompt cache đủ điều kiện của provider cò
 Quyết định này có cân nhắc chi phí. Pi so sánh chi phí ước lượng của một cache read cộng một output token với chi phí tăng thêm dự kiến của cache miss sau đó, và chỉ warm khi mức tiết kiệm ước lượng đạt ngưỡng của runtime đã pin. Usage của warming được tính vào session total nhưng không đi vào model context. Cơ chế này không loại bỏ chi phí provider và không bảo đảm cache hit: provider vẫn quyết định việc nhận cache, thời điểm hết hạn và cách tính phí.
 
 `/session` cho biết warming đang inactive, scheduled hay refreshing, đồng thời hiển thị quyết định chi phí kế tiếp. Usage của refresh thành công có thể xuất hiện dưới dạng transcript notice khi bật cache notice. Trước mỗi refresh đã lên lịch trong cả `streaming` lẫn `idle`, Extension nhận `cache_warming_decision`; giá trị `warm` hoặc `stop` override quyết định đó, và action từ handler cuối cùng được áp dụng. Khi transcript của session thay đổi, kể cả do compaction, Pi không còn xem request cũ là hiện hành và không warm một prefix đã lỗi thời.
+
+| Runtime phase | Decision hook |
+|---|---|
+| `streaming` | `cache_warming_decision` |
+| `idle` | `cache_warming_decision` |
 
 ## 3. Pi cắt nhánh đang hoạt động ở đâu
 

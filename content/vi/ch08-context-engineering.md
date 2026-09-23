@@ -187,6 +187,15 @@ Ví dụ dấu báo cho trường hợp biên của Bash
 
 Giới hạn output kiểm soát nội dung đi vào context sau khi Tool chạy. Pi cũng kiểm soát cách một số built-in yêu cầu model sinh argument: `read`, `bash`, `powershell`, `edit` và `write` mặc định dùng JSON Schema constrained sampling ở chế độ strict-prefer. Provider có capability phù hợp sẽ enforce schema; provider không tương thích sẽ fallback về Tool calling thông thường vì policy là “prefer”, không phải “require”. Extension chủ động thay một trong các definition này có thể opt out bằng `constrainedSampling: false`.
 
+| Tool hoặc phạm vi thay thế | Quy ước `constrainedSampling` |
+|---|---|
+| `read` | `strict-prefer` |
+| `bash` | `strict-prefer` |
+| `powershell` | `strict-prefer` |
+| `edit` | `strict-prefer` |
+| `write` | `strict-prefer` |
+| `extension replacement` | `constrainedSampling: false` |
+
 ## 4. Phòng thủ đầu vào 2: ghép system prompt và tài nguyên
 
 ### Vấn đề: quy tắc dự án phải tới model mà không cần nhắc lại

@@ -265,7 +265,14 @@ export default function temporaryInputHandler(pi: ExtensionAPI) {
 }
 ```
 
-Extension cũng có thể gọi model lồng nhau qua `ctx.modelRegistry.stream()` với option riêng của API, hoặc `streamSimple()` với option trung lập với provider. Cả hai đường đều dùng provider đã cấu hình và authentication đã được resolve tại thời điểm gửi request. Extension không cần tự đọc `auth.json` hay chép API key vào handler.
+Extension cũng có thể gọi model lồng nhau qua `ctx.modelRegistry.stream()` với option riêng của API, hoặc `ctx.modelRegistry.streamSimple()` với option trung lập với provider. Cả hai đường đều dùng provider đã cấu hình và authentication đã được resolve tại thời điểm gửi request. Extension không cần tự đọc `auth.json` hay chép API key vào handler.
+
+| Ranh giới API | Quy ước runtime |
+|---|---|
+| `ctx.modelRegistry.stream()` | `configured provider → resolved authentication` |
+| `ctx.modelRegistry.streamSimple()` | `configured provider → resolved authentication` |
+| `pi.on()` | `returns () => void` |
+| `dispatch` | `handler snapshot → registration changes apply to later dispatches` |
 
 Ở baseline Pi `0.87.1`, `cache_warming_decision` chạy trước mỗi lần refresh prompt cache đã được lên lịch trong cả phase `streaming` đang hoạt động lẫn phase `idle` tùy chọn. Handler có thể trả `{ action: "warm" }` hoặc `{ action: "stop" }`; action cuối cùng được trả về sẽ quyết định lần refresh đó. Hook này chỉ đổi việc có gửi refresh hay không, không đổi cache lifetime do model công bố hay hành vi cache của provider.
 

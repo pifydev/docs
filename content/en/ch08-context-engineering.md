@@ -187,6 +187,15 @@ Example Bash edge marker
 
 Output limits constrain what enters context after a Tool runs. Pi also constrains how selected built-ins ask the model to produce their arguments: `read`, `bash`, `powershell`, `edit`, and `write` use strict-prefer JSON Schema constrained sampling by default. A capable provider enforces the schema; an incompatible provider falls back to ordinary Tool calling because the policy is “prefer,” not “require.” An Extension that deliberately replaces one of these definitions can opt out with `constrainedSampling: false`.
 
+| Tool or replacement scope | `constrainedSampling` contract |
+|---|---|
+| `read` | `strict-prefer` |
+| `bash` | `strict-prefer` |
+| `powershell` | `strict-prefer` |
+| `edit` | `strict-prefer` |
+| `write` | `strict-prefer` |
+| `extension replacement` | `constrainedSampling: false` |
+
 ## 4. Input defense 2: system-prompt and resource assembly
 
 ### Problem: project rules must arrive without repetition

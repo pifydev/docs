@@ -621,6 +621,18 @@ Manager của Coding Agent gọi API file đồng bộ và không có khóa file
 
 Flow xác nhận cho phép kèm transcript của session, bỏ transcript, hoặc yêu cầu model hiện tại viết một summary thay thế. Hãy đọc transcript hoặc summary do model tạo trước khi chia sẻ. Report có thể được upload lên Radius hoặc xuất thành ZIP local để tự kiểm tra và chuyển giao. Trong offline mode, Pi vẫn cho xuất ZIP local nhưng không thể upload report lên Radius.
 
+| Ranh giới chẩn đoán | Chế độ | Kết quả |
+|---|---|---|
+| `metadata.secrets` | `all` | `redacted` |
+| `transcript` | `consent: include` | `attached` |
+| `transcript` | `consent: omit` | `not attached` |
+| `summary` | `consent: model-written` | `attached; transcript stays local` |
+| `Radius upload` | `online` | `allowed` |
+| `Radius upload` | `offline` | `blocked` |
+| `local ZIP` | `online` | `allowed` |
+| `local ZIP` | `offline` | `allowed` |
+| `crash metadata` | `all` | `~/.pi/agent/crashes.json` |
+
 Radius upload không yêu cầu login; Radius session đã xác thực sẽ gắn report với tài khoản để maintainer có thể follow up. Sau khi upload, Pi ghi report ID vào session dưới dạng entry `pi.bug-report`. Process crash được ghi riêng ở `~/.pi/agent/crashes.json`, thông báo một lần trong lần khởi động kế tiếp và đính kèm vào report tiếp theo. Crash file đó là diagnostic state, không thay thế session JSONL.
 
 ### Các chỉnh sửa session trong Pi 0.85.0

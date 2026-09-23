@@ -44,6 +44,11 @@ Amazon Bedrock and Google Vertex AI also accept ambient cloud credentials descri
 
 Meta Muse supports `/login meta`, which stores the login credential and refreshes its Muse Model API key automatically. `META_API_KEY` supplies that Model API key directly when interactive login is not appropriate. Keep the two paths distinct: the environment value is already the request credential and does not create a stored Meta login.
 
+| Meta authentication path | Credential boundary |
+|---|---|
+| `/login meta` | `stored login → automatic Muse Model API key refresh` |
+| `META_API_KEY` | `direct Muse Model API key → no stored login` |
+
 ## Runtime flags
 
 ### Directories and runtime assets

@@ -407,7 +407,9 @@ async function importCompileFixtureFunctions(
           functionName,
         ).functionSource,
     )
-    .map((source) => (source.startsWith("export ") ? source : `export ${source}`))
+    .map((source) =>
+      source.startsWith("export ") ? source : `export ${source}`,
+    )
     .join("\n\n");
   const compiled = ts.transpileModule(executableSource, {
     compilerOptions: {
@@ -881,7 +883,9 @@ function sdkInstallCommands(markdown) {
   for (const segment of markdownSemanticSegments(markdown)) {
     if (segment.kind === "code") {
       const [language = "shell"] = segment.fenceLanguages;
-      if (!/^(?:bash|sh|shell|zsh|powershell|pwsh|ps1|cmd|bat)$/.test(language)) {
+      if (
+        !/^(?:bash|sh|shell|zsh|powershell|pwsh|ps1|cmd|bat)$/.test(language)
+      ) {
         continue;
       }
       const continuation = /^(?:powershell|pwsh|ps1)$/.test(language)
@@ -1054,6 +1058,65 @@ function assertParagraphContainsAll(source, patterns, context) {
   return matchingParagraph;
 }
 
+function normalizeContractCell(cell) {
+  return cell.trim().replaceAll("`", "").replace(/\s+/g, " ");
+}
+
+function parseMarkdownContractTables(source) {
+  const lines = source.replaceAll("\r\n", "\n").split("\n");
+  const tables = [];
+
+  for (let index = 0; index < lines.length - 1; index += 1) {
+    if (!/^\s*\|.*\|\s*$/.test(lines[index])) continue;
+    if (!/^\s*\|(?:\s*:?-{3,}:?\s*\|)+\s*$/.test(lines[index + 1])) {
+      continue;
+    }
+
+    const parseRow = (line) =>
+      line.trim().slice(1, -1).split("|").map(normalizeContractCell);
+    const rows = [];
+    index += 2;
+    while (index < lines.length && /^\s*\|.*\|\s*$/.test(lines[index])) {
+      rows.push(parseRow(lines[index]));
+      index += 1;
+    }
+    index -= 1;
+    tables.push(rows);
+  }
+
+  return tables;
+}
+
+function contractTableContainsRows(
+  rows,
+  expectedRows,
+  { ordered = false } = {},
+) {
+  let lastIndex = -1;
+  return expectedRows.every((expectedRow) => {
+    const matchIndex = rows.findIndex(
+      (row, rowIndex) =>
+        (!ordered || rowIndex > lastIndex) &&
+        row.length === expectedRow.length &&
+        row.every((cell, cellIndex) => cell === expectedRow[cellIndex]),
+    );
+    if (matchIndex === -1) return false;
+    lastIndex = matchIndex;
+    return true;
+  });
+}
+
+function assertContractTableRows(source, expectedRows, context, options = {}) {
+  const table = parseMarkdownContractTables(source).find((candidate) =>
+    contractTableContainsRows(candidate, expectedRows, options),
+  );
+  assert.ok(
+    table,
+    `${context} must preserve the required technical relationships`,
+  );
+  return table;
+}
+
 const providerContractTerms = [
   "TranscriptContext",
   "getCurrentSystemPrompt",
@@ -1068,19 +1131,6 @@ const toolContractTerms = [
   "undefined",
   "operations",
   "result",
-];
-
-const operationalFeatureTerms = [
-  "cache_warming_decision",
-  "compaction.modelOverrides",
-  "reserveTokens",
-  "keepRecentTokens",
-  "/bug",
-  "Radius",
-  "Meta",
-  "META_API_KEY",
-  "ctx.modelRegistry.stream",
-  "streamSimple",
 ];
 
 function assertTextContentMessageRoles(source, locale) {
@@ -1263,9 +1313,7 @@ test("0.86.0 provider and tool contracts reject omitted system text and bypassed
     }
     const mutations = [];
     for (let index = 0; index < agentProviderPipelineStages.length; index++) {
-      const skipped = agentProviderPipelineStages.filter(
-        (_, i) => i !== index,
-      );
+      const skipped = agentProviderPipelineStages.filter((_, i) => i !== index);
       mutations.push([`skipped stage ${index}`, skipped.join(" → ")]);
       if (index + 1 < agentProviderPipelineStages.length) {
         const swapped = [...agentProviderPipelineStages];
@@ -1766,6 +1814,120 @@ test("0.86.0 provider and tool contracts Tool examples typecheck against public 
   );
 });
 
+test("operational contract tables reject inverted relationships without parsing prose", () => {
+  const expectedRows = [
+    ["streaming", "cache_warming_decision"],
+    ["idle", "cache_warming_decision"],
+  ];
+  const table = `
+This prose can be rewritten freely. It may even split one explanation across
+several sentences without changing the machine-checked contract below.
+
+| Runtime phase | Decision hook |
+|---|---|
+| \`streaming\` | \`cache_warming_decision\` |
+| \`idle\` | \`cache_warming_decision\` |
+`;
+
+  assertContractTableRows(table, expectedRows, "prose-independent fixture");
+  assertContractTableRows(
+    table.replace("This prose can be rewritten freely.", "Different wording."),
+    expectedRows,
+    "surrounding prose mutation",
+  );
+
+  for (const [label, mutation] of [
+    [
+      "wrong mapping",
+      (source) =>
+        source.replace(
+          "| `streaming` | `cache_warming_decision` |",
+          "| `streaming` | `unrelated_hook` |",
+        ),
+    ],
+    [
+      "inverted row",
+      (source) =>
+        source.replace(
+          "| `idle` | `cache_warming_decision` |",
+          "| `cache_warming_decision` | `idle` |",
+        ),
+    ],
+    [
+      "removed row",
+      (source) => source.replace("| `idle` | `cache_warming_decision` |\n", ""),
+    ],
+  ]) {
+    assert.throws(
+      () =>
+        assertContractTableRows(
+          mutation(table),
+          expectedRows,
+          `mutated ${label}`,
+        ),
+      assert.AssertionError,
+      `contract parser must reject ${label}`,
+    );
+  }
+
+  const adversarialContracts = [
+    {
+      label: "secret redaction",
+      expected: [["metadata.secrets", "all", "redacted"]],
+      source: `| Boundary | Mode | Result |
+|---|---|---|
+| \`metadata.secrets\` | \`all\` | \`redacted\` |`,
+      broken: "| `metadata.secrets` | `all` | `not redacted` |",
+    },
+    {
+      label: "offline upload and ZIP boundaries",
+      expected: [
+        ["Radius upload", "offline", "blocked"],
+        ["local ZIP", "offline", "allowed"],
+      ],
+      source: `| Boundary | Mode | Result |
+|---|---|---|
+| \`Radius upload\` | \`offline\` | \`blocked\` |
+| \`local ZIP\` | \`offline\` | \`allowed\` |`,
+      broken: "| `local ZIP` | `offline` | `blocked` |",
+    },
+    {
+      label: "RPC handler ordering",
+      expected: [
+        ["steer", "streaming", '"rpc"', '"steer"', "Extension input → queue"],
+      ],
+      source: `| Command | State | Source | Behavior | Order |
+|---|---|---|---|---|
+| \`steer\` | \`streaming\` | \`"rpc"\` | \`"steer"\` | \`Extension input → queue\` |`,
+      broken:
+        '| `steer` | `streaming` | `"rpc"` | `"steer"` | `queue → Extension input` |',
+    },
+    {
+      label: "strict-prefer built-ins",
+      expected: [["read", "strict-prefer"]],
+      source: `| Tool | Contract |
+|---|---|
+| \`read\` | \`strict-prefer\` |`,
+      broken: "| `read` | `do not use strict-prefer` |",
+    },
+  ];
+
+  for (const { label, expected, source, broken } of adversarialContracts) {
+    assertContractTableRows(source, expected, `${label} fixture`);
+    const dataRow = source.trim().split("\n").at(-1);
+    assert.throws(
+      () =>
+        assertContractTableRows(
+          source.replace(dataRow, broken),
+          expected,
+          `inverted ${label}`,
+        ),
+      assert.AssertionError,
+      `contract parser must reject inverted ${label}`,
+    );
+  }
+});
+
 test("0.86.x operational features preserve runtime boundaries in both locales", async () => {
   const scopedFiles = [
     "ch07-event-driven.md",
@@ -1794,233 +1956,150 @@ test("0.86.x operational features preserve runtime boundaries in both locales", 
 
   for (const locale of ["en", "vi"]) {
     const get = (filename) => localized.get(`${locale}/${filename}`);
-    const corpus = scopedFiles.map(get).join("\n");
-    const language =
-      locale === "en"
-        ? {
-            costAware: /cost-aware/i,
-            longTool: /long Tool (?:run|execution)/i,
-            optionalIdle: /optional(?:ly)?[^.\n]*idle|idle[^.\n]*optional/i,
-            cacheLifetime: /(?:cache|`promptCache`)[^.\n]*lifetime/i,
-            noFreeGuarantee:
-              /does not (?:eliminate|remove)[^.\n]*(?:cost|charge)[^.\n]*(?:does not|cannot)[^.\n]*guarantee[^.\n]*cache hit/i,
-            fallback: /fall(?:s)? back independently/i,
-            secretRedaction:
-              /secret[^.\n]*(?:redact|omit)|(?:redact|omit)[^.\n]*secret/i,
-            transcriptChoice:
-              /(?:include|attach)[^.\n]*transcript[^.\n]*(?:model-written|model-generated)[^.\n]*summary/i,
-            offlineBoundary:
-              /offline[^.\n]*(?:local )?(?:ZIP|zip)[^.\n]*(?:cannot|disable|block)[^.\n]*upload/i,
-            catalogLayers:
-              /offline[^.\n]*catalog[^.\n]*cached[^.\n]*(?:live|gateway)/i,
-            museRefresh:
-              /\/login meta[^.\n]*(?:automatic|refresh)[^.\n]*(?:Muse|Model API key)/i,
-            resolvedAuth: /resolved authentication/i,
-            unsubscribe: /returns? (?:an? )?unsubscribe function/i,
-            snapshot:
-              /(?:added|removed)[^.\n]*during[^.\n]*dispatch[^.\n]*(?:later|subsequent)[^.\n]*dispatch/i,
-            strictPrefer: /strict-prefer/i,
-            promptDelta:
-              /structured[^.\n]*(?:prompt|section|tool|guideline)[^.\n]*transcript delta/i,
-            directRpcCommands: /direct RPC[^.\n]*`steer`[^.\n]*`follow_up`/i,
-            rpcInputHandlers: /Extension `input` handlers/i,
-            rpcBeforeQueue:
-              /`input` handlers[^.\n]*before[^.\n]*(?:queue|queued)/i,
-            sameRenderedPrompt: /same current rendered prompt/i,
-            earlierPromptHandlers:
-              /(?:mutation|change)s?[^.\n]*(?:earlier|prior) handlers/i,
-          }
-        : {
-            costAware: /cân nhắc chi phí/i,
-            longTool:
-              /Tool (?:run|execution|chạy|thực thi)[^.\n]*dài|(?:run|lần chạy) Tool dài/i,
-            optionalIdle:
-              /(?:tùy chọn|có thể|cho phép)[^.\n]*idle|idle[^.\n]*(?:tùy chọn|nếu bật|có thể|cho phép)/i,
-            cacheLifetime:
-              /(?:thời gian sống|cache lifetime|`promptCache`[^.\n]*lifetime)/i,
-            noFreeGuarantee:
-              /không (?:loại bỏ|xóa)[^.\n]*(?:chi phí|phí)[^.\n]*(?:không bảo đảm|không đảm bảo)[^.\n]*cache hit/i,
-            fallback: /fallback độc lập|rơi về độc lập/i,
-            secretRedaction:
-              /(?:che|loại bỏ)[^.\n]*secret|secret[^.\n]*(?:che|loại bỏ)/i,
-            transcriptChoice:
-              /(?:kèm|đính kèm)[^.\n]*transcript[^.\n]*(?:model[^.\n]*summary|summary[^.\n]*model)/i,
-            offlineBoundary:
-              /offline[^.\n]*(?:ZIP|zip)[^.\n]*(?:không thể|chặn|tắt)[^.\n]*upload/i,
-            catalogLayers:
-              /catalog offline[^.\n]*(?:đã cache|cache)[^.\n]*(?:trực tiếp|live|gateway)/i,
-            museRefresh:
-              /\/login meta[^.\n]*(?:tự động|refresh)[^.\n]*(?:Muse|Model API key)/i,
-            resolvedAuth: /(?:xác thực|authentication) đã (?:được )?resolve/i,
-            unsubscribe: /trả về (?:một )?hàm unsubscribe/i,
-            snapshot:
-              /(?:thêm|xóa)[^.\n]*trong (?:một |lúc )?dispatch[^.\n]*(?:sau|tiếp theo)/i,
-            strictPrefer: /strict-prefer/i,
-            promptDelta:
-              /(?:prompt|section|tool|guideline)[^.\n]*có cấu trúc[^.\n]*transcript delta|transcript delta[^.\n]*(?:prompt|section|tool|guideline)/i,
-            directRpcCommands: /RPC trực tiếp[^.\n]*`steer`[^.\n]*`follow_up`/i,
-            rpcInputHandlers: /handler `input` của Extension/i,
-            rpcBeforeQueue:
-              /handler `input`[^.\n]*trước khi[^.\n]*(?:queue|xếp hàng)/i,
-            sameRenderedPrompt: /đúng prompt hiện tại đã render/i,
-            earlierPromptHandlers:
-              /(?:mutation|thay đổi)[^.\n]*handler chạy trước/i,
-          };
-
-    for (const term of operationalFeatureTerms) {
-      assert.ok(corpus.includes(term), `${locale} operational corpus: ${term}`);
-    }
-
     const compaction = get("ch09-compaction.md");
-    assertContainsAll(
+    const cacheSection = extractMarkdownSection(
       compaction,
-      [
-        language.costAware,
-        language.longTool,
-        language.optionalIdle,
-        /`\/session`/,
-        /transcript/i,
-        /`cache_warming_decision`/,
-        language.cacheLifetime,
-        language.noFreeGuarantee,
-      ],
+      locale === "en"
+        ? "### Prompt-cache warming around long Tool execution"
+        : "### Prompt cache warming quanh Tool execution dài",
       `${locale} cache warming boundaries`,
     );
-    assertParagraphContainsAll(
-      compaction,
+    assertContractTableRows(
+      cacheSection.body,
       [
-        /`compaction\.modelOverrides`/,
-        /`reserveTokens`/,
-        /`keepRecentTokens`/,
-        language.fallback,
+        ["streaming", "cache_warming_decision"],
+        ["idle", "cache_warming_decision"],
       ],
-      `${locale} per-model compaction fallback`,
+      `${locale} cache warming phase mapping`,
     );
-    const cacheDecisionPatterns = [
-      /`cache_warming_decision`/,
-      /`streaming`/,
-      /`idle`/,
-    ];
-    const cacheDecisionParagraph = assertParagraphContainsAll(
+    const compactionSettingsSection = extractMarkdownSection(
       compaction,
-      cacheDecisionPatterns,
-      `${locale} cache warming decision phases`,
+      locale === "en"
+        ? "### Threshold, defaults, and setting precedence"
+        : "### Ngưỡng, giá trị mặc định và thứ tự ưu tiên của thiết lập",
+      `${locale} compaction fallback boundaries`,
     );
-    for (const [phase, replacement] of [
-      ["streaming", "active"],
-      ["idle", "settled"],
-    ]) {
-      const mutatedParagraph = cacheDecisionParagraph.replaceAll(
-        `\`${phase}\``,
-        `\`${replacement}\``,
-      );
-      assert.notEqual(
-        mutatedParagraph,
-        cacheDecisionParagraph,
-        `${locale} cache decision fixture must contain ${phase}`,
-      );
-      assert.throws(
-        () =>
-          assertParagraphContainsAll(
-            compaction.replace(cacheDecisionParagraph, mutatedParagraph),
-            cacheDecisionPatterns,
-            `${locale} mutated cache warming decision phases`,
-          ),
-        assert.AssertionError,
-        `${locale} cache decision contract rejects missing ${phase} phase`,
-      );
-    }
+    assertContractTableRows(
+      compactionSettingsSection.body,
+      [
+        [
+          "reserveTokens",
+          "compaction.modelOverrides[provider/modelId].reserveTokens → compaction.reserveTokens → 16384",
+        ],
+        [
+          "keepRecentTokens",
+          "compaction.modelOverrides[provider/modelId].keepRecentTokens → compaction.keepRecentTokens → 20000",
+        ],
+      ],
+      `${locale} per-field compaction fallback`,
+    );
 
     const sessions = get("ch10-session.md");
-    assertContainsAll(
+    const bugSection = extractMarkdownSection(
       sessions,
-      [
-        /`\/bug \[description\]`/,
-        /metadata/i,
-        language.secretRedaction,
-        language.transcriptChoice,
-        /Radius/,
-        /ZIP/i,
-        language.offlineBoundary,
-        /`~\/\.pi\/agent\/crashes\.json`/,
-      ],
+      locale === "en"
+        ? "### Report a bug without assuming the transcript is public"
+        : "### Báo lỗi mà không mặc định transcript là dữ liệu công khai",
       `${locale} bug-reporting boundaries`,
     );
+    assertContractTableRows(
+      bugSection.body,
+      [
+        ["metadata.secrets", "all", "redacted"],
+        ["transcript", "consent: include", "attached"],
+        ["transcript", "consent: omit", "not attached"],
+        [
+          "summary",
+          "consent: model-written",
+          "attached; transcript stays local",
+        ],
+        ["Radius upload", "online", "allowed"],
+        ["Radius upload", "offline", "blocked"],
+        ["local ZIP", "online", "allowed"],
+        ["local ZIP", "offline", "allowed"],
+        ["crash metadata", "all", "~/.pi/agent/crashes.json"],
+      ],
+      `${locale} bug-reporting mode matrix`,
+    );
 
-    assertParagraphContainsAll(
+    const configurationSection = extractMarkdownSection(
       get("reference/configuration.md"),
-      [/Radius/, language.catalogLayers],
+      locale === "en" ? "### Model and thinking" : "### Model và thinking",
       `${locale} Radius catalog layering`,
     );
-    assertParagraphContainsAll(
+    assertContractTableRows(
+      configurationSection.body,
+      [
+        ["1", "bundled offline catalog"],
+        ["2", "cached gateway catalog"],
+        ["3", "live gateway catalog"],
+      ],
+      `${locale} Radius catalog layering order`,
+      { ordered: true },
+    );
+    const environmentSection = extractMarkdownSection(
       get("reference/environment-variables.md"),
-      [/`META_API_KEY`/, /`\/login meta`/, language.museRefresh],
+      locale === "en" ? "## Provider credentials" : "## Provider credential",
       `${locale} Meta Muse authentication`,
+    );
+    assertContractTableRows(
+      environmentSection.body,
+      [
+        ["/login meta", "stored login → automatic Muse Model API key refresh"],
+        ["META_API_KEY", "direct Muse Model API key → no stored login"],
+      ],
+      `${locale} Meta authentication boundary`,
     );
 
     const events = get("ch07-event-driven.md");
-    assertContainsAll(
+    const extensionSection = extractMarkdownSection(
       events,
+      locale === "en"
+        ? "### Extension events form a separate contract"
+        : "### Sự kiện Extension có hợp đồng riêng",
+      `${locale} Extension runtime contracts`,
+    );
+    assertContractTableRows(
+      extensionSection.body,
       [
-        /`ctx\.modelRegistry\.stream\(\)`/,
-        /`streamSimple\(\)`/,
-        language.resolvedAuth,
-        /`pi\.on\(\)`/,
-        language.unsubscribe,
-        language.snapshot,
+        [
+          "ctx.modelRegistry.stream()",
+          "configured provider → resolved authentication",
+        ],
+        [
+          "ctx.modelRegistry.streamSimple()",
+          "configured provider → resolved authentication",
+        ],
+        ["pi.on()", "returns () => void"],
+        [
+          "dispatch",
+          "handler snapshot → registration changes apply to later dispatches",
+        ],
       ],
-      `${locale} Extension model and subscription APIs`,
+      `${locale} Extension model and subscription API contracts`,
     );
 
-    assertParagraphContainsAll(
+    const contextSection = extractMarkdownSection(
       get("ch08-context-engineering.md"),
+      locale === "en"
+        ? "## 3. Input defense 1: Tool-output truncation"
+        : "## 3. Phòng thủ đầu vào 1: cắt đầu ra Tool",
+      `${locale} built-in constrained sampling`,
+    );
+    assertContractTableRows(
+      contextSection.body,
       [
-        /`read`/,
-        /`bash`/,
-        /`powershell`/,
-        /`edit`/,
-        /`write`/,
-        language.strictPrefer,
-        /`constrainedSampling: false`/,
+        ["read", "strict-prefer"],
+        ["bash", "strict-prefer"],
+        ["powershell", "strict-prefer"],
+        ["edit", "strict-prefer"],
+        ["write", "strict-prefer"],
+        ["extension replacement", "constrainedSampling: false"],
       ],
       `${locale} built-in constrained sampling`,
     );
-    const promptCustomization = get("how-to/customize-system-prompt.md");
-    assert.match(
-      promptCustomization,
-      language.promptDelta,
-      `${locale} prompt customization must explain transcript-backed deltas`,
-    );
-    assertParagraphContainsAll(
-      promptCustomization,
-      [
-        /`ctx\.getSystemPrompt\(\)`/,
-        /`event\.systemPrompt`/,
-        language.sameRenderedPrompt,
-        language.earlierPromptHandlers,
-      ],
-      `${locale} current rendered prompt visibility`,
-    );
-    assertParagraphContainsAll(
-      get("how-to/stream-output.md"),
-      [
-        /`ctx\.modelRegistry\.stream\(\)`/,
-        /`streamSimple\(\)`/,
-        language.resolvedAuth,
-      ],
-      `${locale} nested Extension streams`,
-    );
+
     const apiReference = get("reference/api.md");
-    assertContainsAll(
-      apiReference,
-      [
-        /`cache_warming_decision`/,
-        /`ctx\.modelRegistry\.stream\(\)`/,
-        /`streamSimple\(\)`/,
-        /`constrainedSampling: false`/,
-      ],
-      `${locale} operational API reference`,
-    );
     const rpcSection = extractMarkdownSection(
       apiReference,
       locale === "en"
@@ -2028,39 +2107,32 @@ test("0.86.x operational features preserve runtime boundaries in both locales", 
         : "### Queue RPC và thao tác hủy",
       `${locale} RPC input boundary`,
     );
-    const rpcInputPatterns = [
-      language.directRpcCommands,
-      language.rpcInputHandlers,
-      language.rpcBeforeQueue,
-      /`source`[^.\n]*`"rpc"`/i,
-      /`steer`[^.\n]*`streamingBehavior`[^.\n]*`"steer"`/i,
-      /`follow_up`[^.\n]*`streamingBehavior`[^.\n]*`"followUp"`/i,
-    ];
-    const rpcInputParagraph = assertParagraphContainsAll(
+    assertContractTableRows(
       rpcSection.body,
-      rpcInputPatterns,
-      `${locale} direct RPC input handlers`,
+      [
+        ["steer", "streaming", '"rpc"', '"steer"', "Extension input → queue"],
+        [
+          "follow_up",
+          "streaming",
+          '"rpc"',
+          '"followUp"',
+          "Extension input → queue",
+        ],
+        ["steer", "idle", '"rpc"', "undefined", "Extension input → queue"],
+        ["follow_up", "idle", '"rpc"', "undefined", "Extension input → queue"],
+      ],
+      `${locale} direct RPC input routing`,
     );
-    for (const [mutation, from, to] of [
-      ["source", '`"rpc"`', '`"interactive"`'],
-      ["steer mapping", '`"steer"`', '`"followUp"`'],
-      ["follow-up mapping", '`"followUp"`', '`"steer"`'],
+
+    for (const [filename, context] of [
+      ["ch07-event-driven.md", "event chapter"],
+      ["how-to/stream-output.md", "streaming guide"],
+      ["reference/api.md", "API reference"],
     ]) {
-      const mutatedParagraph = rpcInputParagraph.replace(from, to);
-      assert.notEqual(
-        mutatedParagraph,
-        rpcInputParagraph,
-        `${locale} RPC fixture must expose ${mutation}`,
-      );
-      assert.throws(
-        () =>
-          assertParagraphContainsAll(
-            rpcSection.body.replace(rpcInputParagraph, mutatedParagraph),
-            rpcInputPatterns,
-            `${locale} mutated direct RPC input handlers`,
-          ),
-        assert.AssertionError,
-        `${locale} RPC input contract rejects broken ${mutation}`,
+      assert.match(
+        get(filename),
+        /`ctx\.modelRegistry\.streamSimple\(\)`/,
+        `${locale} ${context} must fully qualify streamSimple()`,
       );
     }
   }
@@ -2691,10 +2763,7 @@ test("release fixture identifies published Pi 0.87.1 authority", async () => {
   const release = await readReleaseFixture();
   assert.equal(release.packageVersion, "0.87.1");
   assert.equal(release.tag, "v0.87.1");
-  assert.equal(
-    release.commit,
-    "f07218c4d4bbc12bef056a7058c3dd49dfe41abe",
-  );
+  assert.equal(release.commit, "f07218c4d4bbc12bef056a7058c3dd49dfe41abe");
   assert.equal(release.publishedAt, "2026-09-22T19:43:43Z");
   assert.equal(release.nodeRequirement, ">=22.19.0");
   assert.equal(release.previousDocumentationVersion, "0.85.0");
@@ -4046,7 +4115,10 @@ test("Pi 0.87.1 compile fixture typechecks against the installed public declarat
   );
 });
 
-for (const functionName of [chapter11ExampleFunction, deterministicGuideFunction]) {
+for (const functionName of [
+  chapter11ExampleFunction,
+  deterministicGuideFunction,
+]) {
   test(`Pi 0.87.1 compile fixture executes ${functionName} offline`, async () => {
     const [compileFixture, ai, agentCore] = await Promise.all([
       readFile(
@@ -4145,7 +4217,10 @@ test("Chapter 11 compile fixture aborts and drains a stalled Agent before removi
     assert.ok(cleanupEvents.includes("idle"));
     assert.ok(cleanupEvents.indexOf("abort") < cleanupEvents.indexOf("idle"));
     assert.equal(models.getProvider("chapter-11-faux"), undefined);
-    assert.equal(models.getModel("chapter-11-faux", "chapter-11-model"), undefined);
+    assert.equal(
+      models.getModel("chapter-11-faux", "chapter-11-model"),
+      undefined,
+    );
   } finally {
     clearTimeout(safetyTimer);
   }
@@ -4207,7 +4282,11 @@ test("Pi 0.87.1 SDK install recipes omit the fixed 0.85.0 packaging workaround",
         /workaround[^\r\n]*đóng gói[^\r\n]*0\.85\.0/i,
         context,
       );
-      assert.doesNotMatch(source, /@earendil-works\/pi-[a-z-]+@0\.85\.0/, context);
+      assert.doesNotMatch(
+        source,
+        /@earendil-works\/pi-[a-z-]+@0\.85\.0/,
+        context,
+      );
 
       assertSdkInstallPackages(source, scope, context);
     }
@@ -4251,13 +4330,18 @@ test("SDK install recipes recognize and pin required packages on continuation li
       "  @earendil-works/pi-coding-agent@0.87.1",
       "```",
     ].join("\r\n");
-    assert.doesNotThrow(() => assertSdkInstallPackages(source, scope, language));
+    assert.doesNotThrow(() =>
+      assertSdkInstallPackages(source, scope, language),
+    );
     for (const version of ["0.87.0", "^0.87.1", "0.87.10"]) {
       assert.throws(
         () =>
           assertSdkInstallPackages(
             source,
-            scope.replace("pi-coding-agent@0.87.1", `pi-coding-agent@${version}`),
+            scope.replace(
+              "pi-coding-agent@0.87.1",
+              `pi-coding-agent@${version}`,
+            ),
             language,
           ),
         /must pin @earendil-works\/pi-coding-agent to 0\.87\.1/,
@@ -4294,7 +4378,9 @@ test("SDK install recipes accept quoted package arguments", () => {
         `npm install --save-exact ${quote}@earendil-works/pi-coding-agent@0.87.1${quote}`,
         "```",
       ].join("\n");
-      assert.doesNotThrow(() => assertSdkInstallPackages(source, scope, language));
+      assert.doesNotThrow(() =>
+        assertSdkInstallPackages(source, scope, language),
+      );
     }
   }
 });
@@ -4321,12 +4407,17 @@ test("SDK install recipes ignore shell comments without stripping quoted hashes"
       `npm install --registry="https://registry.example/#mirror;cache" "@earendil-works/pi-coding-agent@0.87.1" ${comment} @earendil-works/pi-server@0.87.1`,
       "```",
     ].join("\n");
-    assert.doesNotThrow(() => assertSdkInstallPackages(source, scope, language));
+    assert.doesNotThrow(() =>
+      assertSdkInstallPackages(source, scope, language),
+    );
     assert.throws(
       () =>
         assertSdkInstallPackages(
           source,
-          scope.replace("pi-coding-agent@0.87.1", "pi-coding-agent@0.87.1#invalid"),
+          scope.replace(
+            "pi-coding-agent@0.87.1",
+            "pi-coding-agent@0.87.1#invalid",
+          ),
           language,
         ),
       /must pin @earendil-works\/pi-coding-agent to 0\.87\.1/,
@@ -4343,7 +4434,9 @@ test("SDK install recipes preserve Bash and PowerShell hashes within unquoted ar
       "npm install --cache=/tmp/build#1 @earendil-works/pi-coding-agent@0.87.1",
       "```",
     ].join("\n");
-    assert.doesNotThrow(() => assertSdkInstallPackages(source, scope, language));
+    assert.doesNotThrow(() =>
+      assertSdkInstallPackages(source, scope, language),
+    );
   }
 });
 

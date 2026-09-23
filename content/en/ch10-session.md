@@ -621,6 +621,18 @@ The generic Pi Agent Core `JsonlSessionStorage` has different safety code: it se
 
 The confirmation flow lets you include the session transcript, omit it, or ask the current model for a model-written summary instead. Review an included transcript or generated summary before sharing it. A report may be uploaded to Radius, or exported as a local ZIP for inspection and manual transfer. In offline mode, local ZIP export remains available but Pi cannot upload the report to Radius.
 
+| Diagnostic boundary | Mode | Result |
+|---|---|---|
+| `metadata.secrets` | `all` | `redacted` |
+| `transcript` | `consent: include` | `attached` |
+| `transcript` | `consent: omit` | `not attached` |
+| `summary` | `consent: model-written` | `attached; transcript stays local` |
+| `Radius upload` | `online` | `allowed` |
+| `Radius upload` | `offline` | `blocked` |
+| `local ZIP` | `online` | `allowed` |
+| `local ZIP` | `offline` | `allowed` |
+| `crash metadata` | `all` | `~/.pi/agent/crashes.json` |
+
 Radius upload does not require login; an authenticated Radius session attributes the report so maintainers can follow up. After upload, Pi records the report ID in the session as a `pi.bug-report` entry. Process crashes are recorded separately in `~/.pi/agent/crashes.json`, announced once at the next startup, and attached to the next report. That crash file is diagnostic state, not a substitute for the session JSONL.
 
 ### Pi 0.85.0 session corrections
