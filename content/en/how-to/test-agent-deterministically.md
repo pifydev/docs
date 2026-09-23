@@ -5,10 +5,10 @@ translation_key: how-to-test-agent-deterministically
 language: en
 source_url: "https://docs.pify.dev/en/how-to/test-agent-deterministically"
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/src/providers/faux.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/agent.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/agent-loop.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/test/e2e.test.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/providers/faux.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent-loop.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/test/e2e.test.ts"
 terms_used:
   - test double
   - fixture
@@ -19,7 +19,7 @@ terms_used:
   - ToolResultMessage
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 translator: Pify maintainers
 ---
 
@@ -37,10 +37,10 @@ The test also captures lifecycle events, inspects both provider requests, verifi
 
 ## Prerequisites and exact package versions
 
-Use Node.js `22.19.0` or a newer Node 22 release, ESM, and the published Pi `0.85.0` packages:
+Use Node.js `22.19.0` or a newer Node 22 release, ESM, and the published Pi `0.87.1` packages:
 
 ```bash
-npm install --save-dev @earendil-works/pi-ai@0.85.0 @earendil-works/pi-agent-core@0.85.0 tsx typescript @types/node
+npm install --save-dev @earendil-works/pi-ai@0.87.1 @earendil-works/pi-agent-core@0.87.1 tsx typescript @types/node
 ```
 
 Save the complete example below as `deterministic-agent.test.ts`, then run:
@@ -49,7 +49,7 @@ Save the complete example below as `deterministic-agent.test.ts`, then run:
 node --import tsx --test deterministic-agent.test.ts
 ```
 
-The package versions are deliberately exact. The helper names and behavior shown here are verified against Pi tag `v0.85.0`, commit `107d79f11072bbc8a3a757ed7fd69596bee7d68c`.
+The package versions are deliberately exact. The helper names and behavior shown here are verified against Pi tag `v0.87.1`, commit `f07218c4d4bbc12bef056a7058c3dd49dfe41abe`.
 
 ## 1. Create an isolated Models collection and faux provider
 
@@ -94,7 +94,7 @@ These assertions localize regressions. A wrong Tool argument is not reported as 
 
 ## Complete compile-checked test
 
-The function below is compiled in this documentation repository against the exact public `0.85.0` dependencies. The same code is shown in the Vietnamese edition.
+The function below is synchronized with `tests/fixtures/pi-sdk-0871.contract.ts` and compiled against exact public dependencies `@earendil-works/pi-ai@0.87.1` and `@earendil-works/pi-agent-core@0.87.1`. The same code is shown in the Vietnamese edition.
 
 ```typescript title="deterministic-agent.test.ts"
 import assert from "node:assert/strict";
@@ -409,7 +409,7 @@ For a larger suite, create a fresh fixture per test and register this cleanup in
 
 ## Acceptance checklist
 
-- [ ] The test installs exact `@earendil-works/pi-ai@0.85.0` and `@earendil-works/pi-agent-core@0.85.0` packages.
+- [ ] The test installs exact `@earendil-works/pi-ai@0.87.1` and `@earendil-works/pi-agent-core@0.87.1` packages.
 - [ ] It creates its own `Models` collection and never reads an API key.
 - [ ] The faux queue contains a `ToolCall` response and a separate final response.
 - [ ] Assertions cover provider requests, Tool arguments, result linkage, transcript order, final text, and final stop reason.

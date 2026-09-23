@@ -622,7 +622,7 @@ Array trả về chỉ chuẩn bị một request. Nó không thay transcript b�
 const llmMessages = await config.convertToLlm(messages);
 ```
 
-Converter mặc định của `Agent` giữ role `user`, `assistant` và `toolResult`. Coding Agent còn map `bashExecution`, `custom`, `branchSummary` và `compactionSummary` thành user message; Bash message bị đánh dấu exclude sẽ bị lọc:
+Converter mặc định của `Agent` giữ các role `system`, `user`, `assistant` và `toolResult`. Coding Agent còn map `bashExecution`, `custom`, `branchSummary` và `compactionSummary` thành user message; Bash message bị đánh dấu exclude sẽ bị lọc:
 
 ```typescript
 // Faithfully abridged from packages/coding-agent/src/core/messages.ts.
@@ -664,6 +664,7 @@ switch (m.role) {
       ],
       timestamp: m.timestamp,
     };
+  case "system":
   case "user":
   case "assistant":
   case "toolResult":
@@ -677,6 +678,7 @@ Type transition này cố ý làm mất thông tin:
 
 ```text
 AgentMessage[]                           Message[]
+├─ system ----------------------------> system
 ├─ user ------------------------------> user
 ├─ assistant -------------------------> assistant
 ├─ toolResult ------------------------> toolResult

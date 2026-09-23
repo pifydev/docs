@@ -6,12 +6,12 @@ language: vi
 chapter: 11
 source_url: "https://docs.pify.dev/vi/ch11-testing-evaluation"
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/src/providers/faux.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/test/e2e.test.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/agent-loop.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/session-manager.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/README.md"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/pi-harness.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/providers/faux.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/test/e2e.test.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent-loop.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/session-manager.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/README.md"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/src/harness.ts"
 terms_used:
   - test double
   - fixture
@@ -24,14 +24,14 @@ terms_used:
   - ToolCall
   - ToolResultMessage
 status: reviewed
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
 
 Chương 10 kết thúc ở Session Tree bền vững. Cơ chế lưu bền vững giúp kiểm tra lại một lần chạy Agent, nhưng việc transcript tồn tại trên đĩa không chứng minh Agent đã hoạt động đúng. Một chiến lược kiểm thử hữu ích phải xác lập nhiều sự thật khác nhau: provider adapter tuân thủ streaming protocol, Agent Loop ghép đúng từng lệnh gọi Tool với kết quả, đường dẫn session đang hoạt động vẫn nhất quán, ứng dụng hoàn thành một tác vụ thực tế, và một thay đổi đề xuất hoạt động tốt hơn baseline đủ thường xuyên để đáng phát hành.
 
-Không thể gộp các sự thật đó thành một con số “chất lượng Agent”. Chương này xây dựng mô hình bằng chứng theo tầng quanh Pi `0.85.0`, giải thích loại lỗi thuộc về từng tầng và kết thúc bằng một ma trận sẵn sàng cho release. Ví dụ deterministic chỉ biên dịch với các export công khai của `@earendil-works/pi-ai@0.85.0` và `@earendil-works/pi-agent-core@0.85.0`. Phần đánh giá cũng trỏ vào monorepo của Pi tại release đã pin vì `packages/evals` là công cụ workspace private, không phải package SDK đã phát hành.
+Không thể gộp các sự thật đó thành một con số “chất lượng Agent”. Chương này xây dựng mô hình bằng chứng theo tầng quanh Pi `0.87.1`, giải thích loại lỗi thuộc về từng tầng và kết thúc bằng một ma trận sẵn sàng cho release. Ví dụ deterministic chỉ biên dịch với các export công khai của `@earendil-works/pi-ai@0.87.1` và `@earendil-works/pi-agent-core@0.87.1`. Phần đánh giá cũng trỏ vào monorepo của Pi tại release đã pin vì `packages/evals` là công cụ workspace private, không phải package SDK đã phát hành.
 
 ## 1. Xem kiểm thử là bằng chứng theo tầng, không phải một điểm end-to-end
 
@@ -101,7 +101,7 @@ Dùng contract fixture cho các biến thể protocol được hỗ trợ và m�
 
 Handle cung cấp `setResponses()`, `appendResponses()`, `getPendingResponseCount()`, `getModel()` và các counter trong `state`. Khác với cơ chế đăng ký compatibility cũ, handle tường minh này không có method `unregister()`. Khi cleanup, hãy xóa provider của nó khỏi collection cô lập bằng `models.deleteProvider(faux.provider.id)`.
 
-Function dưới đây được kiểm tra bằng bước biên dịch và bao phủ trọn một vòng khứ hồi qua Tool. Nó không dùng API key, environment secret, filesystem hay network request; timer duy nhất là failure-only watchdog dùng để abort rồi chờ một Agent bị treo settle hoàn toàn. Scripted response đầu chứa text giải thích và một `ToolCall`; response thứ hai là assistant response cuối. Các assertion kiểm tra cả provider request lẫn transcript của Agent.
+Function dưới đây được đồng bộ với `tests/fixtures/pi-sdk-0871.contract.ts` và biên dịch bằng đúng các public dependency `@earendil-works/pi-ai@0.87.1` cùng `@earendil-works/pi-agent-core@0.87.1`. Function bao phủ trọn một vòng khứ hồi qua Tool mà không dùng API key, environment secret, filesystem hay network request; timer duy nhất là failure-only watchdog dùng để abort rồi chờ một Agent bị treo settle hoàn toàn. Scripted response đầu chứa text giải thích và một `ToolCall`; response thứ hai là assistant response cuối. Các assertion kiểm tra cả provider request lẫn transcript của Agent.
 
 ```typescript
 import assert from "node:assert/strict";
@@ -344,7 +344,7 @@ Harness end-to-end điều phối nhiều component hơn, nên phải xác đị
 - **Observation:** output người dùng nhìn thấy, trace đã chuẩn hóa, usage, timing và bằng chứng session được chọn.
 - **Teardown:** abort, dispose subscription, flush hoặc snapshot session và cleanup đệ quy workspace tạm.
 
-Pi có hai ví dụ liên quan tại release đã pin. `packages/agent/test/e2e.test.ts` điều khiển `Agent` công khai bằng faux provider và Tool deterministic. Nó phù hợp cho assertion chính xác về lifecycle và transcript. `packages/evals/src/pi-harness.ts` tạo một Coding Agent session thật trong các thư mục project và Agent tạm, chọn model đã cấu hình, chuẩn hóa event transcript, ghi usage, snapshot JSONL session native, dispose session và xóa workspace. Harness thứ hai là hạ tầng đánh giá model-backed, không phải SDK `@earendil-works/pi-evals` công khai.
+Pi có hai ví dụ liên quan tại release đã pin. `packages/agent/test/e2e.test.ts` điều khiển `Agent` công khai bằng faux provider và Tool deterministic. Nó phù hợp cho assertion chính xác về lifecycle và transcript. `packages/evals/src/harness.ts` tạo một Coding Agent session thật trong các thư mục project và Agent tạm, chọn model đã cấu hình, chuẩn hóa event transcript, ghi usage, snapshot JSONL session native, dispose session và xóa workspace. Harness thứ hai là hạ tầng đánh giá model-backed, không phải SDK `@earendil-works/pi-evals` công khai.
 
 Đặt các assertion cứng về setup bên ngoài quality judge. “Model được yêu cầu tồn tại”, “workspace tạm đã được tạo”, “kết quả Tool liên kết với một call” và “cleanup đã hoàn tất” là các contract hạ tầng. Chúng phải làm harness hoặc test thất bại ngay. “Patch sửa lỗi held-out mà không có chỉnh sửa không liên quan” là hành vi tác vụ; nó thuộc về assertion hoặc judge được chọn cho evaluation.
 
@@ -391,8 +391,8 @@ Pseudocode sau cho thấy hình dạng điều phối. Nó chủ đích không �
 ```typescript
 // Pseudocode: evaluation orchestration, not a Pi SDK API.
 const experiment = {
-  release: "0.85.0",
-  sourceCommit: "107d79f11072bbc8a3a757ed7fd69596bee7d68c",
+  release: "0.87.1",
+  sourceCommit: "f07218c4d4bbc12bef056a7058c3dd49dfe41abe",
   baseline,
   candidate,
   tasks: heldOutTasks,
@@ -435,7 +435,7 @@ reportPairedDelta({
 });
 ```
 
-Việc ghép cặp làm giảm noise do độ khó tác vụ: observation baseline và candidate của cùng tác vụ và lần lặp được so với nhau. Tên harness ổn định và ID tác vụ ổn định ngăn các lần chạy không liên quan bị nối chung. `evalHarnessTable()` ở bản Pi đã pin tạo group key từ `input.id` không rỗng khi có; nếu không, nó dùng SHA-256 hash của input JSON canonical strict, kết hợp với số lần lặp.
+Việc ghép cặp làm giảm noise do độ khó tác vụ: observation baseline và candidate của cùng tác vụ và lần lặp được so với nhau. Trong Pi `0.87.1`, `plan.ts` gán cho mỗi arm một eval set, case ID, variant, model và run number. `report.ts` chỉ ghép hai arm `without_docs` và `with_docs` khi eval set, case ID, model và run number khớp nhau.
 
 Chọn số lần lặp trước khi đọc kết quả. Nhiều lần chạy hơn giúp thấy rõ variance, nhưng nhân thời gian chạy, chi phí provider và chi phí judging. Báo cáo cả số lần chạy và mẫu số eligible-pair, không chỉ phần trăm thắng. Nếu năm trong ba mươi cặp biến mất do một harness lỗi, mức cải thiện tính trên hai mươi lăm cặp còn lại phải đi kèm diagnostic đó.
 
@@ -503,7 +503,7 @@ Release gate nhỏ nhất có độ tin cậy phải bao phủ mọi tầng mà 
 | Held-out evaluation baseline/candidate | Trước release làm thay đổi hành vi | Đạt ngưỡng với số eligible pair và diagnostic được báo cáo |
 | Audit artifact và cleanup | Trước khi bật trace hoặc judge mới | Kiểm tra redaction, access, retention và deletion đều pass |
 
-Với ví dụ code deterministic trong chương này, tiêu chí chấp nhận là `npm run typecheck` biên dịch cùng function với dependency chính xác `0.85.0`. Test thật nên gọi function trong test runner; repository tài liệu này chỉ giữ nó ở dạng compile-only để việc import contract fixture không bao giờ khởi chạy Agent.
+Với ví dụ code deterministic trong chương này, tiêu chí chấp nhận là release contract biên dịch và gọi cùng function từ `tests/fixtures/pi-sdk-0871.contract.ts` bằng đúng các dependency `@earendil-works/pi-ai@0.87.1` và `@earendil-works/pi-agent-core@0.87.1`. Lần chạy offline phải settle và cleanup provider xong trong giới hạn watchdog.
 
 Trước khi phát hành thay đổi hành vi Agent, hãy trả lời các câu hỏi sau bằng bằng chứng:
 
@@ -514,14 +514,14 @@ Trước khi phát hành thay đổi hành vi Agent, hãy trả lời các câu 
 - Reviewer có thể tái lập cấu hình mà không nhận artifact private chưa redact hay không?
 - Candidate có đạt correctness policy mà không tạo regression không thể chấp nhận về latency, token hoặc cost hay không?
 
-Source map sau được pin tới release Pi `0.85.0`, commit `107d79f11072bbc8a3a757ed7fd69596bee7d68c`:
+Source map sau được pin tới tag Pi `v0.87.1`, commit `f07218c4d4bbc12bef056a7058c3dd49dfe41abe`:
 
-- [`packages/ai/src/providers/faux.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/src/providers/faux.ts) định nghĩa `fauxProvider()`, response helper, hành vi hàng đợi và request factory.
-- [`packages/agent/test/e2e.test.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/test/e2e.test.ts) minh họa test deterministic cho Agent, Tool, abort, lifecycle và multi-turn.
-- [`packages/agent/src/agent-loop.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/agent-loop.ts) sở hữu bước chuẩn bị và thực thi Tool, dựng result, thứ tự append và tiếp tục turn.
-- [`packages/coding-agent/src/core/session-manager.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/session-manager.ts) triển khai session storage v3 liên kết bằng parent và phép chiếu active path của Coding Agent.
-- [`packages/agent/test/harness/context.test.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/test/harness/context.test.ts) và [`jsonl-storage.test.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/test/harness/jsonl-storage.test.ts) kiểm thử các contract session riêng của generic harness.
-- [`packages/evals/README.md`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/README.md), [`smoke.eval.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/smoke.eval.ts) và [`pi-harness.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/pi-harness.ts) định nghĩa entry eval model-backed private của release và Coding Agent harness.
-- [`harness-table.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/vitest-evals/harness-table.ts), [`reporter.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/vitest-evals/reporter.ts), [`artifacts.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/vitest-evals/artifacts.ts) và [`summary.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/vitest-evals/summary.ts) triển khai việc ghép cặp lặp lại, đính kèm artifact, diagnostic và summary so sánh.
+- [`packages/ai/src/providers/faux.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/providers/faux.ts) định nghĩa `fauxProvider()`, response helper, hành vi hàng đợi và request factory.
+- [`packages/agent/test/e2e.test.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/test/e2e.test.ts) minh họa test deterministic cho Agent, Tool, abort, lifecycle và multi-turn.
+- [`packages/agent/src/agent-loop.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent-loop.ts) sở hữu bước chuẩn bị và thực thi Tool, dựng result, thứ tự append và tiếp tục turn.
+- [`packages/coding-agent/src/core/session-manager.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/session-manager.ts) triển khai session storage v3 liên kết bằng parent và phép chiếu active path của Coding Agent.
+- [`packages/agent/test/harness/context.test.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/test/harness/context.test.ts) và [`jsonl-storage.test.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/test/harness/jsonl-storage.test.ts) kiểm thử các contract session riêng của generic harness.
+- [`packages/evals/README.md`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/README.md), [`evals/smoke.eval.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/evals/smoke.eval.ts) và [`src/harness.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/src/harness.ts) định nghĩa entry eval model-backed private và Coding Agent harness.
+- [`src/plan.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/src/plan.ts) cùng [`src/report.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/src/report.ts) triển khai repetition planning, ghép cặp chính xác theo arm, lưu session artifact, diagnostic và comparative summary.
 
 Ranh giới này chuẩn bị cho ba hướng dẫn tập trung tiếp theo: kiểm thử Agent theo cách deterministic, chạy eval suite của Pi được pin theo release và host một session runtime có thể thay thế. Giữ test deterministic làm nền tảng chẩn đoán; dùng evaluation để trả lời câu hỏi sản phẩm rộng hơn sau khi các contract đó đã green.

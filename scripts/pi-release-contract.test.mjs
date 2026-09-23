@@ -2474,6 +2474,59 @@ function validateLowLevelLoopExamples(localized) {
     /context\.systemPrompt|tools:\s*context\.tools/,
   );
 
+  for (const locale of ["en", "vi"]) {
+    const chapter = localized.get(`${locale}/ch03-agent-loop.md`);
+    const section = extractMarkdownSection(
+      chapter,
+      locale === "en"
+        ? "#### Phase B: convert `AgentMessage` to `Message`"
+        : "#### Pha B: convert `AgentMessage` thành `Message`",
+      `${locale} Chapter 3 converter boundary`,
+    );
+    const converterDescription = markdownSemanticSegments(section.body).find(
+      ({ kind, text }) =>
+        kind === "prose" &&
+        text.includes("`Agent`") &&
+        text.includes("`toolResult`"),
+    );
+    assert.ok(
+      converterDescription,
+      `${locale} Chapter 3 must describe the default Agent converter`,
+    );
+    const preservedRoles = [
+      ...converterDescription.text.matchAll(
+        /`(system|user|assistant|toolResult)`/g,
+      ),
+    ].map((match) => match[1]);
+    assert.deepEqual(
+      preservedRoles,
+      ["system", "user", "assistant", "toolResult"],
+      `${locale} default Agent converter must preserve every public Message role`,
+    );
+
+    const codingConverter = extractTypeScriptFenceContaining(
+      section.body,
+      "switch (m.role)",
+      `${locale} Coding Agent converter excerpt`,
+    );
+    assert.match(
+      codingConverter,
+      /case "system":\s+case "user":\s+case "assistant":\s+case "toolResult":\s+return m;/,
+      `${locale} Coding Agent converter must preserve system messages`,
+    );
+
+    const roleTransitions = extractTextFenceContaining(
+      section.body,
+      "compactionSummary",
+      `${locale} AgentMessage role transitions`,
+    );
+    assert.match(
+      roleTransitions,
+      /^[├└]─ system -+> system$/m,
+      `${locale} role transition diagram must preserve system messages`,
+    );
+  }
+
   assertVirtualTypeScriptCompiles(
     virtualSources,
     "published low-level loop examples must compile against installed 0.87.1 declarations",
@@ -2776,6 +2829,27 @@ test("0.87.0 session context and lifecycle mutation guards use real published se
       key: "en/ch03-agent-loop.md",
       from: "const llmMessages = await config.convertToLlm(context.messages);\n  const llmContext = normalizeContext({ messages: llmMessages });",
       to: "const llmContext = normalizeContext({ messages: context.messages });\n  const llmMessages = await config.convertToLlm(context.messages);",
+      validator: validateLowLevelLoopExamples,
+    },
+    {
+      label: "default converter system role",
+      key: "en/ch03-agent-loop.md",
+      from: "The default `Agent` converter retains `system`, `user`, `assistant`, and `toolResult` roles.",
+      to: "The default `Agent` converter retains `user`, `assistant`, and `toolResult` roles.",
+      validator: validateLowLevelLoopExamples,
+    },
+    {
+      label: "Coding Agent converter system case",
+      key: "en/ch03-agent-loop.md",
+      from: '  case "system":\n  case "user":',
+      to: '  case "user":',
+      validator: validateLowLevelLoopExamples,
+    },
+    {
+      label: "role transition system mapping",
+      key: "en/ch03-agent-loop.md",
+      from: "├─ system ----------------------------> system\n",
+      to: "",
       validator: validateLowLevelLoopExamples,
     },
   ];
@@ -6311,6 +6385,129 @@ test("both replaceable session runtime guides preserve the ten-step lifecycle an
         new RegExp(actor, "i"),
         `${locale} runtime guide Mermaid diagram must name ${actor}`,
       );
+    }
+  }
+});
+
+function assertDeterministicPageReleaseAuthority(
+  source,
+  { locale, filename, release },
+) {
+  const context = `${locale} ${filename}`;
+  const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---/.exec(source)?.[1];
+  assert.ok(frontmatter, `${context} must contain frontmatter`);
+  assert.match(
+    frontmatter,
+    /^last_updated: '2026-09-23'$/m,
+    `${context} must record the current review date`,
+  );
+  assert.deepEqual(
+    invalidPiSourceLinks([{ filename, source }], release),
+    [],
+    `${context} must use current Pi source authority`,
+  );
+  assert.doesNotMatch(
+    source,
+    /0\.85\.0|v0\.85\.0|107d79f11072bbc8a3a757ed7fd69596bee7d68c|pi-sdk-085/i,
+    `${context} must not retain active Pi 0.85 authority`,
+  );
+  assert.ok(
+    source.includes(`\`${release.tag}\``),
+    `${context} must name the current release tag`,
+  );
+  assert.ok(
+    source.includes(`\`${release.commit}\``),
+    `${context} must name the current release commit`,
+  );
+
+  const chapter = filename === "ch11-testing-evaluation.md";
+  const example = chapter
+    ? chapter11ExampleFence(source)
+    : deterministicGuideExampleFence(source, context);
+  const exampleSection = extractMarkdownSection(
+    source,
+    chapter
+      ? locale === "en"
+        ? "## 3. Script deterministic turns with the public faux provider"
+        : "## 3. Lập kịch bản turn deterministic bằng faux provider công khai"
+      : locale === "en"
+        ? "## Complete compile-checked test"
+        : "## Test hoàn chỉnh đã được compile-check",
+    `${context} displayed deterministic example`,
+  );
+  assert.ok(
+    exampleSection.body.includes(example),
+    `${context} release statement must accompany the displayed example`,
+  );
+  const importedPiPackages = [
+    ...new Set(
+      [
+        ...example.matchAll(
+          /\bfrom\s+["'](@earendil-works\/pi-[a-z-]+)(?:\/[^"']*)?["']/g,
+        ),
+      ].map((match) => match[1]),
+    ),
+  ].sort();
+  assert.deepEqual(importedPiPackages, [
+    "@earendil-works/pi-agent-core",
+    "@earendil-works/pi-ai",
+  ]);
+  for (const packageName of importedPiPackages) {
+    assert.ok(
+      exampleSection.body.includes(
+        `\`${packageName}@${release.packageVersion}\``,
+      ),
+      `${context} must state ${packageName} at the current release beside its example`,
+    );
+  }
+  assert.ok(
+    exampleSection.body.includes("`tests/fixtures/pi-sdk-0871.contract.ts`"),
+    `${context} must name the fixture that compiles its displayed example`,
+  );
+
+  if (!chapter) {
+    assertSdkInstallPackages(example, source, context);
+  }
+}
+
+test("deterministic displayed examples use current release dependencies and fixture authority", async () => {
+  const release = await readReleaseFixture();
+  for (const filename of [
+    "ch11-testing-evaluation.md",
+    "how-to/test-agent-deterministically.md",
+  ]) {
+    for (const { locale, source } of await readLocalizedContent(filename)) {
+      const options = { locale, filename, release };
+      const context = `${locale} ${filename}`;
+      assertDeterministicPageReleaseAuthority(source, options);
+
+      for (const [label, mutation] of [
+        [
+          "dependency version",
+          source.replace(
+            "@earendil-works/pi-ai@0.87.1",
+            "@earendil-works/pi-ai@0.85.0",
+          ),
+        ],
+        [
+          "fixture filename",
+          source.replace(
+            "tests/fixtures/pi-sdk-0871.contract.ts",
+            "tests/fixtures/pi-sdk-0850.contract.ts",
+          ),
+        ],
+      ]) {
+        assert.notEqual(
+          mutation,
+          source,
+          `${context} ${label} must mutate the real page`,
+        );
+        assert.throws(
+          () => assertDeterministicPageReleaseAuthority(mutation, options),
+          assert.AssertionError,
+          `${context} ${label} drift must fail release validation`,
+        );
+      }
     }
   }
 });

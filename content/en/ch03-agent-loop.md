@@ -622,7 +622,7 @@ The returned array prepares one request. It does not replace the durable transcr
 const llmMessages = await config.convertToLlm(messages);
 ```
 
-The default `Agent` converter retains `user`, `assistant`, and `toolResult` roles. Coding Agent instead maps `bashExecution`, `custom`, `branchSummary`, and `compactionSummary` messages into user messages, while excluded Bash messages are filtered out:
+The default `Agent` converter retains `system`, `user`, `assistant`, and `toolResult` roles. Coding Agent instead maps `bashExecution`, `custom`, `branchSummary`, and `compactionSummary` messages into user messages, while excluded Bash messages are filtered out:
 
 ```typescript
 // Faithfully abridged from packages/coding-agent/src/core/messages.ts.
@@ -664,6 +664,7 @@ switch (m.role) {
       ],
       timestamp: m.timestamp,
     };
+  case "system":
   case "user":
   case "assistant":
   case "toolResult":
@@ -677,6 +678,7 @@ The type transition is intentionally lossy:
 
 ```text
 AgentMessage[]                           Message[]
+├─ system ----------------------------> system
 ├─ user ------------------------------> user
 ├─ assistant -------------------------> assistant
 ├─ toolResult ------------------------> toolResult
