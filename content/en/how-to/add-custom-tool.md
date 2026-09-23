@@ -13,7 +13,7 @@ terms_used:
   - AbortSignal
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: "2026-09-04"
+last_updated: '2026-09-23'
 ---
 
 This guide builds a typed `get_weather` Tool that the model can call during a turn. The example runs against a small in-memory data set, so you can test the Tool without an external service. The same execution contract works with a database or HTTP client once you pass through cancellation and keep credentials out of model-visible output.
@@ -36,16 +36,14 @@ Choose one product route for registration. A Coding Agent session combines `cust
 
 ## Prerequisites
 
-Pi `0.85.0` requires Node.js `>=22.19.0`. Start an ESM TypeScript project and install every package imported directly by the examples:
+Pi `0.87.1` requires Node.js `>=22.19.0`. Start an ESM TypeScript project and install every package imported directly by the examples:
 
 ```bash
 npm init -y
 npm pkg set type=module
-npm install @earendil-works/pi-ai@0.85.0 @earendil-works/pi-agent-core@0.85.0 @earendil-works/pi-coding-agent@0.85.0 @earendil-works/pi-server@0.85.0
+npm install @earendil-works/pi-ai@0.87.1 @earendil-works/pi-agent-core@0.87.1 @earendil-works/pi-coding-agent@0.87.1
 npm install --save-dev typescript tsx @types/node
 ```
-
-Pi `0.85.0` packaging workaround: the published Coding Agent manifest omits this runtime dependency even though its public root export loads it. This workaround is release-scoped, not a permanent dependency rule for later Pi versions.
 
 ```json title="tsconfig.json"
 {

@@ -16,7 +16,7 @@ terms_used:
   - AbortSignal
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 ---
 
 Most model additions describe an endpoint Pi already knows how to call. Start with `~/.pi/agent/models.json` or an Extension `ProviderConfig`; build a native `Provider` when you need provider-owned authentication or discovery; implement `ProviderStreams` only for a genuinely new wire protocol.
@@ -42,16 +42,14 @@ Do not revive the old process-global model/translator registry. Current applicat
 
 ## Prerequisites
 
-Pi `0.85.0` requires Node.js `>=22.19.0`. For the TypeScript examples, use ESM and install each package you import:
+Pi `0.87.1` requires Node.js `>=22.19.0`. For the TypeScript examples, use ESM and install each package you import:
 
 ```bash
 npm init -y
 npm pkg set type=module
-npm install @earendil-works/pi-ai@0.85.0 @earendil-works/pi-coding-agent@0.85.0 @earendil-works/pi-server@0.85.0
+npm install @earendil-works/pi-ai@0.87.1 @earendil-works/pi-coding-agent@0.87.1
 npm install --save-dev typescript tsx @types/node
 ```
-
-Pi `0.85.0` packaging workaround: the published Coding Agent manifest omits this runtime dependency even though its public root export loads it. This workaround is release-scoped, not a permanent dependency rule for later Pi versions.
 
 ```json title="tsconfig.json"
 {

@@ -8,7 +8,7 @@ official_refs:
   - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/modes/rpc/rpc-types.ts'
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 ---
 
 Subscribe vào `AgentSession` trước khi gọi `prompt()`. Các event của session cho phép CLI hoặc UI hiển thị partial output, công việc của Tool, retry và trạng thái cuối mà không phải đọc lại toàn bộ transcript.
@@ -21,14 +21,12 @@ Subscribe vào `AgentSession` trước khi gọi `prompt()`. Các event của se
 
 :::
 
-Các ví dụ dùng Node.js `>=22.19.0`, ESM và package phát hành ở phiên bản `0.85.0`:
+Các ví dụ dùng Node.js `>=22.19.0`, ESM và package phát hành ở phiên bản `0.87.1`:
 
 ```bash
-npm install @earendil-works/pi-coding-agent@0.85.0 @earendil-works/pi-server@0.85.0
+npm install @earendil-works/pi-coding-agent@0.87.1
 npm install --save-dev tsx typescript @types/node
 ```
-
-Workaround cho lỗi đóng gói của Pi `0.85.0`: manifest Coding Agent đã phát hành thiếu runtime dependency này dù public root export có load nó. Workaround này chỉ áp dụng cho phiên bản này, không phải quy tắc dependency cố định cho các phiên bản Pi sau.
 
 ## Event stream
 

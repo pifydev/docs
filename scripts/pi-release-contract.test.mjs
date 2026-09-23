@@ -2948,8 +2948,7 @@ test("Chapter 11 compile fixture aborts and drains a stalled Agent before removi
   }
 });
 
-test("Pi 0.85 SDK install recipes include the same-version pi-server packaging workaround", async () => {
-  const release = await readReleaseFixture();
+test("Pi 0.87.1 SDK install recipes omit the fixed 0.85.0 packaging workaround", async () => {
   const guideContracts = [
     {
       path: "how-to/add-custom-tool.md",
@@ -2982,26 +2981,11 @@ test("Pi 0.85 SDK install recipes include the same-version pi-server packaging w
       beforeHeadings: { en: "## Outcome", vi: "## Kết quả" },
     },
   ];
-  const localeContracts = {
-    en: [
-      /Pi `0\.85\.0` packaging workaround/i,
-      /published Coding Agent manifest[^.]*omits[^.]*runtime dependency/i,
-      /release-scoped[^.]*not a permanent dependency rule/i,
-    ],
-    vi: [
-      /workaround[^.]*đóng gói[^.]*Pi `0\.85\.0`/i,
-      /manifest Coding Agent[^.]*đã phát hành[^.]*thiếu[^.]*runtime dependency/i,
-      /chỉ áp dụng[^.]*phiên bản[^.]*không phải quy tắc dependency cố định/i,
-    ],
-  };
-  const exactInstallCommand =
-    /npm install[^\r\n`]*@earendil-works\/pi-coding-agent@0\.85\.0[^\r\n`]*@earendil-works\/pi-server@0\.85\.0/;
-
   for (const guideContract of guideContracts) {
     for (const { locale, source } of await readLocalizedContent(
       guideContract.path,
     )) {
-      const context = `${locale} ${guideContract.path} Pi 0.85.0 SDK install`;
+      const context = `${locale} ${guideContract.path} Pi 0.87.1 SDK install`;
       const scope = guideContract.headings
         ? extractMarkdownSection(
             source,
@@ -3014,17 +2998,39 @@ test("Pi 0.85 SDK install recipes include the same-version pi-server packaging w
             context,
           );
 
-      assert.match(scope, exactInstallCommand, context);
-      assertParagraphContainsAll(scope, localeContracts[locale], context);
-
-      const serverVersions = [
-        ...scope.matchAll(/@earendil-works\/pi-server@([^\s`]+)/g),
-      ].map((match) => match[1]);
-      assert.ok(serverVersions.length > 0, `${context} must name pi-server`);
-      assert.ok(
-        serverVersions.every((version) => version === release.packageVersion),
-        `${context} must pin every pi-server workaround reference to ${release.packageVersion}`,
+      assert.doesNotMatch(source, /0\.85\.0`? packaging workaround/i, context);
+      assert.doesNotMatch(
+        source,
+        /workaround[^\r\n]*đóng gói[^\r\n]*0\.85\.0/i,
+        context,
       );
+      assert.doesNotMatch(source, /@earendil-works\/pi-[a-z-]+@0\.85\.0/, context);
+
+      const importedPackages = new Set(
+        [
+          ...source.matchAll(
+            /\bfrom\s+["'](@earendil-works\/pi-[a-z-]+)(?:\/[^"']*)?["']/g,
+          ),
+        ].map((match) => match[1]),
+      );
+      const installedPackages = [
+        ...scope.matchAll(/\bnpm install[^\r\n`]+/g),
+      ].flatMap(([command]) => [
+        ...command.matchAll(/(@earendil-works\/pi-[a-z-]+)(?:@([^\s`]+))?/g),
+      ]);
+      assert.ok(importedPackages.size > 0, `${context} must import Pi packages`);
+      assert.deepEqual(
+        [...new Set(installedPackages.map((match) => match[1]))].sort(),
+        [...importedPackages].sort(),
+        `${context} must install every directly imported Pi package without unused dependencies`,
+      );
+      for (const [, packageName, version] of installedPackages) {
+        assert.equal(
+          version,
+          "0.87.1",
+          `${context} must pin ${packageName} to 0.87.1`,
+        );
+      }
     }
   }
 });

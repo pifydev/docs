@@ -16,7 +16,7 @@ terms_used:
   - AbortSignal
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 ---
 
 Phần lớn trường hợp thêm model chỉ cần mô tả một endpoint mà Pi đã biết cách gọi. Hãy bắt đầu bằng `~/.pi/agent/models.json` hoặc `ProviderConfig` trong Extension; tạo native `Provider` khi cần cơ chế xác thực hoặc khám phá model do provider quản lý; chỉ triển khai `ProviderStreams` cho một wire protocol thật sự mới.
@@ -42,16 +42,14 @@ Chọn đúng một hướng: hoàn thành mục **1–2** cho catalog tĩnh, **
 
 ## Điều kiện cần
 
-Pi `0.85.0` yêu cầu Node.js `>=22.19.0`. Với các ví dụ TypeScript, hãy dùng ESM và cài từng package được import:
+Pi `0.87.1` yêu cầu Node.js `>=22.19.0`. Với các ví dụ TypeScript, hãy dùng ESM và cài từng package được import:
 
 ```bash
 npm init -y
 npm pkg set type=module
-npm install @earendil-works/pi-ai@0.85.0 @earendil-works/pi-coding-agent@0.85.0 @earendil-works/pi-server@0.85.0
+npm install @earendil-works/pi-ai@0.87.1 @earendil-works/pi-coding-agent@0.87.1
 npm install --save-dev typescript tsx @types/node
 ```
-
-Workaround cho lỗi đóng gói của Pi `0.85.0`: manifest Coding Agent đã phát hành thiếu runtime dependency này dù public root export có load nó. Workaround này chỉ áp dụng cho phiên bản này, không phải quy tắc dependency cố định cho các phiên bản Pi sau.
 
 ```json title="tsconfig.json"
 {

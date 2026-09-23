@@ -8,7 +8,7 @@ official_refs:
   - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/modes/rpc/rpc-types.ts'
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 ---
 
 Subscribe to an `AgentSession` before calling `prompt()`. Its events let a CLI or UI render partial output, Tool work, retries, and final state without repeatedly reading the complete transcript.
@@ -21,14 +21,12 @@ Subscribe to an `AgentSession` before calling `prompt()`. Its events let a CLI o
 
 :::
 
-The examples target Node.js `>=22.19.0`, ESM, and the published package at `0.85.0`:
+The examples target Node.js `>=22.19.0`, ESM, and the published package at `0.87.1`:
 
 ```bash
-npm install @earendil-works/pi-coding-agent@0.85.0 @earendil-works/pi-server@0.85.0
+npm install @earendil-works/pi-coding-agent@0.87.1
 npm install --save-dev tsx typescript @types/node
 ```
-
-Pi `0.85.0` packaging workaround: the published Coding Agent manifest omits this runtime dependency even though its public root export loads it. This workaround is release-scoped, not a permanent dependency rule for later Pi versions.
 
 ## The event stream
 

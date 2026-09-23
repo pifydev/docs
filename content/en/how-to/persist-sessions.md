@@ -5,7 +5,7 @@ translation_key: how-to-persist-sessions
 language: en
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 ---
 
 Use `SessionManager` when a conversation must outlive the current process. A persistent manager owns a Pi session file and appends state as an `AgentSession` runs; an in-memory manager can instead project entries whose durable storage is owned by your host.
@@ -18,9 +18,7 @@ Use `SessionManager` when a conversation must outlive the current process. A per
 
 :::
 
-The examples target Node.js `>=22.19.0` and ESM. Install the SDK with `npm install @earendil-works/pi-coding-agent@0.85.0 @earendil-works/pi-server@0.85.0`, plus `tsx`, TypeScript, and Node types for the commands below.
-
-Pi `0.85.0` packaging workaround: the published Coding Agent manifest omits this runtime dependency even though its public root export loads it. This workaround is release-scoped, not a permanent dependency rule for later Pi versions.
+The examples target Node.js `>=22.19.0` and ESM. Install the SDK with `npm install @earendil-works/pi-coding-agent@0.87.1`, plus `tsx`, TypeScript, and Node types for the commands below.
 
 ## The session model
 

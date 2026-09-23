@@ -13,7 +13,7 @@ terms_used:
   - AbortSignal
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: "2026-09-04"
+last_updated: '2026-09-23'
 ---
 
 Hướng dẫn này tạo Tool `get_weather` có type để model gọi trong một turn. Ví dụ dùng một tập dữ liệu nhỏ trong bộ nhớ, nên bạn có thể kiểm thử Tool mà không cần dịch vụ bên ngoài. Contract thực thi này cũng dùng được với database hoặc HTTP client, miễn là bạn chuyển tiếp tín hiệu hủy và không đưa credential vào output mà model nhìn thấy.
@@ -36,16 +36,14 @@ Chỉ chọn một cách đăng ký ở tầng sản phẩm. Coding Agent sessio
 
 ## Điều kiện cần
 
-Pi `0.85.0` yêu cầu Node.js `>=22.19.0`. Tạo một dự án TypeScript dùng ESM và cài từng package được import trực tiếp trong ví dụ:
+Pi `0.87.1` yêu cầu Node.js `>=22.19.0`. Tạo một dự án TypeScript dùng ESM và cài từng package được import trực tiếp trong ví dụ:
 
 ```bash
 npm init -y
 npm pkg set type=module
-npm install @earendil-works/pi-ai@0.85.0 @earendil-works/pi-agent-core@0.85.0 @earendil-works/pi-coding-agent@0.85.0 @earendil-works/pi-server@0.85.0
+npm install @earendil-works/pi-ai@0.87.1 @earendil-works/pi-agent-core@0.87.1 @earendil-works/pi-coding-agent@0.87.1
 npm install --save-dev typescript tsx @types/node
 ```
-
-Workaround cho lỗi đóng gói của Pi `0.85.0`: manifest Coding Agent đã phát hành thiếu runtime dependency này dù public root export có load nó. Workaround này chỉ áp dụng cho phiên bản này, không phải quy tắc dependency cố định cho các phiên bản Pi sau.
 
 ```json title="tsconfig.json"
 {

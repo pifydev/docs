@@ -15,15 +15,15 @@ terms_used:
   - harness
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 translator: Pify maintainers
 ---
 
 Một server chạy lâu, desktop shell hoặc RPC process không thể coi `AgentSession` là cố định khi người dùng có thể tạo session mới, resume project khác, fork lịch sử, clone một branch hoặc import JSONL. Pi `0.85.0` cung cấp `AgentSessionRuntime` làm boundary thay thế: nó sở hữu session hiện tại cùng các service gắn với cwd, còn host chịu trách nhiệm tuần tự hóa, subscription, diagnostic và failure policy.
 
-Hướng dẫn này xây boundary đó chỉ bằng public export từ `@earendil-works/pi-coding-agent@0.85.0`. Toàn bộ TypeScript shape được compile-check trong repository tài liệu này. Code nhận dependency thay vì tạo resource thật trong lúc kiểm tra.
+Hướng dẫn này xây boundary đó chỉ bằng public export từ `@earendil-works/pi-coding-agent@0.87.1`. Toàn bộ TypeScript shape được compile-check trong repository tài liệu này. Code nhận dependency thay vì tạo resource thật trong lúc kiểm tra.
 
-Trước khi import public root đó trên Node.js `>=22.19.0`, hãy cài SDK bằng `npm install @earendil-works/pi-coding-agent@0.85.0 @earendil-works/pi-server@0.85.0`. Workaround cho lỗi đóng gói của Pi `0.85.0`: manifest Coding Agent đã phát hành thiếu runtime dependency này dù public root export có load nó. Workaround này chỉ áp dụng cho phiên bản này, không phải quy tắc dependency cố định cho các phiên bản Pi sau.
+Trước khi import public root đó trên Node.js `>=22.19.0`, hãy cài SDK bằng `npm install @earendil-works/pi-coding-agent@0.87.1`.
 
 ## Kết quả
 

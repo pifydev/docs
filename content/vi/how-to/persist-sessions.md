@@ -5,7 +5,7 @@ translation_key: how-to-persist-sessions
 language: vi
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 ---
 
 Dùng `SessionManager` khi hội thoại phải tồn tại lâu hơn process hiện tại. Persistent manager sở hữu một Pi session file và append trạng thái trong lúc `AgentSession` chạy; in-memory manager có thể chiếu các entry mà host của bạn lưu bền vững ở nơi khác.
@@ -18,9 +18,7 @@ Dùng `SessionManager` khi hội thoại phải tồn tại lâu hơn process hi
 
 :::
 
-Các ví dụ dùng Node.js `>=22.19.0` và ESM. Cài SDK bằng `npm install @earendil-works/pi-coding-agent@0.85.0 @earendil-works/pi-server@0.85.0`; thêm `tsx`, TypeScript và Node types để chạy các lệnh bên dưới.
-
-Workaround cho lỗi đóng gói của Pi `0.85.0`: manifest Coding Agent đã phát hành thiếu runtime dependency này dù public root export có load nó. Workaround này chỉ áp dụng cho phiên bản này, không phải quy tắc dependency cố định cho các phiên bản Pi sau.
+Các ví dụ dùng Node.js `>=22.19.0` và ESM. Cài SDK bằng `npm install @earendil-works/pi-coding-agent@0.87.1`; thêm `tsx`, TypeScript và Node types để chạy các lệnh bên dưới.
 
 ## Mô hình session
 
