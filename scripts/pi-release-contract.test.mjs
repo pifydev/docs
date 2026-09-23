@@ -827,6 +827,61 @@ function withoutAllowedStaleBaselineSelfTestLiterals(
     );
 }
 
+function sdkInstallCommands(markdown) {
+  const snippets = [];
+  for (const segment of markdownSemanticSegments(markdown)) {
+    if (segment.kind === "code") {
+      const [language = "shell"] = segment.fenceLanguages;
+      if (!/^(?:bash|sh|shell|zsh|powershell|pwsh|ps1|cmd|bat)$/.test(language)) {
+        continue;
+      }
+      const continuation = /^(?:powershell|pwsh|ps1)$/.test(language)
+        ? /`\n[ \t]*/g
+        : /^(?:cmd|bat)$/.test(language)
+          ? /\^\n[ \t]*/g
+          : /\\\n[ \t]*/g;
+      const body = segment.text.split("\n").slice(1, -1).join("\n");
+      snippets.push(body.replace(continuation, " "));
+    } else {
+      snippets.push(
+        ...[...segment.text.matchAll(/`([^`\n]+)`/g)].map((match) => match[1]),
+      );
+    }
+  }
+  return snippets.flatMap((snippet) =>
+    snippet
+      .split(/\n|[;&|]+/)
+      .map((command) => command.trim())
+      .filter((command) => /^npm[ \t]+install(?:[ \t]|$)/.test(command)),
+  );
+}
+
+function assertSdkInstallPackages(source, scope, context) {
+  const importedPackages = new Set(
+    [
+      ...source.matchAll(
+        /\bfrom\s+["'](@earendil-works\/pi-[a-z-]+)(?:\/[^"']*)?["']/g,
+      ),
+    ].map((match) => match[1]),
+  );
+  const installedPackages = sdkInstallCommands(scope).flatMap((command) => [
+    ...command.matchAll(/(@earendil-works\/pi-[a-z-]+)(?:@([^\s`]+))?/g),
+  ]);
+  assert.ok(importedPackages.size > 0, `${context} must import Pi packages`);
+  assert.deepEqual(
+    [...new Set(installedPackages.map((match) => match[1]))].sort(),
+    [...importedPackages].sort(),
+    `${context} must install every directly imported Pi package without unused dependencies`,
+  );
+  for (const [, packageName, version] of installedPackages) {
+    assert.equal(
+      version,
+      "0.87.1",
+      `${context} must pin ${packageName} to 0.87.1`,
+    );
+  }
+}
+
 async function readLocalizedContent(relativePath) {
   return Promise.all(
     ["en", "vi"].map(async (locale) => ({
@@ -3006,32 +3061,74 @@ test("Pi 0.87.1 SDK install recipes omit the fixed 0.85.0 packaging workaround",
       );
       assert.doesNotMatch(source, /@earendil-works\/pi-[a-z-]+@0\.85\.0/, context);
 
-      const importedPackages = new Set(
-        [
-          ...source.matchAll(
-            /\bfrom\s+["'](@earendil-works\/pi-[a-z-]+)(?:\/[^"']*)?["']/g,
-          ),
-        ].map((match) => match[1]),
-      );
-      const installedPackages = [
-        ...scope.matchAll(/\bnpm install[^\r\n`]+/g),
-      ].flatMap(([command]) => [
-        ...command.matchAll(/(@earendil-works\/pi-[a-z-]+)(?:@([^\s`]+))?/g),
-      ]);
-      assert.ok(importedPackages.size > 0, `${context} must import Pi packages`);
-      assert.deepEqual(
-        [...new Set(installedPackages.map((match) => match[1]))].sort(),
-        [...importedPackages].sort(),
-        `${context} must install every directly imported Pi package without unused dependencies`,
-      );
-      for (const [, packageName, version] of installedPackages) {
-        assert.equal(
-          version,
-          "0.87.1",
-          `${context} must pin ${packageName} to 0.87.1`,
-        );
-      }
+      assertSdkInstallPackages(source, scope, context);
     }
+  }
+});
+
+test("SDK install recipes reject extra Pi packages on continuation lines", () => {
+  const source =
+    'import { createAgentSession } from "@earendil-works/pi-coding-agent";';
+  for (const [language, continuation] of [
+    ["bash", "\\"],
+    ["powershell", "`"],
+    ["cmd", "^"],
+  ]) {
+    const scope = [
+      `\`\`\`${language}`,
+      `npm install @earendil-works/pi-coding-agent@0.87.1 ${continuation}`,
+      "  @earendil-works/pi-server@0.87.1",
+      "```",
+    ].join("\n");
+    assert.throws(
+      () => assertSdkInstallPackages(source, scope, language),
+      /without unused dependencies/,
+    );
+  }
+});
+
+test("SDK install recipes recognize and pin required packages on continuation lines", () => {
+  const source = [
+    'import { createAgentSession } from "@earendil-works/pi-coding-agent";',
+    'import { Type } from "@earendil-works/pi-ai";',
+  ].join("\n");
+  for (const [language, continuation] of [
+    ["bash", "\\"],
+    ["powershell", "`"],
+    ["cmd", "^"],
+  ]) {
+    const scope = [
+      `\`\`\`${language}`,
+      `npm install @earendil-works/pi-ai@0.87.1 ${continuation}`,
+      "  @earendil-works/pi-coding-agent@0.87.1",
+      "```",
+    ].join("\r\n");
+    assert.doesNotThrow(() => assertSdkInstallPackages(source, scope, language));
+    for (const version of ["0.87.0", "^0.87.1", "0.87.10"]) {
+      assert.throws(
+        () =>
+          assertSdkInstallPackages(
+            source,
+            scope.replace("pi-coding-agent@0.87.1", `pi-coding-agent@${version}`),
+            language,
+          ),
+        /must pin @earendil-works\/pi-coding-agent to 0\.87\.1/,
+      );
+    }
+  }
+});
+
+test("SDK install recipes keep following commands and prose outside the install set", () => {
+  const source =
+    'import { createAgentSession } from "@earendil-works/pi-coding-agent";';
+  for (const scope of [
+    "```bash\nnpm install @earendil-works/pi-coding-agent@0.87.1 \\\n  --save-exact\nnpm view @earendil-works/pi-server@0.87.1\n```\nThe old npm install @earendil-works/pi-server@0.85.0 command is obsolete.",
+    "Install with `npm install @earendil-works/pi-coding-agent@0.87.1`, then run `npm view @earendil-works/pi-server@0.87.1`.",
+    "```bash\nnpm install @earendil-works/pi-coding-agent@0.87.1 && npm view @earendil-works/pi-server@0.87.1\n```",
+  ]) {
+    assert.doesNotThrow(() =>
+      assertSdkInstallPackages(source, scope, "command boundary"),
+    );
   }
 });
 
