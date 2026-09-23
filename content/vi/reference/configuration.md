@@ -79,6 +79,14 @@ console.log({
 
 `defaultProvider` và `defaultModel` xác định model mặc định. `--model` được ưu tiên cho một lần chạy; session được resume có thể khôi phục model đã ghi khi không truyền model tường minh qua CLI. `defaultThinkingLevel` nhận `off`, `minimal`, `low`, `medium`, `high`, `xhigh` hoặc `max`; setting này có thể được lưu bằng Ctrl+S trong `/thinking` hoặc sửa thủ công. Global default mang semantics cho lúc khởi động này tách biệt với request field của provider.
 
+Model resolver cung cấp fallback khi cả lựa chọn tường minh lẫn trạng thái được resume đều không chỉ định model:
+
+| Provider | Phạm vi resolution | Default trong catalog |
+|---|---|---|
+| `xai` | `new session` | `grok-4.7` |
+
+Đây là default cho xAI session mới hoặc trường hợp cần default resolution trong `0.87.1`. Nó không thay thế model được chọn qua `--model`, chọn tương tác, cấu hình bằng `defaultModel` hoặc khôi phục từ session được resume.
+
 `modelThinkingLevels` lưu thinking level khởi động theo từng model với khóa `provider/modelId`; hãy cấu hình qua `/settings` → Default thinking level per model hoặc sửa JSON thủ công. Giá trị khớp theo model chọn level khởi động của model đó, còn `defaultThinkingLevel` vẫn là global fallback. `thinkingBudgets` là setting riêng để cung cấp token budget cho provider hoặc compatible model có hỗ trợ.
 
 Đừng nhầm các setting mang semantics đó với option gửi trực tiếp tới Google API. `GoogleApiThinkingLevel`, được export từ `@earendil-works/pi-ai`, là union kiểu enum hướng API `"THINKING_LEVEL_UNSPECIFIED" | "MINIMAL" | "LOW" | "MEDIUM" | "HIGH"` dùng cho `GoogleOptions.thinking.level` và `GoogleVertexOptions.thinking.level`. `ResolvedGoogleThinkingLevel` là union đã chuẩn hóa trong adapter `"minimal" | "low" | "medium" | "high"`, dùng sau khi Pi resolve capability mapping của model. Cả hai type đều không mở rộng tập giá trị của `defaultThinkingLevel`; chúng mô tả các ranh giới trong mã provider.
@@ -201,7 +209,17 @@ Không có setting tích hợp `sessions.retention` hoặc `sessions.redactSecre
 
 ### Terminal, image, shell và npm
 
-`terminal.showImages` (`true`) điều khiển inline display, `imageWidthCells` (`60`) đặt chiều rộng ưu tiên, `clearOnShrink` (`false`) xóa hàng không còn dùng, còn `showTerminalProgress` (`false`) phát progress indicator khi terminal hỗ trợ. `images.autoResize` (`true`) resize image gửi tới model về tối đa 2000 × 2000; `images.blockImages` (`false`) chặn mọi image gửi đến provider. Ẩn image trong terminal không chặn upload.
+`terminal.showImages` (`true`) điều khiển inline display, `imageWidthCells` (`60`) đặt chiều rộng ưu tiên, `clearOnShrink` (`false`) xóa hàng không còn dùng, còn `showTerminalProgress` (`false`) phát progress indicator khi terminal hỗ trợ. `images.blockImages` (`false`) chặn mọi image gửi đến provider. Ẩn image trong terminal không chặn upload.
+
+`images.autoResize` là global gate để bật hoặc tắt. Resize profile thực tế lấy từ `inputLimits.images.resize` của model đã chọn, vì vậy không có một giới hạn chung cho mọi model:
+
+| Control hoặc event | Phạm vi | Tác động |
+|---|---|---|
+| `images.autoResize` | `global gate` | `enable or disable resizing` |
+| `inputLimits.images.resize` | `per-model profile` | `new images before history` |
+| `model switch` | `stored image` | `do not rewrite` |
+
+Profile đang active được dùng cho file attachment, image do `read` trả về và Tool-result image. Mỗi image mới chỉ được normalize một lần khi đi vào history; việc chọn model khác về sau không ghi lại nội dung đã lưu. Provider-side transformation và hard limit nằm ngoài profile này của Pi, vì vậy cần kiểm tra riêng theo từng route.
 
 Pi tự động detect terminal capability và nhận chính xác các giá trị environment cùng setting sau:
 
@@ -244,6 +262,15 @@ Force capability không được hỗ trợ ở bất kỳ đoạn nào trên đ
 ```
 
 ## Interface và output
+
+`--mode` nhận `text`, `json` hoặc `rpc`. Pi `0.87.1` coi cả giá trị bị thiếu lẫn giá trị không hợp lệ là CLI error thay vì fallback sang interactive mode:
+
+| Invocation | Kết quả | Trạng thái process |
+|---|---|---|
+| `--mode <missing>` | `error` | `exit status=1` |
+| `--mode invalid` | `error` | `exit status=1` |
+
+Validation này chạy trước khi session bắt đầu, vì vậy mode viết sai sẽ thất bại rõ ràng trong script và CI.
 
 ### UI và display
 

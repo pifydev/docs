@@ -137,6 +137,19 @@ Pi dùng metadata của model để chọn model, kiểm tra dữ liệu, tạo 
 
 Những switch tương thích completions thường gặp điều khiển role `developer`, `reasoning_effort`, usage và `finish_reason` khi streaming, field giới hạn token, Tool strict/grammar, quy tắc replay Tool result hoặc reasoning content, thinking format, cache, routing và session affinity. Chỉ đặt flag đã kiểm chứng trên server. Metadata không có boolean `streaming` hay `toolUse` dùng chung: mọi `Provider` đều stream, còn khả năng dùng Tool phải được chứng minh bằng Tool call thật.
 
+Image normalization cũng lấy cấu hình từ model metadata. Trong `0.87.1`, `inputLimits.images.resize` là profile riêng cho từng model, được áp dụng tại mỗi điểm một image mới đi vào conversation history:
+
+| Điểm image đi vào history | Nguồn cấu hình resize | Tác động lên history |
+|---|---|---|
+| `file attachment` | `selected model.inputLimits.images.resize` | `resize once before history append` |
+| `read` | `ctx.model.inputLimits.images.resize` | `resize once in Tool result` |
+| `Tool-result image` | `active model.inputLimits.images.resize` | `normalize once after tool_result hooks` |
+| `profile scope` | `per model` | `no uniform limit` |
+| `model switch` | `historical images` | `not rewritten` |
+| `provider-side transform` | `outside Pi resize profile` | `not controlled` |
+
+Profile có thể đặt `maxWidth`, `maxHeight`, `maxBytes` và `jpegQuality`. Hãy dùng giá trị phù hợp với model đã chọn rồi kiểm tra toàn bộ đường đi; provider vẫn có thể áp dụng hard limit hoặc biến đổi image đã encode sau khi Pi chuyển request cho nó. Pi chỉ normalize mỗi image mới một lần khi image đi vào history, nhờ đó input đã lưu vẫn cache-safe. Đổi model về sau không re-encode image đã lưu trong transcript.
+
 ## 3. Khám phá model bằng provider config
 
 Dùng Extension bất đồng bộ khi danh sách model của endpoint thay đổi. Hãy kiểm tra response không đáng tin cậy và truyền signal được cấp vào `fetch`. Danh sách trả về thay thế các model của Extension này; nếu refresh ném lỗi, Pi giữ danh sách đang có trong bộ nhớ.
@@ -676,6 +689,14 @@ Hãy quy định transport policy rõ ràng. API adapter được gọi trực t
 Request bị abort kết thúc bằng assistant message có `stopReason` là `"aborted"`; lỗi provider dùng `"error"` và `errorMessage`. Consumer vẫn nên đọc hết stream hoặc chờ `stream.result()`, và chỉ lưu trạng thái transcript mà ứng dụng có thể replay an toàn. Không retry lỗi xác thực, Tool call sai định dạng hoặc lỗi validation chắc chắn lặp lại nếu input không đổi.
 
 ## Xử lý sự cố
+
+Khi kiểm tra request chỉ có image, cần chú ý edge case sau của adapter:
+
+| Hình dạng request | Cách xử lý text part | Payload bắt buộc |
+|---|---|---|
+| `OpenAI-compatible + image-only user message` | `omit empty text part` | `send image block` |
+
+Đây là hành vi của adapter trong `0.87.1`, không phải public option mới. Custom adapter tương thích OpenAI phải giữ image content nhưng không tự tạo empty text item mà endpoint có thể từ chối.
 
 | Hiện tượng | Cần kiểm tra |
 | --- | --- |

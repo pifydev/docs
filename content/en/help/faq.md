@@ -23,6 +23,17 @@ Pi keeps the core small and exposes customization through extensions, skills, pr
 
 Pi registers built-in providers for Anthropic, OpenAI, Google, Bedrock, OpenRouter, several subscription endpoints, and other hosted or local services. It can also register a custom provider or an OpenAI-compatible server. See [Integrate a model provider](../how-to/plug-new-model.md).
 
+These selected `0.87.1` additions show how one catalog name can have several authentication routes:
+
+| Model | Current routes | Route behavior |
+|---|---|---|
+| `Claude Opus 5.5` | `anthropic + github-copilot` | `adaptive thinking + supported Copilot route` |
+| `GPT-6 Sol` | `openai + openai-codex + github-copilot` | `API key + OpenAI Codex subscription + supported Copilot route` |
+| `GPT-6 Luna` | `openai + openai-codex + github-copilot` | `API key + OpenAI Codex subscription + supported Copilot route` |
+| `Grok 4.7` | `xai` | `default for new xAI sessions` |
+
+This is not the complete catalog. Use `/model` or `pi --list-models` for the installed build, and remember that an explicit model or the saved model in a resumed session takes precedence over the new-session xAI default.
+
 ### Is Pi free?
 
 The Pi source and npm packages use open-source licenses. Model providers may charge for inference, so configure account limits before making API calls.
@@ -60,6 +71,15 @@ Yes. Submit matching English and Vietnamese files, keep their heading and code-f
 The repository-level [GLOSSARY.md](https://github.com/pifydev/docs/blob/main/GLOSSARY.md) defines canonical terms. Preserve identifiers and translate only the concepts that the glossary marks as translatable.
 
 ## Common pitfalls
+
+Two `0.87.1` fixes matter when diagnosing provider-specific failures:
+
+| Case | Boundary | Expected behavior |
+|---|---|---|
+| `OpenAI-compatible + image-only user message` | `omit empty text part` | `request contains image block` |
+| `Claude Fable 5.1 + split-turn compaction` | `separate conversation` | `continuation-oriented instructions` |
+
+These are implementation corrections, not public APIs. If an OpenAI-compatible endpoint still rejects an image-only turn, inspect the serialized content parts. If Claude Fable 5.1 handles a split-turn compaction summary as a new task, verify that the earlier conversation is separate from the continuation instructions rather than trying to tune a public compaction option that does not exist.
 
 ### My tool result does not reach the model
 

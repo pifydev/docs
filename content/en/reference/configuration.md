@@ -79,6 +79,14 @@ console.log({
 
 `defaultProvider` and `defaultModel` identify the default model. `--model` takes precedence for a run; a resumed session can restore its recorded model when no explicit CLI model is supplied. `defaultThinkingLevel` accepts `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`; it can be saved with Ctrl+S in `/thinking` or edited manually. This semantic global startup default is distinct from provider request fields.
 
+The model resolver supplies a fallback when neither an explicit selection nor resumed state supplies a model:
+
+| Provider | Resolution scope | Catalog default |
+|---|---|---|
+| `xai` | `new session` | `grok-4.7` |
+
+This is the default for new or otherwise default-resolved xAI sessions in `0.87.1`. It does not replace a model selected with `--model`, chosen interactively, configured as `defaultModel`, or restored from a resumed session.
+
 `modelThinkingLevels` stores per-model startup thinking levels keyed by `provider/modelId`; configure it from `/settings` → Default thinking level per model or edit the JSON manually. A matching per-model value selects that model's startup level, while `defaultThinkingLevel` remains the global fallback. `thinkingBudgets` separately supplies token budgets for supported providers or compatible models.
 
 Do not confuse those semantic settings with a direct Google API option. `GoogleApiThinkingLevel`, exported from `@earendil-works/pi-ai`, is the API-facing union `"THINKING_LEVEL_UNSPECIFIED" | "MINIMAL" | "LOW" | "MEDIUM" | "HIGH"` used by `GoogleOptions.thinking.level` and `GoogleVertexOptions.thinking.level`. `ResolvedGoogleThinkingLevel` is the normalized adapter union `"minimal" | "low" | "medium" | "high"` used after Pi resolves model capability mappings. Neither type expands the allowed values of `defaultThinkingLevel`; they describe provider-code boundaries.
@@ -201,7 +209,17 @@ There are no built-in `sessions.retention` or `sessions.redactSecrets` settings.
 
 ### Terminal, images, shell, and npm
 
-`terminal.showImages` (`true`) controls inline display, `imageWidthCells` (`60`) sets preferred width, `clearOnShrink` (`false`) clears vacated rows, and `showTerminalProgress` (`false`) emits supported terminal progress indicators. `images.autoResize` (`true`) resizes model-bound images to at most 2000 × 2000; `images.blockImages` (`false`) blocks all images from reaching providers. Hiding terminal images does not block upload.
+`terminal.showImages` (`true`) controls inline display, `imageWidthCells` (`60`) sets preferred width, `clearOnShrink` (`false`) clears vacated rows, and `showTerminalProgress` (`false`) emits supported terminal progress indicators. `images.blockImages` (`false`) blocks all images from reaching providers. Hiding terminal images does not block upload.
+
+`images.autoResize` is the global on/off gate. The actual resize profile comes from the selected model's `inputLimits.images.resize`, so there is no single limit shared by every model:
+
+| Control or event | Scope | Effect |
+|---|---|---|
+| `images.autoResize` | `global gate` | `enable or disable resizing` |
+| `inputLimits.images.resize` | `per-model profile` | `new images before history` |
+| `model switch` | `stored image` | `do not rewrite` |
+
+The active profile is used for file attachments, images returned by `read`, and Tool-result images. Each new image is normalized once as it enters history; selecting another model later does not rewrite the stored content. Provider-side transformations and hard limits remain outside this Pi profile, so validate them separately for each route.
 
 Pi auto-detects terminal capabilities, with these exact environment and setting values:
 
@@ -244,6 +262,15 @@ Forcing a capability unsupported anywhere along the terminal, proxy, or multiple
 ```
 
 ## Interface and output
+
+`--mode` accepts `text`, `json`, or `rpc`. Pi `0.87.1` treats both a missing value and an unknown value as CLI errors rather than falling back to interactive mode:
+
+| Invocation | Result | Process outcome |
+|---|---|---|
+| `--mode <missing>` | `error` | `exit status=1` |
+| `--mode invalid` | `error` | `exit status=1` |
+
+This validation happens before the session starts, which makes a misspelled mode fail visibly in scripts and CI.
 
 ### UI and display
 

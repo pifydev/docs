@@ -40,6 +40,22 @@ Với built-in provider của Pi, thứ tự credential là CLI `--api-key` ho�
 | GitHub Copilot | `COPILOT_GITHUB_TOKEN` |
 | Cloudflare AI Gateway và Workers AI | `CLOUDFLARE_API_KEY`; các ID được trình bày bên dưới |
 
+Các catalog entry chọn lọc dưới đây phân biệt direct API-key route với subscription authentication. Cột credential đặt tên cho route, không phải giá trị cần sao chép vào environment variable:
+
+| Model | Provider route | Credential path |
+|---|---|---|
+| `Claude Opus 5.5` | `anthropic` | `ANTHROPIC_API_KEY` |
+| `GPT-6 Sol` | `openai` | `OPENAI_API_KEY` |
+| `GPT-6 Luna` | `openai` | `OPENAI_API_KEY` |
+| `GPT-6 Sol` | `openai-codex` | `OpenAI Codex subscription` |
+| `GPT-6 Luna` | `openai-codex` | `OpenAI Codex subscription` |
+| `Claude Opus 5.5` | `github-copilot` | `GitHub Copilot subscription` |
+| `GPT-6 Sol` | `github-copilot` | `GitHub Copilot subscription` |
+| `GPT-6 Luna` | `github-copilot` | `GitHub Copilot subscription` |
+| `Grok 4.7` | `xai` | `XAI_API_KEY` |
+
+Hai Claude route hiện dùng ID khác nhau: Anthropic dùng `claude-opus-5-5`, còn GitHub Copilot dùng `claude-opus-5.5`. Dùng `/login` cho subscription route và giữ environment variable cho các direct-key route ở trên.
+
 Amazon Bedrock và Google Vertex AI còn nhận ambient cloud credential được mô tả trong phần variable riêng cho provider. Custom provider trong `models.json` có thể tham chiếu variable bất kỳ bằng `"apiKey": "$COMPANY_AI_TOKEN"`; chuỗi chỉ gồm chữ hoa là literal, không phải environment lookup. Xem <a href="/vi/how-to/plug-new-model">Thêm một nhà cung cấp mô hình</a> để biết surface chính xác của file này.
 
 Meta Muse hỗ trợ `/login meta`; flow này lưu login credential và tự động refresh Muse Model API key. `META_API_KEY` cung cấp trực tiếp Model API key đó khi interactive login không phù hợp. Hai đường có contract riêng: environment value đã là request credential và không tạo stored Meta login.
@@ -82,7 +98,7 @@ Hãy dùng `--offline` hoặc giá trị truthy được hỗ trợ cho `PI_OFFL
 
 `PI_HARDWARE_CURSOR=1` làm hardware cursor của TUI hiện ra. `PI_TUI_ESC_TIMEOUT` nhận số mili giây hữu hạn dương để phân biệt một phím Escape đơn với Alt-key sequence bị chia nhỏ; mặc định là 100 ms khi có `SSH_CONNECTION` hoặc `SSH_TTY`, và 10 ms trong trường hợp khác.
 
-Pi tự động phát hiện OSC 8 hyperlink, inline image protocol và truecolor. Pi 0.85.0 cung cấp chính xác các advanced override sau:
+Pi tự động phát hiện OSC 8 hyperlink, inline image protocol và truecolor. Pi 0.87.1 cung cấp chính xác các advanced override sau:
 
 | Capability | Giá trị environment | JSON setting tương ứng |
 |---|---|---|
@@ -116,7 +132,7 @@ Environment variable là chuỗi, nhưng Pi không coi mọi chuỗi khác rỗn
 
 ## Proxy và TLS
 
-Pi 0.85.0 cấu hình Undici `EnvHttpProxyAgent` cho traffic dùng fetch do Pi quản lý.
+Pi 0.87.1 cấu hình Undici `EnvHttpProxyAgent` cho traffic dùng fetch do Pi quản lý.
 
 | Variable | Hành vi |
 |---|---|
@@ -126,13 +142,13 @@ Pi 0.85.0 cấu hình Undici `EnvHttpProxyAgent` cho traffic dùng fetch do Pi q
 
 Undici cũng nhận dạng dạng chữ thường và ưu tiên dạng đó hơn dạng chữ hoa. Setting global `httpProxy` chỉ điền `HTTP_PROXY` và `HTTPS_PROXY` khi chúng chưa được đặt. Provider SDK như AWS hoặc Google có thể sở hữu transport riêng, vì vậy các variable này không bảo đảm cho mọi extension hoặc cloud client.
 
-`SSL_CERT_FILE` không được transport trong bản Pi 0.85.0 đã publish đọc hoặc cài đặt. Hãy cấu hình custom certificate trust qua Node runtime hoặc provider SDK đã chọn rồi kiểm tra riêng route đó; đừng giả định variable từ baseline này thay đổi TLS do Pi quản lý.
+`SSL_CERT_FILE` không được transport trong bản Pi 0.87.1 đã publish đọc hoặc cài đặt. Hãy cấu hình custom certificate trust qua Node runtime hoặc provider SDK đã chọn rồi kiểm tra riêng route đó; đừng giả định variable từ baseline này thay đổi TLS do Pi quản lý.
 
 ## Variable riêng cho provider
 
 ### Azure OpenAI
 
-Azure OpenAI Responses yêu cầu `AZURE_OPENAI_API_KEY` cùng `AZURE_OPENAI_BASE_URL` hoặc `AZURE_OPENAI_RESOURCE_NAME`. Control tùy chọn gồm `AZURE_OPENAI_API_VERSION` và `AZURE_OPENAI_DEPLOYMENT_NAME_MAP` phân tách bằng dấu phẩy. Variable `OPENAI_ORG_ID` chung trong baseline không được OpenAI provider của 0.85.0 sử dụng.
+Azure OpenAI Responses yêu cầu `AZURE_OPENAI_API_KEY` cùng `AZURE_OPENAI_BASE_URL` hoặc `AZURE_OPENAI_RESOURCE_NAME`. Control tùy chọn gồm `AZURE_OPENAI_API_VERSION` và `AZURE_OPENAI_DEPLOYMENT_NAME_MAP` phân tách bằng dấu phẩy. Variable `OPENAI_ORG_ID` chung trong baseline không được OpenAI provider của 0.87.1 sử dụng.
 
 ### Amazon Bedrock
 
@@ -157,7 +173,7 @@ Variable cũ `ANTHROPIC_BASE_URL` cũng không phải built-in override hiện t
 
 ## Process marker và shell-tool metadata
 
-CLI và RPC entry point đặt `AI_AGENT=pi` cùng `PI_CODING_AGENT=true`. Child process kế thừa chúng, nhưng đây không phải session identifier và bản nhúng SDK không tự động đặt chúng. Bản publish 0.85.0 không phát marker cũ `PI_PARENT_SESSION`.
+CLI và RPC entry point đặt `AI_AGENT=pi` cùng `PI_CODING_AGENT=true`. Child process kế thừa chúng, nhưng đây không phải session identifier và bản nhúng SDK không tự động đặt chúng. Bản publish 0.87.1 không phát marker cũ `PI_PARENT_SESSION`.
 
 Pi có thể expose session context hiện tại sau cho command do các LLM-callable tool `bash` và `powershell` chạy:
 
@@ -211,7 +227,7 @@ export const isolatedBashTool = createBashTool(process.cwd(), {
 ## Lỗi thường gặp và bảo mật
 
 - Không đưa API key vào shell file được commit, `settings.json`, mã nguồn extension, log, prompt hoặc transcript. Ưu tiên `/login`, secret manager hoặc process injection có scope hẹp; hãy nhớ child process kế thừa giá trị được export.
-- Tên hiện tại phải chính xác. `PI_HOME`, `PI_LOG_LEVEL`, `PI_PARENT_SESSION`, `GOOGLE_API_KEY`, `GOOGLE_VERTEX_API_KEY`, `GITHUB_TOKEN`, `OPENAI_ORG_ID`, `ANTHROPIC_BASE_URL` và tên `CLOUDflare_*` viết sai không phải compatibility alias trong bản publish 0.85.0.
+- Tên hiện tại phải chính xác. `PI_HOME`, `PI_LOG_LEVEL`, `PI_PARENT_SESSION`, `GOOGLE_API_KEY`, `GOOGLE_VERTEX_API_KEY`, `GITHUB_TOKEN`, `OPENAI_ORG_ID`, `ANTHROPIC_BASE_URL` và tên `CLOUDflare_*` viết sai không phải compatibility alias trong bản publish 0.87.1.
 - Stored provider credential và `apiKey` đã cấu hình trong `models.json` đều được ưu tiên hơn ambient variable. Hãy logout hoặc cập nhật stored entry, đồng thời xóa hoặc đổi configured key, trước khi mong shell key vừa rotate được chọn.
 - `PI_EXPERIMENTAL` không liên quan đến provider authentication và không phải switch permission hay “yolo”.
 - Không in toàn bộ environment dump khi debug. Chỉ kiểm tra non-secret marker hoặc từng metadata field, đồng thời coi `PI_SESSION_FILE` là local data nhạy cảm.

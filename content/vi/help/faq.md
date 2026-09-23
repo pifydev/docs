@@ -23,6 +23,17 @@ Pi giữ phần core nhỏ và cho phép tùy chỉnh bằng extension, skill, p
 
 Pi đăng ký sẵn provider cho Anthropic, OpenAI, Google, Bedrock, OpenRouter, một số subscription endpoint và nhiều dịch vụ hosted hoặc local khác. Bạn cũng có thể đăng ký custom provider hoặc server tương thích OpenAI. Xem [Tích hợp model provider](../how-to/plug-new-model.md).
 
+Các bổ sung chọn lọc của `0.87.1` dưới đây cho thấy một tên trong catalog có thể có nhiều authentication route:
+
+| Model | Route hiện tại | Hành vi của route |
+|---|---|---|
+| `Claude Opus 5.5` | `anthropic + github-copilot` | `adaptive thinking + supported Copilot route` |
+| `GPT-6 Sol` | `openai + openai-codex + github-copilot` | `API key + OpenAI Codex subscription + supported Copilot route` |
+| `GPT-6 Luna` | `openai + openai-codex + github-copilot` | `API key + OpenAI Codex subscription + supported Copilot route` |
+| `Grok 4.7` | `xai` | `default for new xAI sessions` |
+
+Đây không phải toàn bộ catalog. Dùng `/model` hoặc `pi --list-models` để xem bản đã cài, và lưu ý model được chọn tường minh hoặc model đã lưu trong session được resume có độ ưu tiên cao hơn xAI default dành cho session mới.
+
 ### Pi có miễn phí không?
 
 Mã nguồn và npm package của Pi dùng giấy phép mã nguồn mở. Model provider vẫn có thể tính phí inference, vì vậy hãy đặt giới hạn tài khoản trước khi gọi API.
@@ -60,6 +71,15 @@ Có. Hãy gửi đủ file tiếng Anh và tiếng Việt, giữ cấu trúc hea
 [GLOSSARY.md](https://github.com/pifydev/docs/blob/main/GLOSSARY.md) tại repository root định nghĩa thuật ngữ chuẩn. Giữ nguyên identifier và chỉ dịch các khái niệm được glossary cho phép.
 
 ## Lỗi thường gặp
+
+Hai bản sửa trong `0.87.1` cần được tính đến khi chẩn đoán lỗi riêng của provider:
+
+| Trường hợp | Boundary | Hành vi mong đợi |
+|---|---|---|
+| `OpenAI-compatible + image-only user message` | `omit empty text part` | `request contains image block` |
+| `Claude Fable 5.1 + split-turn compaction` | `separate conversation` | `continuation-oriented instructions` |
+
+Đây là các sửa đổi implementation, không phải public API. Nếu endpoint tương thích OpenAI vẫn từ chối lượt chỉ có image, hãy kiểm tra các content part đã serialize. Nếu Claude Fable 5.1 hiểu split-turn compaction summary thành task mới, hãy xác nhận conversation trước đó được tách khỏi continuation instruction; không có public compaction option để tinh chỉnh hành vi này.
 
 ### Kết quả Tool không đến được model
 

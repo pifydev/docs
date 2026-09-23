@@ -40,6 +40,22 @@ For Pi's built-in providers, credential order is an explicit CLI `--api-key` or 
 | GitHub Copilot | `COPILOT_GITHUB_TOKEN` |
 | Cloudflare AI Gateway and Workers AI | `CLOUDFLARE_API_KEY`; IDs are covered below |
 
+The following selected catalog entries distinguish direct API-key routes from subscription authentication. The credential column names the route, not a value to copy into an environment variable:
+
+| Model | Provider route | Credential path |
+|---|---|---|
+| `Claude Opus 5.5` | `anthropic` | `ANTHROPIC_API_KEY` |
+| `GPT-6 Sol` | `openai` | `OPENAI_API_KEY` |
+| `GPT-6 Luna` | `openai` | `OPENAI_API_KEY` |
+| `GPT-6 Sol` | `openai-codex` | `OpenAI Codex subscription` |
+| `GPT-6 Luna` | `openai-codex` | `OpenAI Codex subscription` |
+| `Claude Opus 5.5` | `github-copilot` | `GitHub Copilot subscription` |
+| `GPT-6 Sol` | `github-copilot` | `GitHub Copilot subscription` |
+| `GPT-6 Luna` | `github-copilot` | `GitHub Copilot subscription` |
+| `Grok 4.7` | `xai` | `XAI_API_KEY` |
+
+For the two Claude routes, the current IDs differ: Anthropic uses `claude-opus-5-5`, while GitHub Copilot uses `claude-opus-5.5`. Use `/login` for subscription routes and keep environment variables for the direct-key routes shown above.
+
 Amazon Bedrock and Google Vertex AI also accept ambient cloud credentials described under provider-specific variables. A custom `models.json` provider can reference an arbitrary variable with `"apiKey": "$COMPANY_AI_TOKEN"`; a plain uppercase string is a literal, not an environment lookup. See <a href="/en/how-to/plug-new-model">Add a model provider</a> for that file's exact surface.
 
 Meta Muse supports `/login meta`, which stores the login credential and refreshes its Muse Model API key automatically. `META_API_KEY` supplies that Model API key directly when interactive login is not appropriate. Keep the two paths distinct: the environment value is already the request credential and does not create a stored Meta login.
@@ -82,7 +98,7 @@ Use `--offline` or a supported truthy `PI_OFFLINE` value. Unset the variable to 
 
 `PI_HARDWARE_CURSOR=1` makes the TUI hardware cursor visible. `PI_TUI_ESC_TIMEOUT` accepts a positive finite number of milliseconds for distinguishing a lone Escape from a split Alt-key sequence; the default is 100 ms when `SSH_CONNECTION` or `SSH_TTY` exists and 10 ms otherwise.
 
-Pi auto-detects OSC 8 hyperlinks, an inline image protocol, and truecolor. Pi 0.85.0 exposes these exact advanced overrides:
+Pi auto-detects OSC 8 hyperlinks, an inline image protocol, and truecolor. Pi 0.87.1 exposes these exact advanced overrides:
 
 | Capability | Environment value | Matching JSON setting |
 |---|---|---|
@@ -116,7 +132,7 @@ Environment variables are strings, but Pi does not treat every non-empty string 
 
 ## Proxy and TLS
 
-Pi 0.85.0 configures an Undici `EnvHttpProxyAgent` for Pi-managed fetch traffic.
+Pi 0.87.1 configures an Undici `EnvHttpProxyAgent` for Pi-managed fetch traffic.
 
 | Variable | Behavior |
 |---|---|
@@ -126,13 +142,13 @@ Pi 0.85.0 configures an Undici `EnvHttpProxyAgent` for Pi-managed fetch traffic.
 
 Undici also recognizes lowercase forms and gives them precedence over uppercase forms. The global `httpProxy` setting fills `HTTP_PROXY` and `HTTPS_PROXY` only when they are unset. Provider SDKs such as AWS or Google may own separate transports, so these variables are not a guarantee for every extension or cloud client.
 
-`SSL_CERT_FILE` is not read or installed by Pi's published 0.85.0 transport. Configure custom certificate trust through the selected Node runtime or provider SDK and verify that route independently; do not assume this baseline variable changes Pi-managed TLS.
+`SSL_CERT_FILE` is not read or installed by Pi's published 0.87.1 transport. Configure custom certificate trust through the selected Node runtime or provider SDK and verify that route independently; do not assume this baseline variable changes Pi-managed TLS.
 
 ## Provider-specific variables
 
 ### Azure OpenAI
 
-Azure OpenAI Responses requires `AZURE_OPENAI_API_KEY` and either `AZURE_OPENAI_BASE_URL` or `AZURE_OPENAI_RESOURCE_NAME`. Optional controls are `AZURE_OPENAI_API_VERSION` and the comma-separated `AZURE_OPENAI_DEPLOYMENT_NAME_MAP`. The generic `OPENAI_ORG_ID` baseline variable is not consumed by the 0.85.0 OpenAI provider.
+Azure OpenAI Responses requires `AZURE_OPENAI_API_KEY` and either `AZURE_OPENAI_BASE_URL` or `AZURE_OPENAI_RESOURCE_NAME`. Optional controls are `AZURE_OPENAI_API_VERSION` and the comma-separated `AZURE_OPENAI_DEPLOYMENT_NAME_MAP`. The generic `OPENAI_ORG_ID` baseline variable is not consumed by the 0.87.1 OpenAI provider.
 
 ### Amazon Bedrock
 
@@ -157,7 +173,7 @@ The old `ANTHROPIC_BASE_URL` variable is also not a current built-in override. C
 
 ## Process markers and shell-tool metadata
 
-CLI and RPC entry points set `AI_AGENT=pi` and `PI_CODING_AGENT=true`. Child processes inherit them, but they are not session identifiers and an SDK embedding does not set them automatically. Published 0.85.0 does not emit the old `PI_PARENT_SESSION` marker.
+CLI and RPC entry points set `AI_AGENT=pi` and `PI_CODING_AGENT=true`. Child processes inherit them, but they are not session identifiers and an SDK embedding does not set them automatically. Published 0.87.1 does not emit the old `PI_PARENT_SESSION` marker.
 
 Pi can expose the following current session context to commands run by the LLM-callable `bash` and `powershell` tools:
 
@@ -211,7 +227,7 @@ export const isolatedBashTool = createBashTool(process.cwd(), {
 ## Pitfalls and security
 
 - Do not put API keys in committed shell files, `settings.json`, extension source, logs, prompts, or transcripts. Prefer `/login`, a secret manager, or narrowly scoped process injection; remember that child processes inherit exported values.
-- Current names are exact. `PI_HOME`, `PI_LOG_LEVEL`, `PI_PARENT_SESSION`, `GOOGLE_API_KEY`, `GOOGLE_VERTEX_API_KEY`, `GITHUB_TOKEN`, `OPENAI_ORG_ID`, `ANTHROPIC_BASE_URL`, and misspelled `CLOUDflare_*` names are not compatibility aliases in published 0.85.0.
+- Current names are exact. `PI_HOME`, `PI_LOG_LEVEL`, `PI_PARENT_SESSION`, `GOOGLE_API_KEY`, `GOOGLE_VERTEX_API_KEY`, `GITHUB_TOKEN`, `OPENAI_ORG_ID`, `ANTHROPIC_BASE_URL`, and misspelled `CLOUDflare_*` names are not compatibility aliases in published 0.87.1.
 - A stored provider credential and a configured `models.json` `apiKey` both take precedence over ambient variables. Log out or update the stored entry, and remove or change the configured key, before expecting a rotated shell key to win.
 - `PI_EXPERIMENTAL` is unrelated to provider authentication and is not a permission or “yolo” switch.
 - Do not print complete environment dumps while debugging. Inspect only non-secret markers or individual metadata fields, and treat `PI_SESSION_FILE` as sensitive local data.

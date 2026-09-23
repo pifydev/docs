@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
@@ -1159,6 +1160,435 @@ function assertTechnicalContractRows(
   );
   return table;
 }
+
+const modelConfigurationFiles = [
+  "ch04-model-invocation.md",
+  "how-to/plug-new-model.md",
+  "quickstart.md",
+  "help/faq.md",
+  "reference/configuration.md",
+  "reference/environment-variables.md",
+];
+
+async function readModelConfigurationContent() {
+  const entries = await Promise.all(
+    ["en", "vi"].flatMap((locale) =>
+      modelConfigurationFiles.map(async (filename) => [
+        `${locale}/${filename}`,
+        await readFile(
+          new URL(`content/${locale}/${filename}`, repositoryRoot),
+          "utf8",
+        ),
+      ]),
+    ),
+  );
+  return new Map(entries);
+}
+
+const currentCatalogRouteRows = [
+  [
+    "Claude Opus 5.5",
+    "anthropic",
+    "ANTHROPIC_API_KEY",
+    "adaptive thinking; contextWindow=1000000",
+  ],
+  ["GPT-6 Sol", "openai", "OPENAI_API_KEY", "OpenAI API key"],
+  ["GPT-6 Luna", "openai", "OPENAI_API_KEY", "OpenAI API key"],
+  [
+    "GPT-6 Sol",
+    "openai-codex",
+    "OpenAI Codex subscription",
+    "subscription route",
+  ],
+  [
+    "GPT-6 Luna",
+    "openai-codex",
+    "OpenAI Codex subscription",
+    "subscription route",
+  ],
+  [
+    "Claude Opus 5.5",
+    "github-copilot",
+    "GitHub Copilot subscription",
+    "supported route",
+  ],
+  [
+    "GPT-6 Sol",
+    "github-copilot",
+    "GitHub Copilot subscription",
+    "supported route",
+  ],
+  [
+    "GPT-6 Luna",
+    "github-copilot",
+    "GitHub Copilot subscription",
+    "supported route",
+  ],
+  ["Grok 4.7", "xai", "XAI_API_KEY", "default for new xAI sessions"],
+];
+
+const imageIngressRows = [
+  [
+    "file attachment",
+    "selected model.inputLimits.images.resize",
+    "resize once before history append",
+  ],
+  ["read", "ctx.model.inputLimits.images.resize", "resize once in Tool result"],
+  [
+    "Tool-result image",
+    "active model.inputLimits.images.resize",
+    "normalize once after tool_result hooks",
+  ],
+  ["profile scope", "per model", "no uniform limit"],
+  ["model switch", "historical images", "not rewritten"],
+  ["provider-side transform", "outside Pi resize profile", "not controlled"],
+];
+
+function validateModelConfigurationContracts(localized) {
+  for (const locale of ["en", "vi"]) {
+    const context = `${locale} Pi 0.87.1 model and image contracts`;
+    const headings =
+      locale === "en"
+        ? {
+            auth: "### Authentication and model configuration",
+            metadata: "## 2. Record metadata accurately",
+            troubleshooting: "## Troubleshooting",
+            quickstart: "## Before you start",
+            providers: "### Which model providers does Pi support?",
+            pitfalls: "## Common pitfalls",
+            configModel: "### Model and thinking",
+            configImages: "### Terminal, images, shell, and npm",
+            configInterface: "## Interface and output",
+            credentials: "## Provider credentials",
+          }
+        : {
+            auth: "### Authentication và model configuration",
+            metadata: "## 2. Ghi metadata chính xác",
+            troubleshooting: "## Xử lý sự cố",
+            quickstart: "## Trước khi bắt đầu",
+            providers: "### Pi hỗ trợ những model provider nào?",
+            pitfalls: "## Lỗi thường gặp",
+            configModel: "### Model và thinking",
+            configImages: "### Terminal, image, shell và npm",
+            configInterface: "## Interface và output",
+            credentials: "## Provider credential",
+          };
+
+    const chapter = localized.get(`${locale}/ch04-model-invocation.md`);
+    assertContractTableRows(
+      extractMarkdownSection(chapter, headings.auth, context).body,
+      currentCatalogRouteRows,
+      `${context} catalog routes`,
+      { ordered: true },
+    );
+
+    const providerGuide = localized.get(`${locale}/how-to/plug-new-model.md`);
+    assertContractTableRows(
+      extractMarkdownSection(providerGuide, headings.metadata, context).body,
+      imageIngressRows,
+      `${context} image ingress`,
+      { ordered: true },
+    );
+    assertContractTableRows(
+      extractMarkdownSection(providerGuide, headings.troubleshooting, context)
+        .body,
+      [
+        [
+          "OpenAI-compatible + image-only user message",
+          "omit empty text part",
+          "send image block",
+        ],
+      ],
+      `${context} image-only request edge`,
+    );
+
+    assertContractTableRows(
+      extractMarkdownSection(
+        localized.get(`${locale}/quickstart.md`),
+        headings.quickstart,
+        context,
+      ).body,
+      [
+        ["anthropic/claude-opus-5-5", "Claude Opus 5.5", "ANTHROPIC_API_KEY"],
+        ["openai/gpt-6-sol", "GPT-6 Sol", "OPENAI_API_KEY"],
+        ["openai/gpt-6-luna", "GPT-6 Luna", "OPENAI_API_KEY"],
+        ["xai/grok-4.7", "Grok 4.7", "XAI_API_KEY"],
+      ],
+      `${context} quickstart API-key routes`,
+      { ordered: true },
+    );
+
+    const faq = localized.get(`${locale}/help/faq.md`);
+    assertContractTableRows(
+      extractMarkdownSection(faq, headings.providers, context).body,
+      [
+        [
+          "Claude Opus 5.5",
+          "anthropic + github-copilot",
+          "adaptive thinking + supported Copilot route",
+        ],
+        [
+          "GPT-6 Sol",
+          "openai + openai-codex + github-copilot",
+          "API key + OpenAI Codex subscription + supported Copilot route",
+        ],
+        [
+          "GPT-6 Luna",
+          "openai + openai-codex + github-copilot",
+          "API key + OpenAI Codex subscription + supported Copilot route",
+        ],
+        ["Grok 4.7", "xai", "default for new xAI sessions"],
+      ],
+      `${context} FAQ provider routes`,
+      { ordered: true },
+    );
+    assertContractTableRows(
+      extractMarkdownSection(faq, headings.pitfalls, context).body,
+      [
+        [
+          "OpenAI-compatible + image-only user message",
+          "omit empty text part",
+          "request contains image block",
+        ],
+        [
+          "Claude Fable 5.1 + split-turn compaction",
+          "separate conversation",
+          "continuation-oriented instructions",
+        ],
+      ],
+      `${context} provider troubleshooting edges`,
+      { ordered: true },
+    );
+
+    const configuration = localized.get(`${locale}/reference/configuration.md`);
+    assertContractTableRows(
+      extractMarkdownSection(configuration, headings.configModel, context).body,
+      [["xai", "new session", "grok-4.7"]],
+      `${context} xAI default`,
+    );
+    assertContractTableRows(
+      extractMarkdownSection(configuration, headings.configImages, context)
+        .body,
+      [
+        ["images.autoResize", "global gate", "enable or disable resizing"],
+        [
+          "inputLimits.images.resize",
+          "per-model profile",
+          "new images before history",
+        ],
+        ["model switch", "stored image", "do not rewrite"],
+      ],
+      `${context} configuration image boundary`,
+      { ordered: true },
+    );
+    assertContractTableRows(
+      extractMarkdownSection(configuration, headings.configInterface, context)
+        .body,
+      [
+        ["--mode <missing>", "error", "exit status=1"],
+        ["--mode invalid", "error", "exit status=1"],
+      ],
+      `${context} CLI mode validation`,
+      { ordered: true },
+    );
+
+    const environment = localized.get(
+      `${locale}/reference/environment-variables.md`,
+    );
+    assertContractTableRows(
+      extractMarkdownSection(environment, headings.credentials, context).body,
+      currentCatalogRouteRows.map((row) => row.slice(0, 3)),
+      `${context} credential routes`,
+      { ordered: true },
+    );
+  }
+}
+
+test("0.87.1 models and image limits preserve bilingual technical relationships", async () => {
+  validateModelConfigurationContracts(await readModelConfigurationContent());
+});
+
+test("0.87.1 models and image limits match the installed catalog and runtime defaults", async () => {
+  const release = await readReleaseFixture();
+  assert.equal(release.packageVersion, "0.87.1");
+  assert.equal(release.commit, "f07218c4d4bbc12bef056a7058c3dd49dfe41abe");
+
+  const { builtinModels } = await import("@earendil-works/pi-ai/providers/all");
+  const models = builtinModels();
+  const required = [
+    ["anthropic", "claude-opus-5-5", "Claude Opus 5.5"],
+    ["openai", "gpt-6-sol", "GPT-6 Sol"],
+    ["openai", "gpt-6-luna", "GPT-6 Luna"],
+    ["openai-codex", "gpt-6-sol", "GPT-6 Sol"],
+    ["openai-codex", "gpt-6-luna", "GPT-6 Luna"],
+    ["github-copilot", "claude-opus-5.5", "Claude Opus 5.5"],
+    ["github-copilot", "gpt-6-sol", "GPT-6 Sol"],
+    ["github-copilot", "gpt-6-luna", "GPT-6 Luna"],
+    ["xai", "grok-4.7", "Grok 4.7"],
+  ];
+  for (const [provider, id, name] of required) {
+    const model = models.getModel(provider, id);
+    assert.ok(model, `${provider}/${id} must exist in the installed catalog`);
+    assert.equal(model.name, name);
+  }
+
+  const opus = models.getModel("anthropic", "claude-opus-5-5");
+  assert.equal(opus.contextWindow, 1_000_000);
+  assert.equal(opus.compat?.forceAdaptiveThinking, true);
+
+  const resolver = await import(
+    new URL(
+      "node_modules/@earendil-works/pi-coding-agent/dist/core/model-resolver.js",
+      repositoryRoot,
+    )
+  );
+  assert.equal(resolver.defaultModelPerProvider.xai, "grok-4.7");
+});
+
+test("0.87.1 models and image limits use the per-model profile at every image ingress", async () => {
+  const [agentSession, readTool, toolResults] = await Promise.all(
+    [
+      "node_modules/@earendil-works/pi-coding-agent/dist/core/agent-session.js",
+      "node_modules/@earendil-works/pi-coding-agent/dist/core/tools/read.js",
+      "node_modules/@earendil-works/pi-coding-agent/dist/utils/tool-result-images.js",
+    ].map((filename) => readFile(new URL(filename, repositoryRoot), "utf8")),
+  );
+  assert.match(
+    agentSession,
+    /_normalizePromptImages[\s\S]*?resizeOptions: this\.model\?\.inputLimits\?\.images\?\.resize/,
+  );
+  assert.match(
+    readTool,
+    /resizeOptions: ctx\?\.model\?\.inputLimits\?\.images\?\.resize \?\? fallbackResizeOptions/,
+  );
+  assert.match(
+    agentSession,
+    /afterToolCall[\s\S]*?const resizeOptions = this\.model\?\.inputLimits\?\.images\?\.resize;[\s\S]*?normalizeToolResultImages/,
+  );
+  assert.match(toolResults, /normalize them once as they enter history/);
+});
+
+test("0.87.1 models and image limits preserve adapter and split-turn edge behavior", async () => {
+  const [openAiCompletions, compaction, changelog] = await Promise.all(
+    [
+      "node_modules/@earendil-works/pi-ai/dist/api/openai-completions.js",
+      "node_modules/@earendil-works/pi-coding-agent/dist/core/compaction/compaction.js",
+      "node_modules/@earendil-works/pi-coding-agent/CHANGELOG.md",
+    ].map((filename) => readFile(new URL(filename, repositoryRoot), "utf8")),
+  );
+  assert.match(
+    openAiCompletions,
+    /\.filter\(\(item\) => item\.type !== "text" \|\| item\.text\.length > 0\)/,
+  );
+  assert.match(
+    compaction,
+    /Later messages are stored separately and do not need to be reconstructed/,
+  );
+  assert.match(
+    compaction,
+    /# Conversation\\n\$\{conversationText\}\\n\\n# Instructions\\n\$\{TURN_PREFIX_SUMMARIZATION_PROMPT\}/,
+  );
+  assert.match(
+    changelog,
+    /split-turn compaction summaries being refused by Claude Fable 5\.1/,
+  );
+});
+
+test("0.87.1 models and image limits reject missing and invalid CLI modes", () => {
+  const cli = fileURLToPath(
+    new URL(
+      "node_modules/@earendil-works/pi-coding-agent/dist/cli.js",
+      repositoryRoot,
+    ),
+  );
+  const run = (args) =>
+    spawnSync(process.execPath, [cli, ...args], {
+      cwd: fileURLToPath(repositoryRoot),
+      encoding: "utf8",
+      env: { ...process.env, PI_OFFLINE: "1" },
+      timeout: 15_000,
+    });
+  const missing = run(["--mode"]);
+  assert.equal(missing.status, 1);
+  assert.match(missing.stderr, /--mode requires text, json, or rpc/);
+  const invalid = run(["--mode", "invalid"]);
+  assert.equal(invalid.status, 1);
+  assert.match(invalid.stderr, /Invalid mode "invalid"/);
+});
+
+test("0.87.1 models and image limits mutation guards reject wrong routes and edge semantics", async () => {
+  const localized = await readModelConfigurationContent();
+  validateModelConfigurationContracts(localized);
+  const mutations = [
+    [
+      "Anthropic route",
+      "en/ch04-model-invocation.md",
+      "| `Claude Opus 5.5` | `anthropic` |",
+      "| `Claude Opus 5.5` | `openai` |",
+    ],
+    [
+      "xAI default scope",
+      "en/ch04-model-invocation.md",
+      "`default for new xAI sessions`",
+      "`default for resumed xAI sessions only`",
+    ],
+    [
+      "attachment profile direction",
+      "en/how-to/plug-new-model.md",
+      "`selected model.inputLimits.images.resize`",
+      "`global images.autoResize profile`",
+    ],
+    [
+      "history rewrite boundary",
+      "en/how-to/plug-new-model.md",
+      "| `model switch` | `historical images` | `not rewritten` |",
+      "| `model switch` | `historical images` | `rewritten` |",
+    ],
+    [
+      "provider transform ownership",
+      "en/how-to/plug-new-model.md",
+      "| `provider-side transform` | `outside Pi resize profile` | `not controlled` |",
+      "| `provider-side transform` | `inside Pi resize profile` | `controlled` |",
+    ],
+    [
+      "image-only empty part",
+      "en/help/faq.md",
+      "| `OpenAI-compatible + image-only user message` | `omit empty text part` |",
+      "| `OpenAI-compatible + image-only user message` | `add empty text part` |",
+    ],
+    [
+      "split-turn prompt direction",
+      "en/help/faq.md",
+      "| `Claude Fable 5.1 + split-turn compaction` | `separate conversation` | `continuation-oriented instructions` |",
+      "| `Claude Fable 5.1 + split-turn compaction` | `merge instructions into conversation` | `reconstruct later messages` |",
+    ],
+    [
+      "CLI nonzero status",
+      "en/reference/configuration.md",
+      "| `--mode invalid` | `error` | `exit status=1` |",
+      "| `--mode invalid` | `warning` | `exit status=0` |",
+    ],
+    [
+      "Codex subscription route",
+      "en/reference/environment-variables.md",
+      "| `GPT-6 Sol` | `openai-codex` | `OpenAI Codex subscription` |",
+      "| `GPT-6 Sol` | `openai-codex` | `OPENAI_API_KEY` |",
+    ],
+  ];
+
+  for (const [label, key, from, to] of mutations) {
+    const mutated = new Map(localized);
+    const source = mutated.get(key);
+    const replacement = source.replace(from, to);
+    assert.notEqual(replacement, source, `${label} must mutate a real section`);
+    mutated.set(key, replacement);
+    assert.throws(
+      () => validateModelConfigurationContracts(mutated),
+      assert.AssertionError,
+      `${label} mutation must fail the real validator`,
+    );
+  }
+});
 
 const providerContractTerms = [
   "TranscriptContext",

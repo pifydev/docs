@@ -317,6 +317,22 @@ stored credential hoặc provider ambient auth
 
 `getModel(provider, id)` là catalog lookup đồng bộ và trả `undefined` nếu hiện không có registered provider nào expose ID đó. Hàm không fetch catalog và cũng không chứng minh auth đã được cấu hình. `getAvailable()` áp dụng auth check, còn dynamic provider update last-known model list qua `refresh()`.
 
+Generated catalog của `0.87.1` có các route hiện tại dưới đây. Đây là snapshot có chủ đích, không thay thế `models.getAll()` hoặc `pi --list-models`:
+
+| Model | Provider route | Credential path | Hành vi trong catalog |
+|---|---|---|---|
+| `Claude Opus 5.5` | `anthropic` | `ANTHROPIC_API_KEY` | `adaptive thinking; contextWindow=1000000` |
+| `GPT-6 Sol` | `openai` | `OPENAI_API_KEY` | `OpenAI API key` |
+| `GPT-6 Luna` | `openai` | `OPENAI_API_KEY` | `OpenAI API key` |
+| `GPT-6 Sol` | `openai-codex` | `OpenAI Codex subscription` | `subscription route` |
+| `GPT-6 Luna` | `openai-codex` | `OpenAI Codex subscription` | `subscription route` |
+| `Claude Opus 5.5` | `github-copilot` | `GitHub Copilot subscription` | `supported route` |
+| `GPT-6 Sol` | `github-copilot` | `GitHub Copilot subscription` | `supported route` |
+| `GPT-6 Luna` | `github-copilot` | `GitHub Copilot subscription` | `supported route` |
+| `Grok 4.7` | `xai` | `XAI_API_KEY` | `default for new xAI sessions` |
+
+Claude ID phụ thuộc vào route: Anthropic expose `claude-opus-5-5`, còn GitHub Copilot expose `claude-opus-5.5`. Context một triệu token và compatibility flag buộc adaptive thinking ở trên chỉ thuộc catalog record của Anthropic; đừng suy rộng giới hạn hoặc request transformation đó sang mọi route. `grok-4.7` là default khi Pi resolve model cho xAI session mới. Lựa chọn tường minh hoặc model đã lưu trong session được resume vẫn được ưu tiên.
+
 Một `Model` ghi cả hai routing key. `provider` đặt tên collection owner; `api` đặt tên wire implementation của provider. Record còn mang `id`, `name`, `baseUrl`, input capability, reasoning support, token limit, cost rate, compatibility flag, header tùy chọn và `thinkingLevelMap` riêng của model. Với custom model, hãy giữ `provider` trùng ID truyền vào `createProvider()` và đặt endpoint trên model khi API implementation được tái sử dụng đọc `model.baseUrl`.
 
 ### Kịch bản 2: thêm provider hoặc wire protocol mới

@@ -317,6 +317,22 @@ An explicit per-request `apiKey` wins. A stored credential owns its provider, so
 
 `getModel(provider, id)` is a synchronous catalog lookup and returns `undefined` when no registered provider currently exposes that ID. It does not fetch a catalog and does not prove that auth is configured. `getAvailable()` applies auth checks, while dynamic providers update their last-known model lists through `refresh()`.
 
+The generated `0.87.1` catalog includes these current routes. This is a focused snapshot, not a substitute for `models.getAll()` or `pi --list-models`:
+
+| Model | Provider route | Credential path | Catalog behavior |
+|---|---|---|---|
+| `Claude Opus 5.5` | `anthropic` | `ANTHROPIC_API_KEY` | `adaptive thinking; contextWindow=1000000` |
+| `GPT-6 Sol` | `openai` | `OPENAI_API_KEY` | `OpenAI API key` |
+| `GPT-6 Luna` | `openai` | `OPENAI_API_KEY` | `OpenAI API key` |
+| `GPT-6 Sol` | `openai-codex` | `OpenAI Codex subscription` | `subscription route` |
+| `GPT-6 Luna` | `openai-codex` | `OpenAI Codex subscription` | `subscription route` |
+| `Claude Opus 5.5` | `github-copilot` | `GitHub Copilot subscription` | `supported route` |
+| `GPT-6 Sol` | `github-copilot` | `GitHub Copilot subscription` | `supported route` |
+| `GPT-6 Luna` | `github-copilot` | `GitHub Copilot subscription` | `supported route` |
+| `Grok 4.7` | `xai` | `XAI_API_KEY` | `default for new xAI sessions` |
+
+The Claude ID is route-specific: Anthropic exposes `claude-opus-5-5`, while GitHub Copilot exposes `claude-opus-5.5`. The one-million-token context and forced adaptive-thinking compatibility flag above belong to the Anthropic catalog record; do not infer the same limits or request transformation for every route. `grok-4.7` is the default when Pi resolves a model for a new xAI session. An explicit selection or a model saved in a resumed session still wins.
+
 A `Model` records both routing keys. `provider` names the collection owner; `api` names the provider's wire implementation. The record also carries `id`, `name`, `baseUrl`, input capabilities, reasoning support, token limits, cost rates, compatibility flags, optional headers, and a model-specific `thinkingLevelMap`. Keep a custom model's `provider` aligned with the ID passed to `createProvider()` and configure the endpoint on the model when the reused API implementation reads `model.baseUrl`.
 
 ### Scenario 2: add a provider or a new wire protocol

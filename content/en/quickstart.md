@@ -19,6 +19,17 @@ A TypeScript file that calls one model through the `Models.streamSimple()` inter
 
 ## Before you start
 
+The example below deliberately stays with Anthropic Claude Sonnet so the first run remains small. If you choose one of the newer direct API-key routes in the `0.87.1` catalog, use the matching provider/model ID and credential:
+
+| Provider/model ID | Catalog name | Environment credential |
+|---|---|---|
+| `anthropic/claude-opus-5-5` | `Claude Opus 5.5` | `ANTHROPIC_API_KEY` |
+| `openai/gpt-6-sol` | `GPT-6 Sol` | `OPENAI_API_KEY` |
+| `openai/gpt-6-luna` | `GPT-6 Luna` | `OPENAI_API_KEY` |
+| `xai/grok-4.7` | `Grok 4.7` | `XAI_API_KEY` |
+
+This is a selected list rather than the full generated catalog. Pi Coding Agent also exposes subscription routes for Claude Opus 5.5 and GPT-6 Sol/Luna, but the standalone SDK example must receive credentials through its configured authentication path.
+
 You need:
 
 - **Node.js 22.19 or later** - check with `node --version`

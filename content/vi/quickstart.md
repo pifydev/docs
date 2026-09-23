@@ -19,6 +19,17 @@ Một file TypeScript gọi model qua `Models.streamSimple()`. Từ đây, bạn
 
 ## Trước khi bắt đầu
 
+Ví dụ bên dưới vẫn dùng Anthropic Claude Sonnet để lần chạy đầu tiên gọn và dễ theo dõi. Nếu chọn một direct API-key route mới trong catalog `0.87.1`, hãy dùng đúng provider/model ID và credential tương ứng:
+
+| Provider/model ID | Tên trong catalog | Environment credential |
+|---|---|---|
+| `anthropic/claude-opus-5-5` | `Claude Opus 5.5` | `ANTHROPIC_API_KEY` |
+| `openai/gpt-6-sol` | `GPT-6 Sol` | `OPENAI_API_KEY` |
+| `openai/gpt-6-luna` | `GPT-6 Luna` | `OPENAI_API_KEY` |
+| `xai/grok-4.7` | `Grok 4.7` | `XAI_API_KEY` |
+
+Đây là danh sách chọn lọc, không phải toàn bộ generated catalog. Pi Coding Agent còn cung cấp subscription route cho Claude Opus 5.5 và GPT-6 Sol/Luna, nhưng ví dụ SDK độc lập phải nhận credential qua authentication path đã cấu hình.
+
 Bạn cần:
 
 - **Node.js 22.19 trở lên** - kiểm tra bằng `node --version`
