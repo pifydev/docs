@@ -2090,7 +2090,7 @@ function assertRollupPublicationScope(entryBody, locale, context) {
             /\b(?:chapters?|guides?|references?)\b|\bsource(?:[- ]review)?\s+records?\b/i,
             /\b(?:already|now|are|is|have been|has been)\s+(?:(?:been|already|now|fully)\s+)*(?:migrated|updated|complete(?:d)?|finished)\b/i,
           ],
-          negatedCompletion:
+          nonCompletion:
             /\b(?:not|never)\s+(?:(?:yet|already|fully|now|been)\s+)*(?:migrated|updated|complete(?:d)?|finished)\b/i,
         }
       : {
@@ -2111,11 +2111,11 @@ function assertRollupPublicationScope(entryBody, locale, context) {
           ],
           completed: [
             /chương|hướng dẫn|trang tham khảo|hồ sơ nguồn|source[- ]review\s+record/i,
-            /đã|nay|hiện/i,
+            /đã|hoàn tất|hoàn thành|cập nhật xong/i,
             /cập nhật|migrat(?:e|ion)|hoàn tất|hoàn thành/i,
           ],
-          negatedCompletion:
-            /(?:chưa|không)\s+(?:(?:được|hoàn toàn)\s+)*(?:cập nhật|migrat(?:e|ion)|hoàn tất|hoàn thành)/i,
+          nonCompletion:
+            /(?:chưa|không|sẽ)\s+(?:(?:được|hoàn toàn)\s+)*(?:cập nhật|migrat(?:e|ion)|hoàn tất|hoàn thành)/i,
         };
   assertParagraphContainsAll(
     scope,
@@ -2127,10 +2127,13 @@ function assertRollupPublicationScope(entryBody, locale, context) {
     [/\bcommits?\b/i, ...anchors.deferred],
     `${context} detailed migrations deferred to later commits`,
   );
-  for (const claim of scope.split(/[.!?;](?:\s+|$)|\n(?=- )/)) {
+  const clauses = scope.split(
+    /[.!?;](?:\s+|$)|\n(?=- )|(?:,\s*|\s+)(?:but|while|nhưng|còn(?!\s+lại\b))\s+/i,
+  );
+  for (const claim of clauses) {
     const completed =
       anchors.completed.every((pattern) => pattern.test(claim)) &&
-      !anchors.negatedCompletion.test(claim);
+      !anchors.nonCompletion.test(claim);
     assert.equal(
       completed,
       false,
@@ -2253,6 +2256,69 @@ test("first bilingual changelog publication guard allows editorial rewrites and 
       () => assertRollupPublicationScope(wrongSection, locale, context),
       { name: "AssertionError" },
     );
+  }
+});
+
+test("first bilingual changelog publication guard accepts Vietnamese future phrasing", async () => {
+  const { source } = (await readLocalizedContent("changelog.md")).find(
+    ({ locale }) => locale === "vi",
+  );
+  const entry = extractMarkdownSection(
+    source,
+    "## 2026-09-23",
+    "VI future tense",
+  );
+  const scope = extractMarkdownSection(
+    entry.body,
+    currentRollupHeadings.vi.scope,
+    "VI future tense",
+  );
+  for (const claim of [
+    "Các chương hiện sẽ được cập nhật trong những commit tiếp theo.",
+    "Các hướng dẫn nay sẽ được cập nhật trong các commit tiếp theo.",
+    "Các chương sẽ hoàn tất migration trong các commit tiếp theo.",
+  ]) {
+    assert.doesNotThrow(() =>
+      assertRollupPublicationScope(
+        entry.body.replace(scope.body, `${scope.body}\n\n${claim}`),
+        "vi",
+        "VI future tense",
+      ),
+    );
+  }
+});
+
+test("first bilingual changelog publication guard rejects mixed completed and deferred clauses", async () => {
+  const claims = {
+    en: [
+      "The chapters are fully migrated, but the guides are not yet migrated.",
+      "The guides are not yet migrated while the chapters are fully migrated.",
+    ],
+    vi: [
+      "Các chương đã được cập nhật đầy đủ, nhưng các hướng dẫn chưa được cập nhật.",
+      "Các hướng dẫn chưa được cập nhật; còn các chương đã hoàn tất migration.",
+    ],
+  };
+  for (const { locale, source } of await readLocalizedContent("changelog.md")) {
+    const context = `${locale} clause-local completion`;
+    const entry = extractMarkdownSection(source, "## 2026-09-23", context);
+    const scope = extractMarkdownSection(
+      entry.body,
+      currentRollupHeadings[locale].scope,
+      context,
+    );
+    for (const claim of claims[locale]) {
+      assert.throws(
+        () =>
+          assertRollupPublicationScope(
+            entry.body.replace(scope.body, `${scope.body}\n\n${claim}`),
+            locale,
+            context,
+          ),
+        { name: "AssertionError" },
+        claim,
+      );
+    }
   }
 });
 
