@@ -95,7 +95,7 @@ To resume a chosen file, pass an absolute path from `SessionManager.list()` or `
 
 ## Restore externally stored entries
 
-Pi 0.85.0 can rebuild the Coding Agent tree from a `FileEntry[]` held in a database, object store, or another application-owned medium:
+Pi 0.87.1 can rebuild the Coding Agent tree from a `FileEntry[]` held in a database, object store, or another application-owned medium:
 
 ```ts title="restore-external-session.ts"
 import {
@@ -117,6 +117,34 @@ Here the host owns the external storage lifecycle. `SessionManager.inMemory(cwd,
 The caller is responsible for supplying a well-formed `FileEntry[]`. A normal snapshot starts with one `SessionHeader` whose `type` is `"session"` and whose `id`, `timestamp`, `cwd`, and `version` have the published shapes; later `SessionEntry` records must have valid `id`, `parentId`, `timestamp`, discriminant, and payload fields. When a header is present its `id` becomes the restored manager ID; `{ id: sessionId }` supplies the identity for a headerless entry list. The `cwd` argument is the live manager cwd, so validate it independently of any externally supplied header.
 
 Do schema and authorization validation before construction. `parseSessionEntries()` is a permissive JSONL recovery helper: it skips malformed JSON lines and does not prove that parsed objects satisfy the `FileEntry` union. `migrateSessionEntries()` upgrades older versioned entries in place and therefore mutates the array; `inMemory()` also applies the supported v1-to-v2-to-v3 migration while loading a header. Copy data first if the external store needs the original representation, and treat unsupported or malformed shapes as an application migration error rather than relying on Pi for broad validation.
+
+## Edit future provider context without rewriting history
+
+`SessionManager` is the canonical source for future provider context. Append a `ContextEditEntry` when one earlier message should be omitted or have its content replaced. On a live `AgentSession`, refresh the public finalized context after appending directly through the manager:
+
+```typescript
+import type { AgentSession } from "@earendil-works/pi-coding-agent";
+
+export function omitFromFutureProviderContext(
+  session: AgentSession,
+  targetEntryId: string,
+): string {
+  const editId = session.sessionManager.appendContextEdit(targetEntryId, null);
+  session.refreshContext();
+  return editId;
+}
+```
+
+| Operation | Stored change | Projection effect |
+| --- | --- | --- |
+| `appendContextEdit(targetEntryId, null)` | `append context_edit` | `omit target from future provider context` |
+| `appendContextEdit(targetEntryId, { content })` | `append context_edit` | `replace target content in future provider context` |
+| `raw transcript / UI history` | `append-only` | `unchanged` |
+| `returned editId` | `new context_edit entry` | `not target entry` |
+
+A non-null replacement must be `{ content }`, not the content value by itself. The method returns the ID of the newly appended edit entry. The target entry, raw transcript, and UI history stay intact; only the model projection changes. Add a `context_edit` branch to every exhaustive `SessionEntry` switch.
+
+Use `session.navigateTree(targetId)` for live tree navigation because it updates the leaf, rebuilds context, and restores Tool state coherently. If the host appends another entry type directly through `session.sessionManager`, call `session.refreshContext()` afterward. Mutating only the underlying Agent transcript does not replace the manager projection used by the next request.
 
 ## 3. Branch a session
 
@@ -197,7 +225,7 @@ console.log({
 });
 ```
 
-Run it with `npx tsx extract-branch.ts /absolute/session.jsonl ENTRY_ID`. `forkFrom(sourcePath, targetCwd, sessionDir)` is the cross-project alternative: it creates a new file and copies the source file's full non-header history, while recording the source path as `parentSession`. Pi 0.85.0 also preserves the applicable compaction boundary when a session path is forked, so the extracted context does not accidentally expose history that the source projection had already summarized.
+Run it with `npx tsx extract-branch.ts /absolute/session.jsonl ENTRY_ID`. `forkFrom(sourcePath, targetCwd, sessionDir)` is the cross-project alternative: it creates a new file and copies the source file's full non-header history, while recording the source path as `parentSession`. Pi 0.87.1 also preserves the applicable compaction boundary when a session path is forked, so the extracted context does not accidentally expose history that the source projection had already summarized.
 
 ## 4. Walk the tree
 
@@ -379,7 +407,7 @@ Back up files before upgrades or bulk cleanup. The loader automatically migrates
 - **Confusing CLI and SDK storage rules:** the CLI resolves `--session-dir`, then `PI_CODING_AGENT_SESSION_DIR`, then `sessionDir` in `settings.json`. Direct SDK calls do not read that precedence chain; pass `sessionDir` explicitly or accept the default.
 - **Passing a project path to `listAll()`:** its first string argument is a storage directory. Use `list(cwd)` for one project or zero-argument `listAll()` for all default project directories.
 - **Overriding `cwd` accidentally:** prefer the absolute `SessionInfo.path` returned by the list methods and let `open()` restore the header's working directory.
-- **Reading collision fixes as a locking guarantee:** Pi 0.85.0 gives imported JSONL a suffixed destination when the same filename already exists, and concurrent session shares no longer overwrite one another. Neither fix adds inter-process locking to a live `SessionManager` file; retain the one-writer rule above.
+- **Reading collision fixes as a locking guarantee:** Pi 0.87.1 gives imported JSONL a suffixed destination when the same filename already exists, and concurrent session shares no longer overwrite one another. Neither fix adds inter-process locking to a live `SessionManager` file; retain the one-writer rule above.
 
 ## Next
 

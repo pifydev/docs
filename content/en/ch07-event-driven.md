@@ -21,7 +21,7 @@ reviewed_by: Pify maintainers
 ---
 The first six chapters followed data through the model, Agent loop, Tools, and message boundaries. Events were present at every step, but three questions remained: how does a transition reach outside code, which consumers receive it, and when must the Agent wait for them?
 
-This chapter answers those questions across three surfaces in Pi 0.85.0:
+This chapter answers those questions across three surfaces in Pi 0.87.1:
 
 - `AgentEvent` from `@earendil-works/pi-agent-core` describes one low-level run;
 - `AgentSessionEvent` from `@earendil-works/pi-coding-agent` adds product concerns such as retries and compaction;
@@ -94,7 +94,7 @@ Pi still calls listener functions internally. Decoupling comes from ownership: A
 | Tool | `tool_execution_update` | `toolCallId`, `toolName`, `args`, `partialResult` |
 | Tool | `tool_execution_end` | `toolCallId`, `toolName`, `result`, `isError` |
 
-The following is a source-faithful excerpt from [`packages/agent/src/types.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/types.ts), formatted over more lines but not simplified:
+The following is a source-faithful excerpt from [`packages/agent/src/types.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/types.ts), formatted over more lines but not simplified:
 
 ```typescript
 export type AgentEvent =
@@ -211,7 +211,7 @@ Use the nested discriminant before reading `delta`. `text_start`, `text_end`, an
 | `summarization_retry_finished` | none |
 | `bash_execution_update` | optional `id`, `delta: string` |
 
-The normalized inventory below is based on [`packages/coding-agent/src/core/agent-session.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/agent-session.ts). It refers back to the core union and collapses multiline formatting. It is not a verbatim source excerpt:
+The normalized inventory below is based on [`packages/coding-agent/src/core/agent-session.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/agent-session.ts). It refers back to the core union and collapses multiline formatting. It is not a verbatim source excerpt:
 
 ```typescript
 type AgentSessionEvent =
@@ -243,12 +243,52 @@ type AgentSessionEvent =
 | --- | --- |
 | Startup and resources | `project_trust`, `resources_discover` |
 | Session | `session_start`, `session_info_changed`, `session_before_switch`, `session_before_fork`, `session_before_compact`, `session_compact`, `session_compact_failed`, `session_before_tree`, `session_tree`, `session_shutdown` |
-| Agent and provider | `before_agent_start`, `agent_start`, `agent_end`, `agent_settled`, `turn_start`, `turn_end`, `message_start`, `message_update`, `message_end`, `tool_execution_start`, `tool_execution_update`, `tool_execution_end`, `context`, `before_provider_request`, `before_provider_headers`, `after_provider_response`, `cache_warming_decision` |
+| Agent and provider | `before_agent_start`, `agent_start`, `agent_end`, `agent_before_settle`, `agent_settled`, `turn_start`, `turn_end`, `message_start`, `message_update`, `message_end`, `tool_execution_start`, `tool_execution_update`, `tool_execution_end`, `context`, `context_with_system`, `before_provider_request`, `before_provider_headers`, `after_provider_response`, `cache_warming_decision` |
 | Extension UI prompts | `ui_prompt_start`, `ui_prompt_end` |
 | Model | `model_select`, `thinking_level_select` |
 | Tool, Bash, and input | `tool_call`, `tool_result`, `user_bash`, `input` |
 
-Several names overlap with core events, but the payloads and guarantees belong to the Extension API. For example, Extension `turn_start` adds `turnIndex` and `timestamp`; Extension `agent_end` does not add the session subscriber's `willRetry`; `tool_call` and `context` can change execution, while `tool_execution_start` and `message_update` report lifecycle state.
+Several names overlap with core events, but the payloads and guarantees belong to the Extension API. For example, Extension `turn_start` adds `turnIndex` and `timestamp`; Extension `agent_end` does not add the session subscriber's `willRetry`; `tool_call` and the two context phases can change execution, while `tool_execution_start` and `message_update` report lifecycle state.
+
+`turn_end` and `agent_before_settle` are actionable boundaries. `TurnEndEvent` requires `turnIndex`, `message`, `toolResults`, `messageEntryId`, `toolResultEntryIds`, `outcome`, `entries`, `continue`, and a context preview. `AgentBeforeSettleEvent` carries the shared boundary state and is part of the exported `ExtensionEvent` union. Host integrations dispatch both through `emitBoundary(baseEvent, buildContext)`, which previews chained entry drafts before they are committed.
+
+| Extension event | Contract | Host scheduling |
+| --- | --- | --- |
+| `turn_end` | `actionable` | `emitBoundary(baseEvent, buildContext)` |
+| `agent_before_settle` | `actionable` | `emitBoundary(baseEvent, buildContext)` |
+| `agent_settled` | `requested runs` | `after all settled handlers finish` |
+
+An actionable handler can append a context omission and ask for one next provider request. Guard the continuation condition; returning `continue: true` unconditionally creates a loop.
+
+```typescript
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+
+export function registerRecoveryBoundary(
+  pi: ExtensionAPI,
+  targetId: string,
+): () => void {
+  let recoveryPending = true;
+  return pi.on("agent_before_settle", (event) => {
+    if (!recoveryPending) return;
+    recoveryPending = false;
+    return {
+      entries: [
+        ...event.entries,
+        {
+          type: "context_edit",
+          targetId,
+          replacement: null,
+        },
+      ],
+      continue: true,
+    };
+  });
+}
+```
+
+The local flag makes this example a one-shot recovery. A real Extension should replace it with the condition that identifies its abandoned attempt.
+
+If an `agent_settled` handler calls a session API that starts a run, Pi queues that work until every settled handler has finished. One handler therefore cannot start the next run while another handler is still observing the previous settled boundary.
 
 Registration is reversible. `pi.on()` returns an unsubscribe function, and Pi snapshots the handlers for an event before dispatch begins. A handler added or removed during that dispatch does not change the snapshot being processed; the change applies to later dispatches.
 
@@ -276,7 +316,7 @@ An Extension can also make nested model calls through `ctx.modelRegistry.stream(
 
 At the Pi `0.87.1` baseline, `cache_warming_decision` runs before each scheduled prompt-cache refresh in both the active `streaming` phase and the optional `idle` phase. A handler may return `{ action: "warm" }` or `{ action: "stop" }`; the last returned action wins for that decision. The hook changes whether that refresh is sent, not the model's advertised cache lifetime or the provider's cache behavior.
 
-Pi 0.85.0 exports these prompt event types from the package root:
+Pi 0.87.1 exports these prompt event types from the package root:
 
 ```typescript
 type UIPromptKind =
@@ -349,7 +389,7 @@ The `Set` of listeners is traversed in registration order. Pi awaits one listene
 
 ### State is reduced before subscribers run
 
-`Agent.processEvents()` changes public runtime state first, then calls listeners. This excerpt is pseudocode, condensed from [`packages/agent/src/agent.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/agent.ts):
+`Agent.processEvents()` changes public runtime state first, then calls listeners. This excerpt is pseudocode, condensed from [`packages/agent/src/agent.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent.ts):
 
 ```typescript
 // Pseudocode: omitted cases retain the same state-before-delivery order.
@@ -388,9 +428,9 @@ This ordering creates concrete barriers. Assistant `message_end` delivery finish
 
 ### Tool progress is concurrent delivery followed by a barrier
 
-Historical Pi documentation described `tool_execution_update` listeners as never awaited. Pi 0.85.0 uses a two-part rule. The Tool's synchronous `onUpdate` callback starts delivery without awaiting it, so a Tool may report another update while subscribers process the previous one. Every delivery promise is collected, and all of them must settle before result postprocessing continues.
+Historical Pi documentation described `tool_execution_update` listeners as never awaited. Pi 0.87.1 uses a two-part rule. The Tool's synchronous `onUpdate` callback starts delivery without awaiting it, so a Tool may report another update while subscribers process the previous one. Every delivery promise is collected, and all of them must settle before result postprocessing continues.
 
-The following is source-faithful pseudocode derived from [`executePreparedToolCall()`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/agent-loop.ts#L677-L718):
+The following is source-faithful pseudocode derived from [`executePreparedToolCall()`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent-loop.ts):
 
 ```typescript
 // Pseudocode: exact ordering, abbreviated payload construction.
@@ -558,7 +598,7 @@ export default function protectProduction(pi: ExtensionAPI) {
 }
 ```
 
-`terminate` applies to the blocked call here. Pinned [`shouldTerminateToolBatch()`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/agent-loop.ts#L589-L590) evaluates termination only after the current batch has produced all of its finalized results. A non-empty result set in which every result has `terminate: true` sets the batch's termination decision; the flag never stops the current batch early.
+`terminate` applies to the blocked call here. Pinned [`shouldTerminateToolBatch()`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent-loop.ts) evaluates termination only after the current batch has produced all of its finalized results. A non-empty result set in which every result has `terminate: true` sets the batch's termination decision; the flag never stops the current batch early.
 
 ### Preprocess model context without changing history
 
@@ -691,7 +731,7 @@ turn_end
 
 ### Sequential and parallel batches
 
-Sequential mode finishes one call's immediate preflight outcome or full prepared pipeline, emits its end event and result-message lifecycle, and only then starts the next call. Pinned [`executeToolCallsParallel()`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/agent-loop.ts#L489-L552) separates a source-order scan from concurrent prepared pipelines:
+Sequential mode finishes one call's immediate preflight outcome or full prepared pipeline, emits its end event and result-message lifecycle, and only then starts the next call. Pinned [`executeToolCallsParallel()`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent-loop.ts) separates a source-order scan from concurrent prepared pipelines:
 
 1. Pi emits `tool_execution_start` and runs preflight sequentially in the assistant message's Tool-call order. A lookup, preparation, validation, hook, or abort failure is an immediate result, so its `tool_execution_end` is also emitted during this scan. Pi then continues scanning later calls unless abort is observed.
 2. After the scan, prepared Tool executions start concurrently. Each normal pipeline awaits Tool execution, every collected progress delivery, and `afterToolCall` finalization before emitting `tool_execution_end`.
@@ -740,4 +780,4 @@ For another event-driven system, carry over five tests:
 
 Events reveal when context is prepared, messages stream, and Tool results return. They do not decide which instructions, history, resources, or Tool outputs enter the next model call. [Chapter 8](ch08-context-engineering.md) follows that context-engineering pipeline, from system-prompt assembly and Tool-output limits to compaction and branch summaries.
 
-> **Pinned source index:** Pi `0.85.0`, commit `107d79f11072bbc8a3a757ed7fd69596bee7d68c`: [`packages/ai/src/types.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/src/types.ts#L527-L551), [`packages/agent/src/types.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/types.ts), [`packages/agent/src/agent-loop.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/agent-loop.ts#L281), [`packages/agent/src/agent.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/agent.ts#L240-L253), [`packages/coding-agent/src/core/agent-session.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/agent-session.ts#L142-L185), [`packages/coding-agent/src/core/extensions/types.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/extensions/types.ts), and [`packages/coding-agent/src/core/extensions/runner.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/extensions/runner.ts#L801).
+> **Pinned source index:** Pi `0.87.1`, commit `f07218c4d4bbc12bef056a7058c3dd49dfe41abe`: [`packages/ai/src/types.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/types.ts), [`packages/agent/src/types.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/types.ts), [`packages/agent/src/agent-loop.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent-loop.ts), [`packages/agent/src/agent.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent.ts), [`packages/coding-agent/src/core/agent-session.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/agent-session.ts), [`packages/coding-agent/src/core/extensions/types.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/extensions/types.ts), and [`packages/coding-agent/src/core/extensions/runner.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/extensions/runner.ts).

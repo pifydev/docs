@@ -331,7 +331,20 @@ const newMessages = await events.result();
 
 ### `AgentLoopConfig`
 
-Hai field bắt buộc là `model` và `convertToLlm`. Hook tùy chọn có thể transform context, resolve key, chuẩn bị turn tiếp theo, dừng sau một turn đã hoàn tất hoặc chặn tool call. Config cũng nhận portable stream option, nguồn queue, retry limit và `toolExecution: "parallel" | "sequential"`.
+Hai field bắt buộc là `model` và `convertToLlm`. Hook tùy chọn có thể transform context, resolve key, chuẩn bị hoặc finalize một turn, hay chặn Tool call. Config cũng nhận portable stream option, nguồn queue, retry limit và `toolExecution: "parallel" | "sequential"`. `finishTurn` chạy trước `turn_end`, còn quyết định của nó có hiệu lực sau đó. Response error và aborted vẫn là hard exit.
+
+```typescript
+import type { FinishTurn } from "@earendil-works/pi-agent-core";
+
+declare const shouldEnd: (message: Parameters<FinishTurn>[0]["message"]) => boolean;
+
+const finishTurn: FinishTurn = ({ message }) => {
+  if (message.stopReason === "error" || message.stopReason === "aborted") {
+    return undefined;
+  }
+  return shouldEnd(message) ? { action: "end" } : undefined;
+};
+```
 
 ```ts title="loop-config.ts"
 import type { AgentLoopConfig } from "@earendil-works/pi-agent-core";
@@ -350,7 +363,10 @@ const config = {
         message.role === "system" || message.role === "user" || message.role === "assistant" || message.role === "toolResult",
     ),
   toolExecution: "parallel",
-  shouldStopAfterTurn: ({ toolResults }) => toolResults.some((result) => result.isError),
+  finishTurn: ({ message }) =>
+    message.stopReason === "error" || message.stopReason === "aborted"
+      ? undefined
+      : { action: "end" },
 } satisfies AgentLoopConfig;
 
 console.log(config.toolExecution);
@@ -470,6 +486,19 @@ export declare class SessionManager {
 
 Truyền `entries` sẽ khôi phục parent-linked tree mà không bật cơ chế lưu Pi file. Caller sở hữu validation, durable write và việc đồng bộ với external store. `parseSessionEntries()` cùng `migrateSessionEntries()` cũng được export, nhưng parser bỏ qua dòng JSON lỗi còn migration thay đổi array; cả hai không phải schema validator tổng quát cho trust boundary.
 
+#### Provider context chuẩn và append-only edit
+
+`SessionManager` sở hữu projection chuẩn dùng cho provider request về sau. Dùng `session.navigateTree()` khi di chuyển trong tree. Sau khi application append trực tiếp qua `session.sessionManager`, hãy gọi `session.refreshContext()`; gán message array trên Agent bên dưới không thay thế projection của manager.
+
+| Operation | Thay đổi được lưu | Ảnh hưởng lên projection |
+| --- | --- | --- |
+| `appendContextEdit(targetEntryId, null)` | `append context_edit` | `omit target from future provider context` |
+| `appendContextEdit(targetEntryId, { content })` | `append context_edit` | `replace target content in future provider context` |
+| `raw transcript / UI history` | `append-only` | `unchanged` |
+| `returned editId` | `new context_edit entry` | `not target entry` |
+
+`ContextEditEntry` thuộc union `SessionEntry` đã export, vì vậy switch exhaustive phải xử lý `context_edit`. Replacement object có đúng shape `{ content }`; `null` nghĩa là omission. Cả hai dạng đều append một edit entry và giữ nguyên target entry. `appendCompaction(summary, null, tokensBefore)` là dạng retain-none: ID của compaction entry vừa sinh trở thành retained boundary có hiệu lực, nên projection kế tiếp không giữ entry nào đứng trước nó.
+
 #### Export compaction và ranh giới failure
 
 Package root export `DEFAULT_COMPACTION_SETTINGS`, `shouldCompact()`, `compact()`, `generateSummary()`, `generateSummaryWithUsage()`, `generateBranchSummary()` cùng các type public liên quan đến result, setting, preparation và file operation. Package không export helper nội bộ `getSummarizationFailure()`. Tuy vậy, các đường generation tích hợp sẵn cho compaction, turn-prefix và branch summary đều áp dụng phép kiểm tra đó bên trong: response kết thúc bằng `stopReason: "length"` là chưa hoàn chỉnh và không được lưu thành summary checkpoint. Branch summary generation hiện yêu cầu tối đa 4.096 output token, đồng thời bị giới hạn thêm bởi model limit dương nhỏ hơn.
@@ -544,6 +573,12 @@ export default extension;
 Mọi overload của `pi.on()` đều trả về hàm unsubscribe. Pi chụp snapshot các handler khớp trước một dispatch, vì vậy việc thêm handler hoặc gọi hàm unsubscribe của nó trong dispatch đó chỉ ảnh hưởng dispatch sau, không đổi snapshot đang chạy. `cache_warming_decision` là actionable hook: trước một refresh đã lên lịch, handler có thể trả `{ action: "warm" }` hoặc `{ action: "stop" }`.
 
 `ExtensionContext.modelRegistry` cung cấp `ctx.modelRegistry.stream()` cho option riêng của API và `ctx.modelRegistry.streamSimple()` cho option trung lập với provider. Cả hai method gọi provider đã cấu hình với authentication đã được resolve tại thời điểm gửi request; method `complete()` tương ứng chờ assistant message đầy đủ. Facade này giữ Extension trên cùng đường provider và credential của Coding Agent thay vì tự đọc secret.
+
+#### Actionable lifecycle boundary
+
+`TurnEndEvent` nay có thêm `turnIndex`, `messageEntryId`, `toolResultEntryIds`, `outcome`, `entries`, `continue` và context preview bên cạnh message đã finalize cùng Tool result. `AgentBeforeSettleEvent` thuộc union `ExtensionEvent` đã export. Handler `turn_end` và `agent_before_settle` đều có thể trả append-only entry draft cùng `continue: true`; host dispatch hai actionable event này qua `emitBoundary(baseEvent, buildContext)`.
+
+Event `context` thông thường nhận conversation message không có system message; Pi khôi phục leading prompt và Tool state sau mỗi handler. `context_with_system` chạy sau đó với full transcript và gửi nguyên văn message được trả về. Vì vậy, xóa leading system message ở phase này cũng xóa provider prompt cùng Tool declaration ban đầu. Run được yêu cầu bên trong handler `agent_settled` chỉ bắt đầu sau khi mọi settled handler đã chạy xong.
 
 `pi.setModel()` đổi model của session hiện tại. Lựa chọn thành công được ghi vào lịch sử session và được khôi phục khi session đó được resume, nhưng không thay đổi `defaultProvider` hoặc `defaultModel` đã cấu hình cho session mới. Promise trả về `false` khi provider được chọn chưa có authentication.
 

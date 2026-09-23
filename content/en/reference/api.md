@@ -331,7 +331,20 @@ const newMessages = await events.result();
 
 ### `AgentLoopConfig`
 
-The required fields are `model` and `convertToLlm`. Optional hooks transform context, resolve keys, prepare the next turn, stop after a completed turn, or intercept tool calls. Portable stream options, queue sources, retry limits, and `toolExecution: "parallel" | "sequential"` are also accepted.
+The required fields are `model` and `convertToLlm`. Optional hooks transform context, resolve keys, prepare or finalize a turn, or intercept Tool calls. Portable stream options, queue sources, retry limits, and `toolExecution: "parallel" | "sequential"` are also accepted. `finishTurn` runs before `turn_end`, while its decision takes effect afterward. Error and aborted responses remain hard exits.
+
+```typescript
+import type { FinishTurn } from "@earendil-works/pi-agent-core";
+
+declare const shouldEnd: (message: Parameters<FinishTurn>[0]["message"]) => boolean;
+
+const finishTurn: FinishTurn = ({ message }) => {
+  if (message.stopReason === "error" || message.stopReason === "aborted") {
+    return undefined;
+  }
+  return shouldEnd(message) ? { action: "end" } : undefined;
+};
+```
 
 ```ts title="loop-config.ts"
 import type { AgentLoopConfig } from "@earendil-works/pi-agent-core";
@@ -350,7 +363,10 @@ const config = {
         message.role === "system" || message.role === "user" || message.role === "assistant" || message.role === "toolResult",
     ),
   toolExecution: "parallel",
-  shouldStopAfterTurn: ({ toolResults }) => toolResults.some((result) => result.isError),
+  finishTurn: ({ message }) =>
+    message.stopReason === "error" || message.stopReason === "aborted"
+      ? undefined
+      : { action: "end" },
 } satisfies AgentLoopConfig;
 
 console.log(config.toolExecution);
@@ -470,6 +486,19 @@ export declare class SessionManager {
 
 Passing `entries` restores the parent-linked tree without enabling Pi file persistence. The caller owns validation, durable writes, and synchronization with its external store. `parseSessionEntries()` and `migrateSessionEntries()` are also exported, but parsing skips malformed JSON lines and migration mutates its array; neither is a general trust-boundary schema validator.
 
+#### Canonical session context and append-only edits
+
+`SessionManager` owns the canonical projection used for future provider requests. Use `session.navigateTree()` for tree movement. After an application appends directly through `session.sessionManager`, call `session.refreshContext()`; assigning a message array on the underlying Agent does not replace the manager projection.
+
+| Operation | Stored change | Projection effect |
+| --- | --- | --- |
+| `appendContextEdit(targetEntryId, null)` | `append context_edit` | `omit target from future provider context` |
+| `appendContextEdit(targetEntryId, { content })` | `append context_edit` | `replace target content in future provider context` |
+| `raw transcript / UI history` | `append-only` | `unchanged` |
+| `returned editId` | `new context_edit entry` | `not target entry` |
+
+`ContextEditEntry` is part of the exported `SessionEntry` union, so exhaustive switches must handle `context_edit`. The replacement object has the exact shape `{ content }`; `null` means omission. Both forms append an edit entry and leave the target entry intact. `appendCompaction(summary, null, tokensBefore)` is the retain-none form: the generated compaction entry ID becomes the effective retained boundary, so no preceding entry is kept in the next projection.
+
 #### Compaction exports and failure boundary
 
 The package root exports `DEFAULT_COMPACTION_SETTINGS`, `shouldCompact()`, `compact()`, `generateSummary()`, `generateSummaryWithUsage()`, `generateBranchSummary()`, and the related public result, settings, preparation, and file-operation types. It does not export the internal `getSummarizationFailure()` helper. Built-in compaction, turn-prefix, and branch-summary generation nevertheless apply that check internally: a response ending with `stopReason: "length"` is incomplete and is not persisted as a summary checkpoint. Branch summary generation now requests at most 4,096 output tokens, further bounded by a smaller positive model limit.
@@ -544,6 +573,12 @@ export default extension;
 Every `pi.on()` overload returns an unsubscribe function. Pi snapshots matching handlers before a dispatch, so adding a handler or calling its unsubscribe function during that dispatch affects later dispatches rather than the snapshot already running. `cache_warming_decision` is an actionable hook: before a scheduled refresh, a handler may return `{ action: "warm" }` or `{ action: "stop" }`.
 
 `ExtensionContext.modelRegistry` exposes `ctx.modelRegistry.stream()` for API-specific options and `ctx.modelRegistry.streamSimple()` for provider-neutral options. Both methods call the configured provider with resolved authentication at request time; the matching `complete()` method waits for the full assistant message. This facade keeps Extensions on Coding Agent's provider and credential path instead of reading secrets directly.
+
+#### Actionable lifecycle boundaries
+
+`TurnEndEvent` now includes `turnIndex`, `messageEntryId`, `toolResultEntryIds`, `outcome`, `entries`, `continue`, and a context preview in addition to the finalized message and Tool results. `AgentBeforeSettleEvent` is part of the exported `ExtensionEvent` union. Both `turn_end` and `agent_before_settle` handlers may return append-only entry drafts and `continue: true`; a host dispatches these actionable events through `emitBoundary(baseEvent, buildContext)`.
+
+The ordinary `context` event receives conversation messages without system messages; Pi restores the leading prompt and Tool state after each handler. `context_with_system` runs afterward with the full transcript and sends returned messages verbatim. Removing its leading system message therefore removes the provider prompt and initial Tool declarations. A run requested inside an `agent_settled` handler is deferred until every settled handler has finished.
 
 `pi.setModel()` changes the current session's model. A successful selection is recorded in session history and restored when that session is resumed, but it does not change the configured `defaultProvider` or `defaultModel` used by new sessions. The Promise resolves to `false` when the selected provider lacks authentication.
 

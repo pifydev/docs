@@ -95,7 +95,7 @@ Luôn hiển thị `modelFallbackMessage`. Thông báo này cho biết provider/
 
 ## Khôi phục entry do storage bên ngoài quản lý
 
-Pi 0.85.0 có thể dựng lại tree của Coding Agent từ `FileEntry[]` nằm trong database, object store hoặc medium khác do application sở hữu:
+Pi 0.87.1 có thể dựng lại tree của Coding Agent từ `FileEntry[]` nằm trong database, object store hoặc medium khác do application sở hữu:
 
 ```ts title="restore-external-session.ts"
 import {
@@ -117,6 +117,34 @@ export function restoreExternalSessionEntries(
 Caller chịu trách nhiệm cung cấp `FileEntry[]` đúng cấu trúc. Snapshot thông thường bắt đầu bằng một `SessionHeader` có `type` là `"session"`, còn `id`, `timestamp`, `cwd` và `version` theo public shape; các record `SessionEntry` sau đó phải có `id`, `parentId`, `timestamp`, discriminant và payload hợp lệ. Khi có header, `id` của header trở thành ID của manager được khôi phục; `{ id: sessionId }` cấp identity cho danh sách entry không có header. Đối số `cwd` là cwd đang hoạt động của manager, vì vậy hãy validate nó độc lập với header lấy từ bên ngoài.
 
 Hãy thực hiện schema validation và authorization validation trước khi dựng manager. `parseSessionEntries()` là helper phục hồi JSONL theo hướng dễ dãi: nó bỏ qua dòng JSON lỗi và không chứng minh object đã parse thỏa union `FileEntry`. `migrateSessionEntries()` nâng version cũ tại chỗ nên thay đổi chính array; `inMemory()` cũng áp dụng migration v1 lên v2 rồi v3 được hỗ trợ khi load header. Hãy copy dữ liệu trước nếu external store cần representation ban đầu, và xử lý shape không hỗ trợ hoặc lỗi như migration error của application thay vì dựa vào Pi để validate rộng.
+
+## Chỉnh provider context về sau mà không viết lại history
+
+`SessionManager` là nguồn chuẩn của provider context về sau. Append `ContextEditEntry` khi cần loại bỏ một message cũ hoặc thay content của nó. Trên `AgentSession` đang live, hãy refresh public finalized context sau khi append trực tiếp qua manager:
+
+```typescript
+import type { AgentSession } from "@earendil-works/pi-coding-agent";
+
+export function omitFromFutureProviderContext(
+  session: AgentSession,
+  targetEntryId: string,
+): string {
+  const editId = session.sessionManager.appendContextEdit(targetEntryId, null);
+  session.refreshContext();
+  return editId;
+}
+```
+
+| Operation | Thay đổi được lưu | Ảnh hưởng lên projection |
+| --- | --- | --- |
+| `appendContextEdit(targetEntryId, null)` | `append context_edit` | `omit target from future provider context` |
+| `appendContextEdit(targetEntryId, { content })` | `append context_edit` | `replace target content in future provider context` |
+| `raw transcript / UI history` | `append-only` | `unchanged` |
+| `returned editId` | `new context_edit entry` | `not target entry` |
+
+Replacement khác null phải có shape `{ content }`, không truyền content value trực tiếp. Method trả ID của edit entry vừa append. Target entry, raw transcript và UI history vẫn nguyên vẹn; chỉ model projection thay đổi. Mọi switch exhaustive trên `SessionEntry` phải có nhánh `context_edit`.
+
+Dùng `session.navigateTree(targetId)` để điều hướng tree của live session vì method này cập nhật leaf, dựng lại context và khôi phục Tool state đồng bộ. Nếu host append loại entry khác trực tiếp qua `session.sessionManager`, hãy gọi `session.refreshContext()` sau đó. Chỉ sửa transcript của Agent bên dưới không thay projection mà manager dùng cho request kế tiếp.
 
 ## 3. Rẽ nhánh session
 
@@ -197,7 +225,7 @@ console.log({
 });
 ```
 
-Chạy bằng `npx tsx extract-branch.ts /absolute/session.jsonl ENTRY_ID`. `forkFrom(sourcePath, targetCwd, sessionDir)` là lựa chọn cho project khác: nó tạo file mới, chép toàn bộ lịch sử không phải header của source file và ghi source path vào `parentSession`. Pi 0.85.0 còn giữ ranh giới compaction áp dụng cho path được fork, nên context đã tách không vô tình làm lộ lại lịch sử mà phép chiếu nguồn đã tóm tắt.
+Chạy bằng `npx tsx extract-branch.ts /absolute/session.jsonl ENTRY_ID`. `forkFrom(sourcePath, targetCwd, sessionDir)` là lựa chọn cho project khác: nó tạo file mới, chép toàn bộ lịch sử không phải header của source file và ghi source path vào `parentSession`. Pi 0.87.1 còn giữ ranh giới compaction áp dụng cho path được fork, nên context đã tách không vô tình làm lộ lại lịch sử mà phép chiếu nguồn đã tóm tắt.
 
 ## 4. Duyệt cây
 
@@ -379,7 +407,7 @@ Hãy backup file trước khi nâng cấp hoặc cleanup hàng loạt. Loader t�
 - **Nhầm quy tắc lưu trữ của CLI và SDK:** CLI xét `--session-dir`, rồi `PI_CODING_AGENT_SESSION_DIR`, rồi `sessionDir` trong `settings.json`. Lời gọi SDK trực tiếp không đọc chuỗi ưu tiên này; hãy truyền `sessionDir` tường minh hoặc dùng mặc định.
 - **Truyền project path vào `listAll()`:** đối số string đầu tiên là storage directory. Dùng `list(cwd)` cho một project hoặc `listAll()` không đối số cho mọi thư mục project mặc định.
 - **Vô tình override `cwd`:** ưu tiên absolute `SessionInfo.path` do các hàm list trả về và để `open()` khôi phục working directory trong header.
-- **Hiểu collision fix thành bảo đảm locking:** Pi 0.85.0 chọn destination có suffix khi imported JSONL trùng filename, và các thao tác share session đồng thời không ghi đè nhau nữa. Hai fix này không thêm inter-process lock cho file đang được một `SessionManager` dùng; vẫn giữ quy tắc một writer ở trên.
+- **Hiểu collision fix thành bảo đảm locking:** Pi 0.87.1 chọn destination có suffix khi imported JSONL trùng filename, và các thao tác share session đồng thời không ghi đè nhau nữa. Hai fix này không thêm inter-process lock cho file đang được một `SessionManager` dùng; vẫn giữ quy tắc một writer ở trên.
 
 ## Tiếp theo
 

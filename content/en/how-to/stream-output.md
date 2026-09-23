@@ -47,6 +47,17 @@ For `message_update`, inspect `assistantMessageEvent.type`. Text, thinking, and 
 
 `prompt()` resolves after the session settles. It does not wait for asynchronous work started inside your listener, because session listeners are synchronous.
 
+### Projected provider context is not raw UI history
+
+`SessionManager` owns the canonical projection sent to the provider. A `context_edit` entry can omit or replace content in that future projection without deleting the original entry. Keep the transcript and UI event log append-only: previously rendered messages remain available for audit and inspection even when they no longer appear in the next provider request.
+
+| View | Owner | Behavior |
+| --- | --- | --- |
+| `provider context` | `SessionManager projection` | `may omit or replace content` |
+| `raw transcript / UI history` | `append-only` | `still observable` |
+
+After appending an edit through `session.sessionManager`, call `session.refreshContext()` before the next prompt. Tree navigation through `session.navigateTree(targetId)` refreshes the projection for you.
+
 ## 1. Stream plain text
 
 With a model and credentials already configured, this is a complete terminal consumer:
@@ -251,11 +262,11 @@ Headless RPC separates cancellation from queue disposal. The exact public `clear
 }
 ```
 
-RPC `abort` cancels the active operation—including an active manual compaction in Pi 0.85.0—and waits for the session to become idle before it responds. Queued steering or follow-up work can continue unless `clear_queue` removes it, so an abort response alone does not mean the queue was discarded.
+RPC `abort` cancels the active operation—including an active manual compaction in Pi 0.87.1—and waits for the session to become idle before it responds. Queued steering or follow-up work can continue unless `clear_queue` removes it, so an abort response alone does not mean the queue was discarded.
 
 For interactive Escape, send `clear_queue` before `abort`, then restore the returned `steering` and `followUp` text in the client editor if appropriate. Reversing that order can let queued work start while `abort` is waiting for idle.
 
-This consumption guidance is transport-neutral: the RPC process carries commands and events as JSON Lines, while an application may project session events over SSE, WebSocket, or another channel. Not all providers use SSE, so the Pi 0.85.0 OpenAI Codex fix for a terminal SSE event without a trailing blank line is an adapter detail, not a framing rule for this renderer.
+This consumption guidance is transport-neutral: the RPC process carries commands and events as JSON Lines, while an application may project session events over SSE, WebSocket, or another channel. Not all providers use SSE, so the OpenAI Codex fix for a terminal SSE event without a trailing blank line is an adapter detail, not a framing rule for this renderer.
 
 ## 5. Batch UI work; do not expect backpressure
 

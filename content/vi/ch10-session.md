@@ -328,9 +328,9 @@ Cây trở nên cụ thể khi ta xem một bản ghi đã lưu.
 
 Khi `SessionManager` đọc file v3, nó không kiểm tra đầy đủ schema của từng dòng đã phân tích cú pháp. Hãy xem định nghĩa TypeScript là quy ước định dạng; việc một đối tượng JSON phân tích cú pháp được chưa đủ chứng minh nó an toàn.
 
-### Chín kiểu entry của Coding Agent
+### Mười một loại entry của Coding Agent
 
-`SessionEntry` là kiểu hợp gồm chín kiểu. Chia theo tác động lên context giúp ta thấy lý do chúng tồn tại riêng.
+`SessionEntry` là union gồm mười một kiểu. Chia theo tác động lên context giúp ta thấy lý do chúng tồn tại riêng.
 
 Bốn kiểu entry có thể chiếu một hoặc nhiều message vào context đang hoạt động:
 
@@ -348,15 +348,29 @@ Hai kiểu entry thay đổi trạng thái trả về bên cạnh messages:
 | `ModelChangeEntry` (`model_change`)                  | Đặt `{ provider, modelId }` cho đường dẫn đã chọn |
 | `ThinkingLevelChangeEntry` (`thinking_level_change`) | Đặt chuỗi `thinkingLevel` hiện tại                |
 
-Ba kiểu entry lưu siêu dữ liệu nhưng không đi vào context của model:
+`ContextEditEntry` (`context_edit`) điều khiển projection mà không tự tạo message. `targetId` trỏ tới một entry trước đó trên path đã chọn. `replacement: null` loại target khỏi provider context về sau; giá trị `{ content }` khác null chỉ thay content, còn role và message metadata được giữ nguyên.
+
+Bốn kiểu entry lưu metadata nhưng không đi vào context của model:
 
 | Kiểu entry                          | Mục đích                                                                      |
 | ----------------------------------- | ----------------------------------------------------------------------------- |
+| `UsageEntry` (`usage`)              | Lưu usage gắn với model nhưng không đóng góp message                          |
 | `CustomEntry` (`custom`)            | Lưu `data` của Extension dưới một `customType`                                |
 | `LabelEntry` (`label`)              | Đặt hoặc xóa label trên `targetId`; thay đổi được append sau cùng có hiệu lực |
 | `SessionInfoEntry` (`session_info`) | Đặt hoặc xóa `name` hiển thị; entry được append sau cùng có hiệu lực          |
 
-`SessionHeader` ở đầu file là cấu trúc thứ mười, nhưng nó không phải `SessionEntry` và không có parent. Bộ khung tổng quát mới hơn của Pi Agent Core định nghĩa một kiểu hợp khác gồm bảy kiểu entry, cùng lane và bản ghi thao tác. Trộn hai lược đồ sẽ tạo trình phân tích sai.
+`SessionHeader` ở đầu file là một file-record shape khác, nhưng nó không phải `SessionEntry` và không có parent. Generic harness của Pi Agent Core định nghĩa union khác cùng lane và operation record. Trộn hai schema sẽ tạo parser sai.
+
+Context edit cũng là append-only tree entry:
+
+| Operation | Thay đổi được lưu | Ảnh hưởng lên projection |
+| --- | --- | --- |
+| `appendContextEdit(targetEntryId, null)` | `append context_edit` | `omit target from future provider context` |
+| `appendContextEdit(targetEntryId, { content })` | `append context_edit` | `replace target content in future provider context` |
+| `raw transcript / UI history` | `append-only` | `unchanged` |
+| `returned editId` | `new context_edit entry` | `not target entry` |
+
+ID trả về thuộc edit entry vừa được tạo, không thuộc target. Switch exhaustive trên `SessionEntry` phải xử lý `context_edit`, dù `sessionEntryToContextMessages()` không tạo message cho chính edit entry.
 
 ### Vì sao entry chỉ lưu parent
 
@@ -466,7 +480,7 @@ Dữ liệu lưu có dạng cây, còn `Agent` và bộ chuyển đổi của pr
 
 Thứ tự vật lý trả lời “bản ghi này được append lúc nào?”. Thứ tự parent trả lời “lịch sử nào thuộc vị trí này?”. Sau khi phân nhánh, hai thứ tự khác nhau. Gửi mọi dòng vật lý sẽ trộn các hướng cạnh tranh, bản ghi label và trạng thái của branch mà người dùng đã rời.
 
-`getBranch()` cung cấp đường dẫn đầy đủ từ root đến leaf. `buildContextEntries()` áp dụng compaction mới nhất trên đường dẫn đó. Sau đó, `buildSessionContext()` đổi các entry đã chọn thành message và xác định model cùng trạng thái suy luận từ đường dẫn đầy đủ.
+`getBranch()` cung cấp path đầy đủ từ root đến leaf. `buildContextEntries()` áp dụng compaction mới nhất trên path đó. `buildSessionProjection()` áp dụng `context_edit` mới nhất cho từng target đã chọn mà không sửa raw entry. Sau đó, `buildSessionContext()` trả projected message rồi resolve model cùng thinking state từ path đầy đủ.
 
 ### Bước 1: đi từ leaf về root
 
@@ -499,8 +513,10 @@ message          -> AgentMessage đã lưu
 custom_message   -> CustomMessage
 branch_summary   -> BranchSummaryMessage
 compaction       -> CompactionSummaryMessage
+context_edit      -> không sinh message; sửa target đã chọn trong projection
 model_change     -> không sinh message
 thinking change  -> không sinh message
+usage            -> không sinh message
 custom           -> không sinh message
 label            -> không sinh message
 session_info     -> không sinh message
@@ -636,7 +652,7 @@ Flow xác nhận cho phép kèm hoặc bỏ transcript của session. Nếu bỏ
 
 Radius upload không yêu cầu login; Radius session đã xác thực sẽ gắn report với tài khoản để maintainer có thể follow up. Sau khi upload, Pi ghi report ID vào session dưới dạng entry `pi.bug-report`. Process crash được ghi riêng ở `~/.pi/agent/crashes.json`, thông báo một lần trong lần khởi động kế tiếp và đính kèm vào report tiếp theo. Crash file đó là diagnostic state, không thay thế session JSONL.
 
-### Các chỉnh sửa session trong Pi 0.85.0
+### Các chỉnh sửa session được giới thiệu trong Pi 0.85.0
 
 Bốn fix làm chặt các workflow cụ thể mà không đổi storage model. Imported JSONL trùng filename với destination đã có giờ nhận suffix dạng số thay vì ghi đè file đó. Các thao tác share session đồng thời không ghi đè nhau nữa. Một fork nay giữ ranh giới compaction áp dụng, nên context dựng lại tôn trọng checkpoint của source. Một fork in-memory được yêu cầu trước khi active turn settle chỉ được xử lý sau khi runtime teardown đã await active response, nhờ đó giữ turn đã hoàn tất hoặc bị abort trước khi manager thay đổi.
 
@@ -644,12 +660,12 @@ Bốn fix làm chặt các workflow cụ thể mà không đổi storage model. 
 
 ## 7. Tách hai tầng lưu trữ và dùng SessionManager
 
-Pi 0.85.0 có hai hệ thống session cùng chia sẻ một số ý tưởng nhưng không tương thích về quy ước:
+Pi 0.87.1 có hai hệ thống session cùng chia sẻ một số ý tưởng nhưng không tương thích về quy ước:
 
 | Thuộc tính                  | Bộ khung Pi Agent Core                                               | `SessionManager` của Coding Agent                                        |
 | --------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------ |
 | Lớp trừu tượng công khai    | `SessionStorage` và `Session` bất đồng bộ                            | Lớp cụ thể đồng bộ                                                       |
-| Kiểu entry hiện tại         | 7 kiểu, gồm `active_tools_change`; có lane và bản ghi thao tác riêng | 9 kiểu `SessionEntry`, gồm message tùy chỉnh, label và thông tin session |
+| Kiểu entry hiện tại         | 7 kiểu, gồm `active_tools_change`; có lane và bản ghi thao tác riêng | 11 kiểu `SessionEntry`, gồm usage, context edit, label và thông tin session |
 | Lược đồ JSONL               | Header v4, bản ghi thay đổi, timestamp số và số thứ tự               | Header v3 `type: "session"`, timestamp entry dạng ISO                    |
 | Bản triển khai trên file    | `JsonlSessionStorage`, có hàng đợi trên từng đối tượng               | Gọi `fs` trực tiếp trong `SessionManager`                                |
 | Bản triển khai trong bộ nhớ | `InMemorySessionStorage`                                             | `SessionManager.inMemory()`                                              |
@@ -674,11 +690,11 @@ API của đối tượng chia thành bốn nhóm:
 | Nhóm                   | Phương thức hiện tại                                                                                                                                                                             |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Vòng đời và định danh  | `newSession()`, `setSessionFile()`, `createBranchedSession()`, `isPersisted()`, `usesDefaultSessionDir()`, `getCwd()`, `getSessionDir()`, `getSessionId()`, `getSessionFile()`                   |
-| Append                 | `appendMessage()`, `appendThinkingLevelChange()`, `appendModelChange()`, `appendCompaction()`, `appendCustomEntry()`, `appendCustomMessageEntry()`, `appendLabelChange()`, `appendSessionInfo()` |
+| Append                 | `appendMessage()`, `appendThinkingLevelChange()`, `appendModelChange()`, `appendUsage()`, `appendCompaction()`, `appendContextEdit()`, `appendCustomEntry()`, `appendCustomMessageEntry()`, `appendLabelChange()`, `appendSessionInfo()` |
 | Tree và label          | `getLeafId()`, `getLeafEntry()`, `getEntry()`, `getChildren()`, `getBranch()`, `getTree()`, `getLabel()`, `branch()`, `resetLeaf()`, `branchWithSummary()`                                       |
-| Phép chiếu và kiểm tra | `buildContextEntries()`, `buildSessionContext()`, `getEntries()`, `getHeader()`, `getSessionName()`                                                                                              |
+| Phép chiếu và kiểm tra | `buildContextEntries()`, `buildSessionProjection()`, `buildSessionContext()`, `getEntries()`, `getHeader()`, `getSessionName()`                                                                  |
 
-Mọi phương thức append đều trả ID của entry mới. `appendCompaction()` và `branchWithSummary()` nhận `details`, `fromHook` và `usage` tùy chọn; việc sinh bản tóm tắt thuộc `AgentSession`, không thuộc manager. `getEntries()` trả một mảng mới chứa các đối tượng entry đã lưu, nên mã gọi không được sửa các đối tượng đó.
+Mọi append method trừ `appendUsage()` đều trả ID của entry mới; `appendUsage()` trả `UsageEntry` vừa tạo. `appendCompaction()` và `branchWithSummary()` nhận `details`, `fromHook` cùng `usage` tùy chọn; việc sinh summary thuộc `AgentSession`, không thuộc manager. `getEntries()` trả array mới chứa các stored entry object, nên caller không được sửa các object đó.
 
 Ví dụ có thể sao chép này chỉ dùng các phương thức công khai đã xuất:
 
@@ -711,9 +727,9 @@ console.log({
 });
 ```
 
-Một số hàm đã xuất cho phép dùng trực tiếp cơ chế này mà không cần đối tượng `SessionManager`: `buildContextEntries()`, `buildSessionContext()`, `sessionEntryToContextMessages()`, `parseSessionEntries()`, `migrateSessionEntries()` và `getLatestCompactionEntry()`. Các hàm hỗ trợ nội bộ của lớp như `_buildIndex()`, `_appendEntry()`, `_persist()` và `_rewriteFile()` triển khai chính sách lưu trữ, không nên được xem là API ổn định cho ứng dụng.
+Một số hàm đã export cho phép dùng trực tiếp cơ chế này mà không cần object `SessionManager`: `buildContextEntries()`, `buildSessionProjection()`, `buildSessionContext()`, `sessionEntryToContextMessages()`, `parseSessionEntries()`, `migrateSessionEntries()` và `getLatestCompactionEntry()`. Helper nội bộ của class như `_buildIndex()`, `_appendEntry()`, `_persist()` và `_rewriteFile()` triển khai storage policy, không phải API ổn định cho application.
 
-Với persistence do bên ngoài sở hữu, gọi `SessionManager.inMemory(cwd, { id: sessionId }, entries)` bằng `FileEntry[]` đúng cấu trúc. Cách này khôi phục append-only tree nhưng không bao giờ tạo Pi JSONL file hay ghi thay đổi ngược về external store. Host sở hữu validation, migration policy, snapshot, concurrency và durable write; `parseSessionEntries()` bỏ qua JSON lỗi nên không phải schema validator đầy đủ, còn `migrateSessionEntries()` thay đổi input array.
+Với persistence do bên ngoài sở hữu, gọi `SessionManager.inMemory(cwd, { id: sessionId }, entries)` bằng `FileEntry[]` đúng cấu trúc. Cách này khôi phục append-only tree cùng provider projection chuẩn nhưng không tạo Pi JSONL file hay ghi ngược về external store. Điều hướng `AgentSession` đang live qua `session.navigateTree()`. Sau khi append trực tiếp qua `session.sessionManager`, gọi `session.refreshContext()` để dựng lại public finalized message từ manager. Thay message array của Agent bên dưới không phải API chỉnh session context. Host sở hữu validation, migration policy, snapshot, concurrency và durable write; `parseSessionEntries()` bỏ qua JSON lỗi nên không phải schema validator đầy đủ, còn `migrateSessionEntries()` thay đổi input array.
 
 Chi tiết khi tạo và mở session có ảnh hưởng trực tiếp đến mã gọi. `create()` có thể trả một manager mà `getSessionFile()` mới chỉ là đường dẫn dự kiến, còn `newSession()` có thể trả trực tiếp đường dẫn đó, vì cơ chế ghi tạo file muộn. `open()` lấy `sessionDir` từ thư mục cha của file nếu mã gọi không cấp. `continueRecent()` lọc theo `cwd` trong header khi dùng thư mục tùy chỉnh dùng chung. `list()` và `listAll()` trả siêu dữ liệu `SessionInfo`, không trả manager đang mở; hãy gọi `open(info.path)` để tiếp tục.
 
@@ -752,9 +768,9 @@ Từ Chương 3 đến Chương 10, đường chạy đã nối liền: vòng l�
 
 Hệ thống Extension của Pi nằm ở cả hai phía ranh giới này. Extension có thể append trạng thái `custom`, đưa context `custom_message` vào, cung cấp bản tóm tắt compaction hoặc branch, gắn label cho entry và quan sát điều hướng. Các file mã nguồn nên đọc tiếp gồm:
 
-- [`lược đồ`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/session-manager.ts#L30-L153), [`phép chiếu`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/session-manager.ts#L334-L469) và phần triển khai [`SessionManager`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/session-manager.ts) của Coding Agent;
-- phần [`thu thập entry`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/compaction/branch-summarization.ts#L96-L145) và [`sinh bản tóm tắt`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/compaction/branch-summarization.ts);
-- [`quy ước entry và lưu trữ`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/harness/session/types.ts#L14-L326) cùng [`cơ chế an toàn JSONL`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/harness/session/jsonl/storage.ts#L23-L124) của bộ khung tổng quát;
-- [Hành vi CLI hiện tại](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/docs/sessions.md).
+- [`lược đồ`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/session-manager.ts), [`phép chiếu`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/session-manager.ts) và phần triển khai [`SessionManager`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/session-manager.ts) của Coding Agent;
+- phần [`thu thập entry`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/compaction/branch-summarization.ts) và [`sinh bản tóm tắt`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/compaction/branch-summarization.ts);
+- [`quy ước entry và lưu trữ`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/harness/session/types.ts) cùng [`cơ chế an toàn JSONL`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/harness/session/jsonl/storage.ts) của bộ khung tổng quát;
+- [Hành vi CLI hiện tại](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/sessions.md).
 
-Chương này bám theo Pi `0.85.0` tại commit `107d79f11072bbc8a3a757ed7fd69596bee7d68c`.
+Chương này bám theo Pi `0.87.1` tại commit `f07218c4d4bbc12bef056a7058c3dd49dfe41abe`.

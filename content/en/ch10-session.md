@@ -328,9 +328,9 @@ This is a valid JSON object for the assistant Tool call. It shows every required
 
 The schema does not validate every parsed line when `SessionManager` loads a v3 file. Treat these TypeScript definitions as the format contract, and do not infer that an arbitrary JSON object is safe because parsing succeeded.
 
-### Nine Coding Agent entry types
+### Eleven Coding Agent entry types
 
-`SessionEntry` is a union of nine types. Grouping them by their effect on context explains why they are separate.
+`SessionEntry` is a union of eleven types. Grouping them by their effect on context explains why they are separate.
 
 Four entry types can project one or more messages into active context:
 
@@ -348,15 +348,29 @@ Two entry types change the state returned beside the messages:
 | `ModelChangeEntry` (`model_change`)                  | Sets `{ provider, modelId }` for the selected path |
 | `ThinkingLevelChangeEntry` (`thinking_level_change`) | Sets the current `thinkingLevel` string            |
 
-Three entry types persist metadata without entering model context:
+`ContextEditEntry` (`context_edit`) controls the projection without producing a message of its own. Its `targetId` names an earlier entry on the selected path. `replacement: null` omits that target from future provider context; a non-null `{ content }` replaces only its content while retaining its role and message metadata.
+
+Four entry types persist metadata without entering model context:
 
 | Entry type                          | Purpose                                                              |
 | ----------------------------------- | -------------------------------------------------------------------- |
+| `UsageEntry` (`usage`)              | Stores model-attributed usage that does not contribute a message     |
 | `CustomEntry` (`custom`)            | Stores extension-owned `data` under a `customType`                   |
 | `LabelEntry` (`label`)              | Applies or clears a label on `targetId`; latest appended change wins |
 | `SessionInfoEntry` (`session_info`) | Sets or clears the display `name`; latest appended entry wins        |
 
-The top-level `SessionHeader` is a tenth file-record shape, but it is not a `SessionEntry` and has no parent. Pi Agent Core's newer generic harness defines a different seven-entry union plus lanes and operation records. Mixing those schemas produces incorrect parsers.
+The top-level `SessionHeader` is another file-record shape, but it is not a `SessionEntry` and has no parent. Pi Agent Core's generic harness defines a different union plus lanes and operation records. Mixing those schemas produces incorrect parsers.
+
+Context edits are themselves append-only tree entries:
+
+| Operation | Stored change | Projection effect |
+| --- | --- | --- |
+| `appendContextEdit(targetEntryId, null)` | `append context_edit` | `omit target from future provider context` |
+| `appendContextEdit(targetEntryId, { content })` | `append context_edit` | `replace target content in future provider context` |
+| `raw transcript / UI history` | `append-only` | `unchanged` |
+| `returned editId` | `new context_edit entry` | `not target entry` |
+
+The returned ID identifies the new edit entry, not the target. An exhaustive `SessionEntry` switch must handle `context_edit`, even though `sessionEntryToContextMessages()` emits no message for the edit itself.
 
 ### Why entries store only their parent
 
@@ -466,7 +480,7 @@ Storage is tree-shaped, while `Agent` and provider adapters consume a linear `Ag
 
 Physical order answers “when was this record appended?” Parent order answers “which history belongs to this position?” After branching, those orders differ. Sending all physical lines would mix competing attempts, label records, and state from paths the user left.
 
-`getBranch()` exposes the full selected root-to-leaf path. `buildContextEntries()` applies the latest compaction on that path. `buildSessionContext()` then converts selected entries to messages and resolves model and thinking state from the full path.
+`getBranch()` exposes the full selected root-to-leaf path. `buildContextEntries()` applies the latest compaction on that path. `buildSessionProjection()` applies the newest `context_edit` for each selected target without changing the raw entries. `buildSessionContext()` then returns projected messages and resolves model and thinking state from the full path.
 
 ### Step 1: walk from leaf to root
 
@@ -499,8 +513,10 @@ message          -> stored AgentMessage
 custom_message   -> CustomMessage
 branch_summary   -> BranchSummaryMessage
 compaction       -> CompactionSummaryMessage
+context_edit      -> no message; modifies its selected target during projection
 model_change     -> no message
 thinking change  -> no message
+usage            -> no message
 custom           -> no message
 label            -> no message
 session_info     -> no message
@@ -636,7 +652,7 @@ The confirmation flow lets you include or omit the session transcript. If you om
 
 Radius upload does not require login; an authenticated Radius session attributes the report so maintainers can follow up. After upload, Pi records the report ID in the session as a `pi.bug-report` entry. Process crashes are recorded separately in `~/.pi/agent/crashes.json`, announced once at the next startup, and attached to the next report. That crash file is diagnostic state, not a substitute for the session JSONL.
 
-### Pi 0.85.0 session corrections
+### Session corrections introduced in Pi 0.85.0
 
 Four fixes tighten specific workflows without changing the storage model. Imported JSONL with the same filename as an existing destination now receives a numeric suffix instead of overwriting that file. Concurrent session shares do not overwrite one another. A fork now retains the applicable compaction boundary, so its reconstructed context respects the source checkpoint. An in-memory session fork requested before an active turn settles is handled only after runtime teardown has awaited the active response, preserving the completed or aborted turn before the manager is mutated.
 
@@ -644,12 +660,12 @@ These are collision and ordering fixes, not a new transaction layer. Coding Agen
 
 ## 7. Separate the two persistence layers and use SessionManager
 
-Pi 0.85.0 contains two session systems with related ideas and incompatible contracts:
+Pi 0.87.1 contains two session systems with related ideas and incompatible contracts:
 
 | Property              | Pi Agent Core harness                                                          | Coding Agent `SessionManager`                                               |
 | --------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
 | Public abstraction    | Async `SessionStorage` and `Session`                                           | Concrete synchronous class                                                  |
-| Current entries       | 7 types, including `active_tools_change`; separate lanes and operation records | 9 `SessionEntry` types, including custom messages, labels, and session info |
+| Current entries       | 7 types, including `active_tools_change`; separate lanes and operation records | 11 `SessionEntry` types, including usage, context edits, labels, and session info |
 | JSONL schema          | v4 header, mutations, numeric timestamps and sequence numbers                  | v3 `type: "session"` header, ISO entry timestamps                           |
 | File implementation   | `JsonlSessionStorage`, queued per instance                                     | Direct `fs` calls inside `SessionManager`                                   |
 | Memory implementation | `InMemorySessionStorage`                                                       | `SessionManager.inMemory()`                                                 |
@@ -674,11 +690,11 @@ Its instance surface falls into four groups:
 | Group                     | Current methods                                                                                                                                                                                  |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Lifecycle and identity    | `newSession()`, `setSessionFile()`, `createBranchedSession()`, `isPersisted()`, `usesDefaultSessionDir()`, `getCwd()`, `getSessionDir()`, `getSessionId()`, `getSessionFile()`                   |
-| Append                    | `appendMessage()`, `appendThinkingLevelChange()`, `appendModelChange()`, `appendCompaction()`, `appendCustomEntry()`, `appendCustomMessageEntry()`, `appendLabelChange()`, `appendSessionInfo()` |
+| Append                    | `appendMessage()`, `appendThinkingLevelChange()`, `appendModelChange()`, `appendUsage()`, `appendCompaction()`, `appendContextEdit()`, `appendCustomEntry()`, `appendCustomMessageEntry()`, `appendLabelChange()`, `appendSessionInfo()` |
 | Tree and labels           | `getLeafId()`, `getLeafEntry()`, `getEntry()`, `getChildren()`, `getBranch()`, `getTree()`, `getLabel()`, `branch()`, `resetLeaf()`, `branchWithSummary()`                                       |
-| Projection and inspection | `buildContextEntries()`, `buildSessionContext()`, `getEntries()`, `getHeader()`, `getSessionName()`                                                                                              |
+| Projection and inspection | `buildContextEntries()`, `buildSessionProjection()`, `buildSessionContext()`, `getEntries()`, `getHeader()`, `getSessionName()`                                                                  |
 
-All append methods return the new entry ID. `appendCompaction()` and `branchWithSummary()` accept optional `details`, `fromHook`, and `usage`; summary generation belongs to `AgentSession`, not to the manager. `getEntries()` returns a new array containing the stored entry objects, so callers should treat those objects as read-only.
+All append methods except `appendUsage()` return the new entry ID; `appendUsage()` returns its new `UsageEntry`. `appendCompaction()` and `branchWithSummary()` accept optional `details`, `fromHook`, and `usage`; summary generation belongs to `AgentSession`, not to the manager. `getEntries()` returns a new array containing the stored entry objects, so callers should treat those objects as read-only.
 
 This copyable example uses only exported public methods:
 
@@ -711,9 +727,9 @@ console.log({
 });
 ```
 
-Several exported functions expose the machinery without a manager instance: `buildContextEntries()`, `buildSessionContext()`, `sessionEntryToContextMessages()`, `parseSessionEntries()`, `migrateSessionEntries()`, and `getLatestCompactionEntry()`. Internal class helpers such as `_buildIndex()`, `_appendEntry()`, `_persist()`, and `_rewriteFile()` implement storage policy and should not be treated as stable application APIs.
+Several exported functions expose the machinery without a manager instance: `buildContextEntries()`, `buildSessionProjection()`, `buildSessionContext()`, `sessionEntryToContextMessages()`, `parseSessionEntries()`, `migrateSessionEntries()`, and `getLatestCompactionEntry()`. Internal class helpers such as `_buildIndex()`, `_appendEntry()`, `_persist()`, and `_rewriteFile()` implement storage policy and should not be treated as stable application APIs.
 
-For externally owned persistence, call `SessionManager.inMemory(cwd, { id: sessionId }, entries)` with a well-formed `FileEntry[]`. This restores the append-only tree but never creates a Pi JSONL file or writes changes back to the external store. The host owns validation, migration policy, snapshots, concurrency, and durable writes; `parseSessionEntries()` skips malformed JSON and is not a full schema validator, while `migrateSessionEntries()` mutates its input array.
+For externally owned persistence, call `SessionManager.inMemory(cwd, { id: sessionId }, entries)` with a well-formed `FileEntry[]`. This restores the append-only tree and its canonical provider projection, but never creates a Pi JSONL file or writes changes back to the external store. Navigate a live `AgentSession` through `session.navigateTree()`. After direct appends through `session.sessionManager`, call `session.refreshContext()` so public finalized messages are rebuilt from the manager. Replacing the underlying Agent's message array is not a session-context mutation API. The host owns validation, migration policy, snapshots, concurrency, and durable writes; `parseSessionEntries()` skips malformed JSON and is not a full schema validator, while `migrateSessionEntries()` mutates its input array.
 
 Creation and opening carry details that affect callers. `create()` can return a manager whose `getSessionFile()` is only a prospective path, while `newSession()` can return that path directly, because writes are lazy. `open()` derives `sessionDir` from the file's parent unless one is supplied. `continueRecent()` filters by header `cwd` when a custom shared directory is used. `list()` and `listAll()` return `SessionInfo` metadata, not open managers; call `open(info.path)` to resume one.
 
@@ -752,9 +768,9 @@ Chapters 3 through 10 now connect the full runtime path: the loop emits messages
 
 Pi's extension system sits on both sides of this boundary. Extensions can append `custom` state, inject `custom_message` context, provide compaction or branch summaries, label entries, and observe navigation. The source files to read next are:
 
-- Coding Agent [`schema`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/session-manager.ts#L30-L153), [`projection`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/session-manager.ts#L334-L469), and [`SessionManager`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/session-manager.ts) implementation;
-- branch-summary [`collection`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/compaction/branch-summarization.ts#L96-L145) and [`generation`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/compaction/branch-summarization.ts);
-- generic-harness [`entry and storage contracts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/harness/session/types.ts#L14-L326) and [`JSONL safety implementation`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/harness/session/jsonl/storage.ts#L23-L124);
-- [Current CLI behavior](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/docs/sessions.md).
+- Coding Agent [`schema`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/session-manager.ts), [`projection`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/session-manager.ts), and [`SessionManager`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/session-manager.ts) implementation;
+- branch-summary [`collection`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/compaction/branch-summarization.ts) and [`generation`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/compaction/branch-summarization.ts);
+- generic-harness [`entry and storage contracts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/harness/session/types.ts) and [`JSONL safety implementation`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/harness/session/jsonl/storage.ts);
+- [Current CLI behavior](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/sessions.md).
 
-This chapter targets Pi `0.85.0` at commit `107d79f11072bbc8a3a757ed7fd69596bee7d68c`.
+This chapter targets Pi `0.87.1` at commit `f07218c4d4bbc12bef056a7058c3dd49dfe41abe`.

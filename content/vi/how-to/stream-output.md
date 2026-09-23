@@ -47,6 +47,17 @@ Với `message_update`, hãy kiểm tra `assistantMessageEvent.type`. Text, thin
 
 `prompt()` resolve sau khi session settle. Nó không chờ công việc bất đồng bộ được khởi chạy bên trong listener vì listener của session là đồng bộ.
 
+### Provider context đã chiếu không phải raw UI history
+
+`SessionManager` sở hữu projection chuẩn được gửi tới provider. Một entry `context_edit` có thể bỏ qua hoặc thay nội dung trong projection về sau mà không xóa entry gốc. Giữ transcript và UI event log theo nguyên tắc append-only: message đã render vẫn có thể được kiểm tra và audit ngay cả khi nó không còn xuất hiện trong provider request tiếp theo.
+
+| View | Owner | Behavior |
+| --- | --- | --- |
+| `provider context` | `SessionManager projection` | `may omit or replace content` |
+| `raw transcript / UI history` | `append-only` | `still observable` |
+
+Sau khi append edit qua `session.sessionManager`, gọi `session.refreshContext()` trước prompt tiếp theo. Khi điều hướng cây bằng `session.navigateTree(targetId)`, Pi sẽ tự refresh projection.
+
 ## 1. Stream text thuần
 
 Khi đã cấu hình model và credential, đây là consumer hoàn chỉnh cho terminal:
@@ -251,11 +262,11 @@ RPC headless tách thao tác hủy khỏi việc dọn queue. Đây là shape ch
 }
 ```
 
-RPC `abort` hủy thao tác đang hoạt động—kể cả compaction thủ công đang chạy ở Pi 0.85.0—và chờ tới khi session idle rồi mới phản hồi. Công việc steering hoặc follow-up trong queue vẫn có thể tiếp tục trừ khi `clear_queue` loại bỏ nó, nên chỉ riêng response của abort không có nghĩa queue đã bị xóa.
+RPC `abort` hủy thao tác đang hoạt động—kể cả compaction thủ công đang chạy ở Pi 0.87.1—và chờ tới khi session idle rồi mới phản hồi. Công việc steering hoặc follow-up trong queue vẫn có thể tiếp tục trừ khi `clear_queue` loại bỏ nó, nên chỉ riêng response của abort không có nghĩa queue đã bị xóa.
 
 Đối với Escape tương tác, hãy gửi `clear_queue` trước `abort`, rồi khôi phục text `steering` và `followUp` được trả về trong editor phía client nếu phù hợp. Đảo thứ tự có thể khiến công việc trong queue bắt đầu khi `abort` còn đang chờ trạng thái idle.
 
-Hướng dẫn tiêu thụ sự kiện này trung lập với transport: tiến trình RPC truyền command và event bằng JSON Lines, còn ứng dụng có thể chiếu event của session qua SSE, WebSocket hoặc kênh khác. Không phải mọi provider đều dùng SSE, vì vậy bản sửa OpenAI Codex trong Pi 0.85.0 cho terminal SSE event không có dòng trống theo sau là chi tiết của adapter, không phải quy tắc framing cho renderer này.
+Hướng dẫn tiêu thụ sự kiện này trung lập với transport: tiến trình RPC truyền command và event bằng JSON Lines, còn ứng dụng có thể chiếu event của session qua SSE, WebSocket hoặc kênh khác. Không phải mọi provider đều dùng SSE, vì vậy bản sửa OpenAI Codex cho terminal SSE event không có dòng trống theo sau là chi tiết của adapter, không phải quy tắc framing cho renderer này.
 
 ## 5. Batch công việc UI; đừng kỳ vọng backpressure
 

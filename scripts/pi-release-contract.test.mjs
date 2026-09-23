@@ -1814,6 +1814,485 @@ test("0.86.0 provider and tool contracts Tool examples typecheck against public 
   );
 });
 
+const lifecycleScopedFiles = [
+  "ch03-agent-loop.md",
+  "ch07-event-driven.md",
+  "ch08-context-engineering.md",
+  "ch09-compaction.md",
+  "ch10-session.md",
+  "how-to/host-session-runtime.md",
+  "how-to/persist-sessions.md",
+  "how-to/stream-output.md",
+  "reference/api.md",
+];
+
+async function readLifecycleScopedContent() {
+  return new Map(
+    await Promise.all(
+      lifecycleScopedFiles.flatMap((filename) =>
+        ["en", "vi"].map(async (locale) => [
+          `${locale}/${filename}`,
+          await readFile(
+            new URL(`content/${locale}/${filename}`, repositoryRoot),
+            "utf8",
+          ),
+        ]),
+      ),
+    ),
+  );
+}
+
+function extractTypeScriptFenceContaining(source, marker, context) {
+  const matches = [
+    ...source.matchAll(
+      /^```(?:ts|typescript)(?:[ \t]+[^\r\n]*)?[ \t]*\r?\n([\s\S]*?)\r?\n```[ \t]*$/gm,
+    ),
+  ].filter((match) => match[1].includes(marker));
+  assert.equal(
+    matches.length,
+    1,
+    `${context} must contain exactly one TypeScript example for ${marker}`,
+  );
+  return matches[0][1].replaceAll("\r\n", "\n");
+}
+
+function assertVirtualTypeScriptCompiles(virtualSources, context) {
+  const options = {
+    target: ts.ScriptTarget.ES2022,
+    module: ts.ModuleKind.ESNext,
+    moduleResolution: ts.ModuleResolutionKind.Bundler,
+    strict: true,
+    noEmit: true,
+    skipLibCheck: true,
+    types: ["node"],
+  };
+  const files = new Map(
+    [...virtualSources].map(([filename, source]) => [
+      path.resolve(
+        fileURLToPath(new URL(`tests/fixtures/${filename}`, repositoryRoot)),
+      ),
+      source,
+    ]),
+  );
+  const host = ts.createCompilerHost(options);
+  const originalExists = host.fileExists.bind(host);
+  const originalDirectoryExists = host.directoryExists.bind(host);
+  const originalSourceFile = host.getSourceFile.bind(host);
+  host.fileExists = (file) =>
+    files.has(path.resolve(file)) || originalExists(file);
+  host.directoryExists = (directory) =>
+    [...files.keys()].some((file) =>
+      file.startsWith(path.resolve(directory) + path.sep),
+    ) || originalDirectoryExists(directory);
+  host.getSourceFile = (file, languageVersion, ...args) =>
+    files.has(path.resolve(file))
+      ? ts.createSourceFile(
+          file,
+          files.get(path.resolve(file)),
+          languageVersion,
+          true,
+        )
+      : originalSourceFile(file, languageVersion, ...args);
+  const program = ts.createProgram([...files.keys()], options, host);
+  const diagnostics = ts.getPreEmitDiagnostics(program);
+  assert.equal(
+    diagnostics.length,
+    0,
+    `${context}\n${ts.formatDiagnostics(diagnostics, {
+      getCanonicalFileName: (file) => file,
+      getCurrentDirectory: () => fileURLToPath(repositoryRoot),
+      getNewLine: () => "\n",
+    })}`,
+  );
+}
+
+test("0.87.0 session context and lifecycle removes obsolete current guidance", async () => {
+  const activeSources = await readActiveSources();
+  const removedCurrentApiPatterns = [
+    /\bshouldStopAfterTurn\b/,
+    /ExtensionRunner\.emit\(["']turn_end["']/,
+    /session\.agent\.state\.messages\s*=/,
+  ];
+  const stale = [];
+
+  for (const { filename, source } of activeSources) {
+    const normalized = filename.replaceAll("\\", "/");
+    if (
+      !normalized.startsWith("content/en/") &&
+      !normalized.startsWith("content/vi/")
+    ) {
+      continue;
+    }
+    for (const [index, pattern] of removedCurrentApiPatterns.entries()) {
+      let currentGuidance = source;
+      if (normalized.endsWith("/changelog.md") && index < 2) {
+        const migration = extractMarkdownSection(
+          source,
+          "## 2026-09-23",
+          `${normalized} lifecycle migration history`,
+        ).body;
+        currentGuidance = source.replace(migration, "");
+      }
+      if (pattern.test(currentGuidance)) {
+        stale.push(`${normalized}: ${pattern}`);
+      }
+    }
+  }
+
+  assert.deepEqual(
+    stale,
+    [],
+    "active docs must not teach removed lifecycle APIs",
+  );
+
+  for (const locale of ["en", "vi"]) {
+    const changelog = activeSources.find(({ filename }) =>
+      filename.replaceAll("\\", "/").endsWith(`content/${locale}/changelog.md`),
+    )?.source;
+    assert.ok(changelog, `${locale} changelog source`);
+    const migration = extractMarkdownSection(
+      changelog,
+      "## 2026-09-23",
+      `${locale} lifecycle migration history`,
+    ).body;
+    assert.match(migration, /\bshouldStopAfterTurn\b/);
+    assert.match(migration, /\bfinishTurn\b/);
+  }
+});
+
+test("0.87.0 session context and lifecycle preserves exact bilingual boundary relationships", async () => {
+  const localized = await readLifecycleScopedContent();
+  const lifecycleRows = [
+    [
+      "finishTurn",
+      "normal, error, aborted",
+      "runs before turn_end; decision applies after turn_end",
+    ],
+    [
+      'normal + { action: "end" }',
+      "turn_end",
+      "agent_end before queue polling",
+    ],
+    ["error / aborted + undefined", "turn_end", "hard exit"],
+  ];
+  const boundaryRows = [
+    ["turn_end", "actionable", "emitBoundary(baseEvent, buildContext)"],
+    [
+      "agent_before_settle",
+      "actionable",
+      "emitBoundary(baseEvent, buildContext)",
+    ],
+    ["agent_settled", "requested runs", "after all settled handlers finish"],
+  ];
+  const contextRows = [
+    [
+      "context",
+      "conversation without system messages",
+      "Pi restores leading prompt and tool state",
+    ],
+    [
+      "context_with_system",
+      "full transcript including system messages",
+      "returned messages are sent verbatim",
+    ],
+    [
+      "context_with_system without leading system message",
+      "provider prompt and initial tool declarations",
+      "removed",
+    ],
+  ];
+  const sessionRows = [
+    [
+      "appendContextEdit(targetEntryId, null)",
+      "append context_edit",
+      "omit target from future provider context",
+    ],
+    [
+      "appendContextEdit(targetEntryId, { content })",
+      "append context_edit",
+      "replace target content in future provider context",
+    ],
+    ["raw transcript / UI history", "append-only", "unchanged"],
+    ["returned editId", "new context_edit entry", "not target entry"],
+  ];
+  const compactionRows = [
+    [
+      "appendCompaction(summary, null, tokensBefore)",
+      "compaction entry ID",
+      "retain no preceding entries",
+    ],
+    ["context_edit present", "projected context estimate", "usage accounting"],
+    [
+      "abandoned retry / recovery attempt",
+      "context_edit omission",
+      "excluded from future provider context",
+    ],
+    ["raw history", "append-only", "preserved"],
+  ];
+  const hostRows = [
+    [
+      "external restore",
+      "SessionManager.inMemory(cwd, { id: sessionId }, entries)",
+      "canonical provider context",
+    ],
+    [
+      "tree navigation",
+      "session.navigateTree(targetId)",
+      "refreshes canonical projection",
+    ],
+    [
+      "manual append",
+      "session.sessionManager append operation → session.refreshContext()",
+      "refreshes canonical projection",
+    ],
+  ];
+  const streamRows = [
+    [
+      "provider context",
+      "SessionManager projection",
+      "may omit or replace content",
+    ],
+    ["raw transcript / UI history", "append-only", "still observable"],
+  ];
+
+  for (const locale of ["en", "vi"]) {
+    const get = (filename) => localized.get(`${locale}/${filename}`);
+    const agentLoop = extractMarkdownSection(
+      get("ch03-agent-loop.md"),
+      locale === "en"
+        ? "### 4.5 Stop and termination checks"
+        : "### 4.5 Kiểm tra dừng và kết thúc",
+      `${locale} finishTurn lifecycle`,
+    );
+    assertContractTableRows(
+      agentLoop.body,
+      lifecycleRows,
+      `${locale} finishTurn order`,
+    );
+
+    const extensionEvents = extractMarkdownSection(
+      get("ch07-event-driven.md"),
+      locale === "en"
+        ? "### Extension events form a separate contract"
+        : "### Sự kiện Extension có hợp đồng riêng",
+      `${locale} actionable Extension boundaries`,
+    );
+    assertContractTableRows(
+      extensionEvents.body,
+      boundaryRows,
+      `${locale} Extension boundary dispatch`,
+    );
+
+    const contextTransforms = extractMarkdownSection(
+      get("ch08-context-engineering.md"),
+      locale === "en"
+        ? "### Request transforms: `context` versus `context_with_system`"
+        : "### Biến đổi request: `context` và `context_with_system`",
+      `${locale} request context phases`,
+    );
+    assertContractTableRows(
+      contextTransforms.body,
+      contextRows,
+      `${locale} context phase ownership`,
+    );
+
+    const compaction = extractMarkdownSection(
+      get("ch09-compaction.md"),
+      locale === "en"
+        ? "### `CompactionEntry` is the stored checkpoint"
+        : "### `CompactionEntry` là điểm kiểm tra được lưu",
+      `${locale} compaction projection semantics`,
+    );
+    assertContractTableRows(
+      compaction.body,
+      compactionRows,
+      `${locale} compaction boundaries`,
+    );
+
+    const sessionEntries = extractMarkdownSection(
+      get("ch10-session.md"),
+      locale === "en"
+        ? "### Eleven Coding Agent entry types"
+        : "### Mười một loại entry của Coding Agent",
+      `${locale} context edit entries`,
+    );
+    assertContractTableRows(
+      sessionEntries.body,
+      sessionRows,
+      `${locale} append-only context edits`,
+    );
+
+    const host = extractMarkdownSection(
+      get("how-to/host-session-runtime.md"),
+      locale === "en"
+        ? "### Keep `SessionManager` canonical after replacement"
+        : "### Giữ `SessionManager` làm nguồn chuẩn sau khi thay session",
+      `${locale} hosted session context ownership`,
+    );
+    assertContractTableRows(
+      host.body,
+      hostRows,
+      `${locale} host canonical projection`,
+    );
+
+    const persisted = extractMarkdownSection(
+      get("how-to/persist-sessions.md"),
+      locale === "en"
+        ? "## Edit future provider context without rewriting history"
+        : "## Chỉnh provider context về sau mà không viết lại history",
+      `${locale} persisted context edits`,
+    );
+    assertContractTableRows(
+      persisted.body,
+      sessionRows,
+      `${locale} persisted append-only context edits`,
+    );
+
+    const streamed = extractMarkdownSection(
+      get("how-to/stream-output.md"),
+      locale === "en"
+        ? "### Projected provider context is not raw UI history"
+        : "### Provider context đã chiếu không phải raw UI history",
+      `${locale} streamed history boundary`,
+    );
+    assertContractTableRows(
+      streamed.body,
+      streamRows,
+      `${locale} stream projection boundary`,
+    );
+
+    const api = extractMarkdownSection(
+      get("reference/api.md"),
+      locale === "en"
+        ? "#### Canonical session context and append-only edits"
+        : "#### Provider context chuẩn và append-only edit",
+      `${locale} API session lifecycle`,
+    );
+    assertContractTableRows(
+      api.body,
+      sessionRows,
+      `${locale} API context edits`,
+    );
+  }
+});
+
+test("0.87.0 session context and lifecycle examples typecheck against Pi 0.87.1", async () => {
+  const localized = await readLifecycleScopedContent();
+  const virtualSources = [];
+  const parity = new Map();
+
+  for (const locale of ["en", "vi"]) {
+    const examples = [
+      ["finish-turn", "ch03-agent-loop.md", "const finishTurn: FinishTurn"],
+      ["api-finish-turn", "reference/api.md", "const finishTurn: FinishTurn"],
+      [
+        "context-edit",
+        "how-to/persist-sessions.md",
+        "function omitFromFutureProviderContext",
+      ],
+      [
+        "boundary-result",
+        "ch07-event-driven.md",
+        "function registerRecoveryBoundary",
+      ],
+    ];
+    for (const [name, filename, marker] of examples) {
+      const source = extractTypeScriptFenceContaining(
+        localized.get(`${locale}/${filename}`),
+        marker,
+        `${locale} ${name}`,
+      );
+      virtualSources.push([`lifecycle-${locale}-${name}.ts`, source]);
+      if (parity.has(name)) {
+        assert.equal(source, parity.get(name), `${name} example locale parity`);
+      } else {
+        parity.set(name, source);
+      }
+    }
+  }
+
+  const finishTurn = parity.get("finish-turn");
+  assert.match(
+    finishTurn,
+    /const finishTurn: FinishTurn = \(\{ message \}\) => \{\s+if \(message\.stopReason === "error" \|\| message\.stopReason === "aborted"\) \{\s+return undefined;\s+\}\s+return shouldEnd\(message\) \? \{ action: "end" \} : undefined;\s+\};/,
+  );
+  assert.match(
+    parity.get("context-edit"),
+    /const editId = session\.sessionManager\.appendContextEdit\(targetEntryId, null\);\s+session\.refreshContext\(\);\s+return editId;/,
+  );
+  assert.match(
+    parity.get("boundary-result"),
+    /entries: \[\s+\.\.\.event\.entries,\s+\{\s+type: "context_edit",\s+targetId,\s+replacement: null,\s+\},\s+\],\s+continue: true/,
+  );
+  assertVirtualTypeScriptCompiles(
+    virtualSources,
+    "published lifecycle examples must compile against installed 0.87.1 declarations",
+  );
+});
+
+test("0.87.0 session context and lifecycle mutation guards reject inverted boundaries", () => {
+  const contracts = [
+    {
+      label: "finishTurn order",
+      expected: [["finishTurn", "turn_end", "apply decision"]],
+      source: `| Callback | Event | Effect |
+|---|---|---|
+| \`finishTurn\` | \`turn_end\` | \`apply decision\` |`,
+      broken: "| `turn_end` | `finishTurn` | `apply decision` |",
+    },
+    {
+      label: "context omission direction",
+      expected: [
+        [
+          "replacement: null",
+          "future provider context",
+          "raw history unchanged",
+        ],
+      ],
+      source: `| Edit | Projection | Storage |
+|---|---|---|
+| \`replacement: null\` | \`future provider context\` | \`raw history unchanged\` |`,
+      broken:
+        "| `replacement: null` | `raw history` | `future provider context unchanged` |",
+    },
+    {
+      label: "full transcript verbatim",
+      expected: [["context_with_system", "full transcript", "verbatim"]],
+      source: `| Event | Input | Output |
+|---|---|---|
+| \`context_with_system\` | \`full transcript\` | \`verbatim\` |`,
+      broken:
+        "| `context_with_system` | `conversation only` | `Pi restores system state` |",
+    },
+    {
+      label: "retain-none compaction",
+      expected: [
+        ["firstKeptEntryId: null", "compaction entry ID", "retain none"],
+      ],
+      source: `| Input | Stored boundary | Result |
+|---|---|---|
+| \`firstKeptEntryId: null\` | \`compaction entry ID\` | \`retain none\` |`,
+      broken:
+        "| `firstKeptEntryId: null` | `previous entry ID` | `retain all` |",
+    },
+  ];
+
+  for (const { label, expected, source, broken } of contracts) {
+    assertContractTableRows(source, expected, `${label} baseline`);
+    const dataRow = source.trim().split("\n").at(-1);
+    assert.throws(
+      () =>
+        assertContractTableRows(
+          source.replace(dataRow, broken),
+          expected,
+          `${label} mutation`,
+        ),
+      assert.AssertionError,
+      `${label} guard must reject the inverted contract`,
+    );
+  }
+});
+
 test("operational contract tables reject inverted relationships without parsing prose", () => {
   const expectedRows = [
     ["streaming", "cache_warming_decision"],
