@@ -583,6 +583,8 @@ Giao thức RPC headless nhận correlation ID không bắt buộc. Đây là c�
 }
 ```
 
+Các lệnh RPC trực tiếp `steer` và `follow_up` đi qua handler `input` của Extension trước khi được đưa vào queue. Cả hai input event đều đặt `source` thành `"rpc"`. Khi session đang stream, `steer` đặt `streamingBehavior` thành `"steer"`, còn `follow_up` đặt `streamingBehavior` thành `"followUp"`; khi idle, field này là `undefined`. Vì vậy, handler có thể transform hoặc handle RPC input trước khi Pi thêm nó vào queue tương ứng.
+
 `clear_queue` loại bỏ nguyên tử công việc trong queue và trả về phần text đã loại bỏ, vẫn tách riêng message steering và follow-up. RPC `abort` hủy thao tác đang hoạt động, nay bao gồm cả compaction thủ công đang chạy, rồi chờ tới khi session idle mới phản hồi. Công việc trong queue vẫn có thể tiếp tục trừ khi `clear_queue` đã loại bỏ nó; thao tác hủy và dọn queue là hai việc riêng.
 
 Trong luồng Escape tương tác, hãy gọi `clear_queue` trước `abort`, sau đó quyết định có khôi phục các chuỗi `steering` và `followUp` được trả về vào editor hay không. Thứ tự này ngăn công việc tiếp diễn trong queue bắt đầu khi lệnh abort còn chờ trạng thái idle.

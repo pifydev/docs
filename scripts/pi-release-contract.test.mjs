@@ -1822,6 +1822,13 @@ test("0.86.x operational features preserve runtime boundaries in both locales", 
             strictPrefer: /strict-prefer/i,
             promptDelta:
               /structured[^.\n]*(?:prompt|section|tool|guideline)[^.\n]*transcript delta/i,
+            directRpcCommands: /direct RPC[^.\n]*`steer`[^.\n]*`follow_up`/i,
+            rpcInputHandlers: /Extension `input` handlers/i,
+            rpcBeforeQueue:
+              /`input` handlers[^.\n]*before[^.\n]*(?:queue|queued)/i,
+            sameRenderedPrompt: /same current rendered prompt/i,
+            earlierPromptHandlers:
+              /(?:mutation|change)s?[^.\n]*(?:earlier|prior) handlers/i,
           }
         : {
             costAware: /cân nhắc chi phí/i,
@@ -1851,6 +1858,13 @@ test("0.86.x operational features preserve runtime boundaries in both locales", 
             strictPrefer: /strict-prefer/i,
             promptDelta:
               /(?:prompt|section|tool|guideline)[^.\n]*có cấu trúc[^.\n]*transcript delta|transcript delta[^.\n]*(?:prompt|section|tool|guideline)/i,
+            directRpcCommands: /RPC trực tiếp[^.\n]*`steer`[^.\n]*`follow_up`/i,
+            rpcInputHandlers: /handler `input` của Extension/i,
+            rpcBeforeQueue:
+              /handler `input`[^.\n]*trước khi[^.\n]*(?:queue|xếp hàng)/i,
+            sameRenderedPrompt: /đúng prompt hiện tại đã render/i,
+            earlierPromptHandlers:
+              /(?:mutation|thay đổi)[^.\n]*handler chạy trước/i,
           };
 
     for (const term of operationalFeatureTerms) {
@@ -1882,6 +1896,40 @@ test("0.86.x operational features preserve runtime boundaries in both locales", 
       ],
       `${locale} per-model compaction fallback`,
     );
+    const cacheDecisionPatterns = [
+      /`cache_warming_decision`/,
+      /`streaming`/,
+      /`idle`/,
+    ];
+    const cacheDecisionParagraph = assertParagraphContainsAll(
+      compaction,
+      cacheDecisionPatterns,
+      `${locale} cache warming decision phases`,
+    );
+    for (const [phase, replacement] of [
+      ["streaming", "active"],
+      ["idle", "settled"],
+    ]) {
+      const mutatedParagraph = cacheDecisionParagraph.replaceAll(
+        `\`${phase}\``,
+        `\`${replacement}\``,
+      );
+      assert.notEqual(
+        mutatedParagraph,
+        cacheDecisionParagraph,
+        `${locale} cache decision fixture must contain ${phase}`,
+      );
+      assert.throws(
+        () =>
+          assertParagraphContainsAll(
+            compaction.replace(cacheDecisionParagraph, mutatedParagraph),
+            cacheDecisionPatterns,
+            `${locale} mutated cache warming decision phases`,
+          ),
+        assert.AssertionError,
+        `${locale} cache decision contract rejects missing ${phase} phase`,
+      );
+    }
 
     const sessions = get("ch10-session.md");
     assertContainsAll(
@@ -1937,10 +1985,21 @@ test("0.86.x operational features preserve runtime boundaries in both locales", 
       ],
       `${locale} built-in constrained sampling`,
     );
+    const promptCustomization = get("how-to/customize-system-prompt.md");
     assert.match(
-      get("how-to/customize-system-prompt.md"),
+      promptCustomization,
       language.promptDelta,
       `${locale} prompt customization must explain transcript-backed deltas`,
+    );
+    assertParagraphContainsAll(
+      promptCustomization,
+      [
+        /`ctx\.getSystemPrompt\(\)`/,
+        /`event\.systemPrompt`/,
+        language.sameRenderedPrompt,
+        language.earlierPromptHandlers,
+      ],
+      `${locale} current rendered prompt visibility`,
     );
     assertParagraphContainsAll(
       get("how-to/stream-output.md"),
@@ -1951,8 +2010,9 @@ test("0.86.x operational features preserve runtime boundaries in both locales", 
       ],
       `${locale} nested Extension streams`,
     );
+    const apiReference = get("reference/api.md");
     assertContainsAll(
-      get("reference/api.md"),
+      apiReference,
       [
         /`cache_warming_decision`/,
         /`ctx\.modelRegistry\.stream\(\)`/,
@@ -1961,6 +2021,48 @@ test("0.86.x operational features preserve runtime boundaries in both locales", 
       ],
       `${locale} operational API reference`,
     );
+    const rpcSection = extractMarkdownSection(
+      apiReference,
+      locale === "en"
+        ? "### RPC queue and cancellation"
+        : "### Queue RPC và thao tác hủy",
+      `${locale} RPC input boundary`,
+    );
+    const rpcInputPatterns = [
+      language.directRpcCommands,
+      language.rpcInputHandlers,
+      language.rpcBeforeQueue,
+      /`source`[^.\n]*`"rpc"`/i,
+      /`steer`[^.\n]*`streamingBehavior`[^.\n]*`"steer"`/i,
+      /`follow_up`[^.\n]*`streamingBehavior`[^.\n]*`"followUp"`/i,
+    ];
+    const rpcInputParagraph = assertParagraphContainsAll(
+      rpcSection.body,
+      rpcInputPatterns,
+      `${locale} direct RPC input handlers`,
+    );
+    for (const [mutation, from, to] of [
+      ["source", '`"rpc"`', '`"interactive"`'],
+      ["steer mapping", '`"steer"`', '`"followUp"`'],
+      ["follow-up mapping", '`"followUp"`', '`"steer"`'],
+    ]) {
+      const mutatedParagraph = rpcInputParagraph.replace(from, to);
+      assert.notEqual(
+        mutatedParagraph,
+        rpcInputParagraph,
+        `${locale} RPC fixture must expose ${mutation}`,
+      );
+      assert.throws(
+        () =>
+          assertParagraphContainsAll(
+            rpcSection.body.replace(rpcInputParagraph, mutatedParagraph),
+            rpcInputPatterns,
+            `${locale} mutated direct RPC input handlers`,
+          ),
+        assert.AssertionError,
+        `${locale} RPC input contract rejects broken ${mutation}`,
+      );
+    }
   }
 
   const snippets = [];

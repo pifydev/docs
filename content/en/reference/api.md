@@ -583,6 +583,8 @@ The headless RPC protocol accepts an optional correlation ID. Its exact `clear_q
 }
 ```
 
+Direct RPC `steer` and `follow_up` commands go through Extension `input` handlers before anything is queued. Both input events set `source` to `"rpc"`. When the session is already streaming, `steer` sets `streamingBehavior` to `"steer"`, while `follow_up` sets `streamingBehavior` to `"followUp"`; the field is `undefined` while idle. A handler can therefore transform or handle RPC input before Pi adds it to the corresponding queue.
+
 `clear_queue` atomically removes queued work and returns the removed text, keeping steering and follow-up messages separate. RPC `abort` cancels the active operation, now including active manual compaction, and waits until the session is idle before responding. Queued work can continue unless `clear_queue` removed it; cancellation and queue disposal are distinct operations.
 
 For an interactive Escape flow, issue `clear_queue` before `abort`, then decide whether to restore the returned `steering` and `followUp` strings in the editor. This ordering prevents queued continuation work from starting while the abort command waits for idle.

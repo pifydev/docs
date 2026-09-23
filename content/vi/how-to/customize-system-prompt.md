@@ -100,7 +100,7 @@ export default function teamRoles(pi: ExtensionAPI) {
 }
 ```
 
-Load extension bằng `pi -e ./team-roles.ts`. `event.systemPrompt` là text được render từ trạng thái hiện tại, còn `event.systemPromptOptions` expose các prompt section có cấu trúc, Tool đã chọn, Tool snippet và guideline có thể sửa. Thay structured prompt state này cho phép Pi append transcript delta cho đúng section đã đổi, nhờ đó turn sau có thể replay prompt mà không lặp lại mọi section.
+Load extension bằng `pi -e ./team-roles.ts`. `event.systemPrompt` là text được render từ trạng thái hiện tại, còn `event.systemPromptOptions` expose các prompt section có cấu trúc, Tool đã chọn, Tool snippet và guideline có thể sửa. `ctx.getSystemPrompt()` trả về đúng prompt hiện tại đã render như `event.systemPrompt`; cả hai phản ánh các thay đổi mà handler chạy trước đã thực hiện. Thay structured prompt state này cho phép Pi append transcript delta cho đúng section đã đổi, nhờ đó turn sau có thể replay prompt mà không lặp lại mọi section.
 
 Việc trả `{ systemPrompt }` vẫn phù hợp khi một turn cần thay toàn bộ prompt bằng opaque text. Handler chạy sau nhìn thấy forced text đó và provider nhận nó làm system prompt đầu tiên, nhưng transcript vẫn ghi các structured section. Hãy ưu tiên `systemPromptOptions` khi thay đổi khớp một section, Tool selection hoặc guideline hiện có.
 

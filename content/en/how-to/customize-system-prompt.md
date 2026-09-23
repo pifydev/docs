@@ -100,7 +100,7 @@ export default function teamRoles(pi: ExtensionAPI) {
 }
 ```
 
-Load it with `pi -e ./team-roles.ts`. `event.systemPrompt` is the text rendered from the current state, while `event.systemPromptOptions` exposes mutable structured prompt sections, selected Tools, Tool snippets, and guidelines. Changing that structured prompt state lets Pi append a transcript delta for the sections that changed, so later turns can replay the prompt without restating every section.
+Load it with `pi -e ./team-roles.ts`. `event.systemPrompt` is the text rendered from the current state, while `event.systemPromptOptions` exposes mutable structured prompt sections, selected Tools, Tool snippets, and guidelines. `ctx.getSystemPrompt()` returns the same current rendered prompt as `event.systemPrompt`; both reflect mutations made by earlier handlers in the chain. Changing that structured prompt state lets Pi append a transcript delta for the sections that changed, so later turns can replay the prompt without restating every section.
 
 Returning `{ systemPrompt }` remains available when one turn needs an opaque full replacement. Later handlers see that forced text, and the provider receives it as the leading system prompt, but the transcript continues recording the structured sections. Prefer `systemPromptOptions` when the change fits an existing section, Tool selection, or guideline.
 
