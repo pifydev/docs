@@ -827,10 +827,13 @@ function withoutAllowedStaleBaselineSelfTestLiterals(
     );
 }
 
-function tokenizeShellCommands(source, cmdShell = false) {
+function tokenizeShellCommands(source, language = "shell") {
+  const cmdShell = /^(?:cmd|bat)$/.test(language);
+  const powerShell = /^(?:powershell|pwsh|ps1)$/.test(language);
   const commands = [];
   let command = [];
   let argument = "";
+  let atTokenBoundary = true;
   let quote;
   let comment = false;
   const endArgument = () => {
@@ -840,6 +843,7 @@ function tokenizeShellCommands(source, cmdShell = false) {
       command.push(argument);
     }
     argument = "";
+    atTokenBoundary = true;
   };
   const endCommand = () => {
     endArgument();
@@ -856,7 +860,10 @@ function tokenizeShellCommands(source, cmdShell = false) {
       else argument += character;
     } else if (character === '"' || (!cmdShell && character === "'")) {
       quote = character;
-    } else if (!cmdShell && character === "#") {
+      atTokenBoundary = false;
+    } else if (
+      !cmdShell && character === "#" && (powerShell || atTokenBoundary)
+    ) {
       comment = true;
     } else if (/[\n;&|]/.test(character)) {
       endCommand();
@@ -864,6 +871,7 @@ function tokenizeShellCommands(source, cmdShell = false) {
       endArgument();
     } else {
       argument += character;
+      atTokenBoundary = false;
     }
   }
   assert.equal(quote, undefined, "SDK install recipes must close shell quotes");
@@ -887,7 +895,7 @@ function sdkInstallCommands(markdown) {
       const body = segment.text.split("\n").slice(1, -1).join("\n");
       snippets.push({
         source: body.replace(continuation, " "),
-        cmdShell: /^(?:cmd|bat)$/.test(language),
+        language,
       });
     } else {
       snippets.push(
@@ -897,8 +905,8 @@ function sdkInstallCommands(markdown) {
       );
     }
   }
-  return snippets.flatMap(({ source, cmdShell }) =>
-    tokenizeShellCommands(source, cmdShell).filter(
+  return snippets.flatMap(({ source, language }) =>
+    tokenizeShellCommands(source, language).filter(
       ([executable, action]) => executable === "npm" && action === "install",
     ),
   );
@@ -3237,6 +3245,17 @@ test("SDK install recipes ignore shell comments without stripping quoted hashes"
       /must pin @earendil-works\/pi-coding-agent to 0\.87\.1/,
     );
   }
+});
+
+test("SDK install recipes preserve Bash hashes within unquoted arguments", () => {
+  const source =
+    'import { createAgentSession } from "@earendil-works/pi-coding-agent";';
+  const scope = [
+    "```bash",
+    "npm install --cache=/tmp/build#1 @earendil-works/pi-coding-agent@0.87.1",
+    "```",
+  ].join("\n");
+  assert.doesNotThrow(() => assertSdkInstallPackages(source, scope, "Bash hash"));
 });
 
 test("external-session restoration examples stay synchronized with the compile fixture", async () => {
