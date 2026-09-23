@@ -497,6 +497,8 @@ declare class SettingsManager {
 
 Khi bật `showCacheMissNotices`, transcript còn có thể hiển thị chẩn đoán phục hồi provider như thinking block Anthropic bị loại, ngoài cache miss đáng kể và mức sử dụng summary.
 
+Package root còn export `CacheWarmingMode`, `CompactionModelOverride` và `CompactionSettings`. `SettingsManager.getCacheWarmingMode()` resolve `"off" | "streaming" | "idle"`; `setCacheWarmingMode()` đổi global setting có phát sinh chi phí đó. `getCompactionSettings(model?)` resolve `reserveTokens` và `keepRecentTokens` qua `compaction.modelOverrides` của đúng model, rồi compaction setting thông thường, sau cùng là built-in default.
+
 SDK host trực tiếp phải tự quản lý cwd, trust, storage và cleanup policy. Không sửa session JSONL khi manager đang active, và không giả định `SettingsManager.create()` tự tái hiện trust resolution của CLI nếu host chưa cung cấp quyết định đó.
 
 ### Phát hiện MIME của image
@@ -539,6 +541,10 @@ const extension: ExtensionFactory = (pi) => {
 export default extension;
 ```
 
+Mọi overload của `pi.on()` đều trả về hàm unsubscribe. Pi chụp snapshot các handler khớp trước một dispatch, vì vậy việc thêm handler hoặc gọi hàm unsubscribe của nó trong dispatch đó chỉ ảnh hưởng dispatch sau, không đổi snapshot đang chạy. `cache_warming_decision` là actionable hook: trước một refresh đã lên lịch, handler có thể trả `{ action: "warm" }` hoặc `{ action: "stop" }`.
+
+`ExtensionContext.modelRegistry` cung cấp `ctx.modelRegistry.stream()` cho option riêng của API và `streamSimple()` cho option trung lập với provider. Cả hai method gọi provider đã cấu hình với authentication đã được resolve tại thời điểm gửi request; method `complete()` tương ứng chờ assistant message đầy đủ. Facade này giữ Extension trên cùng đường provider và credential của Coding Agent thay vì tự đọc secret.
+
 `pi.setModel()` đổi model của session hiện tại. Lựa chọn thành công được ghi vào lịch sử session và được khôi phục khi session đó được resume, nhưng không thay đổi `defaultProvider` hoặc `defaultModel` đã cấu hình cho session mới. Promise trả về `false` khi provider được chọn chưa có authentication.
 
 `pi.setThinkingLevel()` tính mức hiệu lực đã được giới hạn theo capability, và chỉ khi mức này khác giá trị hiện tại thì Pi mới ghi thay đổi vào lịch sử session; không phải mọi lựa chọn được yêu cầu đều được ghi. Pi lưu và khôi phục thay đổi có hiệu lực đó cho session hiện tại, nhưng không thay đổi default đã cấu hình cho session mới.
@@ -551,6 +557,8 @@ Editor mặc định tự động nhúng working indicator vào viền editor. C
 | `powershell` | Built-in tùy chọn trên Windows; chọn tường minh hoặc dùng factory đã export |
 | `grep`, `find`, `ls` | Được tích hợp; active qua `tools` hoặc dùng factory đã export |
 | Entry từ extension hoặc `customTools` | Do host đăng ký; vẫn được lọc bởi `tools`, `excludeTools` và `noTools` |
+
+Các definition tích hợp sẵn `read`, `bash`, `powershell`, `edit` và `write` yêu cầu JSON Schema constrained sampling ở chế độ strict-prefer. Provider có hỗ trợ sẽ enforce schema, còn provider không hỗ trợ có thể fallback về Tool calling thông thường. Extension chủ động thay một definition có thể tắt request này bằng `constrainedSampling: false`.
 
 Quyền truy cập tool là policy của ứng dụng. SDK hiện tại không cung cấp switch `--yolo` trong baseline.
 

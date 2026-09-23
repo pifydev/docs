@@ -93,16 +93,16 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 export default function teamRoles(pi: ExtensionAPI) {
   pi.on("before_agent_start", (event) => {
-    return {
-      systemPrompt: `${event.systemPrompt}
-
-When reviewing code, check API contracts, backward compatibility, and tests.`,
-    };
+    event.systemPromptOptions.promptGuidelines.push(
+      "When reviewing code, check API contracts, backward compatibility, and tests.",
+    );
   });
 }
 ```
 
-Load extension bằng `pi -e ./team-roles.ts`. `event.systemPrompt` chứa chuỗi kết quả tính đến handler hiện tại. Giá trị `systemPrompt` được trả về sẽ thay chuỗi đó cho lượt này, và handler kế tiếp nhận giá trị vừa trả về. Bên trong handler, `ctx.getSystemPrompt()` báo cùng chuỗi hiện tại; handler chạy sau vẫn có thể thay đổi nó.
+Load extension bằng `pi -e ./team-roles.ts`. `event.systemPrompt` là text được render từ trạng thái hiện tại, còn `event.systemPromptOptions` expose các prompt section có cấu trúc, Tool đã chọn, Tool snippet và guideline có thể sửa. Thay structured prompt state này cho phép Pi append transcript delta cho đúng section đã đổi, nhờ đó turn sau có thể replay prompt mà không lặp lại mọi section.
+
+Việc trả `{ systemPrompt }` vẫn phù hợp khi một turn cần thay toàn bộ prompt bằng opaque text. Handler chạy sau nhìn thấy forced text đó và provider nhận nó làm system prompt đầu tiên, nhưng transcript vẫn ghi các structured section. Hãy ưu tiên `systemPromptOptions` khi thay đổi khớp một section, Tool selection hoặc guideline hiện có.
 
 Dùng hook này cho chỉ dẫn phụ thuộc vào request. Không nên tự dựng lại file discovery trong extension: `event.systemPromptOptions` đã cung cấp các input nền, gồm context file và skill.
 

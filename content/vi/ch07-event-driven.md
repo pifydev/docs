@@ -6,15 +6,16 @@ language: vi
 chapter: 7
 source_url: 'https://www.dgzhuya.com/modules/ch07-event-driven'
 official_refs:
-  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/README.md#event-flow'
-  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/docs/extensions.md#events'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/README.md#event-flow'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/extensions.md#events'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/extensions/runner.ts'
 terms_used:
   - Event
   - Agent
   - Tool
   - Stream
 status: reviewed
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -242,12 +243,31 @@ type AgentSessionEvent =
 | --- | --- |
 | Khởi động và tài nguyên | `project_trust`, `resources_discover` |
 | Phiên | `session_start`, `session_info_changed`, `session_before_switch`, `session_before_fork`, `session_before_compact`, `session_compact`, `session_compact_failed`, `session_before_tree`, `session_tree`, `session_shutdown` |
-| Agent và provider | `before_agent_start`, `agent_start`, `agent_end`, `agent_settled`, `turn_start`, `turn_end`, `message_start`, `message_update`, `message_end`, `tool_execution_start`, `tool_execution_update`, `tool_execution_end`, `context`, `before_provider_request`, `before_provider_headers`, `after_provider_response` |
+| Agent và provider | `before_agent_start`, `agent_start`, `agent_end`, `agent_settled`, `turn_start`, `turn_end`, `message_start`, `message_update`, `message_end`, `tool_execution_start`, `tool_execution_update`, `tool_execution_end`, `context`, `before_provider_request`, `before_provider_headers`, `after_provider_response`, `cache_warming_decision` |
 | Prompt UI của Extension | `ui_prompt_start`, `ui_prompt_end` |
 | Model | `model_select`, `thinking_level_select` |
 | Tool, Bash và dữ liệu vào | `tool_call`, `tool_result`, `user_bash`, `input` |
 
 Một số tên trùng với sự kiện lõi, nhưng payload và bảo đảm do Extension API định nghĩa. Chẳng hạn, `turn_start` của Extension thêm `turnIndex` và `timestamp`; `agent_end` của Extension không có `willRetry` như sự kiện mà session gửi tới bên đăng ký; `tool_call` và `context` có thể thay đổi quá trình thực thi, còn `tool_execution_start` và `message_update` chỉ thông báo trạng thái vòng đời.
+
+`pi.on()` trả về hàm unsubscribe để gỡ registration. Trước khi bắt đầu dispatch, Pi chụp snapshot các handler của event. Handler được thêm hoặc xóa trong một dispatch không thay đổi snapshot đang được xử lý; thay đổi đó chỉ có hiệu lực ở các dispatch sau.
+
+```ts title="unsubscribe-extension-handler.ts"
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+
+export default function temporaryInputHandler(pi: ExtensionAPI) {
+  const unsubscribe = pi.on("input", async (event) => {
+    void event;
+    return { action: "continue" };
+  });
+
+  unsubscribe();
+}
+```
+
+Extension cũng có thể gọi model lồng nhau qua `ctx.modelRegistry.stream()` với option riêng của API, hoặc `streamSimple()` với option trung lập với provider. Cả hai đường đều dùng provider đã cấu hình và authentication đã được resolve tại thời điểm gửi request. Extension không cần tự đọc `auth.json` hay chép API key vào handler.
+
+Ở baseline Pi `0.87.1`, `cache_warming_decision` chạy trước mỗi lần refresh prompt cache đã được lên lịch trong cả phase `streaming` đang hoạt động lẫn phase `idle` tùy chọn. Handler có thể trả `{ action: "warm" }` hoặc `{ action: "stop" }`; action cuối cùng được trả về sẽ quyết định lần refresh đó. Hook này chỉ đổi việc có gửi refresh hay không, không đổi cache lifetime do model công bố hay hành vi cache của provider.
 
 Pi 0.85.0 export các kiểu sự kiện prompt sau từ package root:
 

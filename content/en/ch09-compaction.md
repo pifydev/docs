@@ -6,14 +6,15 @@ language: en
 chapter: 9
 source_url: 'https://www.dgzhuya.com/modules/ch09-compaction'
 official_refs:
-  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/docs/compaction.md'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/compaction.md'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/cache-warmer.ts'
 terms_used:
   - Context Compaction
   - CompactionEntry
   - BranchSummaryEntry
   - Session
 status: reviewed
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -102,6 +103,24 @@ Coding Agent loads global settings from `~/.pi/agent/settings.json`. A trusted p
 }
 ```
 
+`compaction.modelOverrides` adjusts these two budgets for an exact, case-sensitive `provider/modelId` without changing the global `enabled` switch:
+
+```json
+{
+  "compaction": {
+    "reserveTokens": 16384,
+    "keepRecentTokens": 20000,
+    "modelOverrides": {
+      "some-provider/large-context-model": {
+        "reserveTokens": 400000
+      }
+    }
+  }
+}
+```
+
+Within `compaction.modelOverrides`, each `reserveTokens` and `keepRecentTokens` value falls back independently from the matching model override to the ordinary compaction setting, then to the built-in default. In this example, the named model reserves 400,000 tokens but keeps the ordinary 20,000-token recent suffix. Omitted values fall back; invalid values do not. Both ordinary and override values must be non-negative safe integers.
+
 `enabled: false` disables the automatic threshold and overflow paths because `_checkCompaction()` returns immediately. It does not disable `AgentSession.compact()`, `/compact`, RPC `compact`, or an Extension call to `ctx.compact()`.
 
 ### Current usage comes from provider data first
@@ -153,6 +172,14 @@ When the low-level loop has another provider turn to run, its ordering is explic
 A terminating Tool batch with no steering or follow-up message skips mid-run compaction because there is no next assistant response. A queued message keeps the loop alive, so the same preparation point can compact before delivery.
 
 Pi therefore retains three checks: the mid-run check above, the check after the low-level Agent run finishes at `agent_end`, and the check before submitting a new prompt. The last path deliberately includes aborted assistant messages; the normal post-run path skips them.
+
+### Prompt-cache warming around long Tool execution
+
+Pi `0.87.1` can keep an eligible provider prompt cache alive while a long Tool execution delays the next model request. The default `cacheWarming: "streaming"` mode schedules refreshes only while the Agent run remains active. `cacheWarming: "idle"` optionally keeps scheduling after the Agent settles, while `"off"` disables the feature. A model is eligible only when its metadata declares a `promptCache` lifetime for the request's active retention tier; a missing lifetime stops warming.
+
+The decision is cost-aware. Pi compares the estimated cost of a cache read plus one output token with the expected extra cost of a later cache miss, and warms only when estimated savings reach the pinned runtime's threshold. Warming usage counts toward session totals but does not enter model context. This does not eliminate provider charges and cannot guarantee a cache hit: the provider still owns cache admission, expiry, and billing.
+
+`/session` shows whether warming is inactive, scheduled, or refreshing and includes the next cost decision. Successful refresh usage can appear as a transcript notice when cache notices are enabled. Before every scheduled refresh in both `streaming` and `idle`, Extensions receive `cache_warming_decision`; returning `warm` or `stop` overrides that decision, with the last handler action winning. If the session transcript changes, including through compaction, Pi stops treating the earlier request as current instead of warming a stale prefix.
 
 ## 3. Where Pi cuts the active path
 

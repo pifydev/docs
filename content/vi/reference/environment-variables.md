@@ -3,9 +3,12 @@ title: Tham chiếu biến môi trường
 description: Process flag, provider credential, child marker, session metadata và proxy variable được Pi sử dụng.
 translation_key: reference-environment-variables
 language: vi
+official_refs:
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/environment-variables.md'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/providers.md'
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 ---
 
 Pi dùng environment variable ở ba nơi riêng biệt: cấu hình process của chính Pi, authentication cho provider đã chọn và environment của command do các LLM-callable tool `bash` và `powershell` khởi chạy. Scope rất quan trọng: một variable được một provider nhận diện không tự động trở thành setting dùng trên toàn Pi.
@@ -20,7 +23,7 @@ Phần lớn process flag có hiệu lực khi khởi động. Provider authenti
 
 Với built-in provider của Pi, thứ tự credential là CLI `--api-key` hoặc runtime override tường minh, API key hoặc OAuth credential khớp được lưu trong `auth.json`, `apiKey` đã cấu hình trong `models.json` (literal hoặc tham chiếu `$ENV` theo contract của file này), rồi ambient environment của built-in provider. Provider do extension định nghĩa có thể triển khai contract khác. Hãy dùng `/login` để ghi vào credential store được bảo vệ thay vì đưa secret vào file của project.
 
-| Provider | Environment credential được 0.85.0 nhận diện |
+| Provider | Environment credential được 0.87.1 nhận diện |
 |---|---|
 | Anthropic | `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_OAUTH_TOKEN`, `ANTHROPIC_API_KEY` |
 | Ant Ling, OpenAI, Azure OpenAI | `ANT_LING_API_KEY`, `OPENAI_API_KEY`, `AZURE_OPENAI_API_KEY` |
@@ -31,13 +34,15 @@ Với built-in provider của Pi, thứ tự credential là CLI `--api-key` ho�
 | OpenCode Zen và Go | `OPENCODE_API_KEY` |
 | Radius, Hugging Face | `RADIUS_API_KEY`, `HF_TOKEN` |
 | Fireworks, Together AI, Baseten | `FIREWORKS_API_KEY`, `TOGETHER_API_KEY`, `BASETEN_API_KEY` |
-| Kimi, MiniMax, MiniMax China, Moonshot | `KIMI_API_KEY`, `MINIMAX_API_KEY`, `MINIMAX_CN_API_KEY`, `MOONSHOT_API_KEY` |
+| Kimi, Meta Muse, MiniMax, MiniMax China, Moonshot | `KIMI_API_KEY`, `META_API_KEY`, `MINIMAX_API_KEY`, `MINIMAX_CN_API_KEY`, `MOONSHOT_API_KEY` |
 | Qwen Token Plan | `QWEN_TOKEN_PLAN_API_KEY`, `QWEN_TOKEN_PLAN_CN_API_KEY` |
 | Xiaomi MiMo và các region token-plan | `XIAOMI_API_KEY`, `XIAOMI_TOKEN_PLAN_CN_API_KEY`, `XIAOMI_TOKEN_PLAN_AMS_API_KEY`, `XIAOMI_TOKEN_PLAN_SGP_API_KEY` |
 | GitHub Copilot | `COPILOT_GITHUB_TOKEN` |
 | Cloudflare AI Gateway và Workers AI | `CLOUDFLARE_API_KEY`; các ID được trình bày bên dưới |
 
 Amazon Bedrock và Google Vertex AI còn nhận ambient cloud credential được mô tả trong phần variable riêng cho provider. Custom provider trong `models.json` có thể tham chiếu variable bất kỳ bằng `"apiKey": "$COMPANY_AI_TOKEN"`; chuỗi chỉ gồm chữ hoa là literal, không phải environment lookup. Xem <a href="/vi/how-to/plug-new-model">Thêm một nhà cung cấp mô hình</a> để biết surface chính xác của file này.
+
+Meta Muse hỗ trợ `/login meta`; flow này lưu login credential và tự động refresh Muse Model API key. `META_API_KEY` cung cấp trực tiếp Model API key đó khi interactive login không phù hợp. Hai đường có contract riêng: environment value đã là request credential và không tạo stored Meta login.
 
 ## Runtime flag
 
@@ -62,11 +67,11 @@ pi
 
 | Variable | Giá trị được chấp nhận và tác dụng |
 |---|---|
-| `PI_OFFLINE` | `1`, `true` hoặc `yes` tắt startup và model-catalog network work được hỗ trợ, gồm version/package check và install/update telemetry |
+| `PI_OFFLINE` | `1`, `true` hoặc `yes` tắt startup và model-catalog network work được hỗ trợ, gồm version/package check, install/update telemetry và `/bug` upload |
 | `PI_SKIP_VERSION_CHECK` | Đặt thành `1` để chỉ bỏ qua request lấy phiên bản mới nhất |
 | `PI_TELEMETRY` | `1`/`true`/`yes` bật install/update telemetry và Pi provider-attribution header; `0`/`false`/`no` tắt chúng |
 
-Hãy dùng `--offline` hoặc giá trị truthy được hỗ trợ cho `PI_OFFLINE`. Muốn bật lại network work, hãy unset variable: một số path phía sau trong 0.85.0 chỉ kiểm tra `PI_OFFLINE` có tồn tại hay không, vì vậy `PI_OFFLINE=0` không an toàn và có thể vẫn hoạt động như offline. `PI_SKIP_VERSION_CHECK` có scope hẹp hơn offline mode. Đừng dựa vào cách viết không được tài liệu hóa cho `PI_TELEMETRY`.
+Hãy dùng `--offline` hoặc giá trị truthy được hỗ trợ cho `PI_OFFLINE`. Muốn bật lại network work, hãy unset variable: một số downstream path chỉ kiểm tra `PI_OFFLINE` có tồn tại hay không, vì vậy `PI_OFFLINE=0` không an toàn và có thể vẫn hoạt động như offline. Offline mode chặn Radius upload từ `/bug` nhưng vẫn cho xuất ZIP local. `PI_SKIP_VERSION_CHECK` có scope hẹp hơn offline mode. Đừng dựa vào cách viết không được tài liệu hóa cho `PI_TELEMETRY`.
 
 ### Hành vi terminal và editor
 
@@ -94,11 +99,11 @@ Với Ctrl+G, setting `externalEditor` được ưu tiên, sau đó là `VISUAL`
 
 ### Cache và chia sẻ
 
-`PI_CACHE_RETENTION=long` yêu cầu provider prompt caching kéo dài nếu API được chọn hỗ trợ; giá trị khác không chọn một tier được tài liệu hóa. `PI_SHARE_VIEWER_URL` thay base URL dùng để tạo viewer link cho `/share`. Không variable nào trong hai variable này là credential.
+`PI_CACHE_RETENTION=long` yêu cầu provider prompt caching kéo dài nếu API được chọn hỗ trợ; giá trị khác không chọn một tier được tài liệu hóa. `PI_SHARE_VIEWER_URL` thay base URL dùng để tạo viewer link cho `/share`. `PI_RADIUS_GATEWAY` override Radius gateway origin mà `/bug` upload và Radius relay connection sử dụng. Không variable nào trong nhóm này là provider credential.
 
 ### `PI_EXPERIMENTAL`
 
-`PI_EXPERIMENTAL=1` bật preferred strict JSON-schema sampling của 0.85.0 cho managed tool khi model/API hỗ trợ. Phép so sánh chính xác là `1`; `true` không được chấp nhận. Hành vi experimental có thể thay đổi giữa các release và không thay đổi project trust hay tool set đã chọn.
+`PI_EXPERIMENTAL=1` bật các runtime feature còn được gate tường minh là experimental. Phép so sánh chính xác là `1`; `true` không được chấp nhận. Variable này không còn điều khiển constrained sampling của built-in Tool `read`, `bash`, `powershell`, `edit` và `write`: các definition đó mặc định dùng strict-prefer sampling, còn Extension có thể thay một definition bằng `constrainedSampling: false`.
 
 ### Quy tắc về giá trị
 

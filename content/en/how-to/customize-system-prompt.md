@@ -93,16 +93,16 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 export default function teamRoles(pi: ExtensionAPI) {
   pi.on("before_agent_start", (event) => {
-    return {
-      systemPrompt: `${event.systemPrompt}
-
-When reviewing code, check API contracts, backward compatibility, and tests.`,
-    };
+    event.systemPromptOptions.promptGuidelines.push(
+      "When reviewing code, check API contracts, backward compatibility, and tests.",
+    );
   });
 }
 ```
 
-Load it with `pi -e ./team-roles.ts`. `event.systemPrompt` contains the chain produced so far. Returning `systemPrompt` replaces that value for this turn, and the next handler sees the returned value. Inside the handler, `ctx.getSystemPrompt()` reports the same current chain; a later handler can still change it.
+Load it with `pi -e ./team-roles.ts`. `event.systemPrompt` is the text rendered from the current state, while `event.systemPromptOptions` exposes mutable structured prompt sections, selected Tools, Tool snippets, and guidelines. Changing that structured prompt state lets Pi append a transcript delta for the sections that changed, so later turns can replay the prompt without restating every section.
+
+Returning `{ systemPrompt }` remains available when one turn needs an opaque full replacement. Later handlers see that forced text, and the provider receives it as the leading system prompt, but the transcript continues recording the structured sections. Prefer `systemPromptOptions` when the change fits an existing section, Tool selection, or guideline.
 
 Use this hook for request-specific instructions. Avoid reconstructing file discovery in the extension: `event.systemPromptOptions` already exposes the base inputs, including context files and skills.
 

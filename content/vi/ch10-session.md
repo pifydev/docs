@@ -6,7 +6,8 @@ language: vi
 chapter: 10
 source_url: "https://www.dgzhuya.com/modules/ch10-session"
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/docs/sessions.md"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/sessions.md"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/modes/interactive/bug-report.ts"
 terms_used:
   - Session
   - Session Tree
@@ -15,7 +16,7 @@ terms_used:
   - CompactionEntry
   - BranchSummaryEntry
 status: reviewed
-last_updated: "2026-09-04"
+last_updated: "2026-09-23"
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -613,6 +614,14 @@ Bộ nạp v3 đọc UTF-8 theo từng khối, phân tích từng dòng đầy �
 Manager của Coding Agent gọi API file đồng bộ và không có khóa file, `fsync`, compare-and-swap hay hàng đợi ghi xuyên tiến trình. Mỗi file session chỉ nên có một tiến trình ghi. `list()` và `listAll()` chỉ đọc; chúng nạp siêu dữ liệu của tối đa mười file cùng lúc, bỏ file không đọc được rồi sắp xếp theo thời điểm hoạt động suy ra.
 
 `JsonlSessionStorage` tổng quát của Pi Agent Core có cơ chế an toàn khác: nó tuần tự hóa thao tác ghi bằng một chuỗi Promise trên từng đối tượng và dùng file tạm cùng phép đổi tên khi fork hoặc sửa phần cuối bị ghi dở. Các bảo đảm v4 đó không áp dụng cho `SessionManager` v3 của Coding Agent.
+
+### Báo lỗi mà không mặc định transcript là dữ liệu công khai
+
+`/bug [description]` chuẩn bị một bundle chẩn đoán riêng tư cho đội ngũ phát triển Pi. Bundle thu thập metadata về environment, model, provider, Extension và setting sau khi che secret, cùng các chẩn đoán từ assistant message và error đã ghi nhận. Redaction giảm nguy cơ lộ dữ liệu ngoài ý muốn, nhưng bạn vẫn cần kiểm tra report vì prompt và Tool output có thể chứa giá trị nhạy cảm không có hình dạng credential quen thuộc.
+
+Flow xác nhận cho phép kèm transcript của session, bỏ transcript, hoặc yêu cầu model hiện tại viết một summary thay thế. Hãy đọc transcript hoặc summary do model tạo trước khi chia sẻ. Report có thể được upload lên Radius hoặc xuất thành ZIP local để tự kiểm tra và chuyển giao. Trong offline mode, Pi vẫn cho xuất ZIP local nhưng không thể upload report lên Radius.
+
+Radius upload không yêu cầu login; Radius session đã xác thực sẽ gắn report với tài khoản để maintainer có thể follow up. Sau khi upload, Pi ghi report ID vào session dưới dạng entry `pi.bug-report`. Process crash được ghi riêng ở `~/.pi/agent/crashes.json`, thông báo một lần trong lần khởi động kế tiếp và đính kèm vào report tiếp theo. Crash file đó là diagnostic state, không thay thế session JSONL.
 
 ### Các chỉnh sửa session trong Pi 0.85.0
 

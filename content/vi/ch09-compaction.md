@@ -6,14 +6,15 @@ language: vi
 chapter: 9
 source_url: 'https://www.dgzhuya.com/modules/ch09-compaction'
 official_refs:
-  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/docs/compaction.md'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/compaction.md'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/cache-warmer.ts'
 terms_used:
   - Context Compaction
   - CompactionEntry
   - BranchSummaryEntry
   - Session
 status: reviewed
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -102,6 +103,24 @@ Coding Agent đọc thiết lập toàn cục từ `~/.pi/agent/settings.json`. 
 }
 ```
 
+`compaction.modelOverrides` điều chỉnh hai budget này cho đúng khóa `provider/modelId` phân biệt chữ hoa chữ thường mà không đổi switch `enabled` toàn cục:
+
+```json
+{
+  "compaction": {
+    "reserveTokens": 16384,
+    "keepRecentTokens": 20000,
+    "modelOverrides": {
+      "some-provider/large-context-model": {
+        "reserveTokens": 400000
+      }
+    }
+  }
+}
+```
+
+Trong `compaction.modelOverrides`, mỗi giá trị `reserveTokens` và `keepRecentTokens` fallback độc lập từ model override khớp sang compaction setting thông thường, rồi mới đến built-in default. Trong ví dụ này, model được đặt tên chừa 400.000 token nhưng vẫn giữ recent suffix 20.000 token của setting thông thường. Field bị bỏ qua sẽ fallback; field không hợp lệ thì không. Cả giá trị thông thường lẫn override đều phải là số nguyên an toàn không âm.
+
 `enabled: false` tắt đường ngưỡng và tràn ngữ cảnh tự động vì `_checkCompaction()` trả về ngay. Thiết lập này không tắt `AgentSession.compact()`, `/compact`, RPC/SDK `compact()` hoặc lời gọi `ctx.compact()` từ Extension.
 
 ### Mức sử dụng hiện tại ưu tiên dữ liệu từ nhà cung cấp
@@ -153,6 +172,14 @@ Khi low-level loop còn một provider turn phải chạy, thứ tự được x
 Một Tool batch kết thúc mà không có message steering hoặc follow-up trong queue sẽ bỏ qua compaction giữa lượt chạy vì không có phản hồi assistant kế tiếp. Message trong queue giữ loop tiếp tục, nên cùng preparation point có thể compact trước khi delivery.
 
 Vì vậy Pi giữ ba điểm kiểm tra: kiểm tra giữa lượt chạy ở trên, kiểm tra sau khi low-level Agent run kết thúc tại `agent_end`, và kiểm tra trước khi gửi prompt mới. Đường cuối cố ý bao gồm assistant message đã abort; đường sau run thông thường bỏ qua chúng.
+
+### Prompt cache warming quanh Tool execution dài
+
+Pi `0.87.1` có thể giữ prompt cache đủ điều kiện của provider còn hiệu lực khi một Tool execution dài làm chậm model request kế tiếp. Mode mặc định `cacheWarming: "streaming"` chỉ lên lịch refresh khi Agent run còn active. `cacheWarming: "idle"` cho phép tiếp tục lên lịch khi Agent đã settle, còn `"off"` tắt tính năng. Model chỉ đủ điều kiện khi metadata khai báo cache lifetime trong `promptCache` cho retention tier đang dùng của request; thiếu lifetime thì warming dừng.
+
+Quyết định này có cân nhắc chi phí. Pi so sánh chi phí ước lượng của một cache read cộng một output token với chi phí tăng thêm dự kiến của cache miss sau đó, và chỉ warm khi mức tiết kiệm ước lượng đạt ngưỡng của runtime đã pin. Usage của warming được tính vào session total nhưng không đi vào model context. Cơ chế này không loại bỏ chi phí provider và không bảo đảm cache hit: provider vẫn quyết định việc nhận cache, thời điểm hết hạn và cách tính phí.
+
+`/session` cho biết warming đang inactive, scheduled hay refreshing, đồng thời hiển thị quyết định chi phí kế tiếp. Usage của refresh thành công có thể xuất hiện dưới dạng transcript notice khi bật cache notice. Trước mỗi refresh đã lên lịch trong cả `streaming` lẫn `idle`, Extension nhận `cache_warming_decision`; giá trị `warm` hoặc `stop` override quyết định đó, và action từ handler cuối cùng được áp dụng. Khi transcript của session thay đổi, kể cả do compaction, Pi không còn xem request cũ là hiện hành và không warm một prefix đã lỗi thời.
 
 ## 3. Pi cắt nhánh đang hoạt động ở đâu
 

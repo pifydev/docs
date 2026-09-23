@@ -4,14 +4,15 @@ description: File setting, quy tắc merge, ranh giới trust, các nhóm settin
 translation_key: reference-configuration
 language: vi
 official_refs:
-  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/docs/settings.md'
-  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/settings-manager.ts'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/settings.md'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/models.md'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/settings-manager.ts'
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 ---
 
-Pi đọc setting JSON khi khởi động và khi reload resource. Reference này mô tả `@earendil-works/pi-coding-agent` 0.85.0 trên Node.js 22.19 trở lên.
+Pi đọc setting JSON khi khởi động và khi reload resource. Reference này mô tả `@earendil-works/pi-coding-agent` 0.87.1 trên Node.js 22.19 trở lên.
 
 ## File setting và thứ tự ưu tiên
 
@@ -43,7 +44,7 @@ Package root public export `SettingsManager` và một số setting type, không
 
 | Nhóm | Key |
 | --- | --- |
-| Model | `defaultProvider`, `defaultModel`, `defaultThinkingLevel`, `modelThinkingLevels`, `thinkingBudgets`, `enabledModels` |
+| Model | `defaultProvider`, `defaultModel`, `defaultThinkingLevel`, `modelThinkingLevels`, `thinkingBudgets`, `enabledModels`, `cacheWarming`, `showCacheMissNotices` |
 | Tương tác | `steeringMode`, `followUpMode`, `defaultTools`, `doubleEscapeAction`, `treeFilterMode` |
 | Hiển thị | `theme`, `tuiMode`, `fullscreenExitOutput`, `fullscreenScrollbar`, `fullscreenCopyOnSelect`, `terminal`, `images`, `markdown` |
 | Vòng đời | `compaction`, `branchSummary`, `retry`, `sessionDir` |
@@ -97,6 +98,10 @@ void [directRequestLevel, resolvedAdapterLevel];
 
 `enabledModels` cung cấp pattern cho thao tác chuyển model bằng Ctrl+P; `--models` override scope đó trong một lần chạy. Provider endpoint và credential không nằm trong object setting `providers`. Hãy đặt endpoint được hỗ trợ trong `~/.pi/agent/models.json` hoặc Provider configuration, đồng thời giữ credential trong authentication store hoặc environment được hỗ trợ. Xem <a href="/vi/how-to/plug-new-model">Thêm một nhà cung cấp mô hình</a>.
 
+`cacheWarming` chỉ được đọc từ global setting vì refresh làm phát sinh provider usage. Giá trị mặc định `"streaming"` giữ cache đủ điều kiện còn hiệu lực khi Agent run đang active; `"idle"` có thể tiếp tục sau khi settle, còn `"off"` tắt warming. Điều kiện tham gia đến từ metadata cache lifetime trong `promptCache` của model cho retention tier đang dùng. Pi đánh giá mức tiết kiệm dự kiến trước mỗi refresh, nhưng warming vẫn tốn chi phí và không bảo đảm provider cache hit. `/session` hiển thị quyết định kế tiếp, còn `showCacheMissNotices` điều khiển transcript notice cho cache miss đáng kể, warming thành công, compaction usage và provider recovery.
+
+Radius model discovery dùng ba lớp: catalog offline tích hợp sẵn có ngay, metadata gateway đã cache overlay lên lớp đó, rồi live gateway refresh overlay lên cả hai khi network thành công. Custom Radius gateway trong `models.json` dùng catalog riêng thay vì kế thừa catalog public của `radius.pi.dev`.
+
 ```json title="thinking-settings.json"
 {
   "defaultProvider": "anthropic",
@@ -112,7 +117,8 @@ void [directRequestLevel, resolvedAdapterLevel];
     "high": 32768
   },
   "hideThinkingBlock": false,
-  "showCacheMissNotices": true
+  "showCacheMissNotices": true,
+  "cacheWarming": "streaming"
 }
 ```
 
@@ -138,6 +144,8 @@ Trên Windows, hãy chọn PowerShell tường minh, thay cho Bash hoặc cùng 
 
 Chọn một Tool không thay đổi host shell đã khởi chạy Pi. Việc này chọn tên LLM-callable Tool nào đang active: `bash` gửi command đến backend tương thích Bash của Pi, còn `powershell` gửi command đến backend PowerShell native. Allowlist `tools` của CLI/SDK giữ cùng sự phân biệt này.
 
+Các definition tích hợp sẵn `read`, `bash`, `powershell`, `edit` và `write` mặc định dùng JSON Schema constrained sampling ở chế độ strict-prefer. Provider không enforce được schema sẽ fallback về Tool calling thông thường. Extension thay một built-in definition có thể opt out tường minh bằng `constrainedSampling: false`.
+
 ## Project trust
 
 ### Giá trị fallback và quyết định đã lưu
@@ -161,10 +169,13 @@ Project trust là ranh giới cho project resource, không phải per-tool appro
 | `compaction.enabled` | `true` | Bật automatic compaction |
 | `compaction.reserveTokens` | `16384` | Chừa context cho model response kế tiếp |
 | `compaction.keepRecentTokens` | `20000` | Giữ số recent token này ngoài summary |
+| `compaction.modelOverrides` | không có | Override một hoặc cả hai token budget cho đúng `provider/modelId` |
 | `branchSummary.reserveTokens` | `16384` | Chừa token cho branch summarization |
 | `branchSummary.skipPrompt` | `false` | Khi là `true`, bỏ câu hỏi branch summary và mặc định không tạo summary |
 
 Hai setting cũ `compaction.threshold` theo tỉ lệ và `preserveRecentTurns` theo số turn không còn tồn tại. Compaction hiện dùng token reserve và recent-token budget.
+
+Trong `compaction.modelOverrides`, `reserveTokens` và `keepRecentTokens` fallback độc lập sang compaction value thông thường, rồi built-in default. Key phải khớp chính xác và phân biệt chữ hoa chữ thường, kể cả slash bên trong model ID. Chỉ field bị bỏ qua mới fallback; value phải là số nguyên an toàn không âm, và override khớp nhưng không hợp lệ sẽ gây lỗi.
 
 ### Retry và message delivery
 
@@ -179,6 +190,8 @@ Hai setting cũ `compaction.threshold` theo tỉ lệ và `preserveRecentTurns` 
 `sessionDir` thay đổi nơi lưu persistent session. Relative path được resolve từ working directory của process, còn `~` được mở rộng thành home directory. Khi không có override, Pi lưu một file JSONL append-only cho mỗi session dưới `~/.pi/agent/sessions/<encoded-cwd>/`.
 
 Không có setting tích hợp `sessions.retention` hoặc `sessions.redactSecrets`. Ứng dụng vận hành Pi chịu trách nhiệm về file permission, backup, retention và deletion; hãy bảo vệ session JSONL vì nó có thể chứa prompt, model output và tool result. Xem <a href="/vi/how-to/persist-sessions">Duy trì session</a>.
+
+`/bug [description]` là runtime command, không phải một nhóm `settings.json`. Command che secret value khỏi metadata đã thu thập, rồi cho phép kèm transcript tùy chọn, dùng summary do model viết, upload lên Radius hoặc xuất ZIP local. Offline mode chặn upload nhưng vẫn cho xuất ZIP local. Crash metadata được giữ trong `~/.pi/agent/crashes.json` cho report tiếp theo; hãy bảo vệ file này và mọi ZIP đã xuất như diagnostic data.
 
 ### Terminal, image, shell và npm
 
@@ -290,6 +303,7 @@ Global file này bao quát các nhóm thông dụng mà không chứa provider c
   },
   "hideThinkingBlock": false,
   "showCacheMissNotices": true,
+  "cacheWarming": "streaming",
   "enabledModels": ["anthropic/*", "openai/gpt-5.2*"],
   "defaultTools": ["read", "bash", "edit", "write"],
   "theme": "dark",
@@ -303,7 +317,12 @@ Global file này bao quát các nhóm thông dụng mà không chứa provider c
   "compaction": {
     "enabled": true,
     "reserveTokens": 16384,
-    "keepRecentTokens": 20000
+    "keepRecentTokens": 20000,
+    "modelOverrides": {
+      "some-provider/large-context-model": {
+        "reserveTokens": 400000
+      }
+    }
   },
   "branchSummary": {
     "reserveTokens": 16384,

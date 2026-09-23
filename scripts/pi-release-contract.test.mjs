@@ -1070,6 +1070,19 @@ const toolContractTerms = [
   "result",
 ];
 
+const operationalFeatureTerms = [
+  "cache_warming_decision",
+  "compaction.modelOverrides",
+  "reserveTokens",
+  "keepRecentTokens",
+  "/bug",
+  "Radius",
+  "Meta",
+  "META_API_KEY",
+  "ctx.modelRegistry.stream",
+  "streamSimple",
+];
+
 function assertTextContentMessageRoles(source, locale) {
   const section = extractMarkdownSection(
     source,
@@ -1741,6 +1754,282 @@ test("0.86.0 provider and tool contracts Tool examples typecheck against public 
         )
       : originalSourceFile(file, languageVersion, ...args);
   const program = ts.createProgram([...files.keys()], options, host);
+  const diagnostics = ts.getPreEmitDiagnostics(program);
+  assert.equal(
+    diagnostics.length,
+    0,
+    ts.formatDiagnostics(diagnostics, {
+      getCanonicalFileName: (file) => file,
+      getCurrentDirectory: () => fileURLToPath(repositoryRoot),
+      getNewLine: () => "\n",
+    }),
+  );
+});
+
+test("0.86.x operational features preserve runtime boundaries in both locales", async () => {
+  const scopedFiles = [
+    "ch07-event-driven.md",
+    "ch08-context-engineering.md",
+    "ch09-compaction.md",
+    "ch10-session.md",
+    "how-to/customize-system-prompt.md",
+    "how-to/stream-output.md",
+    "reference/api.md",
+    "reference/configuration.md",
+    "reference/environment-variables.md",
+  ];
+  const localized = new Map(
+    await Promise.all(
+      scopedFiles.flatMap((filename) =>
+        ["en", "vi"].map(async (locale) => [
+          `${locale}/${filename}`,
+          await readFile(
+            new URL(`content/${locale}/${filename}`, repositoryRoot),
+            "utf8",
+          ),
+        ]),
+      ),
+    ),
+  );
+
+  for (const locale of ["en", "vi"]) {
+    const get = (filename) => localized.get(`${locale}/${filename}`);
+    const corpus = scopedFiles.map(get).join("\n");
+    const language =
+      locale === "en"
+        ? {
+            costAware: /cost-aware/i,
+            longTool: /long Tool (?:run|execution)/i,
+            optionalIdle: /optional(?:ly)?[^.\n]*idle|idle[^.\n]*optional/i,
+            cacheLifetime: /(?:cache|`promptCache`)[^.\n]*lifetime/i,
+            noFreeGuarantee:
+              /does not (?:eliminate|remove)[^.\n]*(?:cost|charge)[^.\n]*(?:does not|cannot)[^.\n]*guarantee[^.\n]*cache hit/i,
+            fallback: /fall(?:s)? back independently/i,
+            secretRedaction:
+              /secret[^.\n]*(?:redact|omit)|(?:redact|omit)[^.\n]*secret/i,
+            transcriptChoice:
+              /(?:include|attach)[^.\n]*transcript[^.\n]*(?:model-written|model-generated)[^.\n]*summary/i,
+            offlineBoundary:
+              /offline[^.\n]*(?:local )?(?:ZIP|zip)[^.\n]*(?:cannot|disable|block)[^.\n]*upload/i,
+            catalogLayers:
+              /offline[^.\n]*catalog[^.\n]*cached[^.\n]*(?:live|gateway)/i,
+            museRefresh:
+              /\/login meta[^.\n]*(?:automatic|refresh)[^.\n]*(?:Muse|Model API key)/i,
+            resolvedAuth: /resolved authentication/i,
+            unsubscribe: /returns? (?:an? )?unsubscribe function/i,
+            snapshot:
+              /(?:added|removed)[^.\n]*during[^.\n]*dispatch[^.\n]*(?:later|subsequent)[^.\n]*dispatch/i,
+            strictPrefer: /strict-prefer/i,
+            promptDelta:
+              /structured[^.\n]*(?:prompt|section|tool|guideline)[^.\n]*transcript delta/i,
+          }
+        : {
+            costAware: /cân nhắc chi phí/i,
+            longTool:
+              /Tool (?:run|execution|chạy|thực thi)[^.\n]*dài|(?:run|lần chạy) Tool dài/i,
+            optionalIdle:
+              /(?:tùy chọn|có thể|cho phép)[^.\n]*idle|idle[^.\n]*(?:tùy chọn|nếu bật|có thể|cho phép)/i,
+            cacheLifetime:
+              /(?:thời gian sống|cache lifetime|`promptCache`[^.\n]*lifetime)/i,
+            noFreeGuarantee:
+              /không (?:loại bỏ|xóa)[^.\n]*(?:chi phí|phí)[^.\n]*(?:không bảo đảm|không đảm bảo)[^.\n]*cache hit/i,
+            fallback: /fallback độc lập|rơi về độc lập/i,
+            secretRedaction:
+              /(?:che|loại bỏ)[^.\n]*secret|secret[^.\n]*(?:che|loại bỏ)/i,
+            transcriptChoice:
+              /(?:kèm|đính kèm)[^.\n]*transcript[^.\n]*(?:model[^.\n]*summary|summary[^.\n]*model)/i,
+            offlineBoundary:
+              /offline[^.\n]*(?:ZIP|zip)[^.\n]*(?:không thể|chặn|tắt)[^.\n]*upload/i,
+            catalogLayers:
+              /catalog offline[^.\n]*(?:đã cache|cache)[^.\n]*(?:trực tiếp|live|gateway)/i,
+            museRefresh:
+              /\/login meta[^.\n]*(?:tự động|refresh)[^.\n]*(?:Muse|Model API key)/i,
+            resolvedAuth: /(?:xác thực|authentication) đã (?:được )?resolve/i,
+            unsubscribe: /trả về (?:một )?hàm unsubscribe/i,
+            snapshot:
+              /(?:thêm|xóa)[^.\n]*trong (?:một |lúc )?dispatch[^.\n]*(?:sau|tiếp theo)/i,
+            strictPrefer: /strict-prefer/i,
+            promptDelta:
+              /(?:prompt|section|tool|guideline)[^.\n]*có cấu trúc[^.\n]*transcript delta|transcript delta[^.\n]*(?:prompt|section|tool|guideline)/i,
+          };
+
+    for (const term of operationalFeatureTerms) {
+      assert.ok(corpus.includes(term), `${locale} operational corpus: ${term}`);
+    }
+
+    const compaction = get("ch09-compaction.md");
+    assertContainsAll(
+      compaction,
+      [
+        language.costAware,
+        language.longTool,
+        language.optionalIdle,
+        /`\/session`/,
+        /transcript/i,
+        /`cache_warming_decision`/,
+        language.cacheLifetime,
+        language.noFreeGuarantee,
+      ],
+      `${locale} cache warming boundaries`,
+    );
+    assertParagraphContainsAll(
+      compaction,
+      [
+        /`compaction\.modelOverrides`/,
+        /`reserveTokens`/,
+        /`keepRecentTokens`/,
+        language.fallback,
+      ],
+      `${locale} per-model compaction fallback`,
+    );
+
+    const sessions = get("ch10-session.md");
+    assertContainsAll(
+      sessions,
+      [
+        /`\/bug \[description\]`/,
+        /metadata/i,
+        language.secretRedaction,
+        language.transcriptChoice,
+        /Radius/,
+        /ZIP/i,
+        language.offlineBoundary,
+        /`~\/\.pi\/agent\/crashes\.json`/,
+      ],
+      `${locale} bug-reporting boundaries`,
+    );
+
+    assertParagraphContainsAll(
+      get("reference/configuration.md"),
+      [/Radius/, language.catalogLayers],
+      `${locale} Radius catalog layering`,
+    );
+    assertParagraphContainsAll(
+      get("reference/environment-variables.md"),
+      [/`META_API_KEY`/, /`\/login meta`/, language.museRefresh],
+      `${locale} Meta Muse authentication`,
+    );
+
+    const events = get("ch07-event-driven.md");
+    assertContainsAll(
+      events,
+      [
+        /`ctx\.modelRegistry\.stream\(\)`/,
+        /`streamSimple\(\)`/,
+        language.resolvedAuth,
+        /`pi\.on\(\)`/,
+        language.unsubscribe,
+        language.snapshot,
+      ],
+      `${locale} Extension model and subscription APIs`,
+    );
+
+    assertParagraphContainsAll(
+      get("ch08-context-engineering.md"),
+      [
+        /`read`/,
+        /`bash`/,
+        /`powershell`/,
+        /`edit`/,
+        /`write`/,
+        language.strictPrefer,
+        /`constrainedSampling: false`/,
+      ],
+      `${locale} built-in constrained sampling`,
+    );
+    assert.match(
+      get("how-to/customize-system-prompt.md"),
+      language.promptDelta,
+      `${locale} prompt customization must explain transcript-backed deltas`,
+    );
+    assertParagraphContainsAll(
+      get("how-to/stream-output.md"),
+      [
+        /`ctx\.modelRegistry\.stream\(\)`/,
+        /`streamSimple\(\)`/,
+        language.resolvedAuth,
+      ],
+      `${locale} nested Extension streams`,
+    );
+    assertContainsAll(
+      get("reference/api.md"),
+      [
+        /`cache_warming_decision`/,
+        /`ctx\.modelRegistry\.stream\(\)`/,
+        /`streamSimple\(\)`/,
+        /`constrainedSampling: false`/,
+      ],
+      `${locale} operational API reference`,
+    );
+  }
+
+  const snippets = [];
+  for (const locale of ["en", "vi"]) {
+    const source = localized.get(`${locale}/ch07-event-driven.md`);
+    const match =
+      /^```ts title="unsubscribe-extension-handler\.ts"\r?\n([\s\S]*?)\r?\n```/m.exec(
+        source,
+      );
+    assert.ok(match, `${locale} unsubscribe example`);
+    snippets.push(match[1]);
+  }
+  assert.equal(snippets[0], snippets[1], "unsubscribe example locale parity");
+  assert.match(
+    snippets[0],
+    /const unsubscribe = pi\.on\("input", async \(event\) => \{\s+void event;\s+return \{ action: "continue" \};\s+\}\);\s+\s*unsubscribe\(\);/,
+  );
+
+  const promptSnippets = [];
+  for (const locale of ["en", "vi"]) {
+    const source = localized.get(`${locale}/how-to/customize-system-prompt.md`);
+    const match = /^```ts title="team-roles\.ts"\r?\n([\s\S]*?)\r?\n```/m.exec(
+      source,
+    );
+    assert.ok(match, `${locale} structured prompt example`);
+    promptSnippets.push(match[1]);
+  }
+  assert.equal(
+    promptSnippets[0],
+    promptSnippets[1],
+    "structured prompt example locale parity",
+  );
+  assert.match(
+    promptSnippets[0],
+    /event\.systemPromptOptions\.promptGuidelines\.push\(/,
+  );
+
+  const virtualSources = new Map(
+    [
+      ["extension-unsubscribe-example.ts", snippets[0]],
+      ["structured-prompt-example.ts", promptSnippets[0]],
+    ].map(([filename, source]) => [
+      path.resolve(
+        fileURLToPath(new URL(`tests/fixtures/${filename}`, repositoryRoot)),
+      ),
+      source,
+    ]),
+  );
+  const options = {
+    target: ts.ScriptTarget.ES2022,
+    module: ts.ModuleKind.ESNext,
+    moduleResolution: ts.ModuleResolutionKind.Bundler,
+    strict: true,
+    noEmit: true,
+    skipLibCheck: true,
+    types: ["node"],
+  };
+  const host = ts.createCompilerHost(options);
+  const originalExists = host.fileExists.bind(host);
+  const originalSourceFile = host.getSourceFile.bind(host);
+  host.fileExists = (file) =>
+    virtualSources.has(path.resolve(file)) || originalExists(file);
+  host.getSourceFile = (file, languageVersion, ...args) => {
+    const source = virtualSources.get(path.resolve(file));
+    return source === undefined
+      ? originalSourceFile(file, languageVersion, ...args)
+      : ts.createSourceFile(file, source, languageVersion, true);
+  };
+  const program = ts.createProgram([...virtualSources.keys()], options, host);
   const diagnostics = ts.getPreEmitDiagnostics(program);
   assert.equal(
     diagnostics.length,

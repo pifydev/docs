@@ -6,7 +6,8 @@ language: en
 chapter: 10
 source_url: "https://www.dgzhuya.com/modules/ch10-session"
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/docs/sessions.md"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/sessions.md"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/modes/interactive/bug-report.ts"
 terms_used:
   - Session
   - Session Tree
@@ -15,7 +16,7 @@ terms_used:
   - CompactionEntry
   - BranchSummaryEntry
 status: reviewed
-last_updated: "2026-09-04"
+last_updated: "2026-09-23"
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -613,6 +614,14 @@ The v3 loader reads UTF-8 in chunks, parses each complete line, and silently ski
 Coding Agent's manager uses synchronous file calls and has no file lock, `fsync`, compare-and-swap, or cross-process writer queue. Keep one writer per session file. `list()` and `listAll()` are read-side operations; metadata loading is capped at ten concurrent files, unreadable files are omitted, and results are sorted by derived activity time.
 
 The generic Pi Agent Core `JsonlSessionStorage` has different safety code: it serializes writes through a per-instance promise tail and uses a temporary sibling plus rename for forks and torn-tail repair. Those v4 guarantees do not apply to Coding Agent's v3 `SessionManager`.
+
+### Report a bug without assuming the transcript is public
+
+`/bug [description]` prepares a private diagnostic bundle for Pi's developers. It collects environment, model, provider, Extension, and settings metadata with secret values redacted, plus recorded assistant-message and error diagnostics. Redaction reduces accidental exposure, but you should still inspect the report because prompts and Tool output can contain sensitive values that are not recognizable as credentials.
+
+The confirmation flow lets you include the session transcript, omit it, or ask the current model for a model-written summary instead. Review an included transcript or generated summary before sharing it. A report may be uploaded to Radius, or exported as a local ZIP for inspection and manual transfer. In offline mode, local ZIP export remains available but Pi cannot upload the report to Radius.
+
+Radius upload does not require login; an authenticated Radius session attributes the report so maintainers can follow up. After upload, Pi records the report ID in the session as a `pi.bug-report` entry. Process crashes are recorded separately in `~/.pi/agent/crashes.json`, announced once at the next startup, and attached to the next report. That crash file is diagnostic state, not a substitute for the session JSONL.
 
 ### Pi 0.85.0 session corrections
 

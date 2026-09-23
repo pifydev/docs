@@ -3,9 +3,12 @@ title: Environment variables reference
 description: Process flags, provider credentials, child markers, session metadata, and proxy variables used by Pi.
 translation_key: reference-environment-variables
 language: en
+official_refs:
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/environment-variables.md'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/providers.md'
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 ---
 
 Pi uses environment variables in three distinct places: its own process configuration, authentication for a selected provider, and the environment of commands launched by the LLM-callable `bash` and `powershell` tools. Scope matters: a variable recognized by one provider is not automatically a Pi-wide setting.
@@ -20,7 +23,7 @@ Most process flags affect startup. Provider authentication is resolved when Pi a
 
 For Pi's built-in providers, credential order is an explicit CLI `--api-key` or runtime override, a matching stored `auth.json` API key or OAuth credential, the configured `models.json` `apiKey` (a literal or `$ENV` reference under that file's contract), then the built-in provider's ambient environment. Extension-defined providers may implement a different contract. Use `/login` to write the protected credential store instead of putting secrets in project files.
 
-| Provider | Environment credential recognized by 0.85.0 |
+| Provider | Environment credential recognized by 0.87.1 |
 |---|---|
 | Anthropic | `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_OAUTH_TOKEN`, `ANTHROPIC_API_KEY` |
 | Ant Ling, OpenAI, Azure OpenAI | `ANT_LING_API_KEY`, `OPENAI_API_KEY`, `AZURE_OPENAI_API_KEY` |
@@ -31,13 +34,15 @@ For Pi's built-in providers, credential order is an explicit CLI `--api-key` or 
 | OpenCode Zen and Go | `OPENCODE_API_KEY` |
 | Radius, Hugging Face | `RADIUS_API_KEY`, `HF_TOKEN` |
 | Fireworks, Together AI, Baseten | `FIREWORKS_API_KEY`, `TOGETHER_API_KEY`, `BASETEN_API_KEY` |
-| Kimi, MiniMax, MiniMax China, Moonshot | `KIMI_API_KEY`, `MINIMAX_API_KEY`, `MINIMAX_CN_API_KEY`, `MOONSHOT_API_KEY` |
+| Kimi, Meta Muse, MiniMax, MiniMax China, Moonshot | `KIMI_API_KEY`, `META_API_KEY`, `MINIMAX_API_KEY`, `MINIMAX_CN_API_KEY`, `MOONSHOT_API_KEY` |
 | Qwen Token Plan | `QWEN_TOKEN_PLAN_API_KEY`, `QWEN_TOKEN_PLAN_CN_API_KEY` |
 | Xiaomi MiMo and token-plan regions | `XIAOMI_API_KEY`, `XIAOMI_TOKEN_PLAN_CN_API_KEY`, `XIAOMI_TOKEN_PLAN_AMS_API_KEY`, `XIAOMI_TOKEN_PLAN_SGP_API_KEY` |
 | GitHub Copilot | `COPILOT_GITHUB_TOKEN` |
 | Cloudflare AI Gateway and Workers AI | `CLOUDFLARE_API_KEY`; IDs are covered below |
 
 Amazon Bedrock and Google Vertex AI also accept ambient cloud credentials described under provider-specific variables. A custom `models.json` provider can reference an arbitrary variable with `"apiKey": "$COMPANY_AI_TOKEN"`; a plain uppercase string is a literal, not an environment lookup. See <a href="/en/how-to/plug-new-model">Add a model provider</a> for that file's exact surface.
+
+Meta Muse supports `/login meta`, which stores the login credential and refreshes its Muse Model API key automatically. `META_API_KEY` supplies that Model API key directly when interactive login is not appropriate. Keep the two paths distinct: the environment value is already the request credential and does not create a stored Meta login.
 
 ## Runtime flags
 
@@ -62,11 +67,11 @@ pi
 
 | Variable | Accepted value and effect |
 |---|---|
-| `PI_OFFLINE` | `1`, `true`, or `yes` disables supported startup and model-catalog network work, including version/package checks and install/update telemetry |
+| `PI_OFFLINE` | `1`, `true`, or `yes` disables supported startup and model-catalog network work, including version/package checks, install/update telemetry, and `/bug` uploads |
 | `PI_SKIP_VERSION_CHECK` | Set to `1` to skip only the latest-version request |
 | `PI_TELEMETRY` | `1`/`true`/`yes` enables install/update telemetry and Pi provider-attribution headers; `0`/`false`/`no` disables them |
 
-Use `--offline` or a supported truthy `PI_OFFLINE` value. Unset the variable to re-enable network work: some 0.85.0 downstream paths test whether `PI_OFFLINE` exists, so `PI_OFFLINE=0` is unsafe and can behave as offline. `PI_SKIP_VERSION_CHECK` is narrower than offline mode. Do not rely on undocumented spellings for `PI_TELEMETRY`.
+Use `--offline` or a supported truthy `PI_OFFLINE` value. Unset the variable to re-enable network work: some downstream paths test whether `PI_OFFLINE` exists, so `PI_OFFLINE=0` is unsafe and can behave as offline. Offline mode blocks Radius upload from `/bug`, but local ZIP export remains available. `PI_SKIP_VERSION_CHECK` is narrower than offline mode. Do not rely on undocumented spellings for `PI_TELEMETRY`.
 
 ### Terminal and editor behavior
 
@@ -94,11 +99,11 @@ For Ctrl+G, the `externalEditor` setting wins, followed by `VISUAL`, then `EDITO
 
 ### Cache and sharing
 
-`PI_CACHE_RETENTION=long` requests extended provider prompt caching where the selected API supports it; other values do not select another documented tier. `PI_SHARE_VIEWER_URL` replaces the base URL used to build the `/share` viewer link. Neither variable is a credential.
+`PI_CACHE_RETENTION=long` requests extended provider prompt caching where the selected API supports it; other values do not select another documented tier. `PI_SHARE_VIEWER_URL` replaces the base URL used to build the `/share` viewer link. `PI_RADIUS_GATEWAY` overrides the Radius gateway origin used by `/bug` uploads and Radius relay connections. None of these variables is a provider credential.
 
 ### `PI_EXPERIMENTAL`
 
-`PI_EXPERIMENTAL=1` enables 0.85.0's preferred strict JSON-schema sampling for managed tools where the model/API supports it. The exact comparison is `1`; `true` is not accepted. Experimental behavior may change between releases and does not alter project trust or the selected tool set.
+`PI_EXPERIMENTAL=1` enables remaining runtime features that are explicitly gated as experimental. The exact comparison is `1`; `true` is not accepted. It no longer controls constrained sampling for the built-in `read`, `bash`, `powershell`, `edit`, and `write` Tools: those definitions use strict-prefer sampling by default, and an Extension can replace one with `constrainedSampling: false`.
 
 ### Value rules
 

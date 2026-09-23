@@ -6,9 +6,10 @@ language: vi
 chapter: 8
 source_url: 'https://www.dgzhuya.com/modules/ch08-context-engineering'
 official_refs:
-  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/resource-loader.ts'
-  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/tools/truncate.ts'
-  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/compaction/compaction.ts'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/resource-loader.ts'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/tools/truncate.ts'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/compaction/compaction.ts'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/tools/index.ts'
 terms_used:
   - Context
   - Context Engineering
@@ -16,7 +17,7 @@ terms_used:
   - transformContext
   - convertToLlm
 status: reviewed
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -183,6 +184,8 @@ Ví dụ dấu báo cho trường hợp biên của Bash
 ```
 
 `OutputAccumulator` giải mã luồng byte bằng `TextDecoder`, duy trì phần cuối hiển thị có giới hạn và mở file tạm khi giới hạn byte hoặc dòng đòi hỏi phải giữ bản đầy đủ. Kết quả Tool cuối vẫn dùng cùng quy tắc giữ tail. Đường dẫn tạm thuộc cơ chế tích lũy của Bash; `read` đã có file gốc, còn `grep` hướng model trở lại mã nguồn.
+
+Giới hạn output kiểm soát nội dung đi vào context sau khi Tool chạy. Pi cũng kiểm soát cách một số built-in yêu cầu model sinh argument: `read`, `bash`, `powershell`, `edit` và `write` mặc định dùng JSON Schema constrained sampling ở chế độ strict-prefer. Provider có capability phù hợp sẽ enforce schema; provider không tương thích sẽ fallback về Tool calling thông thường vì policy là “prefer”, không phải “require”. Extension chủ động thay một trong các definition này có thể opt out bằng `constrainedSampling: false`.
 
 ## 4. Phòng thủ đầu vào 2: ghép system prompt và tài nguyên
 

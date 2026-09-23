@@ -4,14 +4,15 @@ description: Current Pi settings files, merge rules, trust boundary, settings fa
 translation_key: reference-configuration
 language: en
 official_refs:
-  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/docs/settings.md'
-  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/settings-manager.ts'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/settings.md'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/models.md'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/settings-manager.ts'
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 ---
 
-Pi reads JSON settings at startup and when resources reload. This reference describes `@earendil-works/pi-coding-agent` 0.85.0 on Node.js 22.19 or newer.
+Pi reads JSON settings at startup and when resources reload. This reference describes `@earendil-works/pi-coding-agent` 0.87.1 on Node.js 22.19 or newer.
 
 ## Settings files and precedence
 
@@ -43,7 +44,7 @@ The public root exports `SettingsManager` and selected setting types, not a full
 
 | Family | Keys |
 | --- | --- |
-| Model | `defaultProvider`, `defaultModel`, `defaultThinkingLevel`, `modelThinkingLevels`, `thinkingBudgets`, `enabledModels` |
+| Model | `defaultProvider`, `defaultModel`, `defaultThinkingLevel`, `modelThinkingLevels`, `thinkingBudgets`, `enabledModels`, `cacheWarming`, `showCacheMissNotices` |
 | Interaction | `steeringMode`, `followUpMode`, `defaultTools`, `doubleEscapeAction`, `treeFilterMode` |
 | Display | `theme`, `tuiMode`, `fullscreenExitOutput`, `fullscreenScrollbar`, `fullscreenCopyOnSelect`, `terminal`, `images`, `markdown` |
 | Lifecycle | `compaction`, `branchSummary`, `retry`, `sessionDir` |
@@ -97,6 +98,10 @@ void [directRequestLevel, resolvedAdapterLevel];
 
 `enabledModels` supplies patterns for Ctrl+P model cycling; `--models` overrides that scope for one run. Provider endpoints and credentials do not belong in a `providers` settings object. Put supported endpoints in `~/.pi/agent/models.json` or a Provider configuration, and keep credentials in the supported authentication store or environment. See <a href="/en/how-to/plug-new-model">Add a model provider</a>.
 
+`cacheWarming` is global-only because refreshes incur provider usage. Its default, `"streaming"`, keeps eligible caches warm while an Agent run is active; `"idle"` may continue after settlement, and `"off"` disables warming. Eligibility comes from the selected model's `promptCache` lifetime metadata for the active retention tier. Pi evaluates expected savings before each refresh, but warming still costs money and cannot guarantee a provider cache hit. `/session` exposes the next decision, while `showCacheMissNotices` controls transcript notices for significant misses, successful warming, compaction usage, and provider recovery.
+
+Radius model discovery uses three layers: the bundled offline catalog is available immediately, cached gateway metadata overlays it when present, and a live gateway refresh overlays both when network access succeeds. A custom Radius gateway configured in `models.json` uses its own catalog instead of inheriting the public `radius.pi.dev` catalog.
+
 ```json title="thinking-settings.json"
 {
   "defaultProvider": "anthropic",
@@ -112,7 +117,8 @@ void [directRequestLevel, resolvedAdapterLevel];
     "high": 32768
   },
   "hideThinkingBlock": false,
-  "showCacheMissNotices": true
+  "showCacheMissNotices": true,
+  "cacheWarming": "streaming"
 }
 ```
 
@@ -138,6 +144,8 @@ Select PowerShell explicitly on Windows, either instead of Bash or alongside it:
 
 Selecting a Tool does not change the host shell that launched Pi. It chooses which LLM-callable Tool names are active: `bash` sends commands to Pi's Bash-compatible backend, while `powershell` sends commands to the native PowerShell backend. The CLI/SDK `tools` allowlist follows the same distinction.
 
+The built-in `read`, `bash`, `powershell`, `edit`, and `write` definitions use strict-prefer JSON Schema constrained sampling by default. A provider that cannot enforce the schema falls back to ordinary Tool calling. An Extension replacing a built-in definition can opt out explicitly with `constrainedSampling: false`.
+
 ## Project trust
 
 ### Fallback and saved decisions
@@ -161,10 +169,13 @@ Project trust is a project-resource boundary, not per-tool approval. Current set
 | `compaction.enabled` | `true` | Enables automatic compaction |
 | `compaction.reserveTokens` | `16384` | Reserves context space for the next model response |
 | `compaction.keepRecentTokens` | `20000` | Keeps this many recent tokens outside the summary |
+| `compaction.modelOverrides` | none | Overrides either token budget for an exact `provider/modelId` |
 | `branchSummary.reserveTokens` | `16384` | Reserves tokens for branch summarization |
 | `branchSummary.skipPrompt` | `false` | When `true`, skips the branch-summary question and defaults to no summary |
 
 The former fractional `compaction.threshold` and turn-count `preserveRecentTurns` settings do not exist. Current compaction is driven by token reserve and recent-token budgets.
+
+Inside `compaction.modelOverrides`, `reserveTokens` and `keepRecentTokens` fall back independently to the ordinary compaction value, then the built-in default. Keys are exact and case-sensitive, including slashes inside a model ID. Only omitted fields fall back; values must be non-negative safe integers, and an invalid matching override is an error.
 
 ### Retry and message delivery
 
@@ -179,6 +190,8 @@ The former fractional `compaction.threshold` and turn-count `preserveRecentTurns
 `sessionDir` changes persistent session storage. Relative paths resolve from the process working directory, and `~` expands to the home directory. Without an override, Pi stores one append-only JSONL file per session below `~/.pi/agent/sessions/<encoded-cwd>/`.
 
 There are no built-in `sessions.retention` or `sessions.redactSecrets` settings. The application operating Pi owns file permissions, backups, retention, and deletion; protect session JSONL because it can contain prompts, model output, and tool results. See <a href="/en/how-to/persist-sessions">Persist sessions</a>.
+
+`/bug [description]` is a runtime command, not a `settings.json` family. It redacts secret values from collected metadata, then offers optional transcript inclusion, a model-written summary, Radius upload, or local ZIP export. Offline mode blocks upload but preserves local ZIP export. Crash metadata is kept in `~/.pi/agent/crashes.json` for the next report; protect that file and any exported ZIP as diagnostic data.
 
 ### Terminal, images, shell, and npm
 
@@ -290,6 +303,7 @@ This global file covers the common families without provider credentials:
   },
   "hideThinkingBlock": false,
   "showCacheMissNotices": true,
+  "cacheWarming": "streaming",
   "enabledModels": ["anthropic/*", "openai/gpt-5.2*"],
   "defaultTools": ["read", "bash", "edit", "write"],
   "theme": "dark",
@@ -303,7 +317,12 @@ This global file covers the common families without provider credentials:
   "compaction": {
     "enabled": true,
     "reserveTokens": 16384,
-    "keepRecentTokens": 20000
+    "keepRecentTokens": 20000,
+    "modelOverrides": {
+      "some-provider/large-context-model": {
+        "reserveTokens": 400000
+      }
+    }
   },
   "branchSummary": {
     "reserveTokens": 16384,

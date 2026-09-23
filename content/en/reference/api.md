@@ -497,6 +497,8 @@ declare class SettingsManager {
 
 When `showCacheMissNotices` is enabled, the transcript can also surface provider recovery diagnostics such as dropped Anthropic thinking blocks, in addition to significant cache misses and summary usage.
 
+The package root also exports `CacheWarmingMode`, `CompactionModelOverride`, and `CompactionSettings`. `SettingsManager.getCacheWarmingMode()` resolves `"off" | "streaming" | "idle"`; `setCacheWarmingMode()` changes that global, cost-bearing setting. `getCompactionSettings(model?)` resolves `reserveTokens` and `keepRecentTokens` through `compaction.modelOverrides` for the exact model, then the ordinary compaction setting, then the built-in default.
+
 Direct SDK hosts own cwd, trust, storage, and cleanup policy. Do not mutate session JSONL while a manager is active, and do not assume that `SettingsManager.create()` reproduces CLI trust resolution without the host supplying that decision.
 
 ### Image MIME detection
@@ -539,6 +541,10 @@ const extension: ExtensionFactory = (pi) => {
 export default extension;
 ```
 
+Every `pi.on()` overload returns an unsubscribe function. Pi snapshots matching handlers before a dispatch, so adding a handler or calling its unsubscribe function during that dispatch affects later dispatches rather than the snapshot already running. `cache_warming_decision` is an actionable hook: before a scheduled refresh, a handler may return `{ action: "warm" }` or `{ action: "stop" }`.
+
+`ExtensionContext.modelRegistry` exposes `ctx.modelRegistry.stream()` for API-specific options and `streamSimple()` for provider-neutral options. Both methods call the configured provider with resolved authentication at request time; the matching `complete()` method waits for the full assistant message. This facade keeps Extensions on Coding Agent's provider and credential path instead of reading secrets directly.
+
 `pi.setModel()` changes the current session's model. A successful selection is recorded in session history and restored when that session is resumed, but it does not change the configured `defaultProvider` or `defaultModel` used by new sessions. The Promise resolves to `false` when the selected provider lacks authentication.
 
 `pi.setThinkingLevel()` computes the effective capability-clamped level and records a session-history change only when it differs from the current value; not every requested choice produces a history entry. Pi persists and restores that effective change for the current session, but it does not change the configured default used by new sessions.
@@ -551,6 +557,8 @@ The default editor automatically embeds its working indicator in the editor bord
 | `powershell` | Optional Windows built-in; select it explicitly or use its exported factory |
 | `grep`, `find`, `ls` | Built in; activate through `tools` or use their exported factories |
 | Extension or `customTools` entries | Registered by the host; still filtered by `tools`, `excludeTools`, and `noTools` |
+
+The built-in `read`, `bash`, `powershell`, `edit`, and `write` definitions request strict-prefer JSON Schema constrained sampling. Supported providers enforce the schema, while unsupported providers can fall back to ordinary Tool calling. An Extension that deliberately replaces a definition can disable that request with `constrainedSampling: false`.
 
 Tool access is an application policy. The current SDK does not expose the baseline `--yolo` switch.
 

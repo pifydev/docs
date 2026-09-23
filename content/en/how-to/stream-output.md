@@ -4,8 +4,9 @@ description: Render text, thinking, and Tool progress from AgentSession events w
 translation_key: how-to-stream-output
 language: en
 official_refs:
-  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/agent-session.ts'
-  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/modes/rpc/rpc-types.ts'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/agent-session.ts'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/modes/rpc/rpc-types.ts'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/model-registry.ts'
 status: reviewed
 reviewed_by: Pify maintainers
 last_updated: '2026-09-23'
@@ -306,6 +307,12 @@ export function subscribeBatchedText(
 ```
 
 A single delta may exceed the threshold, and `flush()` still calls `append()` synchronously. The threshold controls browser batch size; it is not a hard bound on asynchronous work. For a server or worker, replace `requestAnimationFrame` with a bounded queue and one consumer. Decide explicitly whether overload should pause upstream work outside the listener, coalesce UI updates, or cancel the session; never let a queue grow without a limit.
+
+## 6. Stream a nested Extension model call
+
+An Extension that already has an `ExtensionContext` can open a direct provider stream without constructing another `AgentSession`. Use `ctx.modelRegistry.stream()` for API-specific request options and `streamSimple()` for provider-neutral options; both methods call the configured provider with resolved authentication at request time. Consume the returned `AssistantMessageEventStream` with the same `for await` pattern used by Pi AI, then await `.result()` when the complete assistant message and usage are needed.
+
+That nested stream belongs to the Extension. Its low-level Pi AI events are not automatically copied into the parent session's `AgentSessionEvent` stream. Forward only the UI state you own, and include nested-call usage in a custom Tool result when the Tool contract requires session accounting.
 
 ## Pitfalls
 

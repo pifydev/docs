@@ -6,9 +6,10 @@ language: en
 chapter: 8
 source_url: 'https://www.dgzhuya.com/modules/ch08-context-engineering'
 official_refs:
-  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/resource-loader.ts'
-  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/tools/truncate.ts'
-  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/compaction/compaction.ts'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/resource-loader.ts'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/tools/truncate.ts'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/compaction/compaction.ts'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/tools/index.ts'
 terms_used:
   - Context
   - Context Engineering
@@ -16,7 +17,7 @@ terms_used:
   - transformContext
   - convertToLlm
 status: reviewed
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -183,6 +184,8 @@ Example Bash edge marker
 ```
 
 `OutputAccumulator` decodes streaming bytes with `TextDecoder`, maintains a bounded display tail, and opens a temporary file once byte or line limits require preservation. The final Tool result still uses the same tail policy. Temporary-path availability belongs to Bash accumulation; `read` already has the original file, and `grep` directs the model back to source.
+
+Output limits constrain what enters context after a Tool runs. Pi also constrains how selected built-ins ask the model to produce their arguments: `read`, `bash`, `powershell`, `edit`, and `write` use strict-prefer JSON Schema constrained sampling by default. A capable provider enforces the schema; an incompatible provider falls back to ordinary Tool calling because the policy is “prefer,” not “require.” An Extension that deliberately replaces one of these definitions can opt out with `constrainedSampling: false`.
 
 ## 4. Input defense 2: system-prompt and resource assembly
 

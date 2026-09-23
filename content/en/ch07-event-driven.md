@@ -6,15 +6,16 @@ language: en
 chapter: 7
 source_url: 'https://www.dgzhuya.com/modules/ch07-event-driven'
 official_refs:
-  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/README.md#event-flow'
-  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/docs/extensions.md#events'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/README.md#event-flow'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/extensions.md#events'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/extensions/runner.ts'
 terms_used:
   - Event
   - Agent
   - Tool
   - Stream
 status: reviewed
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -242,12 +243,31 @@ type AgentSessionEvent =
 | --- | --- |
 | Startup and resources | `project_trust`, `resources_discover` |
 | Session | `session_start`, `session_info_changed`, `session_before_switch`, `session_before_fork`, `session_before_compact`, `session_compact`, `session_compact_failed`, `session_before_tree`, `session_tree`, `session_shutdown` |
-| Agent and provider | `before_agent_start`, `agent_start`, `agent_end`, `agent_settled`, `turn_start`, `turn_end`, `message_start`, `message_update`, `message_end`, `tool_execution_start`, `tool_execution_update`, `tool_execution_end`, `context`, `before_provider_request`, `before_provider_headers`, `after_provider_response` |
+| Agent and provider | `before_agent_start`, `agent_start`, `agent_end`, `agent_settled`, `turn_start`, `turn_end`, `message_start`, `message_update`, `message_end`, `tool_execution_start`, `tool_execution_update`, `tool_execution_end`, `context`, `before_provider_request`, `before_provider_headers`, `after_provider_response`, `cache_warming_decision` |
 | Extension UI prompts | `ui_prompt_start`, `ui_prompt_end` |
 | Model | `model_select`, `thinking_level_select` |
 | Tool, Bash, and input | `tool_call`, `tool_result`, `user_bash`, `input` |
 
 Several names overlap with core events, but the payloads and guarantees belong to the Extension API. For example, Extension `turn_start` adds `turnIndex` and `timestamp`; Extension `agent_end` does not add the session subscriber's `willRetry`; `tool_call` and `context` can change execution, while `tool_execution_start` and `message_update` report lifecycle state.
+
+Registration is reversible. `pi.on()` returns an unsubscribe function, and Pi snapshots the handlers for an event before dispatch begins. A handler added or removed during that dispatch does not change the snapshot being processed; the change applies to later dispatches.
+
+```ts title="unsubscribe-extension-handler.ts"
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+
+export default function temporaryInputHandler(pi: ExtensionAPI) {
+  const unsubscribe = pi.on("input", async (event) => {
+    void event;
+    return { action: "continue" };
+  });
+
+  unsubscribe();
+}
+```
+
+An Extension can also make nested model calls through `ctx.modelRegistry.stream()` for API-specific options or `streamSimple()` for provider-neutral options. Both routes use the configured provider and resolved authentication at request time. They do not require an Extension to read `auth.json` or copy an API key into the handler.
+
+At the Pi `0.87.1` baseline, `cache_warming_decision` runs before each scheduled prompt-cache refresh in both the active `streaming` phase and the optional `idle` phase. A handler may return `{ action: "warm" }` or `{ action: "stop" }`; the last returned action wins for that decision. The hook changes whether that refresh is sent, not the model's advertised cache lifetime or the provider's cache behavior.
 
 Pi 0.85.0 exports these prompt event types from the package root:
 

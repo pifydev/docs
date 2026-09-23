@@ -4,8 +4,9 @@ description: Hiển thị text, thinking và tiến trình Tool từ event của
 translation_key: how-to-stream-output
 language: vi
 official_refs:
-  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/agent-session.ts'
-  - 'https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/modes/rpc/rpc-types.ts'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/agent-session.ts'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/modes/rpc/rpc-types.ts'
+  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/model-registry.ts'
 status: reviewed
 reviewed_by: Pify maintainers
 last_updated: '2026-09-23'
@@ -306,6 +307,12 @@ export function subscribeBatchedText(
 ```
 
 Một delta có thể vượt quá ngưỡng, còn `flush()` vẫn gọi `append()` đồng bộ. Ngưỡng này kiểm soát kích thước batch trong browser; nó không phải giới hạn cứng cho công việc bất đồng bộ. Với server hoặc worker, thay `requestAnimationFrame` bằng queue có giới hạn và một consumer. Hãy quyết định rõ khi quá tải thì sẽ tạm dừng công việc upstream ở bên ngoài listener, gộp cập nhật UI hay hủy session; không bao giờ để queue tăng mà không có giới hạn.
+
+## 6. Stream model call lồng trong Extension
+
+Extension đã có `ExtensionContext` có thể mở provider stream trực tiếp mà không cần dựng thêm `AgentSession`. Dùng `ctx.modelRegistry.stream()` cho request option riêng của API và `streamSimple()` cho option trung lập với provider; cả hai method gọi provider đã cấu hình với authentication đã được resolve tại thời điểm gửi request. Consume `AssistantMessageEventStream` trả về bằng cùng pattern `for await` của Pi AI, rồi await `.result()` khi cần assistant message đầy đủ và usage.
+
+Nested stream đó thuộc Extension. Low-level Pi AI event của nó không tự động được chép vào `AgentSessionEvent` stream của session cha. Chỉ forward UI state mà Extension sở hữu, đồng thời đưa usage của nested call vào custom Tool result khi Tool contract yêu cầu session accounting.
 
 ## Các lỗi thường gặp
 
