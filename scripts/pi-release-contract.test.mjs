@@ -2288,6 +2288,69 @@ for (const functionName of [chapter11ExampleFunction, deterministicGuideFunction
   });
 }
 
+test("Chapter 11 compile fixture aborts and drains a stalled Agent before removing its provider", async () => {
+  const [compileFixture, ai, { Agent }] = await Promise.all([
+    readFile(
+      new URL("tests/fixtures/pi-sdk-0871.contract.ts", repositoryRoot),
+      "utf8",
+    ),
+    import("@earendil-works/pi-ai"),
+    import("@earendil-works/pi-agent-core"),
+  ]);
+  const models = ai.createModels();
+  const cleanupEvents = [];
+  class StalledAgent extends Agent {
+    prompt() {
+      return new Promise(() => {});
+    }
+    abort() {
+      cleanupEvents.push("abort");
+      super.abort();
+    }
+    async waitForIdle() {
+      assert.ok(models.getProvider("chapter-11-faux"));
+      cleanupEvents.push("idle");
+      await super.waitForIdle();
+    }
+  }
+  const fixture = await importCompileFixtureFunctions(
+    compileFixture,
+    [chapter11ExampleFunction],
+    {
+      assert,
+      Agent: StalledAgent,
+      createModels: () => models,
+      fauxProvider: ai.fauxProvider,
+      fauxAssistantMessage: ai.fauxAssistantMessage,
+      fauxText: ai.fauxText,
+      fauxToolCall: ai.fauxToolCall,
+      getCurrentSystemPrompt: ai.getCurrentSystemPrompt,
+      getCurrentTools: ai.getCurrentTools,
+      Type: ai.Type,
+    },
+  );
+  let safetyTimer;
+  try {
+    const safetyDeadline = new Promise((_, reject) => {
+      safetyTimer = setTimeout(
+        () => reject(new Error("fixture did not enforce its Agent watchdog")),
+        5_000,
+      );
+    });
+    await assert.rejects(
+      Promise.race([fixture[chapter11ExampleFunction](), safetyDeadline]),
+      /Chapter 11 Agent run did not settle within 2000 ms/,
+    );
+    assert.ok(cleanupEvents.includes("abort"));
+    assert.ok(cleanupEvents.includes("idle"));
+    assert.ok(cleanupEvents.indexOf("abort") < cleanupEvents.indexOf("idle"));
+    assert.equal(models.getProvider("chapter-11-faux"), undefined);
+    assert.equal(models.getModel("chapter-11-faux", "chapter-11-model"), undefined);
+  } finally {
+    clearTimeout(safetyTimer);
+  }
+});
+
 test("Pi 0.85 SDK install recipes include the same-version pi-server packaging workaround", async () => {
   const release = await readReleaseFixture();
   const guideContracts = [

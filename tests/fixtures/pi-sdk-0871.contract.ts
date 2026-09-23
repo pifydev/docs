@@ -201,6 +201,34 @@ async function verifyDeterministicAgentRoundTrip(): Promise<void> {
     },
   ]);
 
+  const WATCHDOG_MS = 2_000;
+  const awaitWithFailureWatchdog = async <T>(
+    operation: Promise<T>,
+    label: string,
+    onTimeout: () => void,
+  ): Promise<T> => {
+    let watchdog: ReturnType<typeof setTimeout> | undefined;
+    const timeoutFailure = new Promise<never>((_, reject) => {
+      watchdog = setTimeout(() => {
+        const message = `${label} did not settle within ${WATCHDOG_MS} ms`;
+        try {
+          onTimeout();
+        } catch (cause) {
+          reject(new Error(`${message}; timeout cleanup failed`, { cause }));
+          return;
+        }
+        reject(new Error(message));
+      }, WATCHDOG_MS);
+    });
+
+    try {
+      return await Promise.race([operation, timeoutFailure]);
+    } finally {
+      if (watchdog !== undefined) clearTimeout(watchdog);
+    }
+  };
+
+  let agent: Agent | undefined;
   try {
     const model = models.getModel("chapter-11-faux", "chapter-11-model");
     assert.ok(
@@ -208,7 +236,7 @@ async function verifyDeterministicAgentRoundTrip(): Promise<void> {
       "the isolated Models collection must expose the faux model",
     );
 
-    const agent = new Agent({
+    agent = new Agent({
       streamFn: models.streamSimple.bind(models),
       initialState: {
         systemPrompt: "Use the add Tool for arithmetic.",
@@ -218,7 +246,11 @@ async function verifyDeterministicAgentRoundTrip(): Promise<void> {
       },
     });
 
-    await agent.prompt("What is 20 + 22?");
+    await awaitWithFailureWatchdog(
+      agent.prompt("What is 20 + 22?"),
+      "Chapter 11 Agent run",
+      () => agent?.abort(),
+    );
 
     assert.equal(faux.state.callCount, 2);
     assert.equal(faux.getPendingResponseCount(), 0);
@@ -255,8 +287,19 @@ async function verifyDeterministicAgentRoundTrip(): Promise<void> {
     assert.equal(finalMessage.stopReason, "stop");
     assert.deepEqual(finalMessage.content, [fauxText("The total is 42.")]);
   } finally {
-    models.deleteProvider(faux.provider.id);
-    assert.equal(models.getProvider(faux.provider.id), undefined);
+    try {
+      agent?.abort();
+      if (agent) {
+        await awaitWithFailureWatchdog(
+          agent.waitForIdle(),
+          "Chapter 11 Agent cleanup",
+          () => agent?.abort(),
+        );
+      }
+    } finally {
+      models.deleteProvider(faux.provider.id);
+      assert.equal(models.getProvider(faux.provider.id), undefined);
+    }
   }
 }
 
