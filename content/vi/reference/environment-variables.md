@@ -40,7 +40,7 @@ Với built-in provider của Pi, thứ tự credential là CLI `--api-key` ho�
 | GitHub Copilot | `COPILOT_GITHUB_TOKEN` |
 | Cloudflare AI Gateway và Workers AI | `CLOUDFLARE_API_KEY`; các ID được trình bày bên dưới |
 
-Các catalog entry chọn lọc dưới đây phân biệt direct API-key route với subscription authentication. Cột credential đặt tên cho route, không phải giá trị cần sao chép vào environment variable:
+Các catalog entry chọn lọc dưới đây phân biệt direct API-key route với subscription authentication. Cột credential cho biết cơ chế xác thực của provider route tương ứng; entry dùng subscription không phải tên environment variable:
 
 | Model | Route của provider | Đường xác thực |
 |---|---|---|

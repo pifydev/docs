@@ -317,7 +317,7 @@ stored credential hoặc provider ambient auth
 
 `getModel(provider, id)` là catalog lookup đồng bộ và trả `undefined` nếu hiện không có registered provider nào expose ID đó. Hàm không fetch catalog và cũng không chứng minh auth đã được cấu hình. `getAvailable()` áp dụng auth check, còn dynamic provider update last-known model list qua `refresh()`.
 
-Generated catalog của `0.87.1` có các route hiện tại dưới đây. Đây là snapshot có chủ đích, không thay thế `models.getAll()` hoặc `pi --list-models`:
+Generated catalog của `0.87.1` có các route hiện tại dưới đây. Đây là snapshot có chủ đích, không thay thế `models.getModels()` hoặc `pi --list-models`:
 
 | Model | Route của provider | Đường xác thực | Hành vi trong catalog |
 |---|---|---|---|
@@ -331,7 +331,7 @@ Generated catalog của `0.87.1` có các route hiện tại dưới đây. Đâ
 | `GPT-6 Luna` | `github-copilot` | `GitHub Copilot subscription` | `route được hỗ trợ` |
 | `Grok 4.7` | `xai` | `XAI_API_KEY` | `default cho xAI session mới` |
 
-Claude ID phụ thuộc vào route: Anthropic expose `claude-opus-5-5`, còn GitHub Copilot expose `claude-opus-5.5`. Context một triệu token và compatibility flag buộc adaptive thinking ở trên chỉ thuộc catalog record của Anthropic; đừng suy rộng giới hạn hoặc request transformation đó sang mọi route. `grok-4.7` là default khi Pi resolve model cho xAI session mới. Lựa chọn tường minh hoặc model đã lưu trong session được resume vẫn được ưu tiên.
+Claude ID phụ thuộc vào route: Anthropic expose `claude-opus-5-5`, còn GitHub Copilot expose `claude-opus-5.5`. Các giá trị context một triệu token và forced adaptive thinking hiển thị trong row Anthropic đã được kiểm chứng theo catalog record đó; hãy kiểm tra metadata riêng của từng route thay vì áp các giá trị ấy sang route khác. `grok-4.7` là default khi Pi resolve model cho xAI session mới. Lựa chọn tường minh hoặc model đã lưu trong session được resume vẫn được ưu tiên.
 
 Một `Model` ghi cả hai routing key. `provider` đặt tên collection owner; `api` đặt tên wire implementation của provider. Record còn mang `id`, `name`, `baseUrl`, input capability, reasoning support, token limit, cost rate, compatibility flag, header tùy chọn và `thinkingLevelMap` riêng của model. Với custom model, hãy giữ `provider` trùng ID truyền vào `createProvider()` và đặt endpoint trên model khi API implementation được tái sử dụng đọc `model.baseUrl`.
 

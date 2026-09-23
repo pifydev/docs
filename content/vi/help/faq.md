@@ -23,7 +23,7 @@ Pi giữ phần core nhỏ và cho phép tùy chỉnh bằng extension, skill, p
 
 Pi đăng ký sẵn provider cho Anthropic, OpenAI, Google, Bedrock, OpenRouter, một số subscription endpoint và nhiều dịch vụ hosted hoặc local khác. Bạn cũng có thể đăng ký custom provider hoặc server tương thích OpenAI. Xem [Tích hợp model provider](../how-to/plug-new-model.md).
 
-Các bổ sung chọn lọc của `0.87.1` dưới đây cho thấy một tên trong catalog có thể có nhiều authentication route:
+Các bổ sung chọn lọc của `0.87.1` dưới đây cho thấy một tên trong catalog có thể có nhiều provider route:
 
 | Model | Route hiện tại | Hành vi của route |
 |---|---|---|
@@ -74,12 +74,12 @@ Có. Hãy gửi đủ file tiếng Anh và tiếng Việt, giữ cấu trúc hea
 
 Hai bản sửa trong `0.87.1` cần được tính đến khi chẩn đoán lỗi riêng của provider:
 
-| Trường hợp | Boundary | Hành vi mong đợi |
+| Trường hợp | Hành vi ở bản cũ | Hành vi trong `0.87.1` |
 |---|---|---|
-| `OpenAI-compatible + user message chỉ có image` | `không gửi empty text part` | `request chứa image block` |
-| `Claude Fable 5.1 + split-turn compaction` | `tách conversation` | `chỉ dẫn để tiếp tục conversation` |
+| `OpenAI-compatible` | `request chỉ có image có thể kèm empty text part` | `bỏ empty text part; giữ image block` |
+| `Claude Fable 5.1 + split-turn compaction` | `summary có thể bị từ chối` | `tách Conversation và Instructions; dùng chỉ dẫn để tiếp tục` |
 
-Đây là các sửa đổi implementation, không phải public API. Nếu endpoint tương thích OpenAI vẫn từ chối lượt chỉ có image, hãy kiểm tra các content part đã serialize. Nếu Claude Fable 5.1 hiểu split-turn compaction summary thành task mới, hãy xác nhận conversation trước đó được tách khỏi continuation instruction; không có public compaction option để tinh chỉnh hành vi này.
+Các sửa đổi implementation này không expose public API. Nếu endpoint tương thích OpenAI vẫn từ chối lượt chỉ có image, hãy kiểm tra các content part đã serialize. Ở bản cũ, split-turn compaction summary có thể bị Claude Fable 5.1 từ chối. Phiên bản `0.87.1` tách `Conversation` trước đó khỏi `Instructions` chứa chỉ dẫn để tiếp tục. Không có public compaction knob cho hành vi này.
 
 ### Kết quả Tool không đến được model
 

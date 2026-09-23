@@ -23,7 +23,7 @@ Pi keeps the core small and exposes customization through extensions, skills, pr
 
 Pi registers built-in providers for Anthropic, OpenAI, Google, Bedrock, OpenRouter, several subscription endpoints, and other hosted or local services. It can also register a custom provider or an OpenAI-compatible server. See [Integrate a model provider](../how-to/plug-new-model.md).
 
-These selected `0.87.1` additions show how one catalog name can have several authentication routes:
+These selected `0.87.1` additions show how one catalog name can have several provider routes:
 
 | Model | Current routes | Route behavior |
 |---|---|---|
@@ -74,12 +74,12 @@ The repository-level [GLOSSARY.md](https://github.com/pifydev/docs/blob/main/GLO
 
 Two `0.87.1` fixes matter when diagnosing provider-specific failures:
 
-| Case | Boundary | Expected behavior |
+| Case | Older behavior | `0.87.1` behavior |
 |---|---|---|
-| `OpenAI-compatible + image-only user message` | `omit empty text part` | `request contains image block` |
-| `Claude Fable 5.1 + split-turn compaction` | `separate conversation` | `continuation-oriented instructions` |
+| `OpenAI-compatible` | `image-only request could include an empty text part` | `omit empty text part; preserve image block` |
+| `Claude Fable 5.1 + split-turn compaction` | `summary could receive a refusal` | `separate Conversation and Instructions; use continuation guidance` |
 
-These are implementation corrections, not public APIs. If an OpenAI-compatible endpoint still rejects an image-only turn, inspect the serialized content parts. If Claude Fable 5.1 handles a split-turn compaction summary as a new task, verify that the earlier conversation is separate from the continuation instructions rather than trying to tune a public compaction option that does not exist.
+These implementation corrections expose no public API. If an OpenAI-compatible endpoint still rejects an image-only turn, inspect the serialized content parts. In older builds, a split-turn compaction summary could receive a refusal from Claude Fable 5.1. Version `0.87.1` separates the earlier `Conversation` from `Instructions` that provide continuation guidance. No public compaction knob controls this behavior.
 
 ### My tool result does not reach the model
 

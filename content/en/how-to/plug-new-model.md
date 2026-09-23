@@ -137,18 +137,27 @@ Pi uses model metadata for selection, validation, request shaping, usage, and di
 
 Common completions compatibility switches cover `developer` roles, `reasoning_effort`, streaming usage and `finish_reason`, the max-token field, strict/grammar Tools, replay rules for Tool results or reasoning content, thinking format, caching, routing, and session affinity. Set only flags you can demonstrate against the server. Metadata has no general `streaming` or `toolUse` boolean: every `Provider` streams, and Tool support is proven by an actual Tool call.
 
-Image normalization also comes from model metadata. In `0.87.1`, `inputLimits.images.resize` is a per-model profile applied at each point where a new image enters conversation history:
+Image normalization also comes from model metadata. In `0.87.1`, `model.inputLimits.images.resize` is an optional per-model, per-field override applied at each point where a new image enters conversation history:
 
 | Image ingress | Resize source | History effect |
 |---|---|---|
-| `file attachment` | `selected model.inputLimits.images.resize` | `resize once before history append` |
+| `file attachment` | `model.inputLimits.images.resize` | `resize once before history append` |
 | `read` | `ctx.model.inputLimits.images.resize` | `resize once in Tool result` |
-| `Tool-result image` | `active model.inputLimits.images.resize` | `normalize once after tool_result hooks` |
+| `Tool-result image` | `model.inputLimits.images.resize` | `normalize once after tool_result hooks` |
 | `profile scope` | `per model` | `no uniform limit` |
 | `model switch` | `historical images` | `not rewritten` |
 | `provider-side transform` | `outside Pi resize profile` | `not controlled` |
 
-The profile can define `maxWidth`, `maxHeight`, `maxBytes`, and `jpegQuality`. Use values that match the selected model and verify the full path; a provider may still impose hard limits or transform the encoded image after Pi hands it off. Pi normalizes each new image once as it enters history, which keeps the stored input cache-safe. Changing models later does not re-encode images already stored in the transcript.
+Pi merges fields supplied by the model profile over these runtime fallbacks:
+
+| Field | Runtime fallback | Unit or boundary |
+|---|---|---|
+| `maxWidth` | `2000` | `pixels` |
+| `maxHeight` | `2000` | `pixels` |
+| `maxBytes` | `4.5` | `MiB base64 payload` |
+| `jpegQuality` | `80` | `integer` |
+
+A missing profile uses every fallback; a partial profile keeps the fallback for each omitted field. Effective limits can therefore differ by model. Provider-side transformations and hard limits are separate from Pi's resize profile, so verify them independently for every route. Pi normalizes each new image once as it enters history, which keeps the stored input cache-safe. Changing models later does not re-encode images already stored in the transcript.
 
 ## 3. Discover models with provider config
 
@@ -694,7 +703,7 @@ For image-only requests, the OpenAI-compatible adapter follows this payload rule
 
 | Request shape | Text-part behavior | Required payload |
 |---|---|---|
-| `OpenAI-compatible + image-only user message` | `omit empty text part` | `send image block` |
+| `OpenAI-compatible` | `omit empty text part` | `send image block` |
 
 This is the `0.87.1` adapter behavior, not an extra public option. A custom OpenAI-compatible adapter should preserve the image content without synthesizing an empty text item that the endpoint may reject.
 

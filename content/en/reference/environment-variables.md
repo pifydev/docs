@@ -40,7 +40,7 @@ For Pi's built-in providers, credential order is an explicit CLI `--api-key` or 
 | GitHub Copilot | `COPILOT_GITHUB_TOKEN` |
 | Cloudflare AI Gateway and Workers AI | `CLOUDFLARE_API_KEY`; IDs are covered below |
 
-The following selected catalog entries distinguish direct API-key routes from subscription authentication. The credential column names the route, not a value to copy into an environment variable:
+The following selected catalog entries distinguish direct API-key routes from subscription authentication. The credential column identifies the authentication mechanism for that provider route; subscription entries are not environment-variable names:
 
 | Model | Provider route | Credential path |
 |---|---|---|

@@ -1131,25 +1131,6 @@ function assertContractTableRows(source, expectedRows, context, options = {}) {
   return table;
 }
 
-function assertLocalizedContractTable(
-  source,
-  { header: expectedHeader, rows: expectedRows },
-  context,
-  options = {},
-) {
-  const table = parseMarkdownContractTableDefinitions(source).find(
-    ({ header, rows }) =>
-      header.length === expectedHeader.length &&
-      header.every((cell, index) => cell === expectedHeader[index]) &&
-      contractTableContainsRows(rows, expectedRows, options),
-  );
-  assert.ok(
-    table,
-    `${context} must preserve its localized header and technical relationships`,
-  );
-  return table;
-}
-
 function assertTechnicalContractRows(
   source,
   expectedRows,
@@ -1204,333 +1185,221 @@ async function readModelConfigurationContent() {
   return new Map(entries);
 }
 
-const englishCatalogRouteRows = [
-  [
+function technicalRow(...values) {
+  return values.map((value, cellIndex) => [cellIndex, value]);
+}
+
+const catalogTechnicalRows = [
+  technicalRow(
     "Claude Opus 5.5",
     "anthropic",
     "ANTHROPIC_API_KEY",
     "adaptive thinking; contextWindow=1000000",
-  ],
-  ["GPT-6 Sol", "openai", "OPENAI_API_KEY", "OpenAI API key"],
-  ["GPT-6 Luna", "openai", "OPENAI_API_KEY", "OpenAI API key"],
-  [
-    "GPT-6 Sol",
-    "openai-codex",
-    "OpenAI Codex subscription",
-    "subscription route",
-  ],
-  [
-    "GPT-6 Luna",
-    "openai-codex",
-    "OpenAI Codex subscription",
-    "subscription route",
-  ],
-  [
+  ),
+  technicalRow("GPT-6 Sol", "openai", "OPENAI_API_KEY"),
+  technicalRow("GPT-6 Luna", "openai", "OPENAI_API_KEY"),
+  technicalRow("GPT-6 Sol", "openai-codex", "OpenAI Codex subscription"),
+  technicalRow("GPT-6 Luna", "openai-codex", "OpenAI Codex subscription"),
+  technicalRow(
     "Claude Opus 5.5",
     "github-copilot",
     "GitHub Copilot subscription",
-    "supported route",
-  ],
-  [
-    "GPT-6 Sol",
-    "github-copilot",
-    "GitHub Copilot subscription",
-    "supported route",
-  ],
-  [
-    "GPT-6 Luna",
-    "github-copilot",
-    "GitHub Copilot subscription",
-    "supported route",
-  ],
-  ["Grok 4.7", "xai", "XAI_API_KEY", "default for new xAI sessions"],
+  ),
+  technicalRow("GPT-6 Sol", "github-copilot", "GitHub Copilot subscription"),
+  technicalRow("GPT-6 Luna", "github-copilot", "GitHub Copilot subscription"),
+  technicalRow("Grok 4.7", "xai", "XAI_API_KEY"),
 ];
 
-const englishImageIngressRows = [
-  [
-    "file attachment",
-    "selected model.inputLimits.images.resize",
-    "resize once before history append",
-  ],
-  ["read", "ctx.model.inputLimits.images.resize", "resize once in Tool result"],
-  [
-    "Tool-result image",
-    "active model.inputLimits.images.resize",
-    "normalize once after tool_result hooks",
-  ],
-  ["profile scope", "per model", "no uniform limit"],
-  ["model switch", "historical images", "not rewritten"],
-  ["provider-side transform", "outside Pi resize profile", "not controlled"],
+const quickstartTechnicalRows = [
+  technicalRow(
+    "anthropic/claude-opus-5-5",
+    "Claude Opus 5.5",
+    "ANTHROPIC_API_KEY",
+  ),
+  technicalRow("openai/gpt-6-sol", "GPT-6 Sol", "OPENAI_API_KEY"),
+  technicalRow("openai/gpt-6-luna", "GPT-6 Luna", "OPENAI_API_KEY"),
+  technicalRow("xai/grok-4.7", "Grok 4.7", "XAI_API_KEY"),
 ];
 
-const sharedQuickstartRouteRows = [
-  ["anthropic/claude-opus-5-5", "Claude Opus 5.5", "ANTHROPIC_API_KEY"],
-  ["openai/gpt-6-sol", "GPT-6 Sol", "OPENAI_API_KEY"],
-  ["openai/gpt-6-luna", "GPT-6 Luna", "OPENAI_API_KEY"],
-  ["xai/grok-4.7", "Grok 4.7", "XAI_API_KEY"],
+const imageIngressTechnicalRows = [
+  [[1, "model.inputLimits.images.resize"]],
+  [
+    [0, "read"],
+    [1, "ctx.model.inputLimits.images.resize"],
+  ],
+  [[1, "model.inputLimits.images.resize"]],
 ];
 
-const modelConfigurationContracts = {
-  en: {
-    catalog: {
-      header: [
-        "Model",
-        "Provider route",
-        "Credential path",
-        "Catalog behavior",
-      ],
-      rows: englishCatalogRouteRows,
-    },
-    imageIngress: {
-      header: ["Image ingress", "Resize source", "History effect"],
-      rows: englishImageIngressRows,
-    },
-    imageOnly: {
-      header: ["Request shape", "Text-part behavior", "Required payload"],
-      rows: [
-        [
-          "OpenAI-compatible + image-only user message",
-          "omit empty text part",
-          "send image block",
-        ],
-      ],
-    },
-    quickstart: {
-      header: ["Provider/model ID", "Catalog name", "Environment credential"],
-      rows: sharedQuickstartRouteRows,
-    },
-    faqRoutes: {
-      header: ["Model", "Current routes", "Route behavior"],
-      rows: [
-        [
-          "Claude Opus 5.5",
-          "anthropic + github-copilot",
-          "adaptive thinking + supported Copilot route",
-        ],
-        [
-          "GPT-6 Sol",
-          "openai + openai-codex + github-copilot",
-          "API key + OpenAI Codex subscription + supported Copilot route",
-        ],
-        [
-          "GPT-6 Luna",
-          "openai + openai-codex + github-copilot",
-          "API key + OpenAI Codex subscription + supported Copilot route",
-        ],
-        ["Grok 4.7", "xai", "default for new xAI sessions"],
-      ],
-    },
-    faqEdges: {
-      header: ["Case", "Boundary", "Expected behavior"],
-      rows: [
-        [
-          "OpenAI-compatible + image-only user message",
-          "omit empty text part",
-          "request contains image block",
-        ],
-        [
-          "Claude Fable 5.1 + split-turn compaction",
-          "separate conversation",
-          "continuation-oriented instructions",
-        ],
-      ],
-    },
-    xaiDefault: {
-      header: ["Provider", "Resolution scope", "Catalog default"],
-      rows: [["xai", "new session", "grok-4.7"]],
-    },
-    imageBoundary: {
-      header: ["Control or event", "Scope", "Effect"],
-      rows: [
-        ["images.autoResize", "global gate", "enable or disable resizing"],
-        [
-          "inputLimits.images.resize",
-          "per-model profile",
-          "new images before history",
-        ],
-        ["model switch", "stored image", "do not rewrite"],
-      ],
-    },
-    cliMode: {
-      header: ["Invocation", "Result", "Process outcome"],
-      rows: [
-        ["--mode <missing>", "error", "exit status=1"],
-        ["--mode invalid", "error", "exit status=1"],
-      ],
-    },
-    credentials: {
-      header: ["Model", "Provider route", "Credential path"],
-      rows: englishCatalogRouteRows.map((row) => row.slice(0, 3)),
-    },
-  },
-  vi: {
-    catalog: {
-      header: [
-        "Model",
-        "Route của provider",
-        "Đường xác thực",
-        "Hành vi trong catalog",
-      ],
-      rows: [
-        [
-          "Claude Opus 5.5",
-          "anthropic",
-          "ANTHROPIC_API_KEY",
-          "adaptive thinking; contextWindow=1000000",
-        ],
-        ["GPT-6 Sol", "openai", "OPENAI_API_KEY", "OpenAI API key"],
-        ["GPT-6 Luna", "openai", "OPENAI_API_KEY", "OpenAI API key"],
-        [
-          "GPT-6 Sol",
-          "openai-codex",
-          "OpenAI Codex subscription",
-          "route dùng subscription",
-        ],
-        [
-          "GPT-6 Luna",
-          "openai-codex",
-          "OpenAI Codex subscription",
-          "route dùng subscription",
-        ],
-        [
-          "Claude Opus 5.5",
-          "github-copilot",
-          "GitHub Copilot subscription",
-          "route được hỗ trợ",
-        ],
-        [
-          "GPT-6 Sol",
-          "github-copilot",
-          "GitHub Copilot subscription",
-          "route được hỗ trợ",
-        ],
-        [
-          "GPT-6 Luna",
-          "github-copilot",
-          "GitHub Copilot subscription",
-          "route được hỗ trợ",
-        ],
-        ["Grok 4.7", "xai", "XAI_API_KEY", "default cho xAI session mới"],
-      ],
-    },
-    imageIngress: {
-      header: [
-        "Điểm image đi vào history",
-        "Nguồn cấu hình resize",
-        "Tác động lên history",
-      ],
-      rows: [
-        [
-          "file đính kèm",
-          "inputLimits.images.resize của model đã chọn",
-          "resize một lần trước khi append vào history",
-        ],
-        [
-          "read",
-          "ctx.model.inputLimits.images.resize",
-          "resize một lần trong Tool result",
-        ],
-        [
-          "image trong Tool result",
-          "inputLimits.images.resize của model đang active",
-          "normalize một lần sau hook tool_result",
-        ],
-        ["phạm vi profile", "theo từng model", "không có giới hạn chung"],
-        ["chuyển model", "image trong history", "không ghi lại"],
-        [
-          "transform phía provider",
-          "ngoài resize profile của Pi",
-          "Pi không kiểm soát",
-        ],
-      ],
-    },
-    imageOnly: {
-      header: ["Hình dạng request", "Cách xử lý text part", "Payload bắt buộc"],
-      rows: [
-        [
-          "OpenAI-compatible + user message chỉ có image",
-          "không gửi empty text part",
-          "gửi image block",
-        ],
-      ],
-    },
-    quickstart: {
-      header: [
-        "Provider/model ID",
-        "Tên trong catalog",
-        "Credential trong environment",
-      ],
-      rows: sharedQuickstartRouteRows,
-    },
-    faqRoutes: {
-      header: ["Model", "Route hiện tại", "Hành vi của route"],
-      rows: [
-        [
-          "Claude Opus 5.5",
-          "anthropic + github-copilot",
-          "adaptive thinking + route Copilot được hỗ trợ",
-        ],
-        [
-          "GPT-6 Sol",
-          "openai + openai-codex + github-copilot",
-          "API key + OpenAI Codex subscription + route Copilot được hỗ trợ",
-        ],
-        [
-          "GPT-6 Luna",
-          "openai + openai-codex + github-copilot",
-          "API key + OpenAI Codex subscription + route Copilot được hỗ trợ",
-        ],
-        ["Grok 4.7", "xai", "default cho xAI session mới"],
-      ],
-    },
-    faqEdges: {
-      header: ["Trường hợp", "Boundary", "Hành vi mong đợi"],
-      rows: [
-        [
-          "OpenAI-compatible + user message chỉ có image",
-          "không gửi empty text part",
-          "request chứa image block",
-        ],
-        [
-          "Claude Fable 5.1 + split-turn compaction",
-          "tách conversation",
-          "chỉ dẫn để tiếp tục conversation",
-        ],
-      ],
-    },
-    xaiDefault: {
-      header: ["Provider", "Phạm vi resolution", "Default trong catalog"],
-      rows: [["xai", "session mới", "grok-4.7"]],
-    },
-    imageBoundary: {
-      header: ["Cấu hình hoặc event", "Phạm vi", "Tác động"],
-      rows: [
-        ["images.autoResize", "gate toàn cục", "bật hoặc tắt resize"],
-        [
-          "inputLimits.images.resize",
-          "profile theo từng model",
-          "image mới trước khi vào history",
-        ],
-        ["chuyển model", "image đã lưu", "không ghi lại"],
-      ],
-    },
-    cliMode: {
-      header: ["Cách gọi", "Kết quả", "Trạng thái process"],
-      rows: [
-        ["--mode <missing>", "error", "exit status=1"],
-        ["--mode invalid", "error", "exit status=1"],
-      ],
-    },
-    credentials: {
-      header: ["Model", "Route của provider", "Đường xác thực"],
-      rows: englishCatalogRouteRows.map((row) => row.slice(0, 3)),
-    },
-  },
-};
+const resizeDefaultTechnicalRows = [
+  technicalRow("maxWidth", "2000"),
+  technicalRow("maxHeight", "2000"),
+  technicalRow("maxBytes", "4.5", "MiB base64 payload"),
+  technicalRow("jpegQuality", "80"),
+];
+
+const credentialTechnicalRows = catalogTechnicalRows.map((row) =>
+  row.filter(([cellIndex]) => cellIndex < 3),
+);
+
+function normalizedComparisonText(value) {
+  return value.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase();
+}
+
+function comparableDescriptionResidue(value, allowedIdentifiers) {
+  let residue = normalizedComparisonText(value);
+  for (const literal of allowedIdentifiers) {
+    residue = residue.split(normalizedComparisonText(literal)).join(" ");
+  }
+  return residue.replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+}
+
+function tableTechnicalIdentifiers(
+  english,
+  vietnamese,
+  stableColumns,
+  allowedIdentifiers,
+) {
+  return [
+    ...new Set(
+      [english, vietnamese]
+        .flatMap(({ rows }) =>
+          rows.flatMap((row) =>
+            stableColumns.map((column) => row[column]).filter(Boolean),
+          ),
+        )
+        .concat(allowedIdentifiers),
+    ),
+  ].sort((left, right) => right.length - left.length);
+}
+
+function assertDescriptionsAreLocalized(
+  englishTables,
+  vietnameseTables,
+  comparisonContracts,
+) {
+  for (const [tableName, contract] of Object.entries(comparisonContracts)) {
+    const { stableColumns, allowedIdentifiers = [] } = contract;
+    const english = englishTables[tableName];
+    const vietnamese = vietnameseTables[tableName];
+    const technicalIdentifiers = tableTechnicalIdentifiers(
+      english,
+      vietnamese,
+      stableColumns,
+      allowedIdentifiers,
+    );
+    assert.equal(
+      vietnamese.header.length,
+      english.header.length,
+      tableName + " localized header must keep the same shape",
+    );
+    assert.equal(
+      vietnamese.rows.length,
+      english.rows.length,
+      tableName + " localized table must keep the same row count",
+    );
+
+    const compareCell = (englishCell, vietnameseCell, context) => {
+      const englishResidue = comparableDescriptionResidue(
+        englishCell,
+        technicalIdentifiers,
+      );
+      const vietnameseResidue = comparableDescriptionResidue(
+        vietnameseCell,
+        technicalIdentifiers,
+      );
+      if (!englishResidue || !vietnameseResidue) return;
+      assert.notEqual(
+        vietnameseResidue,
+        englishResidue,
+        context + " must not copy generic English prose into Vietnamese",
+      );
+    };
+
+    english.header.forEach((cell, column) =>
+      compareCell(
+        cell,
+        vietnamese.header[column],
+        tableName + " header column " + column,
+      ),
+    );
+    english.rows.forEach((row, rowIndex) => {
+      row.forEach((cell, column) => {
+        if (!stableColumns.includes(column)) {
+          compareCell(
+            cell,
+            vietnamese.rows[rowIndex][column],
+            tableName + " row " + rowIndex + " column " + column,
+          );
+        }
+      });
+    });
+  }
+}
+
+function findParagraphContaining(source, requiredLiterals, context) {
+  const paragraph = source
+    .split(/\n\s*\n/)
+    .find(
+      (candidate) =>
+        !candidate.trimStart().startsWith("|") &&
+        requiredLiterals.every((literal) => candidate.includes(literal)),
+    );
+  assert.ok(paragraph, context + " must keep the scoped explanatory paragraph");
+  return paragraph;
+}
+
+function assertRouteMetadataIsRowScoped(section, locale, context) {
+  const paragraph = findParagraphContaining(
+    section,
+    ["claude-opus-5-5", "claude-opus-5.5"],
+    context,
+  );
+  assert.match(paragraph, /metadata/i);
+  if (locale === "en") {
+    assert.match(paragraph, /verified/i);
+    assert.doesNotMatch(
+      paragraph,
+      /\b(?:only|exclusive(?:ly)?)\b[^.\n]{0,100}\bAnthropic\b|\bAnthropic\b[^.\n]{0,100}\b(?:only|exclusive(?:ly)?)\b/i,
+    );
+  } else {
+    assert.match(paragraph, /kiểm chứng/i);
+    assert.doesNotMatch(
+      paragraph,
+      /\bchỉ\b[^.\n]{0,100}\bAnthropic\b|\bAnthropic\b[^.\n]{0,100}\bchỉ\b/i,
+    );
+  }
+}
+
+function assertFableTroubleshooting(section, table, locale, context) {
+  const row = table.rows.find(
+    (candidate) => candidate[0] === "Claude Fable 5.1 + split-turn compaction",
+  );
+  assert.ok(row, context + " must keep the Claude Fable 5.1 edge");
+  assert.match(row[1], locale === "en" ? /\brefus(?:e|ed|al)\b/i : /từ chối/i);
+  assert.match(row[2], /Conversation/);
+  assert.match(row[2], /Instructions/);
+  assert.match(row[2], locale === "en" ? /continuation/i : /tiếp tục/i);
+  assert.match(
+    section,
+    locale === "en"
+      ? /no public [^.\n]{0,30}(?:option|knob)/i
+      : /không có public [^.\n]{0,30}(?:option|knob)/i,
+  );
+}
 
 function validateModelConfigurationContracts(localized) {
+  const validatedTables = {};
+
+  for (const [key, source] of localized) {
+    assert.doesNotMatch(
+      source,
+      /\bmodels\.getAll\(\)/,
+      key + " must use the public Models.getModels() catalog API",
+    );
+  }
+
   for (const locale of ["en", "vi"]) {
-    const context = `${locale} Pi 0.87.1 model and image contracts`;
+    const context = locale + " Pi 0.87.1 model and image contracts";
     const headings =
       locale === "en"
         ? {
@@ -1557,86 +1426,245 @@ function validateModelConfigurationContracts(localized) {
             configInterface: "## Interface và output",
             credentials: "## Provider credential",
           };
-    const contracts = modelConfigurationContracts[locale];
+    const tables = {};
 
-    const chapter = localized.get(`${locale}/ch04-model-invocation.md`);
-    assertLocalizedContractTable(
-      extractMarkdownSection(chapter, headings.auth, context).body,
-      contracts.catalog,
-      `${context} catalog routes`,
+    const chapter = localized.get(locale + "/ch04-model-invocation.md");
+    const authSection = extractMarkdownSection(
+      chapter,
+      headings.auth,
+      context,
+    ).body;
+    tables.catalog = assertTechnicalContractRows(
+      authSection,
+      catalogTechnicalRows,
+      context + " catalog routes",
+      { ordered: true },
+    );
+    const grokCatalogRow = tables.catalog.rows.find(
+      (row) => row[0] === "Grok 4.7" && row[1] === "xai",
+    );
+    assert.equal(
+      grokCatalogRow[3],
+      locale === "en"
+        ? "default for new xAI sessions"
+        : "default cho xAI session mới",
+      context + " must scope the xAI resolver default to new sessions",
+    );
+    assertRouteMetadataIsRowScoped(authSection, locale, context);
+
+    const providerGuide = localized.get(locale + "/how-to/plug-new-model.md");
+    const metadataSection = extractMarkdownSection(
+      providerGuide,
+      headings.metadata,
+      context,
+    ).body;
+    tables.imageIngress = assertTechnicalContractRows(
+      metadataSection,
+      imageIngressTechnicalRows,
+      context + " image ingress",
+      { ordered: true },
+    );
+    tables.resizeDefaults = assertTechnicalContractRows(
+      metadataSection,
+      resizeDefaultTechnicalRows,
+      context + " image resize runtime fallbacks",
       { ordered: true },
     );
 
-    const providerGuide = localized.get(`${locale}/how-to/plug-new-model.md`);
-    assertLocalizedContractTable(
-      extractMarkdownSection(providerGuide, headings.metadata, context).body,
-      contracts.imageIngress,
-      `${context} image ingress`,
-      { ordered: true },
-    );
-    assertLocalizedContractTable(
-      extractMarkdownSection(providerGuide, headings.troubleshooting, context)
-        .body,
-      contracts.imageOnly,
-      `${context} image-only request edge`,
+    const troubleshootingSection = extractMarkdownSection(
+      providerGuide,
+      headings.troubleshooting,
+      context,
+    ).body;
+    tables.imageOnly = assertTechnicalContractRows(
+      troubleshootingSection,
+      [[[0, "OpenAI-compatible"]]],
+      context + " image-only request edge",
     );
 
-    assertLocalizedContractTable(
+    tables.quickstart = assertTechnicalContractRows(
       extractMarkdownSection(
-        localized.get(`${locale}/quickstart.md`),
+        localized.get(locale + "/quickstart.md"),
         headings.quickstart,
         context,
       ).body,
-      contracts.quickstart,
-      `${context} quickstart API-key routes`,
+      quickstartTechnicalRows,
+      context + " quickstart API-key routes",
       { ordered: true },
     );
 
-    const faq = localized.get(`${locale}/help/faq.md`);
-    assertLocalizedContractTable(
+    const faq = localized.get(locale + "/help/faq.md");
+    tables.faqRoutes = assertTechnicalContractRows(
       extractMarkdownSection(faq, headings.providers, context).body,
-      contracts.faqRoutes,
-      `${context} FAQ provider routes`,
+      [
+        [
+          [0, "Claude Opus 5.5"],
+          [1, "anthropic + github-copilot"],
+        ],
+        [
+          [0, "GPT-6 Sol"],
+          [1, "openai + openai-codex + github-copilot"],
+        ],
+        [
+          [0, "GPT-6 Luna"],
+          [1, "openai + openai-codex + github-copilot"],
+        ],
+        [
+          [0, "Grok 4.7"],
+          [1, "xai"],
+        ],
+      ],
+      context + " FAQ provider routes",
       { ordered: true },
     );
-    assertLocalizedContractTable(
-      extractMarkdownSection(faq, headings.pitfalls, context).body,
-      contracts.faqEdges,
-      `${context} provider troubleshooting edges`,
+    const faqGrokRow = tables.faqRoutes.rows.find(
+      (row) => row[0] === "Grok 4.7" && row[1] === "xai",
+    );
+    assert.equal(
+      faqGrokRow[2],
+      locale === "en"
+        ? "default for new xAI sessions"
+        : "default cho xAI session mới",
+      context + " FAQ must scope the xAI default to new sessions",
+    );
+
+    const pitfallsSection = extractMarkdownSection(
+      faq,
+      headings.pitfalls,
+      context,
+    ).body;
+    tables.faqEdges = assertTechnicalContractRows(
+      pitfallsSection,
+      [
+        [[0, "OpenAI-compatible"]],
+        [[0, "Claude Fable 5.1 + split-turn compaction"]],
+      ],
+      context + " provider troubleshooting edges",
+      { ordered: true },
+    );
+    assertFableTroubleshooting(
+      pitfallsSection,
+      tables.faqEdges,
+      locale,
+      context,
+    );
+
+    const configuration = localized.get(locale + "/reference/configuration.md");
+    tables.xaiDefault = assertTechnicalContractRows(
+      extractMarkdownSection(configuration, headings.configModel, context).body,
+      [
+        [
+          [0, "xai"],
+          [1, locale === "en" ? "new session" : "session mới"],
+          [2, "grok-4.7"],
+        ],
+      ],
+      context + " xAI default",
+    );
+
+    const configImagesSection = extractMarkdownSection(
+      configuration,
+      headings.configImages,
+      context,
+    ).body;
+    tables.imageBoundary = assertTechnicalContractRows(
+      configImagesSection,
+      [[[0, "images.autoResize"]], [[0, "model.inputLimits.images.resize"]]],
+      context + " configuration image boundary",
+      { ordered: true },
+    );
+    tables.configurationResizeDefaults = assertTechnicalContractRows(
+      configImagesSection,
+      resizeDefaultTechnicalRows,
+      context + " configuration image resize runtime fallbacks",
       { ordered: true },
     );
 
-    const configuration = localized.get(`${locale}/reference/configuration.md`);
-    assertLocalizedContractTable(
-      extractMarkdownSection(configuration, headings.configModel, context).body,
-      contracts.xaiDefault,
-      `${context} xAI default`,
-    );
-    assertLocalizedContractTable(
-      extractMarkdownSection(configuration, headings.configImages, context)
-        .body,
-      contracts.imageBoundary,
-      `${context} configuration image boundary`,
-      { ordered: true },
-    );
-    assertLocalizedContractTable(
+    tables.cliMode = assertTechnicalContractRows(
       extractMarkdownSection(configuration, headings.configInterface, context)
         .body,
-      contracts.cliMode,
-      `${context} CLI mode validation`,
+      [
+        [
+          [0, "--mode <missing>"],
+          [1, "error"],
+          [2, "exit status=1"],
+        ],
+        [
+          [0, "--mode invalid"],
+          [1, "error"],
+          [2, "exit status=1"],
+        ],
+      ],
+      context + " CLI mode validation",
       { ordered: true },
     );
 
     const environment = localized.get(
-      `${locale}/reference/environment-variables.md`,
+      locale + "/reference/environment-variables.md",
     );
-    assertLocalizedContractTable(
+    tables.credentials = assertTechnicalContractRows(
       extractMarkdownSection(environment, headings.credentials, context).body,
-      contracts.credentials,
-      `${context} credential routes`,
+      credentialTechnicalRows,
+      context + " credential routes",
       { ordered: true },
     );
+
+    validatedTables[locale] = tables;
   }
+
+  assertDescriptionsAreLocalized(validatedTables.en, validatedTables.vi, {
+    catalog: {
+      stableColumns: [0, 1, 2],
+      allowedIdentifiers: [
+        "Model",
+        "Provider",
+        "adaptive thinking; contextWindow=1000000",
+        "OpenAI API key",
+      ],
+    },
+    imageIngress: {
+      stableColumns: [1],
+      allowedIdentifiers: ["read", "Tool result", "tool_result"],
+    },
+    resizeDefaults: { stableColumns: [0, 1, 2] },
+    imageOnly: {
+      stableColumns: [0],
+      allowedIdentifiers: ["text part", "image block"],
+    },
+    quickstart: {
+      stableColumns: [0, 1, 2],
+      allowedIdentifiers: ["Provider", "Model", "ID"],
+    },
+    faqRoutes: {
+      stableColumns: [0, 1],
+      allowedIdentifiers: [
+        "Model",
+        "API key",
+        "OpenAI Codex subscription",
+        "GitHub Copilot subscription",
+      ],
+    },
+    faqEdges: {
+      stableColumns: [0],
+      allowedIdentifiers: [
+        "text part",
+        "image block",
+        "Conversation",
+        "Instructions",
+      ],
+    },
+    xaiDefault: {
+      stableColumns: [0, 2],
+      allowedIdentifiers: ["Provider"],
+    },
+    imageBoundary: { stableColumns: [0] },
+    configurationResizeDefaults: { stableColumns: [0, 1, 2] },
+    cliMode: { stableColumns: [0, 1, 2] },
+    credentials: {
+      stableColumns: [0, 1, 2],
+      allowedIdentifiers: ["Model", "Provider"],
+    },
+  });
 }
 
 test("0.87.1 models and image limits preserve bilingual technical relationships", async () => {
@@ -1650,6 +1678,55 @@ test("0.87.1 models and image limits match the installed catalog and runtime def
 
   const { builtinModels } = await import("@earendil-works/pi-ai/providers/all");
   const models = builtinModels();
+  assert.equal(typeof models.getModels, "function");
+  assert.equal(models.getAll, undefined);
+
+  const modelsDeclaration = await readFile(
+    new URL(
+      "node_modules/@earendil-works/pi-ai/dist/models.d.ts",
+      repositoryRoot,
+    ),
+    "utf8",
+  );
+  const modelsInterface = modelsDeclaration.slice(
+    modelsDeclaration.indexOf("export interface Models {"),
+    modelsDeclaration.indexOf("export interface MutableModels"),
+  );
+  assert.match(
+    modelsInterface,
+    /getModels\(provider\?: string\): readonly Model<Api>\[\];/,
+  );
+  assert.doesNotMatch(modelsInterface, /\bgetAll\s*\(/);
+  assertVirtualTypeScriptCompiles(
+    new Map([
+      [
+        "models-api-surface.ts",
+        `import { createModels } from "@earendil-works/pi-ai";
+
+const models = createModels();
+models.getModels();
+models.getModels("anthropic");
+// @ts-expect-error Models exposes getModels(), not getAll().
+models.getAll();
+`,
+      ],
+    ]),
+    "Pi 0.87.1 public Models catalog API",
+  );
+
+  const activeDocs = await Promise.all(
+    [
+      ...(await activeContentFiles(new URL("content/en/", repositoryRoot))),
+      ...(await activeContentFiles(new URL("content/vi/", repositoryRoot))),
+    ].map(async (file) => [file, await readFile(file, "utf8")]),
+  );
+  for (const [file, source] of activeDocs) {
+    assert.doesNotMatch(
+      source,
+      /\bmodels\.getAll\(\)/,
+      `${fileURLToPath(file)} must use the public Models API`,
+    );
+  }
   const required = [
     ["anthropic", "claude-opus-5-5", "Claude Opus 5.5"],
     ["openai", "gpt-6-sol", "GPT-6 Sol"],
@@ -1678,6 +1755,38 @@ test("0.87.1 models and image limits match the installed catalog and runtime def
     )
   );
   assert.equal(resolver.defaultModelPerProvider.xai, "grok-4.7");
+
+  const resizeCore = await readFile(
+    new URL(
+      "node_modules/@earendil-works/pi-coding-agent/dist/utils/image-resize-core.js",
+      repositoryRoot,
+    ),
+    "utf8",
+  );
+  assert.match(resizeCore, /const DEFAULT_MAX_BYTES = 4\.5 \* 1024 \* 1024;/);
+  assert.match(
+    resizeCore,
+    /const DEFAULT_OPTIONS = \{\s*maxWidth: 2000,\s*maxHeight: 2000,\s*maxBytes: DEFAULT_MAX_BYTES,\s*jpegQuality: 80,\s*\};/,
+  );
+  assert.match(
+    resizeCore,
+    /const opts = \{ \.\.\.DEFAULT_OPTIONS, \.\.\.options \};/,
+  );
+  const runtimeDefaults = {
+    maxWidth: 2000,
+    maxHeight: 2000,
+    maxBytes: 4.5 * 1024 * 1024,
+    jpegQuality: 80,
+  };
+  assert.deepEqual(
+    { ...runtimeDefaults, ...{ maxWidth: 1568 } },
+    {
+      maxWidth: 1568,
+      maxHeight: 2000,
+      maxBytes: 4.5 * 1024 * 1024,
+      jpegQuality: 80,
+    },
+  );
 });
 
 test("0.87.1 models and image limits use the per-model profile at every image ingress", async () => {
@@ -1700,7 +1809,10 @@ test("0.87.1 models and image limits use the per-model profile at every image in
     agentSession,
     /afterToolCall[\s\S]*?const resizeOptions = this\.model\?\.inputLimits\?\.images\?\.resize;[\s\S]*?normalizeToolResultImages/,
   );
-  assert.match(toolResults, /normalize them once as they enter history/);
+  assert.match(
+    toolResults,
+    /const processed = await processImage\([\s\S]*?resizeOptions: options\?\.resizeOptions,[\s\S]*?return changed \? normalized : content;/,
+  );
 });
 
 test("0.87.1 models and image limits preserve adapter and split-turn edge behavior", async () => {
@@ -1756,6 +1868,12 @@ test("0.87.1 models and image limits mutation guards reject wrong routes and edg
   validateModelConfigurationContracts(localized);
   const mutations = [
     [
+      "public catalog API",
+      "en/ch04-model-invocation.md",
+      "models.getModels()",
+      "models.getAll()",
+    ],
+    [
       "Anthropic route",
       "en/ch04-model-invocation.md",
       "| `Claude Opus 5.5` | `anthropic` |",
@@ -1770,32 +1888,44 @@ test("0.87.1 models and image limits mutation guards reject wrong routes and edg
     [
       "attachment profile direction",
       "en/how-to/plug-new-model.md",
-      "`selected model.inputLimits.images.resize`",
-      "`global images.autoResize profile`",
+      "| `file attachment` | `model.inputLimits.images.resize` |",
+      "| `file attachment` | `images.autoResize` |",
     ],
     [
-      "history rewrite boundary",
+      "runtime image fallback",
       "en/how-to/plug-new-model.md",
-      "| `model switch` | `historical images` | `not rewritten` |",
-      "| `model switch` | `historical images` | `rewritten` |",
+      "| `maxHeight` | `2000` |",
+      "| `maxHeight` | `2048` |",
     ],
     [
-      "provider transform ownership",
-      "en/how-to/plug-new-model.md",
-      "| `provider-side transform` | `outside Pi resize profile` | `not controlled` |",
-      "| `provider-side transform` | `inside Pi resize profile` | `controlled` |",
+      "English route exclusivity",
+      "en/ch04-model-invocation.md",
+      "were verified against that catalog record; inspect each route's own metadata instead of carrying those values across routes",
+      "belong only to Anthropic; inspect each route's own metadata instead of carrying those values across routes",
     ],
     [
-      "image-only empty part",
+      "Vietnamese route exclusivity",
+      "vi/ch04-model-invocation.md",
+      "đã được kiểm chứng theo catalog record đó; hãy kiểm tra metadata riêng của từng route thay vì áp các giá trị ấy sang route khác",
+      "chỉ thuộc Anthropic; hãy kiểm tra metadata riêng của từng route thay vì áp các giá trị ấy sang route khác",
+    ],
+    [
+      "Fable refusal symptom",
       "en/help/faq.md",
-      "| `OpenAI-compatible + image-only user message` | `omit empty text part` |",
-      "| `OpenAI-compatible + image-only user message` | `add empty text part` |",
+      "`summary could receive a refusal`",
+      "`could treat the summary as a new task`",
     ],
     [
-      "split-turn prompt direction",
-      "en/help/faq.md",
-      "| `Claude Fable 5.1 + split-turn compaction` | `separate conversation` | `continuation-oriented instructions` |",
-      "| `Claude Fable 5.1 + split-turn compaction` | `merge instructions into conversation` | `reconstruct later messages` |",
+      "copied English descriptive prose",
+      "vi/help/faq.md",
+      "`request chỉ có image có thể kèm empty text part`",
+      "`image-only request could include an empty text part`",
+    ],
+    [
+      "copied English generic header",
+      "vi/reference/configuration.md",
+      "| Cấu hình hoặc event | Phạm vi | Tác động |",
+      "| Control or event | Scope | Effect |",
     ],
     [
       "CLI nonzero status",
@@ -1809,30 +1939,18 @@ test("0.87.1 models and image limits mutation guards reject wrong routes and edg
       "| `GPT-6 Sol` | `openai-codex` | `OpenAI Codex subscription` |",
       "| `GPT-6 Sol` | `openai-codex` | `OPENAI_API_KEY` |",
     ],
-    [
-      "Vietnamese catalog header localization",
-      "vi/ch04-model-invocation.md",
-      "| Model | Route của provider | Đường xác thực | Hành vi trong catalog |",
-      "| Model | Provider route | Credential path | Catalog behavior |",
-    ],
-    [
-      "Vietnamese image boundary localization",
-      "vi/reference/configuration.md",
-      "| `chuyển model` | `image đã lưu` | `không ghi lại` |",
-      "| `model switch` | `stored image` | `do not rewrite` |",
-    ],
   ];
 
   for (const [label, key, from, to] of mutations) {
     const mutated = new Map(localized);
     const source = mutated.get(key);
     const replacement = source.replace(from, to);
-    assert.notEqual(replacement, source, `${label} must mutate a real section`);
+    assert.notEqual(replacement, source, label + " must mutate a real section");
     mutated.set(key, replacement);
     assert.throws(
       () => validateModelConfigurationContracts(mutated),
       assert.AssertionError,
-      `${label} mutation must fail the real validator`,
+      label + " mutation must fail the real validator",
     );
   }
 });

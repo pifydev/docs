@@ -81,7 +81,7 @@ console.log({
 
 Model resolver cung cấp fallback khi cả lựa chọn tường minh lẫn trạng thái được resume đều không chỉ định model:
 
-| Provider | Phạm vi resolution | Default trong catalog |
+| Provider | Phạm vi resolution | Default của resolver |
 |---|---|---|
 | `xai` | `session mới` | `grok-4.7` |
 
@@ -211,15 +211,22 @@ Không có setting tích hợp `sessions.retention` hoặc `sessions.redactSecre
 
 `terminal.showImages` (`true`) điều khiển inline display, `imageWidthCells` (`60`) đặt chiều rộng ưu tiên, `clearOnShrink` (`false`) xóa hàng không còn dùng, còn `showTerminalProgress` (`false`) phát progress indicator khi terminal hỗ trợ. `images.blockImages` (`false`) chặn mọi image gửi đến provider. Ẩn image trong terminal không chặn upload.
 
-`images.autoResize` là global gate để bật hoặc tắt. Resize profile thực tế lấy từ `inputLimits.images.resize` của model đã chọn, vì vậy không có một giới hạn chung cho mọi model:
+`images.autoResize` là global gate để bật hoặc tắt. `model.inputLimits.images.resize` là override tùy chọn theo từng field. Pi lấy fallback runtime làm nền rồi ghi đè từng field được cung cấp; nếu không có profile thì Pi dùng toàn bộ fallback, còn profile không đầy đủ vẫn giữ fallback cho từng field còn thiếu:
 
 | Cấu hình hoặc event | Phạm vi | Tác động |
 |---|---|---|
 | `images.autoResize` | `gate toàn cục` | `bật hoặc tắt resize` |
-| `inputLimits.images.resize` | `profile theo từng model` | `image mới trước khi vào history` |
+| `model.inputLimits.images.resize` | `override tùy chọn theo từng field` | `image mới trước khi vào history` |
 | `chuyển model` | `image đã lưu` | `không ghi lại` |
 
-Profile đang active được dùng cho file attachment, image do `read` trả về và Tool-result image. Mỗi image mới chỉ được normalize một lần khi đi vào history; việc chọn model khác về sau không ghi lại nội dung đã lưu. Provider-side transformation và hard limit nằm ngoài profile này của Pi, vì vậy cần kiểm tra riêng theo từng route.
+| Thuộc tính | Fallback của runtime | Đơn vị hoặc boundary |
+|---|---|---|
+| `maxWidth` | `2000` | `pixels` |
+| `maxHeight` | `2000` | `pixels` |
+| `maxBytes` | `4.5` | `MiB base64 payload` |
+| `jpegQuality` | `80` | `số nguyên` |
+
+Giới hạn thực tế có thể khác nhau theo từng model. Profile đang active được dùng cho file attachment, image do `read` trả về và Tool-result image. Mỗi image mới chỉ được normalize một lần khi đi vào history; việc chọn model khác về sau không ghi lại nội dung đã lưu. Provider-side transformation và hard limit nằm ngoài profile này của Pi, vì vậy cần kiểm tra riêng theo từng route.
 
 Pi tự động detect terminal capability và nhận chính xác các giá trị environment cùng setting sau:
 

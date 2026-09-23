@@ -137,18 +137,27 @@ Pi dùng metadata của model để chọn model, kiểm tra dữ liệu, tạo 
 
 Những switch tương thích completions thường gặp điều khiển role `developer`, `reasoning_effort`, usage và `finish_reason` khi streaming, field giới hạn token, Tool strict/grammar, quy tắc replay Tool result hoặc reasoning content, thinking format, cache, routing và session affinity. Chỉ đặt flag đã kiểm chứng trên server. Metadata không có boolean `streaming` hay `toolUse` dùng chung: mọi `Provider` đều stream, còn khả năng dùng Tool phải được chứng minh bằng Tool call thật.
 
-Image normalization cũng lấy cấu hình từ model metadata. Trong `0.87.1`, `inputLimits.images.resize` là profile riêng cho từng model, được áp dụng tại mỗi điểm một image mới đi vào conversation history:
+Image normalization cũng lấy cấu hình từ model metadata. Trong `0.87.1`, `model.inputLimits.images.resize` là override tùy chọn theo từng field và từng model, được áp dụng tại mỗi điểm một image mới đi vào conversation history:
 
 | Điểm image đi vào history | Nguồn cấu hình resize | Tác động lên history |
 |---|---|---|
-| `file đính kèm` | `inputLimits.images.resize của model đã chọn` | `resize một lần trước khi append vào history` |
+| `file đính kèm` | `model.inputLimits.images.resize` | `resize một lần trước khi append vào history` |
 | `read` | `ctx.model.inputLimits.images.resize` | `resize một lần trong Tool result` |
-| `image trong Tool result` | `inputLimits.images.resize của model đang active` | `normalize một lần sau hook tool_result` |
+| `image trong Tool result` | `model.inputLimits.images.resize` | `normalize một lần sau hook tool_result` |
 | `phạm vi profile` | `theo từng model` | `không có giới hạn chung` |
 | `chuyển model` | `image trong history` | `không ghi lại` |
 | `transform phía provider` | `ngoài resize profile của Pi` | `Pi không kiểm soát` |
 
-Profile có thể đặt `maxWidth`, `maxHeight`, `maxBytes` và `jpegQuality`. Hãy dùng giá trị phù hợp với model đã chọn rồi kiểm tra toàn bộ đường đi; provider vẫn có thể áp dụng hard limit hoặc biến đổi image đã encode sau khi Pi chuyển request cho nó. Pi chỉ normalize mỗi image mới một lần khi image đi vào history, nhờ đó input đã lưu vẫn cache-safe. Đổi model về sau không re-encode image đã lưu trong transcript.
+Pi lấy các fallback runtime sau làm nền rồi ghi đè từng field do model profile cung cấp:
+
+| Thuộc tính | Fallback của runtime | Đơn vị hoặc boundary |
+|---|---|---|
+| `maxWidth` | `2000` | `pixels` |
+| `maxHeight` | `2000` | `pixels` |
+| `maxBytes` | `4.5` | `MiB base64 payload` |
+| `jpegQuality` | `80` | `số nguyên` |
+
+Nếu không có profile, Pi dùng toàn bộ fallback; nếu profile chỉ khai báo một số field, mỗi field còn thiếu vẫn giữ fallback tương ứng. Vì vậy, giới hạn thực tế có thể khác nhau theo từng model. Provider-side transformation và hard limit tách biệt với resize profile của Pi, nên cần kiểm tra độc lập cho từng route. Pi chỉ normalize mỗi image mới một lần khi image đi vào history, nhờ đó input đã lưu vẫn cache-safe. Đổi model về sau không re-encode image đã lưu trong transcript.
 
 ## 3. Khám phá model bằng provider config
 
@@ -694,7 +703,7 @@ Khi kiểm tra request chỉ có image, cần chú ý edge case sau của adapte
 
 | Hình dạng request | Cách xử lý text part | Payload bắt buộc |
 |---|---|---|
-| `OpenAI-compatible + user message chỉ có image` | `không gửi empty text part` | `gửi image block` |
+| `OpenAI-compatible` | `không gửi empty text part` | `gửi image block` |
 
 Đây là hành vi của adapter trong `0.87.1`, không phải public option mới. Custom adapter tương thích OpenAI phải giữ image content nhưng không tự tạo empty text item mà endpoint có thể từ chối.
 

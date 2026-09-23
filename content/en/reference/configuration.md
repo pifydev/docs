@@ -81,7 +81,7 @@ console.log({
 
 The model resolver supplies a fallback when neither an explicit selection nor resumed state supplies a model:
 
-| Provider | Resolution scope | Catalog default |
+| Provider | Resolution scope | Resolver default |
 |---|---|---|
 | `xai` | `new session` | `grok-4.7` |
 
@@ -211,15 +211,22 @@ There are no built-in `sessions.retention` or `sessions.redactSecrets` settings.
 
 `terminal.showImages` (`true`) controls inline display, `imageWidthCells` (`60`) sets preferred width, `clearOnShrink` (`false`) clears vacated rows, and `showTerminalProgress` (`false`) emits supported terminal progress indicators. `images.blockImages` (`false`) blocks all images from reaching providers. Hiding terminal images does not block upload.
 
-`images.autoResize` is the global on/off gate. The actual resize profile comes from the selected model's `inputLimits.images.resize`, so there is no single limit shared by every model:
+`images.autoResize` is the global on/off gate. `model.inputLimits.images.resize` is an optional per-field override. Pi merges its supplied fields over runtime fallbacks, so an absent profile uses every fallback and a partial profile keeps the fallback for each omitted field:
 
 | Control or event | Scope | Effect |
 |---|---|---|
 | `images.autoResize` | `global gate` | `enable or disable resizing` |
-| `inputLimits.images.resize` | `per-model profile` | `new images before history` |
+| `model.inputLimits.images.resize` | `optional per-field override` | `new images before history` |
 | `model switch` | `stored image` | `do not rewrite` |
 
-The active profile is used for file attachments, images returned by `read`, and Tool-result images. Each new image is normalized once as it enters history; selecting another model later does not rewrite the stored content. Provider-side transformations and hard limits remain outside this Pi profile, so validate them separately for each route.
+| Field | Runtime fallback | Unit or boundary |
+|---|---|---|
+| `maxWidth` | `2000` | `pixels` |
+| `maxHeight` | `2000` | `pixels` |
+| `maxBytes` | `4.5` | `MiB base64 payload` |
+| `jpegQuality` | `80` | `integer` |
+
+The effective limits can differ per model. The active profile is used for file attachments, images returned by `read`, and Tool-result images. Each new image is normalized once as it enters history; selecting another model later does not rewrite the stored content. Provider-side transformations and hard limits remain outside this Pi profile, so validate them separately for each route.
 
 Pi auto-detects terminal capabilities, with these exact environment and setting values:
 
