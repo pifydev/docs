@@ -251,7 +251,7 @@ test("switches the current page and keeps search results locale-scoped", async (
   await expect(page).toHaveURL(/\/en\/ch01-overview$/);
 
   const searchResponse = await request.get(
-    "/api/search?query=shouldStopAfterTurn&locale=vi",
+    "/api/search?query=finishTurn&locale=vi",
   );
   expect(searchResponse.ok()).toBe(true);
   const results = (await searchResponse.json()) as Array<{ url: string }>;
@@ -266,7 +266,7 @@ test("switches the current page and keeps search results locale-scoped", async (
     .evaluate((element: HTMLButtonElement) => element.click());
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
-  await page.getByPlaceholder("Tìm kiếm").fill("shouldStopAfterTurn");
+  await page.getByPlaceholder("Tìm kiếm").fill("finishTurn");
 
   const firstResult = dialog.locator("button[aria-selected]").first();
   await expect(firstResult).toContainText("Chương 3");
