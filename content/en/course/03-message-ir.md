@@ -5,10 +5,10 @@ translation_key: course-03-message-ir
 language: en
 checkpoint: 3
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/src/types.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/agent-loop.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/types.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent-loop.ts"
 status: reviewed
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -173,15 +173,15 @@ Run the focused command. The validator must not throw; it returns `ORPHAN_TOOL_R
 - A valid transcript retains discriminants and IDs after JSON serialization and validates again after parsing.
 - An orphan Tool result produces `ORPHAN_TOOL_RESULT` until its matching earlier call is restored.
 
-## Compare with Pi SDK 0.85.0
+## Compare with Pi SDK 0.87.1
 
-:::info[Pi SDK 0.85.0]
+:::info[Pi SDK 0.87.1]
 
-`@earendil-works/pi-ai` exports `Message = UserMessage | AssistantMessage | ToolResultMessage`. Its exported `ToolCall` has `type: "toolCall"`, `id`, `name`, and `arguments`; `ToolResultMessage` links back with `toolCallId` and `toolName`. Pi Agent core uses those public message types inside its Agent Loop.
+`@earendil-works/pi-ai` exports `Message = SystemMessage | UserMessage | AssistantMessage | ToolResultMessage`. Provider code receives a normalized `TranscriptContext`; its `Message[]` carries prompt and Tool state through `SystemMessage` records instead of separate context fields. `ToolResultMessage` still links back through `toolCallId` and `toolName`.
 
 :::
 
-Pi's IR carries more production data. User content may include text and images. Assistant content may include text, thinking, and Tool calls plus provider, model, usage, stop reason, timestamps, and optional replay metadata. Tool results contain text/image blocks, timestamps, optional details and usage. Pi messages do not adopt this course's per-message `id` fields or string-only Tool result content.
+Pi's IR carries more production data. User content may include text and images. Assistant content may include text, thinking, and Tool calls plus provider, model, usage, stop reason, timestamps, and optional replay metadata. `ToolCall.arguments` is a JSON-compatible `JsonObject`; `ToolResultMessage.details` is a JSON representation, and `JsonValue` accepts readonly arrays. The generic `ToolResultMessage<TDetails>` becomes `never` for details that cannot be represented as JSON. Tool results contain text/image blocks, timestamps, optional details and usage. Pi messages do not adopt this course's per-message `id` fields or string-only Tool result content.
 
 The course's `validateTranscript()` and its diagnostic codes are not Pi APIs. Pi's provider adapters and Agent Loop own their release-specific conversion, ordering, Tool execution, and result construction paths. When integrating Pi, keep opaque provider metadata and use its exported shapes. The transferable lesson is narrower: normalize at a boundary, preserve `toolCallId`, keep content order, validate untrusted values, and do not infer a valid Tool round from the rendered text alone.
 

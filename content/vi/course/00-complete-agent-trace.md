@@ -5,10 +5,10 @@ translation_key: course-00-complete-agent-trace
 language: vi
 checkpoint: 0
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/types.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/agent-loop.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/types.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent-loop.ts"
 status: reviewed
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -165,9 +165,9 @@ Chạy lại focused command. Các loại sự kiện vẫn đúng thứ tự v�
 - Run object, array sự kiện, từng sự kiện, Tool arguments và terminal result đều từ chối mutation.
 - Thay đổi ID không khớp có kiểm soát làm linkage assertion fail và test pass trở lại sau khi khôi phục.
 
-## So sánh với Pi SDK 0.85.0
+## So sánh với Pi SDK 0.87.1
 
-:::info[Pi SDK 0.85.0]
+:::info[Pi SDK 0.87.1]
 
 Package `@earendil-works/pi-agent-core` đã phát hành export một `AgentEvent` union phong phú hơn. Lifecycle của nó gồm `agent_start`/`agent_end`, `turn_start`/`turn_end`, các sự kiện trong vòng đời message và `tool_execution_start`/`tool_execution_update`/`tool_execution_end`. Sự kiện Tool mang `toolCallId`, nhờ đó consumer có thể liên kết đúng một execution ngay cả khi tên Tool lặp lại.
 

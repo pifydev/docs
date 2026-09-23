@@ -5,12 +5,12 @@ translation_key: course-14-agent-evaluation
 language: en
 checkpoint: 14
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/package.json"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/README.md"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/pi-harness.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/vitest-evals/summary.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/package.json"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/README.md"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/src/harness.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/src/report.ts"
 status: reviewed
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -201,17 +201,17 @@ Then remove the `try`/`catch` and let `run()` throw. `runEvaluation()` must reje
 - Baseline and candidate comparison requires identical task/run identities and reports reproducible rates separately for `pass`, `fail`, and `error`.
 - Stable serialization emits only the public allowlist and omits prompt, expected evidence, candidate evidence, transcript, and file content.
 
-## Compare with Pi SDK 0.85.0
+## Compare with Pi SDK 0.87.1
 
-:::info[Pi SDK 0.85.0]
+:::info[Pi SDK 0.87.1]
 
 Pi's pinned `packages/evals` workspace is `private: true`. It is release source for Pi's own evaluation system, not a public export of `@earendil-works/pi-coding-agent` and not an npm dependency for applications.
 
 :::
 
-The private Pi workspace adapts a real `AgentSession` to `vitest-evals`, creates isolated temporary project and agent directories, runs model-backed Coding Agent behavior, records usage and timing, and attaches native Session artifacts. Its internal `createPiCodingAgentHarness()` and comparative reporter support real provider/model selection, deterministic or model-backed judges, repeated baseline/candidate treatments, and telemetry deltas. Provider calls can cost money, and retained Session artifacts can contain prompts, responses, source code, Tool input, and Tool output.
+The private Pi workspace adapts a real `AgentSession` to `vitest-evals`, creates isolated temporary project and agent directories, runs model-backed Coding Agent behavior, records usage and timing, and attaches native Session artifacts. Host evals use `createPiCodingAgentHarness()`. Documentation evals run isolated Docker arms named `without_docs` and `with_docs`; `createTaskPlan()` alternates their order across repetitions, and `report.ts` pairs exact arms before publishing pass-rate lift or telemetry deltas. Provider calls can cost money, and retained Session artifacts can contain prompts, responses, source code, Tool input, and Tool output.
 
-The Course implementation is a deterministic local harness over synthetic evidence. It has no Pi `AgentSession`, provider telemetry, native Session artifact, or `vitest-evals` API, and none of its types should be imported into a Pi application. To run the release-pinned private Pi suite, follow [Run Pi evals](../how-to/run-pi-evals.md); that guide covers the exact checkout, smoke eval, optional model-backed execution, baseline/candidate method, artifact review, redaction, and cleanup.
+The Course implementation is a deterministic local harness over synthetic evidence. It has no Pi `AgentSession`, provider telemetry, native Session artifact, or `vitest-evals` API, and none of its types should be imported into a Pi application. To run the release-pinned private Pi suite, follow [Run Pi evals](../how-to/run-pi-evals.md); that guide covers the exact checkout, host smoke eval, containerized documentation comparison, artifact review, redaction, and cleanup.
 
 ## Next checkpoint
 

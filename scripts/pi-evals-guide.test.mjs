@@ -4,7 +4,7 @@ import { test } from "node:test";
 
 import matter from "gray-matter";
 
-const RELEASE_COMMIT = "107d79f11072bbc8a3a757ed7fd69596bee7d68c";
+const RELEASE_COMMIT = "f07218c4d4bbc12bef056a7058c3dd49dfe41abe";
 const GUIDE_PATHS = {
   en: new URL("../content/en/how-to/run-pi-evals.md", import.meta.url),
   vi: new URL("../content/vi/how-to/run-pi-evals.md", import.meta.url),
@@ -15,11 +15,11 @@ git checkout ${RELEASE_COMMIT}
 npm install`;
 const PINNED_SOURCE_PATHS = [
   "packages/evals/README.md",
-  "packages/evals/src/smoke.eval.ts",
-  "packages/evals/src/pi-harness.ts",
-  "packages/evals/src/vitest-evals/reporter.ts",
-  "packages/evals/src/vitest-evals/artifacts.ts",
-  "packages/evals/src/vitest-evals/summary.ts",
+  "packages/evals/evals/smoke.eval.ts",
+  "packages/evals/src/harness.ts",
+  "packages/evals/src/plan.ts",
+  "packages/evals/src/report.ts",
+  "packages/evals/src/cli.ts",
 ];
 const PINNED_SOURCE_URLS = PINNED_SOURCE_PATHS.map(
   (path) =>
@@ -27,9 +27,9 @@ const PINNED_SOURCE_URLS = PINNED_SOURCE_PATHS.map(
 );
 const EXPECTED_SHELL_COMMANDS = [
   EXACT_CHECKOUT,
-  "npm run eval -- --provider openai --model gpt-5.6-sol src/smoke.eval.ts",
-  'npm run eval -- --provider openai --model gpt-5.6-sol src/smoke.eval.ts -t "runs a basic prompt end to end"',
-  "npm run eval -- --provider openai --model gpt-5.6-sol src/extensions.eval.ts",
+  "PI_PROVIDER=openai-codex PI_MODEL=gpt-5.6-sol npm run eval:host -w packages/evals -- evals/smoke.eval.ts",
+  'PI_PROVIDER=openai-codex PI_MODEL=gpt-5.6-sol npm run eval:host -w packages/evals -- evals/smoke.eval.ts -t "returns the expected answer"',
+  "npm run eval:docs -w packages/evals -- evals/extensions.docs.eval.ts --provider openai-codex --model gpt-5.6-sol --runs-per-variant 5",
   "npm run clean --workspace=@earendil-works/pi-evals",
 ];
 
@@ -103,18 +103,18 @@ const localeContracts = {
       /`packages\/evals`[^.]*private monorepo package[^.]*not an npm install target/i,
     smoke: /smoke eval/i,
     harness: /(?:Pi )?coding-agent harness|`pi-harness\.ts`/i,
+    harnessTerminal:
+      /stopReason[^.]*`"stop"`[^.]*`"toolUse"`[^.]*`"stop"`[^.]*non-empty text/i,
     deterministicJudge: /deterministic judge/i,
     modelJudge: /model-backed judge/i,
     comparison: /baseline[^.]*candidate|candidate[^.]*baseline/i,
-    repetitions: /repetitions?/i,
+    repetitions: /--runs-per-variant[^.]*positive integer[^.]*defaults to `1`/i,
     telemetry: /telemetry/i,
     artifacts: /artifacts?/i,
     cleanup: /cleanup|clean up/i,
     customCleanupCaveat: [
-      /only removes[^.]*default[^.]*packages\/evals\/\.eval/i,
-      /does not remove[^.]*PI_EVAL_ARTIFACT_DIR/i,
-      /relative[^.]*absolute|absolute[^.]*relative/i,
-      /separate[^.]*explicit[^.]*validated cleanup/i,
+      /only removes[^.]*packages\/evals\/\.eval/i,
+      /does not accept[^.]*custom artifact path/i,
       /retention policy/i,
     ],
     optionalModelExecution:
@@ -129,18 +129,19 @@ const localeContracts = {
       /`packages\/evals`[^.\n]*private monorepo package[^.\n]*(?:không phải|không là)[^.\n]*npm install target/i,
     smoke: /smoke eval/i,
     harness: /(?:Pi )?coding-agent harness|`pi-harness\.ts`/i,
+    harnessTerminal:
+      /stopReason[^.\n]*`"stop"`[^.\n]*`"toolUse"`[^.\n]*`"stop"`[^.\n]*text không rỗng/i,
     deterministicJudge: /deterministic judge/i,
     modelJudge: /model-backed judge/i,
     comparison: /baseline[^.\n]*candidate|candidate[^.\n]*baseline/i,
-    repetitions: /repetitions?/i,
+    repetitions:
+      /--runs-per-variant[^.\n]*số nguyên dương[^.\n]*mặc định[^.\n]*`1`/i,
     telemetry: /telemetry/i,
     artifacts: /artifacts?/i,
     cleanup: /cleanup|dọn dẹp/i,
     customCleanupCaveat: [
-      /chỉ xóa[^.]*mặc định[^.]*packages\/evals\/\.eval/i,
-      /không xóa[^.]*PI_EVAL_ARTIFACT_DIR/i,
-      /tương đối[^.]*tuyệt đối|relative[^.]*absolute/i,
-      /cleanup[^.]*riêng[^.]*tường minh[^.]*validate/i,
+      /chỉ xóa[^.]*packages\/evals\/\.eval/i,
+      /không nhận[^.]*custom artifact path/i,
       /retention policy/i,
     ],
     optionalModelExecution:
@@ -161,7 +162,12 @@ function validateGuideDocument(source, locale) {
   assert.equal(frontmatter.language, locale);
   assert.equal(frontmatter.status, "reviewed");
   assert.equal(frontmatter.reviewed_by, "Pify maintainers");
-  assert.equal(frontmatter.last_updated, "2026-09-04");
+  assert.equal(frontmatter.last_updated, "2026-09-23");
+  assert.deepEqual(
+    frontmatter.official_refs,
+    PINNED_SOURCE_URLS,
+    `${locale}: frontmatter source paths must be exact and release-pinned`,
+  );
   assert.deepEqual(frontmatter.terms_used, [
     "harness",
     "judge",
@@ -206,10 +212,20 @@ function validateGuideDocument(source, locale) {
     contract.smoke,
     `${locale}: section 2 smoke eval`,
   );
+  assert.match(
+    numbered[2].body,
+    /eval:host[\s\S]*evals\/smoke\.eval\.ts/,
+    `${locale}: section 2 current host-runner contract`,
+  );
   assertMatches(
     numbered[3].body,
     contract.harness,
     `${locale}: section 3 Pi harness`,
+  );
+  assertMatches(
+    numbered[3].body,
+    contract.harnessTerminal,
+    `${locale}: section 3 accepted stop reasons and text requirement`,
   );
   assertMatches(
     numbered[4].body,
@@ -230,6 +246,16 @@ function validateGuideDocument(source, locale) {
     numbered[5].body,
     contract.repetitions,
     `${locale}: section 5 repetitions`,
+  );
+  assert.match(
+    numbered[5].body,
+    /without_docs[\s\S]*with_docs|with_docs[\s\S]*without_docs/,
+    `${locale}: section 5 current documentation variants`,
+  );
+  assert.match(
+    numbered[5].body,
+    /eval:docs[\s\S]*--runs-per-variant/,
+    `${locale}: section 5 current documentation runner`,
   );
   for (const pattern of contract.infraVsVerdict) {
     assertMatches(
@@ -253,6 +279,20 @@ function validateGuideDocument(source, locale) {
     contract.redaction,
     `${locale}: section 8 redaction`,
   );
+  for (const artifact of [
+    "protocol.json",
+    "expected-runs.json",
+    "observations.jsonl",
+    "report.json",
+    "report.txt",
+    "tasks/",
+    "sessions/",
+  ]) {
+    assert.ok(
+      numbered[8].body.includes(artifact),
+      `${locale}: section 8 current artifact ${artifact}`,
+    );
+  }
   assertMatches(
     numbered[9].body,
     contract.cleanup,
@@ -331,6 +371,11 @@ function validateGuideDocument(source, locale) {
     PINNED_SOURCE_URLS,
     `${locale}: source map URLs must be exact and release-pinned`,
   );
+  assert.doesNotMatch(
+    body,
+    /107d79f11072bbc8a3a757ed7fd69596bee7d68c|Pi 0\.85\.0|PI_EVAL_ARTIFACT_DIR/,
+    `${locale}: stale release or removed public artifact override`,
+  );
 
   return { body, commandFences, frontmatter };
 }
@@ -363,8 +408,8 @@ test("the paired Pi eval guides satisfy the release-pinned workflow contract", a
 test("rejects a changed shell command", async () => {
   const source = normalizeLineEndings(await readFile(GUIDE_PATHS.en, "utf8"));
   const mutated = source.replace(
-    "npm run eval -- --provider openai --model gpt-5.6-sol src/smoke.eval.ts\n```",
-    "npm run eval -- --provider openai --model gpt-5.6-sol src/not-smoke.eval.ts\n```",
+    "npm run eval:host -w packages/evals -- evals/smoke.eval.ts\n```",
+    "npm run eval:host -w packages/evals -- evals/not-smoke.eval.ts\n```",
   );
   assert.notEqual(mutated, source, "the command mutation must be applied");
   assert.throws(() => validateGuideDocument(mutated, "en"), /shell command/i);
@@ -383,7 +428,7 @@ test("rejects a removed shell command", async () => {
 test("rejects source links that survive only in frontmatter", async () => {
   const source = normalizeLineEndings(await readFile(GUIDE_PATHS.en, "utf8"));
   const mutated = source.replace(
-    /^## Source map for Pi 0\.85\.0\n[\s\S]*?(?=^## Acceptance checklist)/m,
+    /^## Source map for Pi 0\.87\.1\n[\s\S]*?(?=^## Acceptance checklist)/m,
     "",
   );
   assert.notEqual(mutated, source, "the source-map section must be removed");
@@ -417,7 +462,7 @@ test("rejects a topic token present only in frontmatter", async () => {
 test("rejects removal of the custom artifact cleanup caveat", async () => {
   const source = normalizeLineEndings(await readFile(GUIDE_PATHS.en, "utf8"));
   const mutated = source.replace(
-    /The fixed script only removes[\s\S]*?under your own retention policy\./,
+    /The fixed script only removes[\s\S]*?retention policy to those copies separately\./,
     "The command removes every local eval run.",
   );
   assert.notEqual(mutated, source, "the cleanup caveat must be removed");

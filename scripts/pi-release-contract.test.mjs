@@ -9713,3 +9713,136 @@ test("0.85.0 source links point to the published tag or release commit", async (
     );
   }
 });
+
+function assertCourseEvalReleaseAuthority(sources) {
+  const currentCommit = "f07218c4d4bbc12bef056a7058c3dd49dfe41abe";
+  const staleCommit = "107d79f11072bbc8a3a757ed7fd69596bee7d68c";
+
+  for (const { filename, source } of sources) {
+    assert.doesNotMatch(
+      source,
+      new RegExp(staleCommit),
+      `${filename}: stale source pin`,
+    );
+    for (const match of source.matchAll(
+      /https:\/\/github\.com\/earendil-works\/pi\/blob\/([^/]+)\/[^\s")]+/g,
+    )) {
+      assert.equal(
+        match[1],
+        currentCommit,
+        `${filename}: exact Pi source commit`,
+      );
+    }
+
+    if (!/course\/(?:0\d|1[0-4])-/.test(filename)) continue;
+    const vietnamese = filename.startsWith("content/vi/");
+    const heading = vietnamese
+      ? "## So sánh với Pi SDK 0.87.1"
+      : "## Compare with Pi SDK 0.87.1";
+    assert.match(
+      source,
+      new RegExp(`^${heading.replaceAll(".", "\\.")}$`, "m"),
+    );
+    assert.match(source, /^:::info\[Pi SDK 0\.87\.1\]$/m);
+  }
+}
+
+test("Course comparisons and eval guidance use Pi 0.87.1 authority", async () => {
+  const sources = [];
+  for (const locale of ["en", "vi"]) {
+    const courseDirectory = new URL(
+      `content/${locale}/course/`,
+      repositoryRoot,
+    );
+    for (const filename of await readdir(courseDirectory)) {
+      if (!/\.(?:md|mdx)$/.test(filename)) continue;
+      sources.push({
+        filename: `content/${locale}/course/${filename}`,
+        source: normalizeLineEndings(
+          await readFile(new URL(filename, courseDirectory), "utf8"),
+        ),
+      });
+    }
+    for (const suffix of [
+      "how-to/run-pi-evals.md",
+      "how-to/test-agent-deterministically.md",
+    ]) {
+      sources.push({
+        filename: `content/${locale}/${suffix}`,
+        source: normalizeLineEndings(
+          await readFile(
+            new URL(`content/${locale}/${suffix}`, repositoryRoot),
+            "utf8",
+          ),
+        ),
+      });
+    }
+  }
+
+  assertCourseEvalReleaseAuthority(sources);
+  const runGuide = sources.find(
+    ({ filename }) => filename === "content/en/how-to/run-pi-evals.md",
+  );
+  assert.ok(runGuide);
+  for (const currentContract of [
+    "eval:host -w packages/evals",
+    "evals/smoke.eval.ts",
+    "eval:docs -w packages/evals",
+    "without_docs",
+    "with_docs",
+    "protocol.json",
+    "expected-runs.json",
+    "observations.jsonl",
+    "report.json",
+    "report.txt",
+  ]) {
+    assert.ok(
+      runGuide.source.includes(currentContract),
+      `run-pi-evals must include ${currentContract}`,
+    );
+  }
+
+  const mutatedPin = sources.map((entry) => ({
+    ...entry,
+    source:
+      entry === runGuide
+        ? entry.source.replace(
+            "f07218c4d4bbc12bef056a7058c3dd49dfe41abe",
+            "107d79f11072bbc8a3a757ed7fd69596bee7d68c",
+          )
+        : entry.source,
+  }));
+  assert.notDeepEqual(
+    mutatedPin,
+    sources,
+    "the current eval source pin must mutate",
+  );
+  assert.throws(
+    () => assertCourseEvalReleaseAuthority(mutatedPin),
+    assert.AssertionError,
+  );
+
+  const courseTen = sources.find(
+    ({ filename }) => filename === "content/en/course/10-session-tree.md",
+  );
+  assert.ok(courseTen);
+  const mutatedHeading = sources.map((entry) => ({
+    ...entry,
+    source:
+      entry === courseTen
+        ? entry.source.replace(
+            "Compare with Pi SDK 0.87.1",
+            "Compare with Pi SDK 0.85.0",
+          )
+        : entry.source,
+  }));
+  assert.notDeepEqual(
+    mutatedHeading,
+    sources,
+    "the current Course heading must mutate",
+  );
+  assert.throws(
+    () => assertCourseEvalReleaseAuthority(mutatedHeading),
+    assert.AssertionError,
+  );
+});

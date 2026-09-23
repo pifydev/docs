@@ -5,11 +5,11 @@ translation_key: course-07-agent-loop
 language: vi
 checkpoint: 7
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/agent-loop.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/types.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/agent.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent-loop.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/types.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent.ts"
 status: reviewed
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -223,19 +223,19 @@ expect(events.at(-1)).toMatchObject({
 - Việc hủy chỉ giữ các message hoàn chỉnh và không bao giờ bịa Tool result cho lần thực thi bị ngắt.
 - Với `maxSteps: 1`, batch Tool hiện tại hoàn tất, không có yêu cầu tiếp nối nào được mở và kết quả cuối là `maxSteps`.
 
-## So sánh với Pi SDK 0.85.0
+## So sánh với Pi SDK 0.87.1
 
-:::info[Pi SDK 0.85.0]
+:::info[Pi SDK 0.87.1]
 
 `@earendil-works/pi-agent-core` xuất `Agent`, `agentLoop()`, `agentLoopContinue()`, `runAgentLoop()`, `runAgentLoopContinue()`, `AgentContext`, `AgentLoopConfig`, `AgentTool` và `AgentEvent`.
 
 :::
 
-Agent Loop của Pi dùng `AgentMessage` xuyên suốt rồi chuyển thành message tương thích với LLM bằng `convertToLlm` tại ranh giới yêu cầu. Nó phát `agent_start`/`agent_end`, `turn_start`/`turn_end`, các sự kiện vòng đời message và sự kiện bắt đầu/cập nhật/kết thúc việc thực thi Tool. Cấu hình có thể biến đổi ngữ cảnh, chặn Tool call trước và sau khi thực thi, dừng sau một lượt, nhận message điều hướng và message tiếp nối, đồng thời chọn thực thi Tool tuần tự hoặc song song với ràng buộc riêng cho từng Tool.
+Agent Loop của Pi dùng `AgentMessage` xuyên suốt rồi chuyển thành message tương thích với LLM bằng `convertToLlm` tại ranh giới request. Nó phát `agent_start`/`agent_end`, `turn_start`/`turn_end`, các event vòng đời message và event bắt đầu/cập nhật/kết thúc việc thực thi Tool. Cấu hình có thể transform context, chặn Tool call trước và sau khi thực thi, nhận steering/follow-up message, đồng thời chọn thực thi Tool tuần tự hoặc song song với ràng buộc riêng cho từng Tool. Cơ chế điều khiển sau mỗi turn hiện là `finishTurn`: trả `{ action: "end" }` để dừng sau normal response. Response lỗi hoặc bị abort vẫn theo hành vi hard-exit mặc định; không chuyển chúng thành quyết định dừng bình thường.
 
 Vòng lặp của khóa học dùng một bộ khái niệm transcript, năm loại sự kiện, cách thực thi Tool tuần tự, không có hàng đợi message hay hook cho ngữ cảnh, và có trần riêng của workshop là `64` bước model. Các ID như `request-001`, trạng thái `RunResult`, hành vi `maxSteps` và hằng số tài nguyên không thuộc API công khai của Pi.
 
-Hãy dùng trực tiếp các export của Pi khi tích hợp vào production. Workshop cung cấp một mô hình luồng điều khiển nhỏ hơn để phân tích quyền sở hữu transcript, một lượt Tool hoàn chỉnh, cách kết thúc, việc hủy và thứ tự toàn phần mà bên quan sát thấy. Khi hành vi khác nhau, Pi SDK `0.85.0` là nguồn có thẩm quyền.
+Hãy dùng trực tiếp các export của Pi khi tích hợp vào production. Workshop cung cấp một mô hình luồng điều khiển nhỏ hơn để phân tích quyền sở hữu transcript, một lượt Tool hoàn chỉnh, cách kết thúc, việc hủy và thứ tự toàn phần mà bên quan sát thấy. Khi hành vi khác nhau, Pi SDK `0.87.1` là nguồn có thẩm quyền.
 
 ## Checkpoint tiếp theo
 

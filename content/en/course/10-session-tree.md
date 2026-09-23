@@ -5,10 +5,10 @@ translation_key: course-10-session-tree
 language: en
 checkpoint: 10
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/index.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/session-manager.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/index.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/session-manager.ts"
 status: reviewed
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -157,15 +157,17 @@ Both fragments use the exact helpers and payloads from `course/test/10-session-t
 - Append/flush commit with identity-checked temporary, recovery marker, rename, directory sync, cleanup, and rollback; memory changes only after commit.
 - Limits remain `65,536` bytes per line, `4,194,304` bytes per file, and `4,096` entries.
 
-## Compare with Pi SDK 0.85.0
+## Compare with Pi SDK 0.87.1
 
-:::info[Pi SDK 0.85.0]
+:::info[Pi SDK 0.87.1]
 
 `@earendil-works/pi-coding-agent` exports `SessionManager`, `SessionEntry`, `SessionHeader`, `SessionTreeNode`, `buildContextEntries()`, `buildSessionContext()`, and `CURRENT_SESSION_VERSION`.
 
 :::
 
-Pi's pinned `SessionManager` documents append-only JSONL trees with `id`/`parentId`, a current leaf, `getBranch()`, `getTree()`, `branch()`, and compaction-aware context building. Its release format is version `3` and supports more entry kinds, including model/thinking changes, compaction, branch summaries, custom entries, labels, and session information.
+Pi's pinned `SessionManager` is the canonical source for future provider context. It documents append-only JSONL trees with `id`/`parentId`, a current leaf, `getBranch()`, `getTree()`, `branch()`, and compaction-aware `buildSessionProjection()`. Its release format is version `3` and supports more entry kinds, including model/thinking changes, compaction, branch summaries, custom entries, labels, session information, and `context_edit`.
+
+Changing `session.agent.state.messages` does not replace that canonical projection. Use session APIs for navigation, append through `session.sessionManager`, then call `session.refreshContext()` when an external append must refresh the public finalized transcript. `appendContextEdit(targetId, null)` appends an omission without rewriting the target; a non-null replacement has the shape `{ content }`. Raw transcript and UI history remain append-only.
 
 The course format version is `1`, stores only the header plus Message IR entries, uses a workshop-specific atomic whole-generation commit and recovery-marker protocol, and chooses the newest record as the loaded active leaf. Its JSONL file is not accepted as a Pi session, and Pi session files are not accepted by this loader. Use Pi's `SessionManager` and migration functions for real Pi sessions.
 

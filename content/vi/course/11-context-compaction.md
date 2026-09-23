@@ -5,11 +5,11 @@ translation_key: course-11-context-compaction
 language: vi
 checkpoint: 11
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/index.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/compaction/compaction.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/compaction/index.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/index.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/compaction/compaction.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/compaction/index.ts"
 status: reviewed
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -184,15 +184,17 @@ expect(
 - Yêu cầu hủy trước, trong hoặc sau lúc chọn bản tóm tắt trả lỗi ổn định và không thêm bản ghi.
 - Mọi lỗi giữ ngữ cảnh trước đó nguyên vẹn; khi thành công, hàm chỉ thêm đúng một bản ghi đã đóng băng sau khi kiểm tra toàn bộ trạng thái dự kiến.
 
-## So sánh với Pi SDK 0.85.0
+## So sánh với Pi SDK 0.87.1
 
-:::info[Pi SDK 0.85.0]
+:::info[Pi SDK 0.87.1]
 
 `@earendil-works/pi-coding-agent` xuất công khai `compact()`, `shouldCompact()`, `findCutPoint()`, `findTurnStartIndex()`, `estimateTokens()`, `calculateContextTokens()`, `DEFAULT_COMPACTION_SETTINGS` cùng các kiểu kết quả/cấu hình liên quan.
 
 :::
 
-Phần triển khai nén ở release đã ghim của Pi ước lượng mức sử dụng ngữ cảnh model, tìm điểm cắt có xét ranh giới Turn, giữ token gần đây, đưa lần nén trước vào quá trình xử lý, tạo hoặc cập nhật bản tóm tắt bằng LLM và có thể kèm chi tiết thao tác tệp. `SessionManager` của Pi lưu entry nén rồi dựng lại ngữ cảnh của nhánh hiện tại quanh các entry đó.
+Phần triển khai compaction ở release đã ghim của Pi ước lượng model context usage, tìm cut point có xét ranh giới Turn, giữ token gần đây, đưa lần compaction trước vào quá trình xử lý, tạo hoặc cập nhật summary bằng LLM và có thể kèm chi tiết thao tác file. `SessionManager` lưu compaction entry rồi dựng lại active-branch projection quanh các entry đó. `appendCompaction(summary, null, tokensBefore)` tạo retain-none boundary, trong đó compaction entry tự giữ chính nó và không giữ entry nào đứng trước.
+
+Context accounting theo projected branch, bao gồm replacement hoặc omission từ `context_edit`, thay vì xem mọi raw entry đều hiển thị cho provider. Retry/recovery attempt bị bỏ có thể vẫn nằm trong append-only history nhưng bị loại khỏi provider context sau này. Summary record nhỏ hơn của course không có projection/edit contract tương đương.
 
 Khóa học dùng đơn vị có tính xác định, độc lập với provider; summarizer ngoại tuyến được truyền vào; kênh yêu cầu/bản tóm tắt tách biệt; mô hình nhóm Tool call/result trên Message IR cũng được giản lược hơn. `summaryMaxUnits`, ID, bản ghi, biện pháp phòng vệ trước thenable và ranh giới đều riêng cho workshop. Hãy dùng API nén/phiên làm việc công khai của Pi trong ứng dụng Pi; không diễn giải đơn vị của khóa học thành token của model.
 

@@ -5,11 +5,11 @@ translation_key: course-08-coding-tools
 language: vi
 checkpoint: 8
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/index.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/sdk.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/tools/index.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/index.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/sdk.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/tools/index.ts"
 status: reviewed
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -210,9 +210,9 @@ Hãy lưu tệp Vitest chạy được này bên cạnh `course/test/08-coding-t
 - Việc hủy và hết thời gian dừng tiến trình đang chạy rồi kết thúc mà không để lại tệp `.pify-node-*` hoặc `.pify-tmp-*`.
 - Thử nghiệm traversal không tạo `outside.txt` bên ngoài workspace nhưng bên trong thư mục tạm được quản lý.
 
-## So sánh với Pi SDK 0.85.0
+## So sánh với Pi SDK 0.87.1
 
-:::info[Pi SDK 0.85.0]
+:::info[Pi SDK 0.87.1]
 
 `@earendil-works/pi-coding-agent` xuất công khai `createCodingTools()`, `createReadOnlyTools()`, `createReadTool()`, `createWriteTool()`, `createBashTool()`, `createPowerShellTool()`, `createEditTool()`, `createGrepTool()`, `createFindTool()` và `createLsTool()` cho `cwd` do mã gọi truyền vào.
 

@@ -5,11 +5,11 @@ translation_key: course-05-provider-adapter
 language: vi
 checkpoint: 5
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/src/models.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/src/types.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/src/utils/event-stream.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/models.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/types.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/utils/event-stream.ts"
 status: reviewed
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -188,15 +188,15 @@ Sao chép fixture thành một giá trị tạm rồi xóa `response_end` khỏi
 - Sự kiện không nhận biết được, payload sai hình dạng, lỗi vận chuyển, nguồn thù địch và trạng thái hết hàng đợi đều tạo mã ổn định do khóa học sở hữu.
 - Xóa `response_end` khiến phép lặp và `result` cùng bị từ chối bằng `PROVIDER_MISSING_TERMINAL`, kể cả sau khi chunk trước đó đã được phát.
 
-## So sánh với Pi SDK 0.85.0
+## So sánh với Pi SDK 0.87.1
 
-:::info[Pi SDK 0.85.0]
+:::info[Pi SDK 0.87.1]
 
-`@earendil-works/pi-ai` xuất `Provider`, `createProvider()`, `createModels()`, `MutableModels`, `AssistantMessageEventStream`, `AssistantMessageEvent`, `ToolCall`, `Usage` và `StopReason`. `createProvider()` dựng rồi trả về một `Provider` dùng trong production từ các thành phần xác thực, model và luồng API; hàm này không đăng ký provider. `createModels()` trả về `MutableModels`; hãy gọi `models.setProvider(provider)` trên instance được trả về để thêm mới hoặc thay thế provider trong tập hợp đó.
+`@earendil-works/pi-ai` xuất `Provider`, `createProvider()`, `createModels()`, `MutableModels`, `AssistantMessageEventStream`, `AssistantMessageEvent`, `ToolCall`, `Usage` và `StopReason`. Implementation của `Provider.stream()` nhận `TranscriptContext`, còn `Models.stream()` công khai nhận `Context` và normalize trước khi dispatch. `createProvider()` trả về provider dùng trong production nhưng không đăng ký nó; `createModels()` trả về `MutableModels`, trong đó `models.setProvider(provider)` sẽ thêm mới hoặc thay thế provider.
 
 :::
 
-Luồng assistant của Pi có các sự kiện vòng đời cho lúc bắt đầu, text, thinking, quá trình ghép Tool call, hoàn tất và lỗi. `AssistantMessage` công khai của Pi giữ danh tính provider/model, usage cùng chi phí chi tiết hơn, timestamp, dữ liệu chẩn đoán, metadata của phản hồi, nhiều lý do dừng hơn, content dạng image/thinking và phản hồi trì hoãn. Một module provider thực tế của Pi còn đảm nhiệm việc chuyển yêu cầu cho nhà cung cấp, xử lý đầu vào xác thực, phân tích phản hồi và áp dụng hành vi lỗi riêng của bản phát hành.
+Luồng assistant của Pi có các sự kiện vòng đời cho lúc bắt đầu, text, thinking, quá trình ghép Tool call, hoàn tất và lỗi. Provider adapter đọc prompt và khai báo Tool hiện tại từ system message trong transcript bằng `getCurrentSystemPrompt()` và `getCurrentTools()`; nó không chờ `systemPrompt` hay `tools` trên `TranscriptContext`. `AssistantMessage` công khai của Pi giữ danh tính provider/model, usage cùng chi phí chi tiết hơn, timestamp, diagnostic, response metadata, nhiều lý do dừng hơn, content dạng image/thinking và deferred response. Một module provider thực tế của Pi còn chuyển request cho provider, xử lý auth input, parse response và áp dụng hành vi lỗi riêng của release.
 
 Adapter của khóa học là một bài tập parser nhỏ hơn. Nó nhận biết năm loại record vận chuyển, không có registry cho provider, phát Tool-call chunk hoàn chỉnh thay vì chuỗi sự kiện Tool call dạng bắt đầu/delta/kết thúc và chỉ ghi hai giá trị đếm token. Các mã `FixtureProviderError` cùng fixture `schemaVersion: 1` không phải API của Pi.
 

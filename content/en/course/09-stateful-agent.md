@@ -5,10 +5,10 @@ translation_key: course-09-stateful-agent
 language: en
 checkpoint: 9
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/index.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/agent.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/index.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent.ts"
 status: reviewed
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -170,17 +170,17 @@ If the model receives two requests, two callers owned one transcript concurrentl
 - Completion, cancellation, capacity failure, and internal failure all clear the active owner so a valid later `continue()` can recover.
 - Queue and transcript reservations reject impossible work before exceeding `256` queued or `4096` owned messages.
 
-## Compare with Pi SDK 0.85.0
+## Compare with Pi SDK 0.87.1
 
-:::info[Pi SDK 0.85.0]
+:::info[Pi SDK 0.87.1]
 
 `@earendil-works/pi-agent-core` exports `Agent`, `AgentOptions`, `AgentState`, `AgentEvent`, and queue-related types. Its `Agent` exposes `prompt()`, `continue()`, `steer()`, `followUp()`, `subscribe()`, `abort()`, `waitForIdle()`, queue controls, and `reset()`.
 
 :::
 
-Pi's public Agent also rejects overlapping processing and gives callers steering/follow-up queues. At the pinned release, queue drain modes are configurable, `prompt()` resolves a `Promise<void>`, `abort()` has no course result string, and subscriber Promises are awaited in registration order as part of run settlement. Pi also exposes state, Tool execution policy, retry configuration, and its richer event lifecycle.
+Pi's public Agent also rejects overlapping processing and gives callers steering/follow-up queues. At the pinned release, queue drain modes are configurable, `prompt()` resolves a `Promise<void>`, `abort()` has no course result string, and subscriber Promises are awaited in registration order as part of run settlement. Post-turn policy uses `finishTurn`: `{ action: "end" }` ends a normal response, while `undefined` preserves scheduling and leaves error or aborted responses on the default hard-exit path. Pi also exposes state, Tool execution policy, retry configuration, and its richer event lifecycle.
 
-The course returns `EventStream<AgentEvent, RunResult>`, observes but does not await subscriber Promises, accepts text-only queue helpers, fixes one-at-a-time scheduling, and applies workshop-specific capacity rules. Treat those differences as deliberate teaching constraints, not compatibility shims. For Pi code, import and follow the Pi SDK `0.85.0` contracts directly.
+The course returns `EventStream<AgentEvent, RunResult>`, observes but does not await subscriber Promises, accepts text-only queue helpers, fixes one-at-a-time scheduling, and applies workshop-specific capacity rules. Treat those differences as deliberate teaching constraints, not compatibility shims. For Pi code, import and follow the Pi SDK `0.87.1` contracts directly.
 
 ## Next checkpoint
 

@@ -5,10 +5,10 @@ translation_key: course-02-event-stream
 language: en
 checkpoint: 2
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/src/utils/event-stream.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/src/types.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/utils/event-stream.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/types.ts"
 status: reviewed
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -149,9 +149,9 @@ Run the focused command. The last line throws `EventStream is already terminal (
 - `push()`, `finish()`, and `fail()` reject any operation after terminal state.
 - Documentation and code make no claim of producer backpressure; the buffer is explicitly unbounded.
 
-## Compare with Pi SDK 0.85.0
+## Compare with Pi SDK 0.87.1
 
-:::info[Pi SDK 0.85.0]
+:::info[Pi SDK 0.87.1]
 
 `@earendil-works/pi-ai` exports a generic `EventStream<T, R>`, `AssistantMessageEventStream`, and `createAssistantMessageEventStream()`. `AssistantMessageEventStream` carries `AssistantMessageEvent` values and exposes the final `AssistantMessage` through its `result()` method.
 

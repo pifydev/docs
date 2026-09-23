@@ -16,6 +16,9 @@ import test from "node:test";
 import matter from "gray-matter";
 
 const repositoryRoot = new URL("../", import.meta.url);
+const releaseCommit = "f07218c4d4bbc12bef056a7058c3dd49dfe41abe";
+const staleReleaseCommit = "107d79f11072bbc8a3a757ed7fd69596bee7d68c";
+const courseComparisonCallout = "Pi SDK 0.87.1";
 
 const checkpoints = [
   ["00-complete-agent-trace", "course/src/demo/prologue.ts"],
@@ -75,7 +78,7 @@ const headingContracts = {
     "Run the focused test",
     "Failure experiment",
     "Acceptance criteria",
-    "Compare with Pi SDK 0.85.0",
+    "Compare with Pi SDK 0.87.1",
     "Next checkpoint",
   ],
   vi: [
@@ -87,8 +90,123 @@ const headingContracts = {
     "Chạy focused test",
     "Thử nghiệm lỗi",
     "Tiêu chí chấp nhận",
-    "So sánh với Pi SDK 0.85.0",
+    "So sánh với Pi SDK 0.87.1",
     "Checkpoint tiếp theo",
+  ],
+};
+
+const expectedOfficialSourcePaths = {
+  "00-complete-agent-trace": [
+    "packages/agent/src/types.ts",
+    "packages/agent/src/agent-loop.ts",
+  ],
+  "01-typescript-protocols": [
+    "packages/ai/src/types.ts",
+    "packages/agent/src/types.ts",
+  ],
+  "02-event-stream": [
+    "packages/ai/src/utils/event-stream.ts",
+    "packages/ai/src/types.ts",
+  ],
+  "03-message-ir": [
+    "packages/ai/src/types.ts",
+    "packages/agent/src/agent-loop.ts",
+  ],
+  "04-deterministic-model": [
+    "packages/ai/src/providers/faux.ts",
+    "packages/ai/src/utils/event-stream.ts",
+  ],
+  "05-provider-adapter": [
+    "packages/ai/src/models.ts",
+    "packages/ai/src/types.ts",
+    "packages/ai/src/utils/event-stream.ts",
+  ],
+  "06-tool-contract": [
+    "packages/ai/src/types.ts",
+    "packages/agent/src/types.ts",
+    "packages/agent/src/agent-loop.ts",
+  ],
+  "07-agent-loop": [
+    "packages/agent/src/agent-loop.ts",
+    "packages/agent/src/types.ts",
+    "packages/agent/src/agent.ts",
+  ],
+  "08-coding-tools": [
+    "packages/coding-agent/src/index.ts",
+    "packages/coding-agent/src/core/sdk.ts",
+    "packages/coding-agent/src/core/tools/index.ts",
+  ],
+  "09-stateful-agent": [
+    "packages/agent/src/index.ts",
+    "packages/agent/src/agent.ts",
+  ],
+  "10-session-tree": [
+    "packages/coding-agent/src/index.ts",
+    "packages/coding-agent/src/core/session-manager.ts",
+  ],
+  "11-context-compaction": [
+    "packages/coding-agent/src/index.ts",
+    "packages/coding-agent/src/core/compaction/compaction.ts",
+    "packages/coding-agent/src/core/compaction/index.ts",
+  ],
+  "12-resources-extensions": [
+    "packages/coding-agent/src/index.ts",
+    "packages/coding-agent/src/core/resource-loader.ts",
+    "packages/coding-agent/src/core/extensions/index.ts",
+    "packages/coding-agent/src/core/extensions/loader.ts",
+  ],
+  "13-runtime-composition": [
+    "packages/coding-agent/src/index.ts",
+    "packages/coding-agent/src/core/sdk.ts",
+    "packages/coding-agent/src/core/agent-session-runtime.ts",
+  ],
+  "14-agent-evaluation": [
+    "packages/evals/package.json",
+    "packages/evals/README.md",
+    "packages/evals/src/harness.ts",
+    "packages/evals/src/report.ts",
+  ],
+};
+
+const changedComparisonIdentifiers = {
+  "03-message-ir": [
+    "TranscriptContext",
+    "SystemMessage",
+    "ToolCall.arguments",
+    "ToolResultMessage.details",
+  ],
+  "05-provider-adapter": [
+    "TranscriptContext",
+    "getCurrentSystemPrompt()",
+    "getCurrentTools()",
+  ],
+  "06-tool-contract": [
+    "JsonValue",
+    "ToolCall.arguments",
+    "ToolResultMessage.details",
+  ],
+  "07-agent-loop": ["finishTurn", '{ action: "end" }'],
+  "09-stateful-agent": ["finishTurn", "undefined"],
+  "10-session-tree": [
+    "SessionManager",
+    "appendContextEdit",
+    "context_edit",
+    "refreshContext()",
+  ],
+  "11-context-compaction": [
+    "appendCompaction(summary, null, tokensBefore)",
+    "context_edit",
+  ],
+  "12-resources-extensions": [
+    "emitBoundary",
+    "AgentBeforeSettleEvent",
+    "TurnEndEvent",
+    "context_with_system",
+  ],
+  "13-runtime-composition": [
+    "SessionManager",
+    "refreshContext()",
+    "agent.state.messages",
   ],
 };
 
@@ -601,6 +719,96 @@ test("course directories contain exactly 32 localized public files", async () =>
   );
 });
 
+function assertCheckpointReleaseContract(source, locale, checkpoint) {
+  const relativePath = `content/${locale}/course/${checkpoint.slug}.md`;
+  const parsed = matter(source);
+  const comparisonHeading = headingContracts[locale][8];
+  const comparisonSection = h2Section(parsed.content, comparisonHeading);
+  const expectedRefs = expectedOfficialSourcePaths[checkpoint.slug].map(
+    (sourcePath) =>
+      `https://github.com/earendil-works/pi/blob/${releaseCommit}/${sourcePath}`,
+  );
+
+  assert.equal(
+    parsed.data.last_updated,
+    "2026-09-23",
+    `${relativePath}: current review date`,
+  );
+  assert.deepEqual(
+    parsed.data.official_refs,
+    expectedRefs,
+    `${relativePath}: exact audited Pi 0.87.1 source paths`,
+  );
+  assert.doesNotMatch(
+    source,
+    new RegExp(staleReleaseCommit, "i"),
+    `${relativePath}: stale Pi source commit`,
+  );
+  assert.ok(
+    comparisonSection,
+    `${relativePath}: current Pi comparison section`,
+  );
+  assert.match(
+    comparisonSection,
+    new RegExp(`^:::info\\[${escapeRegExp(courseComparisonCallout)}\\]$`, "m"),
+    `${relativePath}: current Pi comparison callout`,
+  );
+
+  for (const identifier of changedComparisonIdentifiers[checkpoint.slug] ??
+    []) {
+    assert.ok(
+      comparisonSection.includes(identifier),
+      `${relativePath}: changed API relationship includes ${identifier}`,
+    );
+  }
+}
+
+test("Course comparison authority rejects stale pins, headings, and changed API drift", async () => {
+  const source = await readCoursePage("en", "10-session-tree.md");
+  const checkpoint = checkpoints.find(({ slug }) => slug === "10-session-tree");
+  assert.ok(checkpoint);
+
+  const mutations = [
+    source.replace(releaseCommit, staleReleaseCommit),
+    source.replace("Compare with Pi SDK 0.87.1", "Compare with Pi SDK 0.84.3"),
+    source.replace("appendContextEdit", "append replacement entry"),
+  ];
+  assert.notEqual(mutations[0], source, "the real source pin must mutate");
+  assert.notEqual(
+    mutations[1],
+    source,
+    "the real comparison heading must mutate",
+  );
+  assert.notEqual(
+    mutations[2],
+    source,
+    "the real context-edit identifier must mutate",
+  );
+
+  for (const mutation of mutations) {
+    assert.throws(
+      () => assertCheckpointReleaseContract(mutation, "en", checkpoint),
+      assert.AssertionError,
+    );
+  }
+});
+
+test("Course overview keeps the teaching-model boundary at Pi SDK 0.87.1", async () => {
+  for (const locale of ["en", "vi"]) {
+    const source = await readCoursePage(locale, "index.mdx");
+    const parsed = matter(source);
+    assert.equal(parsed.data.last_updated, "2026-09-23");
+    assert.doesNotMatch(source, /Pi SDK 0\.85\.0|`0\.85\.0`/);
+    assert.match(source, /Pi SDK 0\.87\.1/);
+    assert.match(
+      source,
+      locale === "en"
+        ? /teaching system[\s\S]*not an official Pi package[\s\S]*no promise of API compatibility/i
+        : /hệ thống phục vụ giảng dạy[\s\S]*không phải gói Pi[\s\S]*không cam kết tương thích API/i,
+    );
+  }
+});
+
 test("every checkpoint satisfies the shared content contract", async () => {
   const errors = [];
 
@@ -618,6 +826,7 @@ test("every checkpoint satisfies the shared content contract", async () => {
       const command = `npm run test:course:checkpoint -- ${checkpoint.test}`;
 
       try {
+        assertCheckpointReleaseContract(source, locale, checkpoint);
         assert.deepEqual(
           h2Headings(body),
           headingContracts[locale],
@@ -660,8 +869,8 @@ test("every checkpoint satisfies the shared content contract", async () => {
         );
         assert.match(
           visibleBody,
-          /^:::info\[Pi SDK 0\.85\.0\]\s*$/m,
-          `${relativePath}: exact Pi SDK 0.85.0 callout label`,
+          /^:::info\[Pi SDK 0\.87\.1\]\s*$/m,
+          `${relativePath}: exact Pi SDK 0.87.1 callout label`,
         );
         assertNoPerPageAttribution(source, relativePath);
       } catch (error) {

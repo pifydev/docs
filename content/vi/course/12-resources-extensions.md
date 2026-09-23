@@ -5,12 +5,12 @@ translation_key: course-12-resources-extensions
 language: vi
 checkpoint: 12
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/index.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/resource-loader.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/extensions/index.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/extensions/loader.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/index.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/resource-loader.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/extensions/index.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/extensions/loader.ts"
 status: reviewed
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -190,15 +190,17 @@ Chạy lại focused command. Thử nghiệm chỉ pass khi disposer chạy đú
 - Activation thất bại thử mọi disposer đã lấy theo thứ tự ngược, aggregate lỗi rollback và không công bố contribution một phần.
 - Host disposal đảo ngược activation của Extension và thứ tự đăng ký Resource trong từng Extension, thử mọi cleanup rồi aggregate lỗi.
 
-## So sánh với Pi SDK 0.85.0
+## So sánh với Pi SDK 0.87.1
 
-:::info[Pi SDK 0.85.0]
+:::info[Pi SDK 0.87.1]
 
 `@earendil-works/pi-coding-agent` công khai `DefaultResourceLoader`, type `ResourceLoader`, `loadProjectContextFiles()`, `discoverAndLoadExtensions()`, `createExtensionRuntime()`, `ExtensionRunner`, `defineTool()` và các type Extension được ghi trong package entry point.
 
 :::
 
 `DefaultResourceLoader` của Pi phối hợp Resource của project và agent như Extension, Skill, prompt, theme, context file, package resolution, diagnostic, project trust và reload. Pi Extension nhận `ExtensionAPI` cùng `ExtensionContext` giàu capability hơn, có thể đăng ký Tool và command, theo dõi lifecycle event và đóng góp thêm resource path qua `resources_discover`. `ExtensionRunner` kết nối handler đã nạp với một `AgentSession` đang chạy.
+
+Boundary lifecycle hiện tại biến `TurnEndEvent` và `AgentBeforeSettleEvent` thành event có thể hành động: handler có thể trả về append-only entry draft và yêu cầu một continuation. Host dispatch các boundary này qua `emitBoundary(baseEvent, buildContext)`, hàm sẽ dựng lại projected preview sau mỗi handler. Với request transform, `context` nhận conversation message không có system message và Pi khôi phục trạng thái prompt/Tool; `context_with_system` nhận full transcript và danh sách nó trả về được dùng nguyên văn.
 
 Khóa học tách một bài toán nhỏ hơn thành hai boundary dễ quan sát: loader chỉ đọc text trong trusted root và transaction `discover()`/`activate()` tường minh. `ResourceLoader`, `ExtensionHost`, status model, fixed byte cap, hook diagnostic và rollback code của khóa học không tồn tại như public API của Pi. Khi xây trên Pi, hãy dùng loader cùng Extension contract do Pi export, bao gồm project-trust policy của Pi; chỉ dùng type của khóa học để nghiên cứu ownership và atomic publication.
 

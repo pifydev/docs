@@ -5,10 +5,10 @@ translation_key: course-04-deterministic-model
 language: vi
 checkpoint: 4
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/src/providers/faux.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/src/utils/event-stream.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/providers/faux.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/utils/event-stream.ts"
 status: reviewed
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -163,9 +163,9 @@ Chạy lệnh kiểm thử tập trung. Cả phép lặp lẫn `stream.result` �
 - Một iterator phản hồi không thể được chia sẻ giữa nhiều lượt gọi hoặc instance của model.
 - Khi hàng đợi hết, phép lặp sự kiện và `stream.result` cùng bị từ chối bằng `SCRIPT_EXHAUSTED`, nhưng bằng chứng về lượt gọi vẫn được giữ lại.
 
-## So sánh với Pi SDK 0.85.0
+## So sánh với Pi SDK 0.87.1
 
-:::info[Pi SDK 0.85.0]
+:::info[Pi SDK 0.87.1]
 
 `@earendil-works/pi-ai` xuất các helper kiểm thử `fauxProvider()`, `fauxAssistantMessage()`, `fauxToolCall()`, `FauxResponseFactory` và `FauxProviderHandle`. Cùng package đó còn xuất `EventStream` và `AssistantMessageEventStream` cho protocol truyền dữ liệu theo luồng (streaming) phong phú hơn.
 

@@ -5,11 +5,11 @@ translation_key: course-11-context-compaction
 language: en
 checkpoint: 11
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/index.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/compaction/compaction.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/compaction/index.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/index.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/compaction/compaction.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/compaction/index.ts"
 status: reviewed
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -184,15 +184,17 @@ This is the exact boundary assertion from `course/test/11-context-compaction.tes
 - Cancellation before, during, or after summary selection returns a stable error and appends no record.
 - Any failure leaves the prior context unchanged; success appends exactly one frozen record after complete prospective validation.
 
-## Compare with Pi SDK 0.85.0
+## Compare with Pi SDK 0.87.1
 
-:::info[Pi SDK 0.85.0]
+:::info[Pi SDK 0.87.1]
 
 `@earendil-works/pi-coding-agent` exports `compact()`, `shouldCompact()`, `findCutPoint()`, `findTurnStartIndex()`, `estimateTokens()`, `calculateContextTokens()`, `DEFAULT_COMPACTION_SETTINGS`, and related result/settings types.
 
 :::
 
-Pi's pinned compaction implementation estimates model context usage, finds turn-aware cut points, preserves recent tokens, incorporates a previous compaction, generates or updates an LLM summary, and can include file-operation details. Pi's `SessionManager` stores compaction entries and rebuilds the active branch context around them.
+Pi's pinned compaction implementation estimates model context usage, finds turn-aware cut points, preserves recent tokens, incorporates a previous compaction, generates or updates an LLM summary, and can include file-operation details. Pi's `SessionManager` stores compaction entries and rebuilds the active branch projection around them. `appendCompaction(summary, null, tokensBefore)` creates a retain-none boundary whose compaction entry retains itself and no preceding entries.
+
+Context accounting follows the projected branch, including `context_edit` replacements or omissions, rather than treating every raw entry as provider-visible. Abandoned retry or recovery attempts may remain in append-only history while being omitted from future provider context. The course's smaller summary record has no equivalent projection/edit contract.
 
 The course uses provider-independent deterministic units, an injected offline summarizer, explicit requirement/summary channels, and Tool-call/result grouping over its smaller Message IR. Its `summaryMaxUnits`, IDs, records, thenable defenses, and boundaries are workshop-specific. Use Pi's public compaction and session APIs for Pi applications; do not convert course units into model token claims.
 

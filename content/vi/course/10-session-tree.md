@@ -5,10 +5,10 @@ translation_key: course-10-session-tree
 language: vi
 checkpoint: 10
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/index.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/session-manager.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/index.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/session-manager.ts"
 status: reviewed
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -157,15 +157,17 @@ Hai đoạn dùng đúng hàm hỗ trợ và dữ liệu từ `course/test/10-se
 - Append/flush commit qua tệp tạm đã kiểm tra định danh, dấu mốc phục hồi, đổi tên, đồng bộ thư mục, dọn dẹp và rollback; bộ nhớ chỉ đổi sau commit.
 - Giới hạn giữ nguyên `65,536` byte mỗi dòng, `4,194,304` byte mỗi tệp và `4,096` entry.
 
-## So sánh với Pi SDK 0.85.0
+## So sánh với Pi SDK 0.87.1
 
-:::info[Pi SDK 0.85.0]
+:::info[Pi SDK 0.87.1]
 
 `@earendil-works/pi-coding-agent` xuất công khai `SessionManager`, `SessionEntry`, `SessionHeader`, `SessionTreeNode`, `buildContextEntries()`, `buildSessionContext()` và `CURRENT_SESSION_VERSION`.
 
 :::
 
-`SessionManager` ở release đã ghim của Pi mô tả cây JSONL chỉ thêm mới với `id`/`parentId`, leaf hiện tại, `getBranch()`, `getTree()`, `branch()` và cách dựng ngữ cảnh có xét việc nén. Định dạng của release là phiên bản `3` và hỗ trợ thêm nhiều loại entry, gồm thay model/mức suy luận, nén, tóm tắt nhánh, entry tùy chỉnh, nhãn và thông tin phiên làm việc.
+`SessionManager` ở release đã ghim là nguồn canonical cho provider context trong tương lai. Nó mô tả cây JSONL chỉ thêm mới với `id`/`parentId`, leaf hiện tại, `getBranch()`, `getTree()`, `branch()` và `buildSessionProjection()` có xét compaction. Định dạng của release là phiên bản `3` và hỗ trợ thêm model/thinking change, compaction, branch summary, custom entry, label, session info và `context_edit`.
+
+Gán `session.agent.state.messages` không thay thế canonical projection đó. Hãy dùng session API để navigate, append qua `session.sessionManager`, rồi gọi `session.refreshContext()` khi external append cần làm mới public finalized transcript. `appendContextEdit(targetId, null)` append một omission mà không viết lại target; replacement khác null có shape `{ content }`. Raw transcript và UI history vẫn append-only.
 
 Định dạng của khóa học là phiên bản `1`, chỉ lưu header cùng entry Message IR, dùng commit atomic cho toàn bộ thế hệ và giao thức dấu mốc phục hồi riêng cho workshop, đồng thời lấy bản ghi mới nhất làm leaf hiện tại sau khi tải. Tệp JSONL của khóa học không phải phiên làm việc Pi, và loader này cũng không nhận tệp phiên làm việc Pi. Hãy dùng `SessionManager` cùng hàm chuyển đổi phiên bản của Pi cho phiên làm việc thực tế.
 

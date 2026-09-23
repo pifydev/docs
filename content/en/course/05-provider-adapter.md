@@ -5,11 +5,11 @@ translation_key: course-05-provider-adapter
 language: en
 checkpoint: 5
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/src/models.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/src/types.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/ai/src/utils/event-stream.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/models.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/types.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/utils/event-stream.ts"
 status: reviewed
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -188,15 +188,15 @@ Stream that response and await both the chunks and terminal result. The Tool-cal
 - Unknown events, malformed payloads, transport errors, hostile sources, and queue exhaustion produce stable course-owned codes.
 - Removing `response_end` rejects iteration and result with `PROVIDER_MISSING_TERMINAL`, even after earlier chunks were emitted.
 
-## Compare with Pi SDK 0.85.0
+## Compare with Pi SDK 0.87.1
 
-:::info[Pi SDK 0.85.0]
+:::info[Pi SDK 0.87.1]
 
-`@earendil-works/pi-ai` exports `Provider`, `createProvider()`, `createModels()`, `MutableModels`, `AssistantMessageEventStream`, `AssistantMessageEvent`, `ToolCall`, `Usage`, and `StopReason`. `createProvider()` builds and returns a production-facing `Provider` from auth, models, and API stream parts. It does not register that provider. `createModels()` returns `MutableModels`; call `models.setProvider(provider)` on that returned instance to upsert the provider into the collection.
+`@earendil-works/pi-ai` exports `Provider`, `createProvider()`, `createModels()`, `MutableModels`, `AssistantMessageEventStream`, `AssistantMessageEvent`, `ToolCall`, `Usage`, and `StopReason`. A `Provider.stream()` implementation receives `TranscriptContext`, while public `Models.stream()` accepts `Context` and normalizes it before dispatch. `createProvider()` returns a production-facing provider but does not register it; `createModels()` returns `MutableModels`, whose `models.setProvider(provider)` upserts it.
 
 :::
 
-Pi's assistant stream has lifecycle events for start, text, thinking, Tool-call assembly, done, and error. Its public `AssistantMessage` retains provider/model identity, richer usage and cost data, timestamps, diagnostics, response metadata, more stop reasons, image/thinking content, and deferred responses. A real Pi provider module also owns vendor request conversion, authentication inputs, response parsing, and release-specific error behavior.
+Pi's assistant stream has lifecycle events for start, text, thinking, Tool-call assembly, done, and error. Provider adapters read the current prompt and Tool declarations from transcript system messages with `getCurrentSystemPrompt()` and `getCurrentTools()`; they do not expect `systemPrompt` or `tools` on `TranscriptContext`. Its public `AssistantMessage` retains provider/model identity, richer usage and cost data, timestamps, diagnostics, response metadata, more stop reasons, image/thinking content, and deferred responses. A real Pi provider module also owns vendor request conversion, authentication inputs, response parsing, and release-specific error behavior.
 
 The course adapter is a smaller parser exercise. It recognizes five transport record types, has no provider registry, emits complete Tool-call chunks rather than start/delta/end Tool-call events, and records only two token counts. Its `FixtureProviderError` codes and `schemaVersion: 1` fixture are not Pi APIs.
 

@@ -5,11 +5,11 @@ translation_key: course-13-runtime-composition
 language: vi
 checkpoint: 13
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/index.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/sdk.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/agent-session-runtime.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/index.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/sdk.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/agent-session-runtime.ts"
 status: reviewed
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -213,15 +213,17 @@ Chạy lại focused command. Replacement phải reject, các value do candidate
 - Publication bind Session persistence cùng Extension hook sang candidate trước khi cleanup runtime cũ bắt đầu.
 - Replacement lỗi giữ runtime cũ live; lỗi dispose runtime cũ giữ candidate đã công bố ở trạng thái live và báo cleanup failure.
 
-## So sánh với Pi SDK 0.85.0
+## So sánh với Pi SDK 0.87.1
 
-:::info[Pi SDK 0.85.0]
+:::info[Pi SDK 0.87.1]
 
 `@earendil-works/pi-coding-agent` công khai `createAgentSession()`, `createAgentSessionRuntime()`, `AgentSessionRuntime`, `createAgentSessionServices()`, `createAgentSessionFromServices()`, các option và result type tương ứng, cùng `SessionManager`.
 
 :::
 
 `createAgentSession()` của Pi là composition entry point thường dùng cho programmatic API. `AgentSessionRuntime` sở hữu một `AgentSession` cùng service gắn với cwd, hỗ trợ luồng new, resume, fork, switch và import, công bố `setRebindSession()`, đồng thời settle active response trước khi vô hiệu Session cũ. Ở bản phát hành đã pin, replacement method teardown Session hiện tại trước khi đợi construction của runtime tiếp theo. Lifecycle đó không hứa hẹn guarantee candidate-first của course manager rằng replacement lỗi vẫn giữ runtime cũ live.
+
+Trong một session đang chạy, `SessionManager` vẫn là nguồn canonical cho provider request tiếp theo. Gán trực tiếp `session.agent.state.messages` chỉ đổi Agent state được công bố, không thay thế request history sau này. Runtime composition cần restore hoặc edit history phải navigate hay append qua session manager, rồi gọi `session.refreshContext()` sau external append để finalized public view khớp current projection.
 
 Khóa học dựng lại một graph offline nhỏ hơn và ghi ownership trong construction ledger có kiểm tra chặt. Manager queue, phép swap `current`, `flush()`, thuật toán event persistence, factory fallback và error code đều dành riêng cho workshop. Với host dùng Pi, hãy dùng public session factory cùng `AgentSessionRuntime`, bind lại host subscription qua callback được hỗ trợ và tuân theo replacement lifecycle của Pi thay vì sao chép API course manager.
 

@@ -5,10 +5,10 @@ translation_key: course-00-complete-agent-trace
 language: en
 checkpoint: 0
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/types.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/agent/src/agent-loop.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/types.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent-loop.ts"
 status: reviewed
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -165,9 +165,9 @@ Run the focused command again. The event types still appear in the correct order
 - The run object, event array, individual events, Tool arguments, and terminal result reject mutation.
 - The controlled mismatched-ID edit fails the linkage assertion and passes again after restoration.
 
-## Compare with Pi SDK 0.85.0
+## Compare with Pi SDK 0.87.1
 
-:::info[Pi SDK 0.85.0]
+:::info[Pi SDK 0.87.1]
 
 The released `@earendil-works/pi-agent-core` exports a richer `AgentEvent` union. Its lifecycle includes `agent_start`/`agent_end`, `turn_start`/`turn_end`, message lifecycle events, and `tool_execution_start`/`tool_execution_update`/`tool_execution_end`. Tool events carry `toolCallId`, so consumers can correlate one execution even when Tool names repeat.
 

@@ -5,12 +5,12 @@ translation_key: how-to-run-pi-evals
 language: en
 source_url: "https://docs.pify.dev/en/how-to/run-pi-evals"
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/README.md"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/smoke.eval.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/pi-harness.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/vitest-evals/reporter.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/vitest-evals/artifacts.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/vitest-evals/summary.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/README.md"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/evals/smoke.eval.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/src/harness.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/src/plan.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/src/report.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/src/cli.ts"
 terms_used:
   - harness
   - judge
@@ -20,7 +20,7 @@ terms_used:
   - fail-closed
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 translator: Pify maintainers
 ---
 
@@ -53,31 +53,31 @@ Use Node.js `>=22.19.0`. The following block is the complete checkout boundary f
 ```bash
 git clone https://github.com/earendil-works/pi.git
 cd pi
-git checkout 107d79f11072bbc8a3a757ed7fd69596bee7d68c
+git checkout f07218c4d4bbc12bef056a7058c3dd49dfe41abe
 npm install
 ```
 
-The root install hydrates the monorepo workspaces and their lockfile. At this commit, `packages/evals/package.json` declares `private: true` and exposes exactly three package scripts: `eval`, `test`, and `clean`. The repository root delegates `npm run eval` to that workspace, so the remaining commands run from the repository root.
+The root install hydrates the monorepo workspaces and their lockfile. At this commit, `packages/evals/package.json` declares `private: true`. Its relevant scripts are `eval`, `eval:host`, `eval:docs`, `test`, and `clean`. The commands below use npm's `-w packages/evals` workspace selector from the repository root so the execution mode stays explicit.
 
-Before spending a provider request, confirm `git rev-parse HEAD` prints `107d79f11072bbc8a3a757ed7fd69596bee7d68c`. If it does not, stop: flags, report formats, and artifact behavior from another commit are outside this guide's release contract.
+Before spending a provider request, confirm `git rev-parse HEAD` prints `f07218c4d4bbc12bef056a7058c3dd49dfe41abe`. If it does not, stop: flags, report formats, and artifact behavior from another commit are outside this guide's release contract.
 
 ## 2. Run one smoke eval
 
-The pinned smoke eval in `src/smoke.eval.ts` disables all Tools and asks for the capital of France. It hard-asserts the exact trimmed answer `Paris`, an empty harness-error list, the selected provider and model, and a positive token count. Run only that file first:
+The pinned host smoke eval in `evals/smoke.eval.ts` disables all Tools and asks for the capital of France. It hard-asserts the exact trimmed answer `Paris`, an empty harness-error list, the selected provider and model, and a positive token count. Run only that file first:
 
 ```bash
-npm run eval -- --provider openai --model gpt-5.6-sol src/smoke.eval.ts
+PI_PROVIDER=openai-codex PI_MODEL=gpt-5.6-sol npm run eval:host -w packages/evals -- evals/smoke.eval.ts
 ```
 
-Replace the provider/model pair with one available through Pi's normal `ModelRuntime`. The two values are atomic: the runner rejects a CLI invocation that supplies only `--provider` or only `--model`. Authentication comes from Pi subscription credentials or the provider's normal API-key environment variable; the eval package does not define a separate credential store.
+Replace the environment pair with one available through Pi's normal `ModelRuntime`. Both `PI_PROVIDER` and `PI_MODEL` are required by the harness when no explicit model is configured. Authentication comes from Pi's stored subscription credential or the provider's normal API-key environment variable; the eval package does not define a separate credential store.
 
-Arguments not consumed as `--provider` or `--model` are forwarded to Vitest. To select the exact smoke case as well as its file, use:
+The host runner forwards file and test filters to Vitest. To select the exact smoke case as well as its file, use:
 
 ```bash
-npm run eval -- --provider openai --model gpt-5.6-sol src/smoke.eval.ts -t "runs a basic prompt end to end"
+PI_PROVIDER=openai-codex PI_MODEL=gpt-5.6-sol npm run eval:host -w packages/evals -- evals/smoke.eval.ts -t "returns the expected answer"
 ```
 
-The runner prints `default-model=<provider>/<model>` and the resolved artifact directory before Vitest starts. A non-zero command exit means the run did not satisfy its hard assertions or infrastructure contract; it is not automatically evidence that a candidate behavior scored poorly.
+This host path runs Vitest directly and does not produce the paired documentation-comparison report described later. A non-zero command exit means the smoke run did not satisfy its hard assertions or infrastructure contract; it is not automatically evidence that a documentation treatment scored poorly.
 
 ## 3. Understand the Pi coding-agent harness
 
@@ -87,7 +87,7 @@ The Pi coding-agent harness comes from `createPiCodingAgentHarness(...)`, the Pi
 2. create a new temporary root with separate `workspace`, `agent`, and `sessions` locations;
 3. construct `ModelRuntime`, in-memory settings, services, `SessionManager`, and a real `AgentSession`;
 4. reject unexpected preloaded Extensions so ambient user configuration cannot contaminate the fixture;
-5. accept one prompt or a sequence of `prompt` and `reload` steps, then require a final assistant message with `stopReason: "stop"` and non-empty text;
+5. accept one prompt or a sequence of `prompt` and `reload` steps, then require a final assistant message whose `stopReason` is `"stop"` or `"toolUse"`; only the `"stop"` case must contain non-empty text;
 6. normalize messages, Tool calls, and Tool results into trace events, and report usage and elapsed time;
 7. snapshot the native session JSONL, dispose the session, and recursively remove the temporary root even when execution fails.
 
@@ -111,23 +111,16 @@ A judge converts one harness result into a score and optional rationale. Define 
 
 Prefer a deterministic judge whenever correctness can be derived from JSON-safe output or the normalized trace. It is cheap, repeatable, reviewable, and appropriate for exact output, schema validity, Tool name and arguments, created files, loader errors, or other machine-checkable invariants.
 
-The Pi release uses `createJudge(...)` and returns `1` only when all required conditions hold. A minimal form is:
+The tagged documentation evals use `StructuredOutputJudge(...)` and `ToolCallJudge(...)` from `vitest-evals`. A small strict judge can compare a JSON-safe projection from the harness:
 
 ```typescript
-import { createJudge } from "vitest-evals";
+import { StructuredOutputJudge } from "vitest-evals";
 
-const ExactAnswerJudge = createJudge<string, string>(
-  "ExactAnswerJudge",
-  ({ output }) => ({
-    score: output.trim() === "Paris" ? 1 : 0,
-    metadata: {
-      rationale:
-        output.trim() === "Paris"
-          ? "Exact answer matched."
-          : "Expected exactly Paris.",
-    },
-  }),
-);
+const ExactAnswerJudge = StructuredOutputJudge({
+  expected: { answer: "Paris" },
+  match: "strict",
+  allowExtras: false,
+});
 ```
 
 Use hard `expect(...)` assertions for fixture integrity and infrastructure contracts, not as a scoring substitute. `expect.soft(...)` still fails a Vitest task; it does not create a judge observation.
@@ -136,50 +129,46 @@ Use hard `expect(...)` assertions for fixture integrity and infrastructure contr
 
 A model-backed judge is appropriate only when the rubric needs semantic quality that a deterministic predicate cannot express reliably, such as whether an explanation is faithful, useful, and complete. Model-backed evaluation is optional: start with a reviewed rubric and a small held-out evaluation set, calibrate it against human verdicts, pin the judge model and settings, and record its version with the run.
 
-The Pi package supplies the Coding Agent harness and reporter integration; the model-backed judge implementation belongs to `vitest-evals` or your evaluation code. Do not invent a Pi API for it. A judge request receives potentially sensitive output and adds nondeterminism, latency, and cost, so never make it the only fail-closed safety check. Where possible, combine deterministic contract checks with the subjective score and periodically re-review disagreement cases.
+The Pi package supplies the Coding Agent harness and imports judge implementations from `vitest-evals`; a custom or model-backed judge belongs to that library or your evaluation code. Do not invent a Pi API for it. A judge request receives potentially sensitive output and adds nondeterminism, latency, and cost, so never make it the only fail-closed safety check. Where possible, combine deterministic contract checks with the subjective score and periodically re-review disagreement cases.
 
 ## 5. Compare baseline and candidate with repetitions
 
-Use `evalHarnessTable(...)` with Vitest's `describe.for(...)` so the same input and judge run against the declared baseline and candidate. Give each harness a stable unique name. One candidate is declared with `candidate`; multiple treatments use `candidates`, and every treatment is paired only with the declared baseline.
+Pi 0.87.1 has a dedicated documentation comparison instead of asking each eval file to build its own baseline/candidate table. The runner builds two images: `without_docs` is the control and `with_docs` is the treatment. Both install the same local workspace packages and run the same discovered `*.docs.eval.ts` cases with the same provider/model and judge definitions. The treatment keeps Pi documentation; the control removes the coding-agent documentation surfaces and the corresponding default-prompt section.
 
 ```typescript
-const harnessTable = evalHarnessTable("target skill effectiveness", {
-  baseline: withoutTargetSkillHarness,
-  candidate: withTargetSkillHarness,
-  repetitions: 6,
+const harness = createPiDocumentationEvalHarness({
+  output: ({ response, session }) => ({
+    response,
+    toolCalls: session.getSessionStats().toolCalls,
+  }),
 });
 
-describe.for(harnessTable)(
-  "$name repetition $repetition",
-  ({ harness }) => {
-    describeEval(
-      "target skill effectiveness",
-      {
-        harness,
-        judges: [TargetTaskJudge],
-        judgeThreshold: null,
-      },
-      (it) => {
-        it("completes the target task", async ({ run }) => {
-          await run("Complete the target task.");
-        });
-      },
-    );
+describeEval(
+  "target skill effectiveness",
+  {
+    harness,
+    judges: [TargetTaskJudge],
+    judgeThreshold: null,
+  },
+  (it) => {
+    it("completes the target task", async ({ run }) => {
+      await run("Complete the target task.");
+    });
   },
 );
 ```
 
-`repetitions` must be a positive integer and defaults to `1`; increase it deliberately because each row executes the harness again. The grouping key combines the repetition with a non-empty `input.id`, or with a SHA-256 hash of strict canonical JSON input when no ID exists. Stable inputs and harness names let the reporter form valid pairs.
+`createPiDocumentationEvalHarness()` is valid only inside the isolated container runner. It exposes `read`, `write`, `edit`, `grep`, `find`, and `ls` by default, not shell or unrestricted web-search Tools. Discovery must produce identical case cohorts in both images. The plan then expands each case into `(case, variant, model, runNumber)` tasks and alternates variant order by run number to reduce order bias.
 
-Set `judgeThreshold: null` for comparative suites. A low judge score then remains an observation for pass-rate comparison rather than turning the whole invocation into an infrastructure failure. The reporter treats an average judge score of at least `1` as passing and reports candidate pass-rate lift minus baseline pass rate in percentage points.
+Keep `judgeThreshold: null` for comparison suites. A valid low score remains a task observation instead of failing the arm as infrastructure. `--runs-per-variant` must be a positive integer and defaults to `1`; increase it deliberately because each value schedules both variants again.
 
-The release includes a larger baseline/candidate Extension experiment. Run it separately after the smoke case:
+Run the pinned Extension documentation comparison after the host smoke case:
 
 ```bash
-npm run eval -- --provider openai --model gpt-5.6-sol src/extensions.eval.ts
+npm run eval:docs -w packages/evals -- evals/extensions.docs.eval.ts --provider openai-codex --model gpt-5.6-sol --runs-per-variant 5
 ```
 
-Do not compare one lucky candidate run with one unrelated baseline run. Use the same eval input, repetition index, judge definition, and release source. Add repetitions when model variance could change the verdict, and retain incomplete observations instead of silently dropping them.
+The CLI requires `--provider` and `--model` together when either appears; otherwise it reads the paired `PI_PROVIDER`/`PI_MODEL` variables. It accepts only `*.docs.eval.ts` files plus `-t`/`--testNamePattern` discovery filters. Keep the exact release source, case identity, model, run number, and protocol digest with the result. Do not compare unrelated ad hoc runs or silently discard a blocked arm.
 
 ## 6. Separate task verdicts from infrastructure errors
 
@@ -188,12 +177,12 @@ A task verdict answers “did the Agent satisfy the rubric?” An infrastructure
 | Signal | Classification | Action |
 | --- | --- | --- |
 | Deterministic or model-backed judge returns a valid low score | Task verdict | Keep the observation; inspect rationale and compare paired pass rates |
-| Model is absent, credential request fails, run aborts, or assistant ends without `stop` | Infrastructure error | Fix the environment and rerun; do not score it as task failure |
+| Model is absent, credential resolution fails, run aborts, or assistant has an unexpected stop reason | Infrastructure error | Fix the environment and rerun; do not score it as task failure |
 | Harness returns `errors` or cleanup throws | Infrastructure error | Preserve diagnostics, repair the fixture or runtime, then rerun |
-| Reporter has `missing-score`, `missing-observation`, `duplicate-observation`, or `harness-error` | Incomplete comparison | Do not infer lift from the missing pair; investigate the named run |
+| An expected arm is missing or duplicated, or its outcome is `unscored`, `skipped`, `pending`, or `errored` | Blocked pair | Do not infer lift from that eval set; investigate the named arm |
 | A hard suite-invariant assertion fails | Infrastructure/fixture contract failure | Correct the eval definition before interpreting candidate quality |
 
-The summary module only pairs one baseline and one candidate observation for the same file, test, group key, and repetition. An errored, unscored, skipped, pending, missing, or duplicate observation becomes a diagnostic rather than an invented score. This fail-closed behavior keeps coverage visible.
+`report.ts` pairs exactly one `without_docs` and one `with_docs` observation for the same eval set, case ID, model, and run number. Any invalid cohort becomes a blocked-pair reason rather than an invented score. If an eval set has a blocked pair, its headline pass rates and lift are withheld; if any pair is blocked, the documentation CLI exits nonzero after writing the report.
 
 ## 7. Read telemetry and comparison output
 
@@ -201,25 +190,29 @@ The Pi harness records provider/model identity, input and output tokens, total t
 
 | Report field | Meaning | Interpretation limit |
 | --- | --- | --- |
-| Pass-rate lift | Candidate pass rate minus baseline pass rate | Needs matched, scored pairs; it is not causal proof by itself |
-| Tokens | Candidate-minus-baseline mean `totalTokens` | Missing telemetry reduces eligible-pair coverage |
-| Latency | Candidate-minus-baseline mean `totalMs` | Provider load and network conditions can dominate small samples |
-| Estimated cost | Candidate-minus-baseline mean `estimatedCostUsd` | Available only when model pricing metadata is populated |
-| Incomplete observations | Missing, duplicate, errored, or unscored rows | Resolve them before relying on the comparison |
+| Pass-rate lift | `with_docs` pass rate minus `without_docs` pass rate | Published only when every planned pair in the eval set is eligible |
+| Tokens | Treatment-minus-control mean `totalTokens` | Missing telemetry reduces metric-pair coverage |
+| Tools | Treatment-minus-control mean Tool-call count | A lower count is not automatically a better task result |
+| Latency | Treatment-minus-control mean `totalMs` | Provider load and network conditions can dominate small samples |
+| Estimated cost | Treatment-minus-control mean `estimatedCostUsd` | Available only when model pricing metadata is populated |
+| Blocked pairs | Missing, duplicate, errored, skipped, pending, or unscored arms | Resolve them before relying on headline correctness |
 
-Read direction and coverage together. A positive correctness lift may be useful even if token or latency deltas increase, but the trade-off must match the product goal. Record the release SHA, provider/model IDs, prompt or Tool change, judge definition, input-set revision, repetitions, and artifact directory so another reviewer can reproduce the comparison.
+Read direction and coverage together. `report.txt` prints paired deltas plus operational totals for both variants; `report.json` preserves the schema, `protocolDigest`, comparisons, blocked pairs, and totals. A positive correctness lift may still cost more tokens or latency. Record the release SHA, provider/model IDs, documentation change, judge definition, input-set revision, repetitions, and artifact directory so another reviewer can reproduce the comparison.
 
 ## 8. Inspect, redact, and retain artifacts safely
 
-The runner creates `packages/evals/.eval/<timestamp>_<uuid>/` by default and prints the resolved path. `PI_EVAL_ARTIFACT_DIR` can override the directory; a relative value is resolved from `packages/evals`. The directory contains:
+The documentation runner creates `packages/evals/.eval/<timestamp>_<uuid>/` and prints that resolved path. Pi 0.87.1 does not expose a public CLI option for a custom artifact root. The directory contains:
 
 | Path | Contents | Handling |
 | --- | --- | --- |
-| `runs.jsonl` | One reporter record per completed harness run, including test identity, usage, timings, errors, metadata, and artifact references | Filter by `runId`; do not publish blindly |
-| `sessions/<sha256(runId)>/session.jsonl` | Native Pi session snapshot captured before the temporary workspace is removed | Treat as sensitive transcript and Tool evidence |
-| `sources/<sha256(runId)>/<name>` | Optional source attachment explicitly registered by an eval | Review for credentials, private paths, and proprietary code |
+| `protocol.json` | Model, image IDs, selected files, discovered cases, task plan, and `protocolDigest` | Keep it with every comparison report |
+| `expected-runs.json` | Complete planned `(case, variant, model, runNumber)` cohort | Use it to account for missing or duplicate arms |
+| `observations.jsonl` | Normalized outcome and available telemetry for each completed task | Inspect outcomes before reading headline lift |
+| `tasks/*/vitest.json` | Native Vitest JSON produced by each isolated arm | Treat errors and raw harness evidence as sensitive |
+| `<variant>/sessions/*/session.jsonl` | Native Pi session snapshot retained for an arm | Treat as sensitive transcript and Tool evidence |
+| `report.json` and `report.txt` | Machine-readable and printed paired comparisons | Share only after checking blocked pairs and redaction |
 
-The runner creates artifact directories with owner-only mode `0700` and writes report/attachment files with `0600` where the platform honors POSIX modes. Permissions reduce accidental access but are not redaction. Before sharing, copy only the evidence needed for review, remove secrets and personal or proprietary content from that copy, preserve the original `runId` and release metadata, and have a second reviewer verify the redaction. Never edit an artifact and then present it as untouched raw evidence.
+The CLI creates the run directory with owner-only mode `0700`, and retained session snapshots are written with `0600` where the platform honors POSIX modes. Do not assume every Docker or report file has the same mode. Permissions reduce accidental access but are not redaction. Before sharing, copy only the evidence needed for review, remove secrets and personal or proprietary content from that copy, preserve the protocol digest and release metadata, and have a second reviewer verify the redaction. Never edit an artifact and then present it as untouched raw evidence.
 
 Keep artifacts only for an explicit retention period. If a run processed real repository content, store retained evidence in an access-controlled location rather than committing `.eval`; the release package's `.gitignore` excludes that directory by default.
 
@@ -231,34 +224,34 @@ First finish inspection or copy the intentionally retained, redacted evidence. T
 npm run clean --workspace=@earendil-works/pi-evals
 ```
 
-At the pinned commit this delegates to `shx rm -rf .eval` with `packages/evals` as the workspace. The fixed script only removes the default `packages/evals/.eval` directory. It does not remove a relative or absolute directory selected through `PI_EVAL_ARTIFACT_DIR`. The harness has already removed each temporary project/agent root; this command removes only the default durable report and attachment directory.
+At the pinned commit this delegates to `shx rm -rf .eval` with `packages/evals` as the workspace. The fixed script only removes `packages/evals/.eval`. It does not accept a custom artifact path. The harness has already removed each temporary project/agent root; this command removes the durable protocol, observations, reports, task output, and retained session snapshots under the fixed run root.
 
-Custom relative or absolute paths require separate, explicit, validated cleanup under your own retention policy. Resolve the configured value to an exact path, confirm that target is the intended eval artifact directory, and use a platform-appropriate command only after validation. Never pass an unresolved environment value, repository root, home directory, or broad parent directory to recursive deletion.
+Finish review and copy only approved, redacted evidence before running cleanup. Apply your retention policy to those copies separately. Do not replace the pinned script with a recursive command aimed at an unresolved environment value, repository root, home directory, or broad parent directory.
 
 For automation, clean up in a final step that runs on both success and failure, but upload only approved redacted outputs. Do not log session contents or secret-bearing environment variables as part of cleanup diagnostics.
 
-## Source map for Pi 0.85.0
+## Source map for Pi 0.87.1
 
-Every link below is pinned to release commit `107d79f11072bbc8a3a757ed7fd69596bee7d68c`:
+Every link below is pinned to release commit `f07218c4d4bbc12bef056a7058c3dd49dfe41abe`:
 
 | Source | What to verify |
 | --- | --- |
-| [`packages/evals/README.md`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/README.md) | Supported runner commands, harness options, comparative methodology, and artifact warning |
-| [`src/smoke.eval.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/smoke.eval.ts) | One end-to-end smoke prompt and hard infrastructure assertions |
-| [`src/pi-harness.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/pi-harness.ts) | Model resolution, isolated session lifecycle, traces, telemetry, snapshot, and temporary cleanup |
-| [`src/vitest-evals/reporter.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/vitest-evals/reporter.ts) | `runs.jsonl`, harness observations, incomplete diagnostics, and printed comparisons |
-| [`src/vitest-evals/artifacts.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/vitest-evals/artifacts.ts) | Session/source attachment categories, hashed paths, and file modes |
-| [`src/vitest-evals/summary.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/vitest-evals/summary.ts) | Pair eligibility, pass-rate lift, telemetry deltas, and diagnostic reasons |
+| [`packages/evals/README.md`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/README.md) | Host/documentation runner commands, isolation model, results, and artifact warning |
+| [`evals/smoke.eval.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/evals/smoke.eval.ts) | End-to-end host smoke prompt and hard infrastructure assertions |
+| [`src/harness.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/src/harness.ts) | Model resolution, isolated session lifecycle, traces, telemetry, snapshot, and temporary cleanup |
+| [`src/plan.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/src/plan.ts) | Variant identities, case parsing, repeated task planning, and alternating order |
+| [`src/report.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/src/report.ts) | Observation validation, blocked pairs, telemetry deltas, session retention, and report formatting |
+| [`src/cli.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/src/cli.ts) | CLI validation, Docker orchestration, protocol/artifact writing, and nonzero blocked-pair exit |
 
 ## Acceptance checklist
 
-- [ ] The checkout is at exact commit `107d79f11072bbc8a3a757ed7fd69596bee7d68c` and Node.js is `>=22.19.0`.
+- [ ] The checkout is at exact commit `f07218c4d4bbc12bef056a7058c3dd49dfe41abe` and Node.js is `>=22.19.0`.
 - [ ] The eval runs from the Pi monorepo; no application attempts to install the private eval workspace as a public package.
-- [ ] Provider and model are supplied together, with credentials scoped to the run.
-- [ ] The smoke eval passes before a broader or comparative suite runs.
-- [ ] Harness names, inputs, judge definition, and repetition count are stable and recorded.
+- [ ] Host evals receive the paired `PI_PROVIDER`/`PI_MODEL`; documentation CLI flags `--provider`/`--model` are also supplied together.
+- [ ] The host smoke eval passes before the containerized documentation comparison runs.
+- [ ] Case IDs, variant, model, judge definition, run number, and protocol digest are stable and recorded.
 - [ ] Deterministic judges cover machine-checkable contracts; any optional model-backed judge has a reviewed rubric and budget.
-- [ ] Comparative suites keep `judgeThreshold: null` and distinguish a task verdict from an infrastructure error.
+- [ ] Documentation suites keep `judgeThreshold: null`, use `without_docs`/`with_docs`, and distinguish a task verdict from an infrastructure error.
 - [ ] Telemetry is interpreted with eligible-pair coverage and unavailable values, not only the headline delta.
 - [ ] Sensitive artifacts are access-controlled, reviewed, redacted before sharing, and assigned a retention period.
-- [ ] Default `.eval` cleanup and any custom artifact-path cleanup are validated separately after the required evidence has been retained safely.
+- [ ] Fixed-root `.eval` cleanup runs only after the required evidence has been retained safely under the chosen retention policy.

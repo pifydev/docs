@@ -5,12 +5,12 @@ translation_key: how-to-run-pi-evals
 language: vi
 source_url: "https://docs.pify.dev/vi/how-to/run-pi-evals"
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/README.md"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/smoke.eval.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/pi-harness.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/vitest-evals/reporter.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/vitest-evals/artifacts.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/vitest-evals/summary.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/README.md"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/evals/smoke.eval.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/src/harness.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/src/plan.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/src/report.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/src/cli.ts"
 terms_used:
   - harness
   - judge
@@ -20,7 +20,7 @@ terms_used:
   - fail-closed
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 translator: Pify maintainers
 ---
 
@@ -53,31 +53,31 @@ Dùng Node.js `>=22.19.0`. Block sau là toàn bộ checkout boundary cho hướ
 ```bash
 git clone https://github.com/earendil-works/pi.git
 cd pi
-git checkout 107d79f11072bbc8a3a757ed7fd69596bee7d68c
+git checkout f07218c4d4bbc12bef056a7058c3dd49dfe41abe
 npm install
 ```
 
-Lệnh install ở root hydrate các monorepo workspace theo lockfile. Tại commit này, `packages/evals/package.json` khai báo `private: true` và chỉ expose ba package script: `eval`, `test`, `clean`. Repository root chuyển tiếp `npm run eval` vào workspace đó, vì vậy các lệnh còn lại được chạy từ repository root.
+Lệnh install ở root hydrate các monorepo workspace theo lockfile. Tại commit này, `packages/evals/package.json` khai báo `private: true`. Các script liên quan là `eval`, `eval:host`, `eval:docs`, `test` và `clean`. Các lệnh bên dưới dùng workspace selector `-w packages/evals` của npm từ repository root để execution mode luôn tường minh.
 
-Trước khi tốn một provider request, hãy xác nhận `git rev-parse HEAD` in ra `107d79f11072bbc8a3a757ed7fd69596bee7d68c`. Nếu không đúng, hãy dừng lại: flag, định dạng report và hành vi artifact từ commit khác nằm ngoài release contract của hướng dẫn này.
+Trước khi tốn một provider request, hãy xác nhận `git rev-parse HEAD` in ra `f07218c4d4bbc12bef056a7058c3dd49dfe41abe`. Nếu không đúng, hãy dừng lại: flag, định dạng report và hành vi artifact từ commit khác nằm ngoài release contract của hướng dẫn này.
 
 ## 2. Chạy một smoke eval
 
-Smoke eval đã pin tại `src/smoke.eval.ts` sẽ tắt toàn bộ Tool và hỏi thủ đô nước Pháp. Nó hard-assert câu trả lời sau khi trim phải đúng `Paris`, harness-error list rỗng, provider/model đúng lựa chọn và token count dương. Trước tiên chỉ chạy file đó:
+Host smoke eval đã pin tại `evals/smoke.eval.ts` sẽ tắt toàn bộ Tool và hỏi thủ đô nước Pháp. Nó hard-assert câu trả lời sau khi trim phải đúng `Paris`, harness-error list rỗng, provider/model đúng lựa chọn và token count dương. Trước tiên chỉ chạy file đó:
 
 ```bash
-npm run eval -- --provider openai --model gpt-5.6-sol src/smoke.eval.ts
+PI_PROVIDER=openai-codex PI_MODEL=gpt-5.6-sol npm run eval:host -w packages/evals -- evals/smoke.eval.ts
 ```
 
-Thay cặp provider/model bằng cặp có trong `ModelRuntime` thông thường của Pi. Hai giá trị là một lựa chọn nguyên tử: runner từ chối CLI invocation chỉ có `--provider` hoặc chỉ có `--model`. Authentication đến từ Pi subscription credential hoặc API-key environment variable thông thường của provider; eval package không định nghĩa credential store riêng.
+Thay environment pair bằng cặp có trong `ModelRuntime` thông thường của Pi. Harness yêu cầu cả `PI_PROVIDER` và `PI_MODEL` khi không cấu hình model tường minh. Authentication đến từ Pi subscription credential đã lưu hoặc API-key environment variable thông thường của provider; eval package không định nghĩa credential store riêng.
 
-Argument không được `--provider` hoặc `--model` tiêu thụ sẽ được chuyển tiếp cho Vitest. Để chọn đúng smoke case cùng file của nó, dùng:
+Host runner chuyển file filter và test filter cho Vitest. Để chọn đúng smoke case cùng file của nó, dùng:
 
 ```bash
-npm run eval -- --provider openai --model gpt-5.6-sol src/smoke.eval.ts -t "runs a basic prompt end to end"
+PI_PROVIDER=openai-codex PI_MODEL=gpt-5.6-sol npm run eval:host -w packages/evals -- evals/smoke.eval.ts -t "returns the expected answer"
 ```
 
-Runner in `default-model=<provider>/<model>` và artifact directory đã resolve trước khi Vitest khởi động. Command exit khác 0 nghĩa là run chưa thỏa hard assertion hoặc infrastructure contract; đó không tự động là bằng chứng candidate behavior có điểm thấp.
+Host path này chạy Vitest trực tiếp và không tạo paired documentation-comparison report được mô tả ở phần sau. Command exit khác 0 nghĩa là smoke run chưa thỏa hard assertion hoặc infrastructure contract; đó không tự động là bằng chứng documentation treatment có điểm thấp.
 
 ## 3. Hiểu Pi coding-agent harness
 
@@ -87,7 +87,7 @@ Pi coding-agent harness đến từ `createPiCodingAgentHarness(...)`, bridge ri
 2. tạo root tạm mới với các vị trí `workspace`, `agent`, `sessions` tách biệt;
 3. dựng `ModelRuntime`, in-memory settings, services, `SessionManager` và `AgentSession` thật;
 4. từ chối Extension được preload ngoài dự kiến để user configuration xung quanh không làm nhiễu fixture;
-5. nhận một prompt hoặc chuỗi step `prompt`/`reload`, rồi bắt buộc có assistant message cuối với `stopReason: "stop"` và text không rỗng;
+5. nhận một prompt hoặc chuỗi step `prompt`/`reload`, rồi bắt buộc có assistant message cuối với `stopReason` là `"stop"` hoặc `"toolUse"`; chỉ trường hợp `"stop"` mới phải có text không rỗng;
 6. normalize message, Tool call và Tool result thành trace event, đồng thời report usage và elapsed time;
 7. snapshot session JSONL gốc, dispose session và xóa đệ quy root tạm kể cả khi execution thất bại.
 
@@ -111,23 +111,16 @@ Judge chuyển một harness result thành score và rationale tùy chọn. Hãy
 
 Ưu tiên deterministic judge khi có thể suy ra correctness từ output JSON-safe hoặc normalized trace. Nó rẻ, lặp lại được, review được và phù hợp với exact output, schema validity, Tool name/argument, file được tạo, loader error hoặc invariant khác có thể kiểm tra bằng máy.
 
-Bản phát hành Pi dùng `createJudge(...)` và chỉ trả về `1` khi tất cả điều kiện bắt buộc đều đúng. Dạng tối thiểu như sau:
+Documentation eval đã tag dùng `StructuredOutputJudge(...)` và `ToolCallJudge(...)` từ `vitest-evals`. Một strict judge nhỏ có thể so sánh JSON-safe projection từ harness:
 
 ```typescript
-import { createJudge } from "vitest-evals";
+import { StructuredOutputJudge } from "vitest-evals";
 
-const ExactAnswerJudge = createJudge<string, string>(
-  "ExactAnswerJudge",
-  ({ output }) => ({
-    score: output.trim() === "Paris" ? 1 : 0,
-    metadata: {
-      rationale:
-        output.trim() === "Paris"
-          ? "Exact answer matched."
-          : "Expected exactly Paris.",
-    },
-  }),
-);
+const ExactAnswerJudge = StructuredOutputJudge({
+  expected: { answer: "Paris" },
+  match: "strict",
+  allowExtras: false,
+});
 ```
 
 Dùng hard assertion `expect(...)` cho tính toàn vẹn của fixture và infrastructure contract, không dùng nó để thay scoring. `expect.soft(...)` vẫn làm Vitest task fail; nó không tạo judge observation.
@@ -136,50 +129,46 @@ Dùng hard assertion `expect(...)` cho tính toàn vẹn của fixture và infra
 
 Model-backed judge chỉ phù hợp khi rubric cần chất lượng ngữ nghĩa mà deterministic predicate không thể biểu đạt đáng tin cậy, chẳng hạn giải thích có đúng nguồn, hữu ích và đầy đủ hay không. Model-backed evaluation là tùy chọn: bắt đầu bằng rubric đã review và held-out evaluation set nhỏ, hiệu chỉnh theo human verdict, pin judge model cùng setting, rồi ghi version của chúng với run.
 
-Pi package cung cấp Coding Agent harness và reporter integration; implementation của model-backed judge thuộc `vitest-evals` hoặc evaluation code của bạn. Đừng tự bịa một Pi API cho nó. Judge request nhận output có thể nhạy cảm và làm tăng nondeterminism, latency, cost, vì vậy đừng bao giờ dùng nó làm fail-closed safety check duy nhất. Khi có thể, kết hợp deterministic contract check với subjective score và định kỳ review lại các case bất đồng.
+Pi package cung cấp Coding Agent harness và import judge implementation từ `vitest-evals`; custom hoặc model-backed judge thuộc library đó hoặc evaluation code của bạn. Đừng tự bịa một Pi API cho nó. Judge request nhận output có thể nhạy cảm và làm tăng nondeterminism, latency, cost, vì vậy đừng bao giờ dùng nó làm fail-closed safety check duy nhất. Khi có thể, kết hợp deterministic contract check với subjective score và định kỳ review lại các case bất đồng.
 
 ## 5. So sánh baseline và candidate bằng repetitions
 
-Dùng `evalHarnessTable(...)` với `describe.for(...)` của Vitest để cùng input và judge chạy trên baseline và candidate đã khai báo. Đặt cho mỗi harness một tên duy nhất, ổn định. Một treatment dùng `candidate`; nhiều treatment dùng `candidates`, và mỗi treatment chỉ được pair với baseline đã khai báo.
+Pi 0.87.1 có documentation comparison riêng thay vì yêu cầu mỗi eval file tự dựng bảng baseline/candidate. Runner build hai image: `without_docs` là control và `with_docs` là treatment. Cả hai cài cùng local workspace package, rồi chạy cùng các case `*.docs.eval.ts` đã discover với cùng provider/model và judge definition. Treatment giữ tài liệu Pi; control loại các bề mặt tài liệu của coding-agent và section tương ứng trong default prompt.
 
 ```typescript
-const harnessTable = evalHarnessTable("target skill effectiveness", {
-  baseline: withoutTargetSkillHarness,
-  candidate: withTargetSkillHarness,
-  repetitions: 6,
+const harness = createPiDocumentationEvalHarness({
+  output: ({ response, session }) => ({
+    response,
+    toolCalls: session.getSessionStats().toolCalls,
+  }),
 });
 
-describe.for(harnessTable)(
-  "$name repetition $repetition",
-  ({ harness }) => {
-    describeEval(
-      "target skill effectiveness",
-      {
-        harness,
-        judges: [TargetTaskJudge],
-        judgeThreshold: null,
-      },
-      (it) => {
-        it("completes the target task", async ({ run }) => {
-          await run("Complete the target task.");
-        });
-      },
-    );
+describeEval(
+  "target skill effectiveness",
+  {
+    harness,
+    judges: [TargetTaskJudge],
+    judgeThreshold: null,
+  },
+  (it) => {
+    it("completes the target task", async ({ run }) => {
+      await run("Complete the target task.");
+    });
   },
 );
 ```
 
-`repetitions` phải là số nguyên dương và mặc định bằng `1`; chỉ tăng có chủ đích vì mỗi row thực thi harness thêm một lần. Grouping key kết hợp repetition với `input.id` khác rỗng, hoặc với SHA-256 hash của strict canonical JSON input khi không có ID. Input và harness name ổn định giúp reporter tạo pair hợp lệ.
+`createPiDocumentationEvalHarness()` chỉ hợp lệ bên trong isolated container runner. Mặc định nó expose `read`, `write`, `edit`, `grep`, `find` và `ls`, không expose shell hay Tool web-search không giới hạn. Discovery phải tạo cohort case giống nhau trong cả hai image. Plan sau đó mở rộng từng case thành task `(case, variant, model, runNumber)` và luân phiên thứ tự variant theo run number để giảm order bias.
 
-Đặt `judgeThreshold: null` cho comparative suite. Khi đó judge score thấp vẫn là observation cho so sánh pass rate thay vì biến cả invocation thành infrastructure failure. Reporter xem average judge score ít nhất `1` là pass và report candidate pass-rate lift trừ baseline pass rate theo percentage point.
+Giữ `judgeThreshold: null` cho comparison suite. Valid score thấp vẫn là task observation thay vì khiến arm fail như infrastructure. `--runs-per-variant` phải là số nguyên dương và mặc định bằng `1`; chỉ tăng có chủ đích vì mỗi giá trị lập lịch lại cả hai variant.
 
-Bản phát hành có một experiment Extension baseline/candidate lớn hơn. Chạy riêng nó sau smoke case:
+Chạy Extension documentation comparison đã pin sau host smoke case:
 
 ```bash
-npm run eval -- --provider openai --model gpt-5.6-sol src/extensions.eval.ts
+npm run eval:docs -w packages/evals -- evals/extensions.docs.eval.ts --provider openai-codex --model gpt-5.6-sol --runs-per-variant 5
 ```
 
-Đừng so một candidate run may mắn với một baseline run không liên quan. Hãy dùng cùng eval input, repetition index, judge definition và release source. Thêm repetitions khi model variance có thể đổi verdict, đồng thời giữ lại incomplete observation thay vì âm thầm bỏ nó.
+CLI yêu cầu `--provider` và `--model` đi cùng khi một trong hai flag xuất hiện; nếu không, nó đọc cặp `PI_PROVIDER`/`PI_MODEL`. CLI chỉ nhận file `*.docs.eval.ts` cùng discovery filter `-t`/`--testNamePattern`. Giữ exact release source, case identity, model, run number và protocol digest với kết quả. Đừng so các ad hoc run không liên quan hoặc âm thầm bỏ một arm bị blocked.
 
 ## 6. Tách task verdict khỏi infrastructure error
 
@@ -188,12 +177,12 @@ Task verdict trả lời “Agent có thỏa rubric không?”. Infrastructure e
 | Signal | Phân loại | Cách xử lý |
 | --- | --- | --- |
 | Deterministic hoặc model-backed judge trả về score thấp nhưng hợp lệ | Task verdict | Giữ observation; kiểm tra rationale và so paired pass rate |
-| Thiếu model, credential request lỗi, run abort hoặc assistant kết thúc không phải `stop` | Infrastructure error | Sửa environment rồi rerun; không chấm thành task failure |
+| Thiếu model, credential resolution lỗi, run abort hoặc assistant có stop reason ngoài dự kiến | Infrastructure error | Sửa environment rồi rerun; không chấm thành task failure |
 | Harness trả về `errors` hoặc cleanup throw | Infrastructure error | Giữ diagnostic, sửa fixture hoặc runtime rồi rerun |
-| Reporter có `missing-score`, `missing-observation`, `duplicate-observation` hoặc `harness-error` | Comparison chưa đầy đủ | Không suy ra lift từ pair thiếu; điều tra run được nêu tên |
+| Expected arm bị thiếu hoặc trùng, hoặc outcome là `unscored`, `skipped`, `pending`, `errored` | Pair bị blocked | Không suy ra lift từ eval set đó; điều tra arm được nêu tên |
 | Hard assertion về suite invariant fail | Lỗi infrastructure/fixture contract | Sửa eval definition trước khi diễn giải chất lượng candidate |
 
-Summary module chỉ pair một baseline observation và một candidate observation cho cùng file, test, group key, repetition. Observation errored, unscored, skipped, pending, missing hoặc duplicate trở thành diagnostic thay vì score tự bịa. Hành vi fail-closed này làm coverage luôn hiển thị.
+`report.ts` pair chính xác một observation `without_docs` và một observation `with_docs` cho cùng eval set, case ID, model và run number. Cohort không hợp lệ trở thành blocked-pair reason thay vì score tự bịa. Nếu eval set có pair bị blocked, headline pass rate và lift sẽ bị giữ lại; nếu bất kỳ pair nào bị blocked, documentation CLI thoát khác 0 sau khi ghi report.
 
 ## 7. Đọc telemetry và comparison output
 
@@ -201,25 +190,29 @@ Pi harness ghi identity của provider/model, input/output token, total token, s
 
 | Report field | Ý nghĩa | Giới hạn diễn giải |
 | --- | --- | --- |
-| Pass-rate lift | Candidate pass rate trừ baseline pass rate | Cần pair đã match và có score; bản thân nó không phải causal proof |
-| Tokens | Mean `totalTokens` của candidate trừ baseline | Telemetry thiếu làm giảm eligible-pair coverage |
-| Latency | Mean `totalMs` của candidate trừ baseline | Provider load và network condition có thể lấn át sample nhỏ |
-| Estimated cost | Mean `estimatedCostUsd` của candidate trừ baseline | Chỉ có khi model pricing metadata được điền |
-| Incomplete observations | Row thiếu, trùng, lỗi hoặc chưa có score | Giải quyết chúng trước khi tin vào comparison |
+| Pass-rate lift | Pass rate `with_docs` trừ pass rate `without_docs` | Chỉ công bố khi mọi planned pair trong eval set đều eligible |
+| Tokens | Mean `totalTokens` của treatment trừ control | Telemetry thiếu làm giảm metric-pair coverage |
+| Tools | Mean số Tool call của treatment trừ control | Số nhỏ hơn không tự động là task result tốt hơn |
+| Latency | Mean `totalMs` của treatment trừ control | Provider load và network condition có thể lấn át sample nhỏ |
+| Estimated cost | Mean `estimatedCostUsd` của treatment trừ control | Chỉ có khi model pricing metadata được điền |
+| Blocked pairs | Arm thiếu, trùng, lỗi, skipped, pending hoặc unscored | Giải quyết chúng trước khi tin vào headline correctness |
 
-Đọc hướng delta cùng coverage. Correctness lift dương vẫn có thể hữu ích khi token hoặc latency delta tăng, nhưng trade-off phải khớp product goal. Hãy ghi release SHA, provider/model ID, thay đổi prompt hoặc Tool, judge definition, input-set revision, repetitions và artifact directory để reviewer khác tái tạo comparison.
+Đọc hướng delta cùng coverage. `report.txt` in paired delta cùng operational total cho hai variant; `report.json` giữ schema, `protocolDigest`, comparison, blocked pair và total. Correctness lift dương vẫn có thể tốn thêm token hoặc latency. Hãy ghi release SHA, provider/model ID, thay đổi tài liệu, judge definition, input-set revision, repetitions và artifact directory để reviewer khác tái tạo comparison.
 
 ## 8. Kiểm tra, redact và lưu artifact an toàn
 
-Runner mặc định tạo `packages/evals/.eval/<timestamp>_<uuid>/` và in resolved path. `PI_EVAL_ARTIFACT_DIR` có thể override directory; giá trị tương đối được resolve từ `packages/evals`. Directory gồm:
+Documentation runner tạo `packages/evals/.eval/<timestamp>_<uuid>/` và in resolved path đó. Pi 0.87.1 không expose public CLI option cho custom artifact root. Directory gồm:
 
 | Path | Nội dung | Cách xử lý |
 | --- | --- | --- |
-| `runs.jsonl` | Một reporter record cho mỗi harness run hoàn tất, gồm test identity, usage, timing, error, metadata và artifact reference | Filter theo `runId`; không publish mù quáng |
-| `sessions/<sha256(runId)>/session.jsonl` | Snapshot session gốc của Pi được chụp trước khi workspace tạm bị xóa | Xem là transcript và bằng chứng Tool nhạy cảm |
-| `sources/<sha256(runId)>/<name>` | Source attachment tùy chọn do eval đăng ký tường minh | Review credential, private path và code độc quyền |
+| `protocol.json` | Model, image ID, file đã chọn, case đã discover, task plan và `protocolDigest` | Giữ nó cùng mọi comparison report |
+| `expected-runs.json` | Toàn bộ cohort `(case, variant, model, runNumber)` đã lập kế hoạch | Dùng để đối chiếu arm bị thiếu hoặc trùng |
+| `observations.jsonl` | Outcome đã normalize và telemetry có sẵn của từng task hoàn tất | Kiểm tra outcome trước khi đọc headline lift |
+| `tasks/*/vitest.json` | Native Vitest JSON do từng isolated arm tạo ra | Xem error và raw harness evidence là dữ liệu nhạy cảm |
+| `<variant>/sessions/*/session.jsonl` | Native Pi session snapshot được giữ cho một arm | Xem là transcript và bằng chứng Tool nhạy cảm |
+| `report.json` và `report.txt` | Paired comparison dạng machine-readable và dạng in | Chỉ chia sẻ sau khi kiểm tra blocked pair và redaction |
 
-Runner tạo artifact directory với mode chỉ owner `0700` và ghi report/attachment file bằng `0600` trên platform tôn trọng POSIX mode. Permission giảm truy cập vô ý nhưng không thay cho redaction. Trước khi chia sẻ, chỉ copy phần bằng chứng cần review, loại secret cùng nội dung cá nhân hoặc độc quyền khỏi bản copy, giữ `runId` và release metadata gốc, rồi nhờ reviewer thứ hai kiểm tra redaction. Đừng sửa artifact rồi trình bày nó như bằng chứng thô chưa thay đổi.
+CLI tạo run directory với mode chỉ owner `0700`, còn session snapshot được giữ được ghi bằng `0600` trên platform tôn trọng POSIX mode. Đừng giả định mọi Docker hoặc report file đều có cùng mode. Permission giảm truy cập vô ý nhưng không thay cho redaction. Trước khi chia sẻ, chỉ copy phần bằng chứng cần review, loại secret cùng nội dung cá nhân hoặc độc quyền khỏi bản copy, giữ protocol digest và release metadata gốc, rồi nhờ reviewer thứ hai kiểm tra redaction. Đừng sửa artifact rồi trình bày nó như bằng chứng thô chưa thay đổi.
 
 Chỉ giữ artifact theo retention period tường minh. Nếu run xử lý nội dung repository thật, hãy lưu bằng chứng cần giữ ở nơi có access control thay vì commit `.eval`; `.gitignore` của release package đã loại directory này theo mặc định.
 
@@ -231,34 +224,34 @@ Trước tiên hoàn tất kiểm tra hoặc copy phần bằng chứng đã red
 npm run clean --workspace=@earendil-works/pi-evals
 ```
 
-Tại commit đã pin, lệnh này chuyển tiếp sang `shx rm -rf .eval` với `packages/evals` là workspace. Script cố định này chỉ xóa directory mặc định `packages/evals/.eval`. Nó không xóa directory tương đối hoặc tuyệt đối được chọn qua `PI_EVAL_ARTIFACT_DIR`. Harness đã xóa root project/agent tạm của từng run; command này chỉ xóa report directory và attachment directory mặc định được giữ lại.
+Tại commit đã pin, lệnh này chuyển tiếp sang `shx rm -rf .eval` với `packages/evals` là workspace. Script cố định này chỉ xóa `packages/evals/.eval`. Nó không nhận custom artifact path. Harness đã xóa root project/agent tạm của từng run; command này xóa protocol, observation, report, task output và session snapshot được giữ dưới fixed run root.
 
-Custom path tương đối hoặc tuyệt đối cần được cleanup riêng, tường minh và chỉ sau khi đã validate target theo retention policy của bạn. Hãy resolve giá trị đã cấu hình thành exact path, xác nhận target đó đúng là eval artifact directory cần xóa, rồi mới dùng command phù hợp với platform. Không bao giờ truyền environment value chưa resolve, repository root, home directory hoặc parent directory quá rộng vào thao tác xóa đệ quy.
+Hoàn tất review và chỉ copy phần bằng chứng đã redact, được duyệt trước khi cleanup. Áp dụng retention policy cho các bản copy đó một cách riêng biệt. Đừng thay pinned script bằng recursive command nhắm vào environment value chưa resolve, repository root, home directory hoặc parent directory quá rộng.
 
 Trong automation, đặt cleanup ở final step chạy cả khi success lẫn failure, nhưng chỉ upload output đã redact và được duyệt. Đừng log session content hoặc environment variable chứa secret trong cleanup diagnostic.
 
-## Source map cho Pi 0.85.0
+## Source map cho Pi 0.87.1
 
-Mọi link dưới đây đều pin vào release commit `107d79f11072bbc8a3a757ed7fd69596bee7d68c`:
+Mọi link dưới đây đều pin vào release commit `f07218c4d4bbc12bef056a7058c3dd49dfe41abe`:
 
 | Source | Nội dung cần kiểm tra |
 | --- | --- |
-| [`packages/evals/README.md`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/README.md) | Runner command được hỗ trợ, harness option, comparative methodology và artifact warning |
-| [`src/smoke.eval.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/smoke.eval.ts) | Một smoke prompt end-to-end và hard infrastructure assertion |
-| [`src/pi-harness.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/pi-harness.ts) | Model resolution, isolated session lifecycle, trace, telemetry, snapshot và temporary cleanup |
-| [`src/vitest-evals/reporter.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/vitest-evals/reporter.ts) | `runs.jsonl`, harness observation, incomplete diagnostic và printed comparison |
-| [`src/vitest-evals/artifacts.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/vitest-evals/artifacts.ts) | Loại session/source attachment, hashed path và file mode |
-| [`src/vitest-evals/summary.ts`](https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/evals/src/vitest-evals/summary.ts) | Điều kiện pair, pass-rate lift, telemetry delta và diagnostic reason |
+| [`packages/evals/README.md`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/README.md) | Command cho host/documentation runner, isolation model, result và artifact warning |
+| [`evals/smoke.eval.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/evals/smoke.eval.ts) | Host smoke prompt end-to-end và hard infrastructure assertion |
+| [`src/harness.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/src/harness.ts) | Model resolution, isolated session lifecycle, trace, telemetry, snapshot và temporary cleanup |
+| [`src/plan.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/src/plan.ts) | Variant identity, case parsing, repeated task plan và alternating order |
+| [`src/report.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/src/report.ts) | Observation validation, blocked pair, telemetry delta, session retention và report formatting |
+| [`src/cli.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/src/cli.ts) | CLI validation, Docker orchestration, ghi protocol/artifact và nonzero blocked-pair exit |
 
 ## Acceptance checklist
 
-- [ ] Checkout ở đúng commit `107d79f11072bbc8a3a757ed7fd69596bee7d68c` và Node.js là `>=22.19.0`.
+- [ ] Checkout ở đúng commit `f07218c4d4bbc12bef056a7058c3dd49dfe41abe` và Node.js là `>=22.19.0`.
 - [ ] Eval chạy từ Pi monorepo; không application nào cố cài private eval workspace như public package.
-- [ ] Provider và model được truyền cùng nhau, credential chỉ có scope cần thiết cho run.
-- [ ] Smoke eval pass trước khi chạy suite rộng hơn hoặc comparative suite.
-- [ ] Harness name, input, judge definition và repetition count ổn định, có ghi lại.
+- [ ] Host eval nhận cặp `PI_PROVIDER`/`PI_MODEL`; documentation CLI flag `--provider`/`--model` cũng được truyền cùng nhau.
+- [ ] Host smoke eval pass trước khi chạy containerized documentation comparison.
+- [ ] Case ID, variant, model, judge definition, run number và protocol digest ổn định, có ghi lại.
 - [ ] Deterministic judge kiểm tra contract có thể xác minh bằng máy; model-backed judge tùy chọn có rubric và budget đã review.
-- [ ] Comparative suite giữ `judgeThreshold: null` và phân biệt task verdict với infrastructure error.
+- [ ] Documentation suite giữ `judgeThreshold: null`, dùng `without_docs`/`with_docs` và phân biệt task verdict với infrastructure error.
 - [ ] Telemetry được diễn giải cùng eligible-pair coverage và giá trị unavailable, không chỉ headline delta.
 - [ ] Sensitive artifact được access-control, review, redact trước khi chia sẻ và có retention period.
-- [ ] Default `.eval` cleanup và cleanup cho custom artifact path được validate riêng sau khi bằng chứng cần thiết đã được giữ an toàn.
+- [ ] Fixed-root `.eval` cleanup chỉ chạy sau khi bằng chứng cần thiết đã được giữ an toàn theo retention policy đã chọn.

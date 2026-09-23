@@ -5,11 +5,11 @@ translation_key: course-13-runtime-composition
 language: en
 checkpoint: 13
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/index.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/sdk.ts"
-  - "https://github.com/earendil-works/pi/blob/107d79f11072bbc8a3a757ed7fd69596bee7d68c/packages/coding-agent/src/core/agent-session-runtime.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/index.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/sdk.ts"
+  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/agent-session-runtime.ts"
 status: reviewed
-last_updated: '2026-09-04'
+last_updated: '2026-09-23'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -213,15 +213,17 @@ Run the focused command again. The replacement must reject, candidate-owned valu
 - Publication rebinds Session persistence and Extension hooks to the candidate before old cleanup begins.
 - Failed replacement leaves the old runtime live; failure to dispose an old runtime leaves the already-published candidate live and reports cleanup failure.
 
-## Compare with Pi SDK 0.85.0
+## Compare with Pi SDK 0.87.1
 
-:::info[Pi SDK 0.85.0]
+:::info[Pi SDK 0.87.1]
 
 `@earendil-works/pi-coding-agent` publicly exports `createAgentSession()`, `createAgentSessionRuntime()`, `AgentSessionRuntime`, `createAgentSessionServices()`, `createAgentSessionFromServices()`, their options and result types, and `SessionManager`.
 
 :::
 
 Pi's `createAgentSession()` is the usual programmatic composition entry point. `AgentSessionRuntime` owns an `AgentSession` plus cwd-bound services, supports new, resume, fork, switch, and import flows, exposes `setRebindSession()`, and settles an active response before invalidating the outgoing session. At the pinned release, replacement methods tear down the current session before awaiting construction of the next runtime. That lifecycle does not promise the course manager's candidate-first guarantee that a failed replacement leaves the old runtime live.
+
+Within a live session, `SessionManager` remains canonical for the next provider request. Directly assigning `session.agent.state.messages` changes only the exposed Agent state and does not replace future request history. Runtime composition that restores or edits history must navigate or append through the session manager and call `session.refreshContext()` after an external append so the finalized public view matches the current projection.
 
 The course rebuilds a smaller offline graph and records ownership in a defensive construction ledger. Its manager queue, `current` swap, `flush()`, event-persistence algorithm, factory fallback, and error codes are workshop-specific. For a Pi host, use the public session factories and `AgentSessionRuntime`, rebind host subscriptions through its supported callback, and follow Pi's replacement lifecycle rather than copying the course manager API.
 
