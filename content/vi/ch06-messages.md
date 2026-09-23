@@ -114,7 +114,7 @@ Các discriminant chính xác là `"text"`, `"thinking"`, `"image"` và `"toolCa
 
 | Loại content                          | Các trường chính                                           | Có thể nằm trong content của message dùng chung |
 | ------------------------------------- | ---------------------------------------------------------- | ----------------------------------------------- |
-| `TextContent`, `type: "text"`         | `text`, `textSignature` tùy chọn                           | User, assistant, Tool result                    |
+| `TextContent`, `type: "text"`         | `text`, `textSignature` tùy chọn                           | System, user, assistant và Tool result           |
 | `ThinkingContent`, `type: "thinking"` | `thinking`, `thinkingSignature` và `redacted` tùy chọn     | Chỉ assistant                                   |
 | `ImageContent`, `type: "image"`       | `data` dạng base64, `mimeType`                             | User và Tool result                             |
 | `ToolCall`, `type: "toolCall"`        | `id`, `name`, `arguments`, signature và namespace tùy chọn | Chỉ assistant                                   |

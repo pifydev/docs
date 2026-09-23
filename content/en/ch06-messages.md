@@ -114,7 +114,7 @@ The exact discriminants are `"text"`, `"thinking"`, `"image"`, and `"toolCall"`;
 
 | Content type                          | Main fields                                                 | Allowed shared message content |
 | ------------------------------------- | ----------------------------------------------------------- | ------------------------------ |
-| `TextContent`, `type: "text"`         | `text`, optional `textSignature`                            | User, assistant, Tool result   |
+| `TextContent`, `type: "text"`         | `text`, optional `textSignature`                            | System, user, assistant, Tool result |
 | `ThinkingContent`, `type: "thinking"` | `thinking`, optional `thinkingSignature`, `redacted`        | Assistant only                 |
 | `ImageContent`, `type: "image"`       | base64 `data`, `mimeType`                                   | User and Tool result           |
 | `ToolCall`, `type: "toolCall"`        | `id`, `name`, `arguments`, optional signature and namespace | Assistant only                 |

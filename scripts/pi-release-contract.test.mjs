@@ -1070,6 +1070,124 @@ const toolContractTerms = [
   "result",
 ];
 
+function assertTextContentMessageRoles(source, locale) {
+  const section = extractMarkdownSection(
+    source,
+    locale === "en"
+      ? "### The exact message and content shapes"
+      : "### Cấu trúc chính xác của message và content",
+    `${locale} Chapter 6 content positions`,
+  );
+  const cells = section.body
+    .split("\n")
+    .filter((line) => line.startsWith("|"))
+    .map((line) =>
+      line
+        .split("|")
+        .slice(1, -1)
+        .map((cell) => cell.trim()),
+    )
+    .find(([contentType]) => /`TextContent`/.test(contentType));
+  assert.ok(cells, `${locale} TextContent row`);
+  for (const role of [
+    /\bsystem(?:message)?\b/i,
+    /\buser\b/i,
+    /\bassistant\b/i,
+    /Tool result/i,
+  ]) {
+    assert.match(cells[2], role, `${locale} TextContent allowed message roles`);
+  }
+  return cells[2];
+}
+
+function assertAgentProviderOpening(source, locale) {
+  const section = extractMarkdownSection(
+    source,
+    locale === "en"
+      ? "## 1. The problem: one conversation, different provider dialects"
+      : "## 1. Vấn đề: một cuộc hội thoại, nhiều provider dialect",
+    `${locale} Chapter 4 opening boundary`,
+  );
+  const paragraph = assertParagraphContainsAll(
+    section.body,
+    [
+      locale === "en"
+        ? /Agent Loop operates on Agent core's `AgentContext`[^.]*`AgentMessage\[\]`[^.]*`AgentTool`/
+        : /Agent Loop làm việc với `AgentContext` của Agent core[^.]*`AgentMessage\[\]`[^.]*`AgentTool`/,
+      locale === "en"
+        ? /`convertToLlm`[^.;]*to Pi AI `Message\[\]`/
+        : /`convertToLlm`[^.;]*thành `Message\[\]` của Pi AI/,
+      locale === "en"
+        ? /`normalizeContext\(\)` then produces[^.]*provider[^.]*`TranscriptContext`/
+        : /`normalizeContext\(\)` sau đó tạo `TranscriptContext` cho provider/,
+    ],
+    `${locale} AgentContext to provider transcript`,
+  );
+  assert.ok(
+    paragraph.indexOf("`AgentContext`") < paragraph.indexOf("`convertToLlm`") &&
+      paragraph.indexOf("`convertToLlm`") <
+        paragraph.indexOf("`normalizeContext()`"),
+    `${locale} conversion precedes provider normalization`,
+  );
+}
+
+test("0.86.0 provider and tool contracts preserve system text in content positions", async () => {
+  for (const { locale, source } of await readLocalizedContent(
+    "ch06-messages.md",
+  )) {
+    assertTextContentMessageRoles(source, locale);
+  }
+});
+
+test("0.86.0 provider and tool contracts preserve the Agent conversion boundary", async () => {
+  for (const { locale, source } of await readLocalizedContent(
+    "ch04-model-invocation.md",
+  )) {
+    assertAgentProviderOpening(source, locale);
+  }
+});
+
+test("0.86.0 provider and tool contracts reject omitted system text and bypassed Agent conversion", async () => {
+  for (const { locale, source } of await readLocalizedContent(
+    "ch06-messages.md",
+  )) {
+    const allowedRoles = assertTextContentMessageRoles(source, locale);
+    const withoutSystem = allowedRoles.replace(
+      /\bsystem(?:message)?\b\s*,?\s*/i,
+      "",
+    );
+    assert.throws(
+      () =>
+        assertTextContentMessageRoles(
+          source.replace(allowedRoles, withoutSystem),
+          locale,
+        ),
+      assert.AssertionError,
+      `${locale} system text cannot be omitted from the content table`,
+    );
+  }
+  for (const { locale, source } of await readLocalizedContent(
+    "ch04-model-invocation.md",
+  )) {
+    assertAgentProviderOpening(source, locale);
+    for (const [from, to] of [
+      ["`AgentContext`", "`Context`"],
+      ["`AgentTool`", "`Tool`"],
+      ["`convertToLlm`", "`serialize`"],
+      ["`Message[]`", "`AgentMessage[]`"],
+      ["`normalizeContext()`", "`castContext()`"],
+      ["`TranscriptContext`", "`Context`"],
+    ]) {
+      assert.ok(source.includes(from), `${locale} mutation target ${from}`);
+      assert.throws(
+        () => assertAgentProviderOpening(source.replace(from, to), locale),
+        assert.AssertionError,
+        `${locale} preserve the boundary for ${from}`,
+      );
+    }
+  }
+});
+
 function assertProviderTranscriptContract(
   source,
   locale,

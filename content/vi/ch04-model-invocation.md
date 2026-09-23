@@ -33,7 +33,7 @@ Chương này mở đầy đủ boundary đó. Nội dung bắt đầu từ khá
 
 ## 1. Vấn đề: một cuộc hội thoại, nhiều provider dialect
 
-Agent Loop làm việc với các type `Context`, `Message` và `Tool` của Pi. Provider không nhận trực tiếp các type đó qua wire. Anthropic Messages, OpenAI Chat Completions hoặc Responses, Google Generative AI và Amazon Bedrock Converse mô tả cùng một lượt hội thoại bằng role, block name, field và continuity metadata khác nhau.
+Agent Loop làm việc với `AgentContext` của Agent core, chứa `AgentMessage[]` và các `AgentTool` có thể thực thi. Trước mỗi lời gọi provider, `convertToLlm` chuyển các message đó thành `Message[]` của Pi AI; `normalizeContext()` sau đó tạo `TranscriptContext` cho provider. API adapter tuần tự hóa transcript đó thành wire format. Anthropic Messages, OpenAI Chat Completions hoặc Responses, Google Generative AI và Amazon Bedrock Converse mô tả cùng một lượt hội thoại bằng role, block name, field và continuity metadata khác nhau.
 
 Giả sử người dùng yêu cầu Agent đọc `main.ts`. Pi có thể lưu user turn đó bằng format không phụ thuộc provider:
 
