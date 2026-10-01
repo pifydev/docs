@@ -2182,7 +2182,7 @@ function assertAgentProviderOpening(source, locale) {
   return paragraph;
 }
 
-test("0.86.0 provider and tool contracts preserve system text in content positions", async () => {
+test("provider and Tool contracts introduced in Pi 0.86 remain accurate in 0.99.2: system text content positions", async () => {
   for (const { locale, source } of await readLocalizedContent(
     "ch06-messages.md",
   )) {
@@ -2190,7 +2190,7 @@ test("0.86.0 provider and tool contracts preserve system text in content positio
   }
 });
 
-test("0.86.0 provider and tool contracts preserve the Agent conversion boundary", async () => {
+test("provider and Tool contracts introduced in Pi 0.86 remain accurate in 0.99.2: Agent conversion boundary", async () => {
   for (const { locale, source } of await readLocalizedContent(
     "ch04-model-invocation.md",
   )) {
@@ -2207,7 +2207,7 @@ const agentProviderPipelineStages = [
 ];
 const agentProviderPipeline = agentProviderPipelineStages.join(" → ");
 
-test("0.86.0 provider and tool contracts accept paraphrased Agent boundaries in both locales", () => {
+test("provider and Tool contracts introduced in Pi 0.86 remain accurate in 0.99.2: bilingual paraphrases", () => {
   const rewrites = {
     en: [
       "## 1. The problem: one conversation, different provider dialects",
@@ -2237,7 +2237,7 @@ test("0.86.0 provider and tool contracts accept paraphrased Agent boundaries in 
   }
 });
 
-test("0.86.0 provider and tool contracts reject inverted prose without the Agent pipeline", () => {
+test("provider and Tool contracts introduced in Pi 0.86 remain accurate in 0.99.2: inverted prose guard", () => {
   const inverted = {
     en: [
       "## 1. The problem: one conversation, different provider dialects",
@@ -2257,7 +2257,7 @@ test("0.86.0 provider and tool contracts reject inverted prose without the Agent
   }
 });
 
-test("0.86.0 provider and tool contracts reject omitted system text and bypassed Agent conversion", async () => {
+test("provider and Tool contracts introduced in Pi 0.86 remain accurate in 0.99.2: omission and bypass guards", async () => {
   for (const { locale, source } of await readLocalizedContent(
     "ch06-messages.md",
   )) {
@@ -2481,7 +2481,7 @@ function assertUserBashFailureContract(source, locale, label) {
   );
 }
 
-test("0.86.0 provider and tool contracts are explained in paired guides, API reference, and chapters", async () => {
+test("provider and Tool contracts introduced in Pi 0.86 remain explained in current 0.99.2 pages", async () => {
   const headings = {
     "how-to/plug-new-model.md": [
       "## 5. Implement an API adapter only for a new protocol",
@@ -2612,7 +2612,7 @@ test("0.99.2 provider and tool contracts pages pin current sources and review da
   }
 });
 
-test("0.86.0 provider and tool contracts mutation guards reject broken relationships", async () => {
+test("provider and Tool contracts introduced in Pi 0.86 remain accurate in 0.99.2: relationship guards", async () => {
   for (const { locale, source } of await readLocalizedContent(
     "reference/api.md",
   )) {
@@ -8084,7 +8084,7 @@ test("both Chapter 5 locales explain the optional PowerShell tool contract", asy
   assert.deepEqual(structures[0], structures[1]);
 });
 
-test("Pi 0.85 Tool cwd contracts bind the exact affected built-ins at invocation time", async () => {
+test("Tool cwd contracts introduced in Pi 0.85 remain accurate in 0.99.2", async () => {
   const chapters = await readLocalizedContent("ch05-tool-system.md");
   const headings = {
     en: "### The eight built-ins declare only the operations they consume",
@@ -8123,7 +8123,7 @@ test("Pi 0.85 Tool cwd contracts bind the exact affected built-ins at invocation
   );
 });
 
-test("Pi 0.85 terminal override contracts preserve exact values and precedence", async () => {
+test("terminal override contracts introduced in Pi 0.85 remain accurate in 0.99.2", async () => {
   const documentContracts = [
     {
       path: "reference/environment-variables.md",
@@ -8207,7 +8207,7 @@ test("Pi 0.85 terminal override contracts preserve exact values and precedence",
   );
 });
 
-test("Pi 0.85 fullscreen controls are documented in both configuration locales", async () => {
+test("fullscreen controls introduced in Pi 0.85 remain documented in 0.99.2", async () => {
   const references = await readLocalizedContent("reference/configuration.md");
   const headings = {
     en: "### UI and display",
@@ -8273,7 +8273,7 @@ test("Pi 0.85 fullscreen controls are documented in both configuration locales",
   );
 });
 
-test("Pi 0.85 API locales expose file-based supported image MIME detection", async () => {
+test("image MIME detection introduced in Pi 0.85 remains documented in the 0.99.2 API locales", async () => {
   const references = await readLocalizedContent("reference/api.md");
   const headings = {
     en: "### Image MIME detection",
@@ -8346,7 +8346,7 @@ test("Pi 0.85 API locales expose file-based supported image MIME detection", asy
   }
 });
 
-test("Pi 0.85 custom Tool guidance preserves live cwd and authorization boundaries", async () => {
+test("custom Tool guidance introduced in Pi 0.85 retains cwd and authorization boundaries in 0.99.2", async () => {
   const references = await readLocalizedContent("how-to/add-custom-tool.md");
   const headings = {
     en: "### Arguments, paths, commands, and secrets",
@@ -8501,7 +8501,7 @@ test("both configuration locales distinguish tool selection from shell selection
   assert.deepEqual(structures[0], structures[1]);
 });
 
-test("Chapter 7 Extension catalogs specify the Pi 0.85 compaction-failure terminal contract", async () => {
+test("the compaction-failure terminal contract introduced in Pi 0.85 remains in current Chapter 7 catalogs", async () => {
   const chapters = await readLocalizedContent("ch07-event-driven.md");
   const localeContract = {
     en: {
@@ -8556,7 +8556,7 @@ test("Chapter 7 Extension catalogs specify the Pi 0.85 compaction-failure termin
   assert.deepEqual(structures[0], structures[1]);
 });
 
-test("Pi 0.85 Chapter 7 Extension catalogs define the coalesced UI prompt lifecycle", async () => {
+test("the coalesced UI prompt lifecycle introduced in Pi 0.85 remains in current Chapter 7 catalogs", async () => {
   const chapters = await readLocalizedContent("ch07-event-driven.md");
   const headings = {
     en: "### Extension events form a separate contract",
@@ -8617,7 +8617,7 @@ Notifications are scheduled around the outer blocking prompt span, but they are 
   }
 });
 
-test("Pi 0.85 stream guides define RPC queue clearing and abort ordering", async () => {
+test("RPC queue clearing and abort ordering introduced in Pi 0.85 remain in current 0.99.2 stream guides", async () => {
   const guides = await readLocalizedContent("how-to/stream-output.md");
   const headings = {
     en: "## 4. Cancel an active run",
@@ -8702,7 +8702,7 @@ This event-consumption guidance is transport-neutral: RPC uses JSON Lines, and n
   }
 });
 
-test("Pi 0.85 API Extension guidance preserves session-scoped controls and editor status ownership", async () => {
+test("session controls and editor status ownership introduced in Pi 0.85 remain in current 0.99.2 API guidance", async () => {
   const references = await readLocalizedContent("reference/api.md");
   const headings = {
     en: "### Extensions and managed tools",
@@ -8815,7 +8815,7 @@ test("Pi 0.85 API Extension guidance preserves session-scoped controls and edito
   }
 });
 
-test("Pi 0.85 API reference records exact RPC clear_queue shapes and lifecycle", async () => {
+test("RPC clear_queue contracts introduced in Pi 0.85 remain in the current 0.99.2 API reference", async () => {
   const references = await readLocalizedContent("reference/api.md");
   const headings = {
     en: "### RPC queue and cancellation",

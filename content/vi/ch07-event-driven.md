@@ -252,7 +252,17 @@ Một số tên trùng với sự kiện lõi, nhưng payload và bảo đảm d
 
 `provider_stream_event` mang provider frame đã parse trước khi Pi normalize: `provider`, `api` và `model` xác định route, còn `data` do adapter sở hữu là read-only. Đây là observation event trong provider taxonomy hiện có, không phải normalized `AssistantMessageEvent` và cũng không phải mutation hook.
 
-Hook `input` chỉ expose `streamingBehavior` khi prompt đến trong lúc session đang streaming: `"steer"` ngắt ở steering boundary tiếp theo, còn `"followUp"` chờ completion thông thường. Tại RPC boundary, response thành công của `prompt`, `steer` và `follow_up` trả một `disposition`: `prompt` có thể là `started`, `queued` hoặc `handled`, còn `steer` và `follow_up` tường minh có thể là `queued` hoặc `handled`. Input ở trạng thái handled đã được Extension xử lý; input ở trạng thái queued đã được chấp nhận để giao sau. Thiếu `streamingBehavior` trên một `prompt` đang streaming là lỗi, không phải lựa chọn queue ngầm.
+Hook `input` chỉ expose `streamingBehavior` khi prompt đến trong lúc session đang streaming: `"steer"` đưa input vào steering queue, còn `"followUp"` đưa input vào follow-up queue. `AgentSession.prompt()` cho Extension command và `input` handler cơ hội consume input trước streaming queue branch. Khi một trong các handler consume input, RPC trả `handled` mà không cần `streamingBehavior`. Lỗi thiếu option chỉ được kiểm tra khi không handler nào consume input và prompt chưa được handle đi tới streaming queue branch.
+
+Tại RPC boundary, mọi input command thành công đều báo cách input được tiếp nhận. Extension có thể consume trước trên tất cả các path này; nếu không, `prompt` khởi động run khi idle hoặc áp dụng streaming behavior đã chọn, còn `steer` và `follow_up` tường minh dùng queue tương ứng.
+
+| RPC command/path | Extension consume trước | Cách deliver khi chưa được handle | `disposition` thành công |
+| --- | --- | --- | --- |
+| `prompt + idle` | `handled` | khởi động run | `started` |
+| `prompt + streaming "steer"` | `handled` | steering queue | `queued` |
+| `prompt + streaming "followUp"` | `handled` | follow-up queue | `queued` |
+| `steer` | `handled` | steering queue | `queued` |
+| `follow_up` | `handled` | follow-up queue | `queued` |
 
 `turn_end` và `agent_before_settle` là actionable boundary. `TurnEndEvent` yêu cầu `turnIndex`, `message`, `toolResults`, `messageEntryId`, `toolResultEntryIds`, `outcome`, `entries`, `continue` cùng context preview. `AgentBeforeSettleEvent` mang boundary state dùng chung và thuộc union `ExtensionEvent` đã export. Host integration dispatch cả hai qua `emitBoundary(baseEvent, buildContext)`, nơi các entry draft nối tiếp được preview trước khi commit.
 

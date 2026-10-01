@@ -252,7 +252,17 @@ Several names overlap with core events, but the payloads and guarantees belong t
 
 `provider_stream_event` carries a parsed provider frame before Pi normalizes it: `provider`, `api`, and `model` identify the route, while adapter-owned `data` is read-only. It is an observation event inside the existing provider taxonomy, not a normalized `AssistantMessageEvent` and not a mutation hook.
 
-The `input` hook also exposes `streamingBehavior` only when a prompt arrives while the session is already streaming: `"steer"` interrupts at the next steering boundary and `"followUp"` waits for ordinary completion. At the RPC boundary, successful `prompt`, `steer`, and `follow_up` responses return a `disposition`: `prompt` can be `started`, `queued`, or `handled`, while explicit `steer` and `follow_up` can be `queued` or `handled`. A handled input was consumed by an Extension; a queued input was accepted for later delivery. Missing `streamingBehavior` on a streaming `prompt` is an error rather than an implicit queue choice.
+The `input` hook exposes `streamingBehavior` only when a prompt arrives while the session is already streaming: `"steer"` sends it to the steering queue and `"followUp"` sends it to the follow-up queue. `AgentSession.prompt()` lets an Extension command and `input` handlers consume the input before the streaming queue branch. When either consumes it, RPC reports `handled` without `streamingBehavior`. The missing-option error is checked only if neither handler consumes the input and the unhandled prompt reaches the streaming queue branch.
+
+At the RPC boundary, every successful input command reports how the input was accepted. An Extension may consume any of these paths first; otherwise `prompt` starts an idle run or applies the selected streaming behavior, while explicit `steer` and `follow_up` use their named queues.
+
+| RPC command/path | Extension consumes first | Unhandled delivery | Successful `disposition` |
+| --- | --- | --- | --- |
+| `prompt + idle` | `handled` | start run | `started` |
+| `prompt + streaming "steer"` | `handled` | steering queue | `queued` |
+| `prompt + streaming "followUp"` | `handled` | follow-up queue | `queued` |
+| `steer` | `handled` | steering queue | `queued` |
+| `follow_up` | `handled` | follow-up queue | `queued` |
 
 `turn_end` and `agent_before_settle` are actionable boundaries. `TurnEndEvent` requires `turnIndex`, `message`, `toolResults`, `messageEntryId`, `toolResultEntryIds`, `outcome`, `entries`, `continue`, and a context preview. `AgentBeforeSettleEvent` carries the shared boundary state and is part of the exported `ExtensionEvent` union. Host integrations dispatch both through `emitBoundary(baseEvent, buildContext)`, which previews chained entry drafts before they are committed.
 

@@ -119,6 +119,287 @@ function assertSameParagraph(markdown, needle, patterns, context) {
   return paragraph;
 }
 
+function markdownTableRows(markdown) {
+  return markdown
+    .split(/\r?\n/)
+    .filter((line) => /^\|.*\|$/.test(line))
+    .map((line) =>
+      line
+        .slice(1, -1)
+        .split("|")
+        .map((cell) => cell.trim()),
+    )
+    .filter((cells) => !cells.every((cell) => /^:?-+:?$/.test(cell)));
+}
+
+function unquoteCode(cell) {
+  return cell.replace(/^`|`$/g, "");
+}
+
+function replaceOnce(source, from, to, context) {
+  const first = source.indexOf(from);
+  assert.notEqual(first, -1, `${context} mutation target must exist`);
+  assert.equal(
+    source.indexOf(from, first + from.length),
+    -1,
+    `${context} mutation target must be unique`,
+  );
+  return source.slice(0, first) + to + source.slice(first + from.length);
+}
+
+function replaceTableCell(source, row, cellIndex, replacement, context) {
+  const originalLine = `| ${row.join(" | ")} |`;
+  const mutated = [...row];
+  mutated[cellIndex] = replacement;
+  return replaceOnce(
+    source,
+    originalLine,
+    `| ${mutated.join(" | ")} |`,
+    context,
+  );
+}
+
+function replaceParagraph(source, needle, mutate, context) {
+  const paragraph = paragraphContaining(source, needle);
+  const replacement = mutate(paragraph);
+  assert.notEqual(
+    replacement,
+    paragraph,
+    `${context} must mutate the paragraph`,
+  );
+  return replaceOnce(source, paragraph, replacement, context);
+}
+
+function swapTokens(source, left, right) {
+  const marker = "__PI_RELEASE_CONTRACT_SWAP__";
+  assert.ok(!source.includes(marker));
+  assert.ok(source.includes(left));
+  assert.ok(source.includes(right));
+  return source
+    .replaceAll(left, marker)
+    .replaceAll(right, left)
+    .replaceAll(marker, right);
+}
+
+function modelRouteRows(source) {
+  return markdownTableRows(source).filter(
+    (row) => unquoteCode(row[0]) === "GPT-6.1 Sol",
+  );
+}
+
+function assertModelRouteContracts(source, locale) {
+  const context = `${locale} gpt-6.1-sol route contract`;
+  const rows = modelRouteRows(source);
+  assert.deepEqual(
+    rows.map((row) => unquoteCode(row[1])),
+    ["openai", "azure-openai-responses", "openai-codex"],
+    `${context} must preserve the three exact provider routes in order`,
+  );
+  const byProvider = Object.fromEntries(
+    rows.map((row) => [unquoteCode(row[1]), row]),
+  );
+  assert.match(byProvider.openai[2], /OPENAI_API_KEY/);
+  assert.match(byProvider.openai[2], /Sign in with ChatGPT/);
+  assert.match(
+    byProvider.openai[3],
+    /OpenAI Responses route|route OpenAI Responses/i,
+  );
+  assert.doesNotMatch(byProvider.openai[3], /default|mặc định/i);
+  assert.match(byProvider["azure-openai-responses"][2], /Azure OpenAI/i);
+  assert.match(
+    byProvider["azure-openai-responses"][3],
+    /Azure OpenAI Responses route|route Azure OpenAI Responses/i,
+  );
+  assert.doesNotMatch(
+    byProvider["azure-openai-responses"][3],
+    /default|mặc định/i,
+  );
+  assert.match(byProvider["openai-codex"][2], /legacy/i);
+  assert.match(byProvider["openai-codex"][3], /default|mặc định/i);
+  assertSameParagraph(
+    source,
+    "gpt-6.1-sol",
+    [
+      /OpenAI/,
+      /Azure OpenAI Responses/,
+      /OpenAI Codex/,
+      locale === "en"
+        ? /OpenAI Codex uses it as that provider's default/
+        : /OpenAI Codex dùng model này làm default của provider/,
+    ],
+    context,
+  );
+  return byProvider;
+}
+
+function assertToolExposureContracts(source, locale) {
+  const context = `${locale} ToolExposure relationship contract`;
+  const paragraph = paragraphContaining(source, "`ToolExposure`");
+  const patterns =
+    locale === "en"
+      ? [
+          /`direct`[^.]*declared[^.]*callable only while active/i,
+          /`model-only`[^.]*declared[^.]*never callable/i,
+          /`codemode`[^.]*callable whenever registered[^.]*listed[^.]*codemode/i,
+          /`deferred`[^.]*callable whenever registered[^.]*omitted[^.]*codemode[^.]*`tool_search`[^.]*find and activate/i,
+          /`hidden`[^.]*registered[^.]*unreachable[^.]*activat[^.]*no effect/i,
+          /disabled[^.]*not a `ToolExposure`/i,
+          /disabled `direct`[^.]*not callable/i,
+          /`codemode` and `deferred`[^.]*eligible[^.]*`ctx\.executeTool\(\)`[^.]*registered/i,
+          /`hidden`[^.]*cannot be enabled/i,
+        ]
+      : [
+          /`direct`[^.]*declare[^.]*chỉ callable khi active/i,
+          /`model-only`[^.]*declare[^.]*không bao giờ callable/i,
+          /`codemode`[^.]*callable ngay khi được register[^.]*liệt kê[^.]*codemode/i,
+          /`deferred`[^.]*callable ngay khi được register[^.]*không xuất hiện[^.]*codemode[^.]*`tool_search`[^.]*tìm và activate/i,
+          /`hidden`[^.]*register[^.]*không thể tiếp cận[^.]*activate[^.]*không có tác dụng/i,
+          /disabled[^.]*không phải một `ToolExposure`/i,
+          /`direct` bị disabled[^.]*không callable/i,
+          /`codemode` và `deferred`[^.]*đủ điều kiện[^.]*`ctx\.executeTool\(\)`[^.]*register/i,
+          /`hidden`[^.]*không thể bật lại/i,
+        ];
+  for (const pattern of patterns) {
+    assert.match(paragraph, pattern, `${context} must relate ${pattern}`);
+  }
+  return paragraph;
+}
+
+function rpcDispositionRows(source) {
+  const keys = new Set([
+    "prompt + idle",
+    'prompt + streaming "steer"',
+    'prompt + streaming "followUp"',
+    "steer",
+    "follow_up",
+  ]);
+  return markdownTableRows(source).filter((row) =>
+    keys.has(unquoteCode(row[0])),
+  );
+}
+
+function assertRpcInputContracts(source, locale) {
+  const context = `${locale} RPC input relationship contract`;
+  const paragraph = paragraphContaining(source, "`streamingBehavior`");
+  const patterns =
+    locale === "en"
+      ? [
+          /Extension command and `input` handlers[^.]*consume[^.]*before[^.]*streaming queue branch/i,
+          /handled[^.]*without `streamingBehavior`/i,
+          /missing-option error[^.]*only if[^.]*unhandled prompt[^.]*streaming queue branch/i,
+        ]
+      : [
+          /Extension command và `input` handler[^.]*consume[^.]*trước[^.]*streaming queue branch/i,
+          /handled[^.]*không cần `streamingBehavior`/i,
+          /lỗi thiếu option[^.]*chỉ được kiểm tra khi[^.]*prompt chưa được handle[^.]*streaming queue branch/i,
+        ];
+  for (const pattern of patterns) {
+    assert.match(paragraph, pattern, `${context} must relate ${pattern}`);
+  }
+
+  const rows = rpcDispositionRows(source);
+  assert.equal(rows.length, 5, `${context} must publish all five RPC paths`);
+  const byPath = Object.fromEntries(
+    rows.map((row) => [unquoteCode(row[0]), row]),
+  );
+  const expected = {
+    "prompt + idle": [/start run|khởi động run/i, "started"],
+    'prompt + streaming "steer"': [/steering queue/i, "queued"],
+    'prompt + streaming "followUp"': [/follow-up queue/i, "queued"],
+    steer: [/steering queue/i, "queued"],
+    follow_up: [/follow-up queue/i, "queued"],
+  };
+  for (const [path, [delivery, disposition]] of Object.entries(expected)) {
+    const row = byPath[path];
+    assert.equal(unquoteCode(row[1]), "handled", `${context} ${path} consumed`);
+    assert.match(row[2], delivery, `${context} ${path} delivery`);
+    assert.equal(
+      unquoteCode(row[3]),
+      disposition,
+      `${context} ${path} disposition`,
+    );
+  }
+  return byPath;
+}
+
+function assertToolResultContracts(source, locale) {
+  const context = `${locale} Tool result relationship contract`;
+  const paragraph = paragraphContaining(source, "`outputSchema`");
+  for (const pattern of [
+    /`outputSchema`[^.]*JSON Schema[^.]*`AgentToolResult\.structuredContent`/i,
+    /`content`[^.]*model-facing|`content`[^.]*model nhìn thấy/i,
+    /`isError: true`[^.]*instead of throwing|`isError: true`[^.]*thay vì throw/i,
+    /keeping `details` and `structuredContent`|giữ `details` và `structuredContent`/i,
+    /ToolResultMessage[^.]*different contract|ToolResultMessage[^.]*contract khác/i,
+    /does not copy `structuredContent` into model history|không chép `structuredContent` vào model history/i,
+  ]) {
+    assert.match(paragraph, pattern, `${context} must relate ${pattern}`);
+  }
+}
+
+function assertProviderStreamEventContracts(source, locale) {
+  const context = `${locale} provider stream event relationship contract`;
+  assertSameParagraph(
+    source,
+    locale === "en"
+      ? "`provider_stream_event` carries"
+      : "`provider_stream_event` mang",
+    [
+      /parsed|đã parse/i,
+      /before Pi normalizes|trước khi Pi normalize/i,
+      /adapter-owned `data` is read-only|`data` do adapter sở hữu là read-only/i,
+      /observation event/i,
+      /not a normalized `AssistantMessageEvent`|không phải normalized `AssistantMessageEvent`/i,
+      /not a mutation hook|không phải mutation hook/i,
+    ],
+    context,
+  );
+}
+
+function assertConfigurationRelationships(source, locale) {
+  const defaultTools = paragraphContaining(
+    source,
+    locale === "en"
+      ? "`defaultTools` selects Tools at startup"
+      : "`defaultTools` chọn Tool lúc khởi động",
+  );
+  const theme = paragraphContaining(source, "`system` theme");
+  const defaultPatterns =
+    locale === "en"
+      ? [
+          /omitted[^.]*`read`[^.]*`bash`[^.]*`edit`[^.]*`write`[^.]*active defaults/i,
+          /Plain names replace[^.]*inherited selection/i,
+          /list containing only `\+name` and `-name`[^.]*modifies it in order/i,
+          /`\["-bash", "\+powershell", "\+grep"\]` replaces Bash with PowerShell and adds grep/i,
+          /CLI[^.]*override `defaultTools`[^.]*do not accept[^.]*notation/i,
+          /`\/reload`[^.]*activates newly added[^.]*does not disable removed[^.]*or re-enable[^.]*turned off manually/i,
+        ]
+      : [
+          /bỏ qua[^.]*`read`[^.]*`bash`[^.]*`edit`[^.]*`write`[^.]*mặc định được bật/i,
+          /Tên thuần thay toàn bộ selection kế thừa/i,
+          /chỉ gồm entry `\+name` và `-name`[^.]*theo thứ tự/i,
+          /`\["-bash", "\+powershell", "\+grep"\]` thay Bash bằng PowerShell và thêm grep/i,
+          /CLI[^.]*override `defaultTools`[^.]*không nhận[^.]*thêm\/bớt/i,
+          /`\/reload`[^.]*activate tên mới thêm[^.]*không tắt tên đã bị xóa[^.]*không bật lại[^.]*tắt thủ công/i,
+        ];
+  for (const pattern of defaultPatterns) {
+    assert.match(
+      defaultTools,
+      pattern,
+      `${locale} defaultTools must relate ${pattern}`,
+    );
+  }
+  for (const pattern of [
+    /`system` theme[^.]*default|`system` theme là default/i,
+    /exactly six color forms|đúng sáu dạng màu/i,
+    /3-digit[^.]*6-digit[^.]*OKLCH[^.]*OKHSL[^.]*ANSI 256[^.]*variable reference[^.]*empty string/i,
+    /empty string[^.]*terminal default/i,
+    /two RGB spellings[^.]*one hexadecimal form|Hai cách viết RGB[^.]*một dạng hexadecimal/i,
+  ]) {
+    assert.match(theme, pattern, `${locale} theme must relate ${pattern}`);
+  }
+}
+
 test("active release contracts use Pi 0.99.2 capabilities and authority", async () => {
   const releaseCommit = "005af57d88ee23b33778f343a9595b32e67ff788";
 
@@ -178,12 +459,7 @@ test("active release contracts use Pi 0.99.2 capabilities and authority", async 
     );
 
     const models = pages.get("ch04-model-invocation.md");
-    assertSameParagraph(
-      models,
-      "gpt-6.1-sol",
-      [/OpenAI/, /Azure OpenAI Responses/, /OpenAI Codex/, /default/i],
-      `${locale} model route boundary`,
-    );
+    assertModelRouteContracts(models, locale);
     assertSameParagraph(
       models,
       locale === "en"
@@ -207,34 +483,11 @@ test("active release contracts use Pi 0.99.2 capabilities and authority", async 
     assert.match(models, /provider_stream_event/);
 
     const tools = pages.get("ch05-tool-system.md");
+    assertToolResultContracts(tools, locale);
+    assertToolExposureContracts(tools, locale);
     assertSameParagraph(
       tools,
-      locale === "en" ? "`outputSchema` declares" : "`outputSchema` khai báo",
-      [
-        /structuredContent/,
-        /isError/,
-        /content/,
-        /model-facing|model nhìn thấy/i,
-      ],
-      `${locale} structured Tool result boundary`,
-    );
-    assertSameParagraph(
-      tools,
-      locale === "en" ? "`ToolExposure` controls" : "`ToolExposure` kiểm soát",
-      [
-        /direct/,
-        /model-only/,
-        /codemode/,
-        /deferred/,
-        /hidden/,
-        /namespace/,
-        /annotations/,
-      ],
-      `${locale} Tool exposure boundary`,
-    );
-    assertSameParagraph(
-      tools,
-      "ctx.executeTool()",
+      "prepareLoadout()",
       [
         /prepareLoadout/,
         /parentToolCallId/,
@@ -245,65 +498,12 @@ test("active release contracts use Pi 0.99.2 capabilities and authority", async 
     );
 
     const events = pages.get("ch07-event-driven.md");
-    assertSameParagraph(
-      events,
-      locale === "en"
-        ? "`provider_stream_event` carries"
-        : "`provider_stream_event` mang",
-      [/parsed|đã parse/i, /before|trước/i, /normaliz/i, /read-only/i],
-      `${locale} provider event boundary`,
-    );
-    assertSameParagraph(
-      events,
-      locale === "en"
-        ? "The `input` hook also exposes `streamingBehavior`"
-        : "Hook `input` chỉ expose `streamingBehavior`",
-      [
-        /prompt/,
-        /steer/,
-        /follow-?up|follow_up/,
-        /disposition/,
-        /handled/,
-        /queued/,
-        /started/,
-      ],
-      `${locale} RPC input disposition boundary`,
-    );
+    assertProviderStreamEventContracts(events, locale);
+    assertRpcInputContracts(events, locale);
     assert.match(events, /parentToolCallId/);
 
     const configuration = pages.get("reference/configuration.md");
-    assertSameParagraph(
-      configuration,
-      locale === "en"
-        ? "The `system` theme is the default"
-        : "`system` theme là default",
-      [
-        /theme/i,
-        /default/i,
-        /3-digit/,
-        /6-digit/,
-        /OKLCH/,
-        /OKHSL/,
-        /ANSI 256/,
-        /variable/,
-        /empty string|chuỗi rỗng/i,
-      ],
-      `${locale} theme boundary`,
-    );
-    assertSameParagraph(
-      configuration,
-      locale === "en"
-        ? "`defaultTools` selects Tools at startup"
-        : "`defaultTools` chọn Tool lúc khởi động",
-      [
-        /\+name/,
-        /-name/,
-        /reload/i,
-        /newly added|mới thêm/i,
-        /does not disable|không tắt/i,
-      ],
-      `${locale} default Tool merge boundary`,
-    );
+    assertConfigurationRelationships(configuration, locale);
     for (const identifier of [
       "builtin:mcp",
       "builtin:llama.cpp",
@@ -335,6 +535,235 @@ test("active release contracts use Pi 0.99.2 capabilities and authority", async 
       "1 MiB",
       [/bash/, /PowerShell/, /structuredContent/, /truncat/i, /metadata/i],
       `${locale} shell structured output boundary`,
+    );
+  }
+});
+
+test("active release relationship guards reject inverted Pi 0.99.2 mappings", async () => {
+  for (const locale of ["en", "vi"]) {
+    const [models, tools, events, configuration] = await Promise.all([
+      readFile(
+        new URL(`content/${locale}/ch04-model-invocation.md`, repositoryRoot),
+        "utf8",
+      ),
+      readFile(
+        new URL(`content/${locale}/ch05-tool-system.md`, repositoryRoot),
+        "utf8",
+      ),
+      readFile(
+        new URL(`content/${locale}/ch07-event-driven.md`, repositoryRoot),
+        "utf8",
+      ),
+      readFile(
+        new URL(`content/${locale}/reference/configuration.md`, repositoryRoot),
+        "utf8",
+      ),
+    ]);
+
+    const modelRows = modelRouteRows(models);
+    const openAiRow = modelRows.find((row) => unquoteCode(row[1]) === "openai");
+    const codexRow = modelRows.find(
+      (row) => unquoteCode(row[1]) === "openai-codex",
+    );
+    assert.ok(openAiRow && codexRow);
+    assert.throws(
+      () =>
+        assertModelRouteContracts(
+          replaceTableCell(
+            models,
+            openAiRow,
+            1,
+            "`anthropic`",
+            `${locale} model provider inversion`,
+          ),
+          locale,
+        ),
+      assert.AssertionError,
+    );
+    const reassignedDefault = replaceTableCell(
+      replaceTableCell(
+        models,
+        openAiRow,
+        3,
+        codexRow[3],
+        `${locale} assign Codex default to OpenAI`,
+      ),
+      codexRow,
+      3,
+      openAiRow[3],
+      `${locale} remove Codex default`,
+    );
+    assert.throws(
+      () => assertModelRouteContracts(reassignedDefault, locale),
+      assert.AssertionError,
+    );
+
+    for (const [left, right, label] of [
+      ["`direct`", "`codemode`", "direct/codemode"],
+      ["`deferred`", "`hidden`", "deferred/hidden"],
+    ]) {
+      const inverted = replaceParagraph(
+        tools,
+        "`ToolExposure`",
+        (paragraph) => swapTokens(paragraph, left, right),
+        `${locale} ${label} exposure inversion`,
+      );
+      assert.throws(
+        () => assertToolExposureContracts(inverted, locale),
+        assert.AssertionError,
+      );
+    }
+    const disabledBoundary =
+      locale === "en"
+        ? "Disabled is an active-set state, not a `ToolExposure`"
+        : "Disabled là trạng thái của active set, không phải một `ToolExposure`";
+    assert.throws(
+      () =>
+        assertToolExposureContracts(
+          replaceOnce(
+            tools,
+            disabledBoundary,
+            disabledBoundary
+              .replace("not a", "a")
+              .replace("không phải một", "là một"),
+            `${locale} disabled exposure inversion`,
+          ),
+          locale,
+        ),
+      assert.AssertionError,
+    );
+    assert.throws(
+      () =>
+        assertToolResultContracts(
+          replaceParagraph(
+            tools,
+            "`outputSchema`",
+            (paragraph) =>
+              paragraph.replace(
+                locale === "en"
+                  ? "`content` remains the model-facing result"
+                  : "`content` vẫn là result mà model nhìn thấy",
+                locale === "en"
+                  ? "`structuredContent` becomes the model-facing result"
+                  : "`structuredContent` trở thành result mà model nhìn thấy",
+              ),
+            `${locale} Tool result audience inversion`,
+          ),
+          locale,
+        ),
+      assert.AssertionError,
+    );
+
+    const rpcRows = rpcDispositionRows(events);
+    const rpcByPath = Object.fromEntries(
+      rpcRows.map((row) => [unquoteCode(row[0]), row]),
+    );
+    const promptIdle = rpcByPath["prompt + idle"];
+    const promptSteer = rpcByPath['prompt + streaming "steer"'];
+    const promptFollowUp = rpcByPath['prompt + streaming "followUp"'];
+    assert.ok(promptIdle && promptSteer && promptFollowUp);
+    const invertedDisposition = replaceTableCell(
+      replaceTableCell(
+        events,
+        promptIdle,
+        3,
+        promptSteer[3],
+        `${locale} prompt idle disposition inversion`,
+      ),
+      promptSteer,
+      3,
+      promptIdle[3],
+      `${locale} prompt streaming disposition inversion`,
+    );
+    assert.throws(
+      () => assertRpcInputContracts(invertedDisposition, locale),
+      assert.AssertionError,
+    );
+    const invertedQueues = replaceTableCell(
+      replaceTableCell(
+        events,
+        promptSteer,
+        2,
+        promptFollowUp[2],
+        `${locale} steer queue inversion`,
+      ),
+      promptFollowUp,
+      2,
+      promptSteer[2],
+      `${locale} follow-up queue inversion`,
+    );
+    assert.throws(
+      () => assertRpcInputContracts(invertedQueues, locale),
+      assert.AssertionError,
+    );
+    const missingBehaviorBoundary =
+      locale === "en"
+        ? "The missing-option error is checked only if neither handler consumes the input and the unhandled prompt reaches the streaming queue branch."
+        : "Lỗi thiếu option chỉ được kiểm tra khi không handler nào consume input và prompt chưa được handle đi tới streaming queue branch.";
+    assert.throws(
+      () =>
+        assertRpcInputContracts(
+          replaceOnce(
+            events,
+            missingBehaviorBoundary,
+            missingBehaviorBoundary.replace(
+              locale === "en" ? "only if" : "chỉ được kiểm tra khi",
+              locale === "en" ? "before" : "được kiểm tra trước khi",
+            ),
+            `${locale} handled-before-streaming exception inversion`,
+          ),
+          locale,
+        ),
+      assert.AssertionError,
+    );
+    assert.throws(
+      () =>
+        assertProviderStreamEventContracts(
+          replaceParagraph(
+            events,
+            "`provider_stream_event`",
+            (paragraph) =>
+              paragraph.replace(
+                locale === "en"
+                  ? "before Pi normalizes it"
+                  : "trước khi Pi normalize",
+                locale === "en"
+                  ? "after Pi normalizes it"
+                  : "sau khi Pi normalize",
+              ),
+            `${locale} provider normalization-order inversion`,
+          ),
+          locale,
+        ),
+      assert.AssertionError,
+    );
+
+    assert.throws(
+      () =>
+        assertConfigurationRelationships(
+          replaceOnce(
+            configuration,
+            '["-bash", "+powershell", "+grep"]',
+            '["+bash", "-powershell", "-grep"]',
+            `${locale} defaultTools sign inversion`,
+          ),
+          locale,
+        ),
+      assert.AssertionError,
+    );
+    assert.throws(
+      () =>
+        assertConfigurationRelationships(
+          replaceParagraph(
+            configuration,
+            "`system` theme",
+            (paragraph) =>
+              paragraph.replace("`system` theme", "A custom theme"),
+            `${locale} system theme default inversion`,
+          ),
+          locale,
+        ),
+      assert.AssertionError,
     );
   }
 });
