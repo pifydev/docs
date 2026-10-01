@@ -136,7 +136,7 @@ Pi kết nối enabled server ở background. Prompt đầu tiên chỉ chờ t�
 
 Connection retry được giới hạn: HTTP network error và response tạm thời 408, 429, 5xx được retry hai lần; resource read và listing được retry một lần sau các lỗi HTTP tạm thời đó. Connection bị rớt chuyển sang trạng thái disconnected và reconnect ở call kế tiếp.
 
-Tên server nhận chữ cái, chữ số, `_` và `-`. Namespace normalization thay hyphen bằng underscore, nên `mcp__dev-radius` thành `mcp__dev_radius`. Khi tên Tool sau normalize va chạm, Pi cấp stable hash suffix cho mọi Tool va chạm; tên server chỉ khác nhau ở `-` và `_` bị reject thay vì silently merging. Entry không hợp lệ được report rồi skip, còn server cấu hình bằng file chủ động override Extension registration cùng tên.
+Tên server nhận chữ cái, chữ số, `_` và `-`. Namespace normalization thay hyphen bằng underscore, nên `mcp__dev-radius` thành `mcp__dev_radius`. Khi các tên Tool trùng nhau sau normalization, Pi gắn stable hash suffix cho từng Tool. Tên server chỉ khác nhau ở `-` và `_` sẽ bị từ chối, không bị gộp ngầm. Pi báo lỗi rồi bỏ qua từng entry không hợp lệ; server cấu hình bằng file vẫn chủ động override Extension registration cùng tên.
 
 ### OAuth và xác thực bằng provider token
 
@@ -313,7 +313,7 @@ Tool result có ba tầng riêng biệt:
 | `structuredContent` | Programmatic caller | Giá trị machine-readable khớp `outputSchema`; không được gửi đến model như tầng riêng |
 | `isError` | Agent loop và caller | Đánh dấu failure trong khi vẫn giữ `content`, details và structured data nếu có |
 
-Codemode thường resolve Tool có `outputSchema` thành `structuredContent`; Tool khác resolve thành text đã ghép. MCP Tool là trường hợp riêng: script nhận đầy đủ `CallToolResult`, kể cả error result. Nested call không phải MCP mà failed, blocked, unknown hoặc invalid sẽ thành Error trong script, còn script failed vẫn giữ partial output trước `Script error:`. Call thành công trước đó không được undo.
+Khi một Tool khai báo `outputSchema` và kết quả cung cấp `structuredContent`, Codemode trả về chính `structuredContent` đó kể cả khi `isError: true`. MCP Tool áp dụng quy tắc này để trả toàn bộ `CallToolResult`, gồm `content`, `structuredContent` và `isError`. Nếu không có `structuredContent` theo contract đó, Codemode ghép text của Tool call thành công. Chỉ các trường hợp lỗi còn lại—không tìm thấy Tool, argument không hợp lệ, call bị chặn hoặc code thực thi ném lỗi—mới ném `Error` trong script. Script thất bại vẫn giữ partial output trước `Script error:`, còn call thành công trước đó không được hoàn tác.
 
 MCP Tool call không được retry vì side effect có thể đã xảy ra. Chỉ các path connection và resource-read đã được document mới dùng bounded transient retry nêu trên. Đừng bọc mutation chưa rõ trong application retry mù; trước hết hãy thiết lập idempotency bằng operation key hoặc đọc lại state.
 

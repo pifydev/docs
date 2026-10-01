@@ -221,6 +221,30 @@ test("Codemode and MCP guides preserve paired structure and safety boundaries", 
       `${locale} guide must order all five Tool exposure values`,
     );
 
+    const [mcpExposureStart, mcpExposureEnd] =
+      locale === "en"
+        ? [
+            "MCP configuration accepts four values:",
+            "`toolExposure` can override",
+          ]
+        : ["Cấu hình MCP nhận bốn giá trị:", "`toolExposure` có thể override"];
+    const mcpExposureSection = guide.slice(
+      guide.indexOf(mcpExposureStart) + mcpExposureStart.length,
+      guide.indexOf(mcpExposureEnd),
+    );
+    const mcpExposureValues = [
+      ...mcpExposureSection.matchAll(/^\| `([^`]+)` \|/gm),
+    ].map(([, exposure]) => exposure);
+    assert.deepEqual(
+      mcpExposureValues,
+      ["direct", "codemode", "deferred", "hidden"],
+      `${locale} MCP exposure section must contain exactly four values`,
+    );
+    assert.ok(
+      !mcpExposureSection.includes("`model-only`"),
+      `${locale} MCP exposure must exclude model-only`,
+    );
+
     const pinnedRoot =
       "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/";
     for (const sourcePath of [
@@ -245,11 +269,33 @@ test("Codemode and MCP guides preserve paired structure and safety boundaries", 
         `${locale} guide must link release ${tag}`,
       );
     }
+    assert.ok(
+      guide.includes(
+        "https://github.com/earendil-works/pi/commit/005af57d88ee23b33778f343a9595b32e67ff788",
+      ),
+      `${locale} guide must link the exact release commit page`,
+    );
     assert.doesNotMatch(guide, /\/(?:blob|tree)\/main\/|\/latest(?:\/|\b)/);
   }
 
   assert.match(english, /MCP Tool calls are not retried[^.]*side effect/i);
   assert.match(vietnamese, /MCP Tool call không được retry[^.]*side effect/i);
+  assert.match(
+    english,
+    /declares `outputSchema`[^.]*supplies `structuredContent`[^.]*`isError: true`/i,
+  );
+  assert.match(
+    vietnamese,
+    /khai báo `outputSchema`[^.]*cung cấp `structuredContent`[^.]*`isError: true`/i,
+  );
+  assert.match(
+    english,
+    /Only other failures[^.]*throw an `Error` in the script/i,
+  );
+  assert.match(
+    vietnamese,
+    /Chỉ các trường hợp lỗi còn lại[^.]*ném `Error` trong script/i,
+  );
   for (const [locale, guide, projectTrustPattern] of [
     ["en", english, /project trust[^.]*not an? sandbox[^.]*not authorization/i],
     [

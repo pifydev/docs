@@ -313,7 +313,7 @@ A Tool result has three distinct layers:
 | `structuredContent` | Programmatic callers | Machine-readable value matching `outputSchema`; not sent to the model as a separate layer |
 | `isError` | Agent loop and callers | Marks failure while preserving `content`, details, and structured data where present |
 
-Codemode normally resolves a Tool with an `outputSchema` to its `structuredContent`; other Tools resolve to combined text. MCP Tools are special: the script receives the complete `CallToolResult`, including an error result. A failed, blocked, unknown, or invalid non-MCP nested call becomes an Error in the script, and a failed script keeps partial output before `Script error:`. Earlier successful calls are not undone.
+When any Tool declares `outputSchema` and its result supplies `structuredContent`, Codemode resolves the call to that `structuredContent` even when `isError: true`. MCP Tools use this rule to expose the complete `CallToolResult`, including `content`, `structuredContent`, and `isError`. Otherwise, a successful Tool resolves to combined text. Only other failures—an unknown Tool, invalid arguments, a blocked call, or a thrown execution error—throw an `Error` in the script. A failed script keeps partial output before `Script error:`, and earlier successful calls are not undone.
 
 MCP Tool calls are not retried because a side effect may already have happened. Only the documented connection and resource-read paths use the bounded transient retries described above. Do not wrap an unknown mutation in a blind application retry; first establish idempotency with an operation key or read back state.
 
