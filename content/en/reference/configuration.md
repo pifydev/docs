@@ -4,15 +4,15 @@ description: Current Pi settings files, merge rules, trust boundary, settings fa
 translation_key: reference-configuration
 language: en
 official_refs:
-  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/settings.md'
-  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/models.md'
-  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/settings-manager.ts'
+  - 'https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/docs/settings.md'
+  - 'https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/docs/models.md'
+  - 'https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/settings-manager.ts'
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 ---
 
-Pi reads JSON settings at startup and when resources reload. This reference describes `@earendil-works/pi-coding-agent` 0.87.1 on Node.js 22.19 or newer.
+Pi reads JSON settings at startup and when resources reload. This reference describes `@earendil-works/pi-coding-agent` 0.99.2 on Node.js 22.19 or newer.
 
 ## Settings files and precedence
 
@@ -85,7 +85,7 @@ The model resolver supplies a fallback when neither an explicit selection nor re
 |---|---|---|
 | `xai` | `new session` | `grok-4.7` |
 
-This is the default for new or otherwise default-resolved xAI sessions in `0.87.1`. It does not replace a model selected with `--model`, chosen interactively, configured as `defaultModel`, or restored from a resumed session.
+This is the default for new or otherwise default-resolved xAI sessions in `0.99.2`. It does not replace a model selected with `--model`, chosen interactively, configured as `defaultModel`, or restored from a resumed session.
 
 `modelThinkingLevels` stores per-model startup thinking levels keyed by `provider/modelId`; configure it from `/settings` → Default thinking level per model or edit the JSON manually. A matching per-model value selects that model's startup level, while `defaultThinkingLevel` remains the global fallback. `thinkingBudgets` separately supplies token budgets for supported providers or compatible models.
 
@@ -138,9 +138,7 @@ Radius model discovery uses three layers: the bundled offline catalog is availab
 
 ### Tool selection
 
-`defaultTools` selects built-in tools at startup. When omitted, exactly `read`, `bash`, `edit`, and `write` are active defaults. The other selectable built-ins are `powershell`, `grep`, `find`, and `ls`; `powershell` is the optional native Windows shell Tool and is not added to the default set automatically. An empty array removes the built-in defaults but leaves extension and SDK custom tools available.
-
-`--tools` is a strict allowlist across built-in, extension, and custom tools. `--no-tools` disables all tools, `--no-builtin-tools` removes built-ins only, and `--exclude-tools` filters the result. A project array replaces the global array.
+`defaultTools` selects Tools at startup. When omitted, exactly `read`, `bash`, `edit`, and `write` are active defaults. The other ordinary built-ins are `powershell`, `grep`, `find`, and `ls`; `powershell` is the optional native Windows shell Tool and is not added automatically. `codemode` and `tool_search` are inactive Tools registered by built-in extensions and may also be named here. An empty array removes the built-in defaults but leaves extension and SDK custom Tools available. Plain names replace the inherited selection; a list containing only `+name` and `-name` entries modifies it in order. For example, `["-bash", "+powershell", "+grep"]` replaces Bash with PowerShell and adds grep without restating every inherited Tool. Project settings apply this same rule on top of user settings. `--tools` is a strict allowlist across built-in, extension, and custom Tools; it and the other CLI Tool switches override `defaultTools` for the invocation and do not accept the additive/removal notation. On `/reload`, `defaultTools` activates newly added names; it does not disable removed names or re-enable an unchanged Tool that you turned off manually.
 
 ```json title="tool-settings.json"
 {
@@ -270,7 +268,7 @@ Forcing a capability unsupported anywhere along the terminal, proxy, or multiple
 
 ## Interface and output
 
-`--mode` accepts `text`, `json`, or `rpc`. Pi `0.87.1` treats both a missing value and an unknown value as CLI errors rather than falling back to interactive mode:
+`--mode` accepts `text`, `json`, or `rpc`. Pi `0.99.2` treats both a missing value and an unknown value as CLI errors rather than falling back to interactive mode:
 
 | Invocation | Result | Process outcome |
 |---|---|---|
@@ -283,9 +281,13 @@ This validation happens before the session starts, which makes a misspelled mode
 
 `theme`, `externalEditor`, `quietStartup`, and `collapseChangelog` control startup and presentation. `externalEditor` overrides `VISUAL`, then `EDITOR`; use `code --wait` when Pi must wait for VS Code. `doubleEscapeAction` is `tree`, `fork`, or `none`, and `treeFilterMode` chooses the default `/tree` filter.
 
+The `system` theme is the default and derives its palette from terminal colors. A custom theme accepts exactly six color forms: 3-digit RGB hex such as `#0af`, 6-digit RGB hex such as `#00aaff`, OKLCH, OKHSL, an ANSI 256 index from 0 through 255, a variable reference, or the empty string `""` for the terminal default. The two RGB spellings are one hexadecimal form; invalid or circular variable references make the theme invalid.
+
 `editorPaddingX` is clamped from 0 to 3, `outputPad` is 0 or 1, and `autocompleteMaxVisible` is clamped from 3 to 20. `showHardwareCursor` helps IME input. `tuiMode` is `regular` or experimental `fullscreen`; the related flat keys are `fullscreenExitOutput` (`transcript` or `resume-hint`) and `fullscreenScrollbar` (`auto`, `always`, or `hidden`). The old nested `tui.*` and `fullscreen.*` shapes are not current. Escape-key timing is an environment control documented in <a href="/en/reference/environment-variables">Environment variables</a>.
 
 `fullscreenCopyOnSelect` defaults to `true`, which copies a fullscreen drag selection automatically. When it is disabled, the selection remains active and highlighted; `Ctrl+X` attempts to copy the eligible active selection and returns from the copy action whether the clipboard write succeeds or fails. It falls back to the last assistant message only when no eligible active selection exists. This setting affects fullscreen text selection, while `/tree` keeps its own selected-message copy behavior.
+
+`fullscreenWheelScrollLines` accepts `"auto"` or a number from 1 through 100. Automatic mode moves one line per event in local macOS terminals, which already accelerate wheel/trackpad input; elsewhere and over SSH it accelerates fast wheel input up to six lines per event. Alt+wheel moves five times the resolved distance.
 
 The clickable `Jump to latest message` control appears only while the fullscreen transcript is scrolled above the latest message; it occupies the bottom row and shows the `tui.altScreen.bottom` shortcut. For `fullscreenScrollbar: "auto"`, the scrollbar becomes visible while scrolling or when the pointer enters its rightmost-column track. Clicking that track jumps through the transcript; `always` reserves and displays the column continuously, while `hidden` removes it.
 
@@ -304,6 +306,8 @@ The clickable `Jump to latest message` control appears only while the fullscreen
 ### Resource lists and package filters
 
 `extensions`, `skills`, `prompts`, and `themes` contain local paths or directories. In global settings, relative paths resolve from `~/.pi/agent`; in project settings they resolve from `.pi`. These arrays support globs, `!pattern` exclusions, `+path` force-includes, and `-path` force-excludes. `enableSkillCommands` controls registration as `/skill:name` and defaults to `true`.
+
+The exact built-in extension identifiers are `builtin:mcp`, `builtin:llama.cpp`, `builtin:codemode`, and `builtin:tool-search`. They load by default; use `-builtin:mcp` (or the corresponding exact name) to disable one, and use `+builtin:<name>` or `-builtin:<name>` in project settings to override the user-level resource selection. `--no-extensions` disables them with other extensions, while `-e builtin:<name>` loads one explicitly.
 
 Use `packages` for npm or Git package sources; do not put package names in `extensions`. A string package entry autoloads all resources. An object can set `autoload: false` and filter `extensions`, `skills`, `prompts`, or `themes`. Project resources and missing project-package installation remain subject to project trust.
 

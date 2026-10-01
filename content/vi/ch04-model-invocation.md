@@ -6,15 +6,15 @@ language: vi
 chapter: 4
 source_url: "https://www.dgzhuya.com/modules/ch04-model-invocation"
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/README.md"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/types.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/README.md"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/types.ts"
 terms_used:
   - Model
   - Provider
   - Provider Adapter
   - Stream
 status: reviewed
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -27,7 +27,7 @@ Pseudocode: `model`, `context` và `options` là input do caller sở hữu.
 const stream = models.streamSimple(model, context, options);
 ```
 
-Dòng này đi qua một boundary lớn. Pi AI phải tìm provider sở hữu model, resolve credential, chuyển message và Tool của Pi sang request format của provider, đọc streaming dialect của provider rồi trả về một event protocol ổn định. Ở revision Pi `0.87.1` được ghim, implementation chia công việc này cho `Models` collection, các object `Provider` và các API implementation. Global descriptor/translator registry cũ chỉ còn trong compatibility entry point; phần sau sẽ nhắc đến nó trong ngữ cảnh migration.
+Dòng này đi qua một boundary lớn. Pi AI phải tìm provider sở hữu model, resolve credential, chuyển message và Tool của Pi sang request format của provider, đọc streaming dialect của provider rồi trả về một event protocol ổn định. Ở revision Pi `0.99.2` được ghim, implementation chia công việc này cho `Models` collection, các object `Provider` và các API implementation. Global descriptor/translator registry cũ chỉ còn trong compatibility entry point; phần sau sẽ nhắc đến nó trong ngữ cảnh migration.
 
 Chương này mở đầy đủ boundary đó. Nội dung bắt đầu từ khác biệt giữa các provider, đi theo dispatch path hiện tại, rồi xem xét streaming, reasoning, cache, abort, retry và phần việc cần làm khi thêm provider.
 
@@ -113,7 +113,7 @@ Model call không thể chứa toàn bộ các nhánh này trong code của Agen
 
 ## 2. Ba boundary, mỗi boundary có một trách nhiệm
 
-Implementation lịch sử dùng global API registry và gọi các API file là translator. Pi `0.87.1` biểu diễn ownership rõ ràng hơn. Ứng dụng dựng `Models` collection từ provider factory. Mỗi `Provider` sở hữu model catalog, cơ chế auth và stream dispatch. API implementation sở hữu wire protocol cùng việc chuẩn hóa dữ liệu. Pseudocode: boundary map này mô tả architecture, không phải executable syntax.
+Implementation lịch sử dùng global API registry và gọi các API file là translator. Pi `0.99.2` biểu diễn ownership rõ ràng hơn. Ứng dụng dựng `Models` collection từ provider factory. Mỗi `Provider` sở hữu model catalog, cơ chế auth và stream dispatch. API implementation sở hữu wire protocol cùng việc chuẩn hóa dữ liệu. Pseudocode: boundary map này mô tả architecture, không phải executable syntax.
 
 ```text
 Agent Loop hoặc application
@@ -131,13 +131,17 @@ Phép so sánh với công ty phiên dịch vẫn hữu ích khi giới hạn c�
 
 Dispatch bắt đầu bằng `model.provider`, không phải `model.api`. Collection tìm provider đó, resolve auth, áp dụng `baseUrl` lấy từ auth nếu có, merge request option rồi gọi provider. Provider do `createProvider()` tạo tiếp tục chọn một API implementation duy nhất hoặc entry trong map có key bằng `model.api`.
 
-Đoạn source không self-contained sau được lấy từ `packages/ai/src/models.ts` tại commit `f07218c4d4bbc12bef056a7058c3dd49dfe41abe`. Đây là body chính xác của `ModelsImpl.streamSimple()` và nó phụ thuộc vào private method cùng type được import trong file đó.
+Pi 0.99.2 tách riêng generated catalog cho chat, image và classifier. `Models.getModels()` cùng `getModel()` chỉ dành cho chat; với entry image hoặc classifier, hãy dùng `getModelsOfType()`, `getModelOfType()` hoặc các method available-model tương ứng. `ModelRuntime` của Coding Agent phản chiếu các typed accessor này và resolve runtime auth cho mọi operation, còn `generateImages()` và `classify()` dispatch tới one-shot implementation do provider sở hữu. Các accessor image/classifier và auth helper đó không phải chat-model API; không được xử lý result của chúng như `AssistantMessageEventStream`.
+
+Generated catalog là nguồn chuẩn cho provider ID, model ID, capability, limit và price. Hãy dùng accessor của `Models` đã cài, `pi --list-models` hoặc live catalog thay vì tự duy trì một bảng model đầy đủ trong application code. TypeSafe Jev là classifier capability đã được kiểm chứng để virtual model và codemode script dùng cho routing; probability của nó chỉ là tín hiệu, không phải đảm bảo chất lượng model hay bằng chứng route đã chọn sẽ trả lời tốt.
+
+Đoạn source không self-contained sau được lấy từ `packages/ai/src/models.ts` tại commit `005af57d88ee23b33778f343a9595b32e67ff788`. Đây là body chính xác của `ModelsImpl.streamSimple()` và nó phụ thuộc vào private method cùng type được import trong file đó.
 
 ```typescript
 streamSimple(model: Model<Api>, context: Context, options?: ModelsSimpleStreamOptions): AssistantMessageEventStream {
   const transcript = normalizeContext(context);
   return lazyStream(model, async () => {
-    const provider = this.requireProvider(model);
+    const provider = this.requireChatProvider(model);
     const { requestModel, requestOptions } = await this.applyAuth(model, options);
     return provider.streamSimple(requestModel, transcript, requestOptions as SimpleStreamOptions);
   });
@@ -178,6 +182,8 @@ streamSimple(..., { deferred: true })
 
 Provider có thể xen kẽ update của nhiều block. UI có thể nhận `text_delta`, rồi `toolcall_start`, rồi một `text_delta` khác. Consumer phải dùng `contentIndex`, update block tương ứng từ `event.partial`, và không giả định mỗi chuỗi start/delta/end luôn liền mạch.
 
+Tại Extension boundary, `provider_stream_event` báo một provider frame đã được adapter parse trước khi Pi normalize frame đó thành 12 chat event ở trên. Các field `provider`, `api` và `model` xác định route, còn `data` do adapter sở hữu là read-only. Hook này thuộc event taxonomy hiện có của provider và phục vụ observation; nó không phải normalized assistant event mới và không được dùng để mutate provider stream.
+
 ### Boundary 3: trách nhiệm của provider và API adapter
 
 Provider và API implementation chia một model call thành năm giai đoạn. Pseudocode: sequence này tóm tắt các lần hand-off qua boundary:
@@ -212,7 +218,7 @@ Pi phát `start` trước khi bắt đầu iterate SSE body. `message_start` kh�
 
 ### Contract mà API implementation phải tuân theo
 
-Đoạn source-faithful abridgement không self-contained sau chứa chính xác các stream member bắt buộc từ `packages/ai/src/types.ts` tại commit `f07218c4d4bbc12bef056a7058c3dd49dfe41abe`. Type được import và các deferred method tùy chọn đã mô tả ở trên nằm ngoài excerpt này.
+Đoạn source-faithful abridgement không self-contained sau chứa chính xác các stream member bắt buộc từ `packages/ai/src/types.ts` tại commit `005af57d88ee23b33778f343a9595b32e67ff788`. Type được import và các deferred method tùy chọn đã mô tả ở trên nằm ngoài excerpt này.
 
 ```typescript
 export interface ProviderStreams {
@@ -254,7 +260,7 @@ Public API hỗ trợ hai công việc khác nhau. Phần lớn ứng dụng gh�
 
 ### Kịch bản 1: gọi một model hiện có
 
-Ví dụ này là application code self-contained cho `@earendil-works/pi-ai` `0.87.1`. Code dùng một provider factory có thể tree-shake và chỉ import public export.
+Ví dụ này là application code self-contained cho `@earendil-works/pi-ai` `0.99.2`. Code dùng một provider factory có thể tree-shake và chỉ import public export.
 
 ```typescript
 import { createModels, type Context } from "@earendil-works/pi-ai";
@@ -317,7 +323,7 @@ stored credential hoặc provider ambient auth
 
 `getModel(provider, id)` là catalog lookup đồng bộ và trả `undefined` nếu hiện không có registered provider nào expose ID đó. Hàm không fetch catalog và cũng không chứng minh auth đã được cấu hình. `getAvailable()` áp dụng auth check, còn dynamic provider update last-known model list qua `refresh()`.
 
-Generated catalog của `0.87.1` có các route hiện tại dưới đây. Đây là snapshot có chủ đích, không thay thế `models.getModels()` hoặc `pi --list-models`:
+Generated catalog của `0.99.2` có các route hiện tại được chọn dưới đây. Đây là snapshot có chủ đích, không thay thế `models.getModels()` hoặc `pi --list-models`:
 
 | Model | Route của provider | Đường xác thực | Hành vi trong catalog |
 |---|---|---|---|
@@ -326,18 +332,21 @@ Generated catalog của `0.87.1` có các route hiện tại dưới đây. Đâ
 | `GPT-6 Luna` | `openai` | `OPENAI_API_KEY` | `OpenAI API key` |
 | `GPT-6 Sol` | `openai-codex` | `OpenAI Codex subscription` | `route dùng subscription` |
 | `GPT-6 Luna` | `openai-codex` | `OpenAI Codex subscription` | `route dùng subscription` |
+| `GPT-6.1 Sol` | `openai` | `OPENAI_API_KEY` hoặc `Sign in with ChatGPT` của OpenAI | `route OpenAI Responses` |
+| `GPT-6.1 Sol` | `azure-openai-responses` | credential và deployment config của Azure OpenAI | `route Azure OpenAI Responses` |
+| `GPT-6.1 Sol` | `openai-codex` | auth subscription OpenAI Codex legacy | `model mặc định của provider này` |
 | `Claude Opus 5.5` | `github-copilot` | `GitHub Copilot subscription` | `route được hỗ trợ` |
 | `GPT-6 Sol` | `github-copilot` | `GitHub Copilot subscription` | `route được hỗ trợ` |
 | `GPT-6 Luna` | `github-copilot` | `GitHub Copilot subscription` | `route được hỗ trợ` |
 | `Grok 4.7` | `xai` | `XAI_API_KEY` | `default cho xAI session mới` |
 
-Claude ID phụ thuộc vào route: Anthropic expose `claude-opus-5-5`, còn GitHub Copilot expose `claude-opus-5.5`. Các giá trị context một triệu token và forced adaptive thinking hiển thị trong row Anthropic đã được kiểm chứng theo catalog record đó; hãy kiểm tra metadata riêng của từng route thay vì áp các giá trị ấy sang route khác. `grok-4.7` là default khi Pi resolve model cho xAI session mới. Lựa chọn tường minh hoặc model đã lưu trong session được resume vẫn được ưu tiên.
+Cùng ID `gpt-6.1-sol` có mặt qua OpenAI, Azure OpenAI Responses và OpenAI Codex. OpenAI Codex dùng model này làm default của provider ở release này. `Sign in with ChatGPT` thuộc provider `openai`; `openai-codex` là label provider legacy và chỉ nên xuất hiện khi UI hoặc auth route cần phân biệt backend cũ đó. Claude ID phụ thuộc vào route: Anthropic expose `claude-opus-5-5`, còn GitHub Copilot expose `claude-opus-5.5`. Các giá trị context một triệu token và forced adaptive thinking hiển thị trong row Anthropic đã được kiểm chứng theo catalog record đó; hãy kiểm tra metadata riêng của từng route thay vì áp các giá trị ấy sang route khác. `grok-4.7` là default khi Pi resolve model cho xAI session mới. Lựa chọn tường minh hoặc model đã lưu trong session được resume vẫn được ưu tiên.
 
 Một `Model` ghi cả hai routing key. `provider` đặt tên collection owner; `api` đặt tên wire implementation của provider. Record còn mang `id`, `name`, `baseUrl`, input capability, reasoning support, token limit, cost rate, compatibility flag, header tùy chọn và `thinkingLevelMap` riêng của model. Với custom model, hãy giữ `provider` trùng ID truyền vào `createProvider()` và đặt endpoint trên model khi API implementation được tái sử dụng đọc `model.baseUrl`.
 
 ### Kịch bản 2: thêm provider hoặc wire protocol mới
 
-Với endpoint tương thích OpenAI, hãy dùng lại lazy API implementation hiện có và chỉ định nghĩa phần thuộc provider. Ví dụ construction self-contained này compile với public export của `0.87.1`; code tạo provider cùng catalog nhưng không gửi network request.
+Với endpoint tương thích OpenAI, hãy dùng lại lazy API implementation hiện có và chỉ định nghĩa phần thuộc provider. Ví dụ construction self-contained này compile với public export của `0.99.2`; code tạo provider cùng catalog nhưng không gửi network request.
 
 ```typescript
 import {
@@ -440,7 +449,7 @@ googleThinking.thinkingConfig = {
 };
 ```
 
-Pi 0.87.1 export hai type riêng cho Google từ package root không có side effect; kiểu chữ của chúng đánh dấu hai ranh giới semantics khác nhau. `GoogleApiThinkingLevel` là union kiểu enum hướng API `"THINKING_LEVEL_UNSPECIFIED" | "MINIMAL" | "LOW" | "MEDIUM" | "HIGH"`; type này dùng cho `GoogleOptions.thinking.level` và `GoogleVertexOptions.thinking.level`. `ResolvedGoogleThinkingLevel` là union đã chuẩn hóa trong adapter `"minimal" | "low" | "medium" | "high"`, được tạo sau khi Pi resolve `ModelThinkingLevel` mang semantics của model. Type này chủ động loại `off`, `xhigh` và `max` vì bước resolution ánh xạ hoặc từ chối chúng trước khi dựng request.
+Pi 0.99.2 export hai type riêng cho Google từ package root không có side effect; kiểu chữ của chúng đánh dấu hai ranh giới semantics khác nhau. `GoogleApiThinkingLevel` là union kiểu enum hướng API `"THINKING_LEVEL_UNSPECIFIED" | "MINIMAL" | "LOW" | "MEDIUM" | "HIGH"`; type này dùng cho `GoogleOptions.thinking.level` và `GoogleVertexOptions.thinking.level`. `ResolvedGoogleThinkingLevel` là union đã chuẩn hóa trong adapter `"minimal" | "low" | "medium" | "high"`, được tạo sau khi Pi resolve `ModelThinkingLevel` mang semantics của model. Type này chủ động loại `off`, `xhigh` và `max` vì bước resolution ánh xạ hoặc từ chối chúng trước khi dựng request.
 
 ```typescript
 import type {
@@ -458,7 +467,7 @@ const adapterLevel: ResolvedGoogleThinkingLevel = "high";
 void [googleOptions, adapterLevel];
 ```
 
-`supportsMidConvoEffort` thuộc `AnthropicMessagesCompat` và mặc định là `false`. Với model tích hợp sẵn trong generated catalog của Pi 0.87.1, automatic detection chuyển `modelId` thành chữ thường trước, sau đó bỏ một prefix tùy chọn khớp `^~?anthropic/` (`anthropic/` hoặc `~anthropic/`). Pi chỉ tự động bật cờ khi `provider` chính xác là `anthropic` hoặc `openrouter`. ID đã chuẩn hóa phải khớp chính xác `^claude-opus-5(?:-\d{8})?$` hoặc `^claude-(?:fable|mythos)-5(?:[.-]1)(?:-\d{8})?$`. Đúng model được hỗ trợ vẫn phải chạy trên transport Anthropic Messages trung thực; điều này không có nghĩa mọi provider tương thích Anthropic hoặc API chỉ bắt chước hình dạng Messages đều được hỗ trợ.
+`supportsMidConvoEffort` thuộc `AnthropicMessagesCompat` và mặc định là `false`. Với model tích hợp sẵn trong generated catalog của Pi 0.99.2, automatic detection chuyển `modelId` thành chữ thường trước, sau đó bỏ một prefix tùy chọn khớp `^~?anthropic/` (`anthropic/` hoặc `~anthropic/`). Pi chỉ tự động bật cờ khi `provider` chính xác là `anthropic` hoặc `openrouter`. ID đã chuẩn hóa phải khớp chính xác `^claude-opus-5(?:-\d{8})?$` hoặc `^claude-(?:fable|mythos)-5(?:[.-]1)(?:-\d{8})?$`. Đúng model được hỗ trợ vẫn phải chạy trên transport Anthropic Messages trung thực; điều này không có nghĩa mọi provider tương thích Anthropic hoặc API chỉ bắt chước hình dạng Messages đều được hỗ trợ.
 
 Các biến thể ID đã chuẩn hóa được chấp nhận gồm `claude-opus-5`, có thể kèm `-YYYYMMDD`; `claude-fable-5.1` hoặc `claude-fable-5-1`, mỗi ID có thể kèm ngày; và `claude-mythos-5.1` hoặc `claude-mythos-5-1`, mỗi ID có thể kèm ngày.
 
@@ -495,7 +504,7 @@ Các turn của Agent thường gửi lại một conversation prefix ngày càn
 export type CacheRetention = "none" | "short" | "long";
 ```
 
-Declaration source-faithful này nằm trong `packages/ai/src/types.ts` tại commit `f07218c4d4bbc12bef056a7058c3dd49dfe41abe`. Resolution có ba bước: option `cacheRetention` tường minh có độ ưu tiên cao nhất; nếu thiếu option, compatibility override `PI_CACHE_RETENTION=long` chọn `long`; nếu cả hai đều thiếu, adapter dùng `short`. Giá trị provider-scoped trong `options.env` có độ ưu tiên cao hơn `process.env`. Preference `long` sau khi resolve chỉ được giữ khi model và API compatibility metadata hỗ trợ.
+Declaration source-faithful này nằm trong `packages/ai/src/types.ts` tại commit `005af57d88ee23b33778f343a9595b32e67ff788`. Resolution có ba bước: option `cacheRetention` tường minh có độ ưu tiên cao nhất; nếu thiếu option, compatibility override `PI_CACHE_RETENTION=long` chọn `long`; nếu cả hai đều thiếu, adapter dùng `short`. Giá trị provider-scoped trong `options.env` có độ ưu tiên cao hơn `process.env`. Preference `long` sau khi resolve chỉ được giữ khi model và API compatibility metadata hỗ trợ.
 
 | Adapter family                     | `none`                                                                      | `short`                                                                                                                                             | `long` và vị trí                                                                                                                 |
 | ---------------------------------- | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
@@ -510,7 +519,7 @@ Tỷ lệ giá cố định và ước tính tiết kiệm trong baseline không
 
 ### Error, retry boundary, abort và overflow
 
-Đoạn source không self-contained sau được lấy từ `packages/ai/src/api/lazy.ts` tại commit `f07218c4d4bbc12bef056a7058c3dd49dfe41abe`. Nó cho thấy setup-error path chính xác; `setup`, `forwardStream`, `createSetupErrorMessage` và `outer` được định nghĩa trong function bao quanh.
+Đoạn source không self-contained sau được lấy từ `packages/ai/src/api/lazy.ts` tại commit `005af57d88ee23b33778f343a9595b32e67ff788`. Nó cho thấy setup-error path chính xác; `setup`, `forwardStream`, `createSetupErrorMessage` và `outer` được định nghĩa trong function bao quanh.
 
 ```typescript
 setup()
@@ -567,6 +576,6 @@ Compatibility API có thể giữ call shape cũ trong giai đoạn migration, n
 
 Model boundary trả về normalized `ToolCall` block nhưng không thực thi chúng. Chương tiếp theo theo dõi một Tool call qua schema validation, scheduling, safety hook, execution, progress và `ToolResultMessage` được gửi lại cho model.
 
-Source review của chương này được ghim tại Pi `0.87.1`, commit `f07218c4d4bbc12bef056a7058c3dd49dfe41abe`. Các file chính gồm `packages/ai/src/models.ts`, `types.ts`, `api/lazy.ts`, `api/simple-options.ts`, API implementation cho Anthropic/OpenAI/Google/Bedrock, `utils/event-stream.ts`, `utils/provider-retry.ts`, `utils/overflow.ts` và các provider factory trong `packages/ai/src/providers/`.
+Source review của chương này được ghim tại Pi `0.99.2`, commit `005af57d88ee23b33778f343a9595b32e67ff788`. Các file chính gồm `packages/ai/src/models.ts`, `types.ts`, `api/lazy.ts`, `api/simple-options.ts`, API implementation cho Anthropic/OpenAI/Google/Bedrock, `utils/event-stream.ts`, `utils/provider-retry.ts`, `utils/overflow.ts` và các provider factory trong `packages/ai/src/providers/`.
 
 [Chương 5: Hệ thống Tool](ch05-tool-system.md)

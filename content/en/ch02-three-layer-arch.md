@@ -6,10 +6,10 @@ language: en
 chapter: 2
 source_url: 'https://www.dgzhuya.com/modules/ch02-three-layer-arch'
 official_refs:
-  - 'https://github.com/earendil-works/pi/tree/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages'
-  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/client/README.md'
-  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/protocol/README.md'
-  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/server/README.md'
+  - 'https://github.com/earendil-works/pi/tree/005af57d88ee23b33778f343a9595b32e67ff788/packages'
+  - 'https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/client/README.md'
+  - 'https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/protocol/README.md'
+  - 'https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/server/README.md'
 terms_used:
   - Model
   - Provider
@@ -30,7 +30,7 @@ terms_used:
   - TypeBox
   - TSchema
 status: reviewed
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -40,7 +40,7 @@ reviewed_by: Pify maintainers
 
 ## 1. You just opened an Agent codebase
 
-Suppose you cloned the Pi repository at revision `f07218c` and opened `packages/`. The relevant part of the tree looks like this:
+Suppose you cloned the Pi repository at revision `005af57d` and opened `packages/`. The relevant part of the tree looks like this:
 
 ```text
 repo/
@@ -79,7 +79,7 @@ Set dependency arrows aside for a moment. Read each package from its own public 
 
 `@earendil-works/pi-ai`, in `packages/ai/`, answers: how can one application call models from different providers through shared types and streaming contracts?
 
-Its manifest describes a “Unified LLM API with automatic model discovery and provider configuration.” At revision `f07218c`, the package owns four related concepts:
+Its manifest describes a “Unified LLM API with automatic model discovery and provider configuration.” At revision `005af57d`, the package owns four related concepts:
 
 1. `Model<TApi>` describes a concrete model, including its provider, API protocol, input modes, context window, token limit, costs, headers, and compatibility settings.
 2. `Provider<TApi>` owns a provider ID, authentication behavior, a synchronous model catalog, optional refresh behavior, and its `stream()` and `streamSimple()` implementations.
@@ -89,7 +89,7 @@ Its manifest describes a “Unified LLM API with automatic model discovery and p
 The root entry is intentionally side-effect free. Provider factories live behind package subpaths, while `createModels()` and the shared domain types stay at the root:
 
 ```typescript
-// packages/ai/src/index.ts (selected exports at f07218c)
+// packages/ai/src/index.ts (selected exports at 005af57d)
 export type { Static, TSchema } from "typebox";
 export { Type } from "typebox";
 export * from "./models.ts";
@@ -119,7 +119,7 @@ Its manifest calls it a “General-purpose agent with transport abstraction, sta
 The public entry point reflects that split:
 
 ```typescript
-// packages/agent/src/index.ts (selected exports at f07218c)
+// packages/agent/src/index.ts (selected exports at 005af57d)
 export * from "./agent.ts";
 export * from "./agent-loop.ts";
 export * from "./harness/compaction/compaction.ts";
@@ -228,10 +228,10 @@ The coding package depends directly on all three foundational packages in the te
 ```jsonc
 {
   "dependencies": {
-    // Selected foundational dependencies from package.json at f07218c.
-    "@earendil-works/pi-agent-core": "^0.87.1",
-    "@earendil-works/pi-ai": "^0.87.1",
-    "@earendil-works/pi-tui": "^0.87.1"
+    // Selected foundational dependencies from package.json at 005af57d.
+    "@earendil-works/pi-agent-core": "^0.99.2",
+    "@earendil-works/pi-ai": "^0.99.2",
+    "@earendil-works/pi-tui": "^0.99.2"
   }
 }
 ```
@@ -244,12 +244,12 @@ The full manifest also lists `@earendil-works/pi-client` and `@earendil-works/pi
 
 Some direct imports exist because public product APIs mention `Model`, `Provider`, `Usage`, `Context`, `ImageContent`, and other Pi AI types. TypeScript must resolve those types even when a given import disappears from emitted JavaScript.
 
-The dependency is also present at runtime. Coding Agent compares models, extracts message content, creates IDs, retries assistant calls, and implements `ModelRuntime` and `ModelRegistry` over Pi AI contracts. Describing the edge as “only a type re-export” would be inaccurate at `f07218c`.
+The dependency is also present at runtime. Coding Agent compares models, extracts message content, creates IDs, retries assistant calls, and implements `ModelRuntime` and `ModelRegistry` over Pi AI contracts. Describing the edge as “only a type re-export” would be inaccurate at `005af57d`.
 
 Agent Core shows the progressive foundation most clearly:
 
 ```typescript
-// packages/agent/src/types.ts (imports abridged, f07218c)
+// packages/agent/src/types.ts (imports abridged, 005af57d)
 import type {
   Api,
   AssistantMessageEventStream,
@@ -348,6 +348,7 @@ interface AgentTool<
 > extends Tool<TParameters> {
   label: string;
   prepareArguments?: (args: unknown) => Static<TParameters>;
+  outputSchema?: TSchema;
   execute(
     toolCallId: string,
     params: Static<TParameters>,
@@ -359,7 +360,7 @@ interface AgentTool<
 }
 ```
 
-`AgentMessage` opens the transcript to application-defined messages through declaration merging. Before an LLM call, `convertToLlm` must turn that broader union back into Pi AI's `Message[]`. `AgentTool` extends the model-facing schema with a label, optional argument preparation, execution, streaming updates, a recovery policy, and a per-Tool execution mode. Its `replay` field applies when durable intent exists but the outcome is unknown: omitting it or setting `never` prevents replay, while `safe` permits recovery only when the persisted call state also records a safe replay. The Agent loop can now run what the model requested.
+`AgentMessage` opens the transcript to application-defined messages through declaration merging. Before an LLM call, `convertToLlm` must turn that broader union back into Pi AI's `Message[]`. `AgentTool` extends the model-facing schema with a label, optional argument preparation, an optional `outputSchema` for successful machine-readable results, execution, streaming updates, a recovery policy, and a per-Tool execution mode. Its `replay` field applies when durable intent exists but the outcome is unknown: omitting it or setting `never` prevents replay, while `safe` permits recovery only when the persisted call state also records a safe replay. The Agent loop can now run what the model requested.
 
 ### Layer 3: pi-coding-agent builds molecules into materials
 
@@ -368,7 +369,7 @@ Coding Agent assembles types around a complete user workflow. `AgentSession` coo
 For Tools, the product-facing `ToolDefinition` is deliberately separate from `AgentTool`. Their model-facing metadata overlaps, but their execution signatures do not: `ToolDefinition.execute` requires a fifth `ctx: ExtensionContext` parameter. A `ToolDefinition` therefore cannot be passed directly to Agent Core as an `AgentTool`.
 
 ```typescript
-// Selected exact fields and signatures from extensions/types.ts at f07218c.
+// Selected exact fields and signatures from extensions/types.ts at 005af57d.
 export interface ToolDefinition<
   TParams extends TSchema = TSchema,
   TDetails = unknown,
@@ -408,7 +409,7 @@ export interface ToolDefinition<
 The product boundary becomes a runtime Tool through an explicit adapter in `packages/coding-agent/src/core/tools/tool-definition-wrapper.ts`:
 
 ```typescript
-// Selected from tool-definition-wrapper.ts at f07218c.
+// Selected from tool-definition-wrapper.ts at 005af57d.
 export function wrapToolDefinition<TDetails = unknown>(
   definition: ToolDefinition<any, TDetails>,
   ctxFactory?: () => ExtensionContext,
@@ -443,7 +444,7 @@ The adapter copies the `AgentTool` fields and replaces `execute` with a function
 The loader also preserves the registrations from each loaded Extension as one aggregate. This is the current interface, with no fields omitted:
 
 ```typescript
-// packages/coding-agent/src/core/extensions/types.ts at f07218c.
+// packages/coding-agent/src/core/extensions/types.ts at 005af57d.
 export interface Extension {
   path: string;
   resolvedPath: string;
@@ -643,6 +644,6 @@ Chapter 3 follows one prompt through the Agent Loop: why a loop is needed, how s
 
 > **Reading order:** Chapters 1–6 build the core mechanism in sequence. Chapters 7 onward isolate advanced engineering concerns and can be read as focused references.
 
-> **Version note:** This chapter describes Pi `0.87.1` at commit `f07218c4d4bbc12bef056a7058c3dd49dfe41abe`. Package names, exports, dependencies, and experimental labels were checked against that revision.
+> **Version note:** This chapter describes Pi `0.99.2` at commit `005af57d88ee23b33778f343a9595b32e67ff788`. Package names, exports, dependencies, and experimental labels were checked against that revision.
 
 > **Next up:** [Chapter 3: Agent Loop](ch03-agent-loop.md)

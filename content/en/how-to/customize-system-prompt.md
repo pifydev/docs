@@ -5,7 +5,7 @@ translation_key: how-to-customize-system-prompt
 language: en
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 ---
 
 Pi keeps project context, the selected base prompt, appended prompt text, and per-turn extension changes separate. This guide shows where each layer comes from and how to inspect the result without relying on a hidden precedence rule.
@@ -150,7 +150,7 @@ Run it with `npx tsx inspect-system-prompt.ts`; the example deliberately ignores
 
 The optional fixture below creates isolated files, performs no provider request, and checks context order, the same-directory override, trusted and untrusted project prompt files, explicit CLI-style source selection, effective builder output, and `session.reload()`.
 
-Run it with `npx tsx verify-system-prompt.ts` on Node `>=22.19.0` after installing the SDK with `npm install @earendil-works/pi-coding-agent@0.87.1`, plus `tsx` and TypeScript.
+Run it with `npx tsx verify-system-prompt.ts` on Node `>=22.19.0` after installing the SDK with `npm install @earendil-works/pi-coding-agent@0.99.2`, plus `tsx` and TypeScript.
 
 <Accordions type="single">
 <Accordion title="Optional deterministic resource-loader fixture">

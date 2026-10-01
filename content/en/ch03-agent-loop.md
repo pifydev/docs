@@ -6,9 +6,9 @@ language: en
 chapter: 3
 source_url: "https://www.dgzhuya.com/modules/ch03-agent-loop"
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent-loop.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/types.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/agent-loop.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/agent.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/types.ts"
 terms_used:
   - Agent Loop
   - Trace
@@ -18,12 +18,12 @@ terms_used:
   - Steering
   - Follow-up
 status: reviewed
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
 
-Chapter 2 separated model transport, the Agent runtime, and the coding product. The Agent Loop is the moving part inside that architecture. This chapter starts with why a loop exists, then follows one message through Pi 0.87.1: context preparation, streaming, Tool execution, queued instructions, termination, events, and final settlement.
+Chapter 2 separated model transport, the Agent runtime, and the coding product. The Agent Loop is the moving part inside that architecture. This chapter starts with why a loop exists, then follows one message through Pi 0.99.2: context preparation, streaming, Tool execution, queued instructions, termination, events, and final settlement.
 
 ## 1. Prelude: three ways to use an LLM
 
@@ -213,7 +213,7 @@ The loop also maintains `newMessages`, a run-local collector returned by the low
 
 ### What keeps the loop moving, and what ends it
 
-The loop cannot be reduced to “inspect `stopReason`.” Pi 0.87.1 uses several pieces of state:
+The loop cannot be reduced to “inspect `stopReason`.” Pi 0.99.2 uses several pieces of state:
 
 ```text
 assistant response
@@ -246,7 +246,7 @@ This explains why a termination report must name both the provider result and th
 The core decision is based on content and finalized Tool state, not one string:
 
 ```typescript
-// Abridged from packages/agent/src/agent-loop.ts at f07218c4.
+// Abridged from packages/agent/src/agent-loop.ts at 005af57d4.
 const toolCalls = message.content.filter((part) => part.type === "toolCall");
 hasMoreToolCalls = false;
 
@@ -782,7 +782,7 @@ Provider adapters own cache-control serialization. Rebuilding the small `Transcr
 `streamAssistantResponse()` reserves one transcript slot on `start`, replaces that slot with each partial, and finally replaces it with the completed message:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at f07218c4.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 005af57d4.
 case "start":
   partialMessage = event.partial;
   context.messages.push(partialMessage);
@@ -857,7 +857,7 @@ The two modes preserve conversation order in different ways:
 If any targeted Tool declares `executionMode: "sequential"`, the whole assistant batch runs sequentially. Preflight resolves the Tool, applies `prepareArguments`, validates the schema, and calls `beforeToolCall`:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at f07218c4.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 005af57d4.
 const preparedToolCall = prepareToolCallArguments(tool, toolCall);
 const validatedArgs = validateToolArguments(tool, preparedToolCall);
 const beforeResult = await config.beforeToolCall?.(
@@ -869,7 +869,7 @@ const beforeResult = await config.beforeToolCall?.(
 Unknown Tools, invalid arguments, thrown preflight code, blocked calls, and observed aborts become immediate error results. `afterToolCall` runs only after an allowed Tool actually executes; it may replace `content`, `details`, `usage`, `isError`, or `terminate` before final events:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at f07218c4.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 005af57d4.
 const afterResult = await config.afterToolCall?.(
   {
     assistantMessage,
@@ -897,7 +897,7 @@ For each finalized call, Pi emits `tool_execution_end`, then a `message_start`/`
 Batch termination uses `every`:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at f07218c4.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 005af57d4.
 const terminate =
   finalizedCalls.length > 0 &&
   finalizedCalls.every((entry) => entry.result.terminate === true);
@@ -944,7 +944,7 @@ Settlement extends past event emission. `agent_end` guarantees that the loop wil
 ### 4.8 Back to the top of the loop
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at f07218c4.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 005af57d4.
 while (hasMoreToolCalls || pendingMessages.length > 0) {
   // one assistant response and its Tool batch
 }
@@ -957,7 +957,7 @@ Automatic continuation comes from a non-terminating Tool batch. Steering continu
 At the stable boundary, Agent Core polls only the follow-up queue:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at f07218c4.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 005af57d4.
 const followUpMessages = (await config.getFollowUpMessages?.()) || [];
 if (followUpMessages.length > 0) {
   explicitContinuation = false;
@@ -1020,4 +1020,4 @@ This separation lets a small domain Agent use `Agent` directly while the full co
 
 [Chapter 4](ch04-model-invocation.md) opens the `StreamFn` boundary: model collections, provider registration, request conversion, normalized streaming events, and error handling.
 
-> Version boundary: this walkthrough follows Pi `0.87.1` at commit `f07218c4d4bbc12bef056a7058c3dd49dfe41abe` and Node.js `>=22.19.0`.
+> Version boundary: this walkthrough follows Pi `0.99.2` at commit `005af57d88ee23b33778f343a9595b32e67ff788` and Node.js `>=22.19.0`.

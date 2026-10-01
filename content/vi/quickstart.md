@@ -7,9 +7,9 @@ translation_key: quickstart
 language: vi
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 ---
-Hướng dẫn này dùng [release Pi `0.87.1` chính thức](https://github.com/earendil-works/pi/releases/tag/v0.87.1), được review tại [`f07218c`](https://github.com/earendil-works/pi/commit/f07218c4d4bbc12bef056a7058c3dd49dfe41abe), để tạo một chương trình TypeScript nhỏ nhận phản hồi streaming từ model. Bạn sẽ cài `@earendil-works/pi-ai`, đăng ký các provider có sẵn, chọn một model và xử lý luồng sự kiện. Bạn không cần biết Pi từ trước.
+Hướng dẫn này dùng [release Pi `0.99.2` chính thức](https://github.com/earendil-works/pi/releases/tag/v0.99.2), được review tại [`005af57d`](https://github.com/earendil-works/pi/commit/005af57d88ee23b33778f343a9595b32e67ff788), để tạo một chương trình TypeScript nhỏ nhận phản hồi streaming từ model. Bạn sẽ cài `@earendil-works/pi-ai`, đăng ký các provider có sẵn, chọn một model và xử lý luồng sự kiện. Bạn không cần biết Pi từ trước.
 
 :::tip[Kết quả]
 
@@ -19,7 +19,7 @@ Một file TypeScript gọi model qua `Models.streamSimple()`. Từ đây, bạn
 
 ## Trước khi bắt đầu
 
-Ví dụ bên dưới vẫn dùng Anthropic Claude Sonnet để lần chạy đầu tiên gọn và dễ theo dõi. Nếu chọn một direct API-key route mới trong catalog `0.87.1`, hãy dùng đúng provider/model ID và credential tương ứng:
+Ví dụ bên dưới vẫn dùng Anthropic Claude Sonnet để lần chạy đầu tiên gọn và dễ theo dõi. Nếu chọn một direct API-key route mới trong catalog `0.99.2`, hãy dùng đúng provider/model ID và credential tương ứng:
 
 | Provider/model ID | Tên trong catalog | Credential trong environment |
 |---|---|---|
@@ -48,7 +48,7 @@ Hướng dẫn này gọi API thật. Hãy đặt giới hạn chi tiêu thấp 
 mkdir pi-quickstart && cd pi-quickstart
 npm init -y
 npm pkg set type=module
-npm install @earendil-works/pi-ai@0.87.1
+npm install @earendil-works/pi-ai@0.99.2 --save-exact
 npm install --save-dev tsx
 ```
 

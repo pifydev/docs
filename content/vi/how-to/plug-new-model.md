@@ -4,9 +4,9 @@ description: Thêm model qua models.json hoặc Provider, và chỉ viết strea
 translation_key: how-to-plug-new-model
 language: vi
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/models.md"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/custom-provider.md"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/README.md#custom-providers"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/docs/models.md"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/docs/custom-provider.md"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/README.md#custom-providers"
 terms_used:
   - Models
   - Provider
@@ -16,7 +16,7 @@ terms_used:
   - AbortSignal
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 ---
 
 Phần lớn trường hợp thêm model chỉ cần mô tả một endpoint mà Pi đã biết cách gọi. Hãy bắt đầu bằng `~/.pi/agent/models.json` hoặc `ProviderConfig` trong Extension; tạo native `Provider` khi cần cơ chế xác thực hoặc khám phá model do provider quản lý; chỉ triển khai `ProviderStreams` cho một wire protocol thật sự mới.
@@ -42,12 +42,12 @@ Chọn đúng một hướng: hoàn thành mục **1–2** cho catalog tĩnh, **
 
 ## Điều kiện cần
 
-Pi `0.87.1` yêu cầu Node.js `>=22.19.0`. Với các ví dụ TypeScript, hãy dùng ESM và cài từng package được import:
+Pi `0.99.2` yêu cầu Node.js `>=22.19.0`. Với các ví dụ TypeScript, hãy dùng ESM và cài từng package được import:
 
 ```bash
 npm init -y
 npm pkg set type=module
-npm install @earendil-works/pi-ai@0.87.1 @earendil-works/pi-coding-agent@0.87.1
+npm install @earendil-works/pi-ai@0.99.2 @earendil-works/pi-coding-agent@0.99.2
 npm install --save-dev typescript tsx @types/node
 ```
 
@@ -137,7 +137,7 @@ Pi dùng metadata của model để chọn model, kiểm tra dữ liệu, tạo 
 
 Những switch tương thích completions thường gặp điều khiển role `developer`, `reasoning_effort`, usage và `finish_reason` khi streaming, field giới hạn token, Tool strict/grammar, quy tắc replay Tool result hoặc reasoning content, thinking format, cache, routing và session affinity. Chỉ đặt flag đã kiểm chứng trên server. Metadata không có boolean `streaming` hay `toolUse` dùng chung: mọi `Provider` đều stream, còn khả năng dùng Tool phải được chứng minh bằng Tool call thật.
 
-Image normalization cũng lấy cấu hình từ model metadata. Trong `0.87.1`, `model.inputLimits.images.resize` là override tùy chọn theo từng field và từng model, được áp dụng tại mỗi điểm một image mới đi vào conversation history:
+Image normalization cũng lấy cấu hình từ model metadata. Trong `0.99.2`, `model.inputLimits.images.resize` là override tùy chọn theo từng field và từng model, được áp dụng tại mỗi điểm một image mới đi vào conversation history:
 
 | Điểm image đi vào history | Nguồn cấu hình resize | Tác động lên history |
 |---|---|---|
@@ -320,7 +320,7 @@ export default function nativeLocalProvider(pi: ExtensionAPI) {
 }
 ```
 
-`envApiKeyAuth()` kiểm tra credential đã lưu trước, rồi đến các biến môi trường được liệt kê. Với resolver tùy chỉnh, hãy triển khai method công khai `ApiKeyAuth.resolve({ ctx, credential, signal })` và đọc biến môi trường qua `ctx.env()`. `AuthResult` của method này có thể trả về request auth, `env` riêng của provider và nhãn nguồn. Phiên bản `0.87.1` không có type công khai tên `AuthResolver`; đừng import hoặc tự đặt ra type này. SDK caller có thể xem trạng thái đã resolve bằng `Models.getAuth()`.
+`envApiKeyAuth()` kiểm tra credential đã lưu trước, rồi đến các biến môi trường được liệt kê. Với resolver tùy chỉnh, hãy triển khai method công khai `ApiKeyAuth.resolve({ ctx, credential, signal })` và đọc biến môi trường qua `ctx.env()`. `AuthResult` của method này có thể trả về request auth, `env` riêng của provider và nhãn nguồn. Phiên bản `0.99.2` không có type công khai tên `AuthResolver`; đừng import hoặc tự đặt ra type này. SDK caller có thể xem trạng thái đã resolve bằng `Models.getAuth()`.
 
 Factory tích hợp cũng theo contract này. Ví dụ, `openaiProvider()` được export từ `@earendil-works/pi-ai/providers/openai`. Dùng factory khi catalog, auth và tổ hợp API của nó đã khớp dịch vụ; dùng `createProvider()` để tự kết hợp các phần.
 
@@ -356,7 +356,7 @@ interface ProviderStreams {
 }
 ```
 
-Nguồn: [`ProviderStreams`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/types.ts) tại commit đã pin. Đoạn trích lược bỏ import và type của parameter trong deferred method; hãy import interface đã phát hành để lấy contract đầy đủ.
+Nguồn: [`ProviderStreams`](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/types.ts) tại commit đã pin. Đoạn trích lược bỏ import và type của parameter trong deferred method; hãy import interface đã phát hành để lấy contract đầy đủ.
 
 `streamSimple()` là điểm vào trung lập với provider: nó ánh xạ reasoning level của Pi, `toolChoice` và thinking budget tùy chọn trước khi chuyển cho adapter. Adapter production phải giữ đúng thứ tự `start`, các event có index `text_*`, `thinking_*`, `toolcall_*`, rồi kết thúc bằng đúng một `done` hoặc `error`. Nó cũng phải báo usage, phân loại context overflow, giữ Tool-call ID ổn định khi replay, gọi các hook request/response, đồng thời dừng network và parser khi `options.signal` bị abort.
 
@@ -412,7 +412,7 @@ Hãy chạy mọi bước phù hợp trước khi tuyên bố hỗ trợ:
 | Một lần retry | Fixture local | Một response `429` tạo đúng hai lần gọi, rồi trả content và `"stop"`. |
 | Abort có độ trễ | Fixture local | Result là `"aborted"` và connection đóng mà không bị treo. |
 
-`supportsMidConvoEffort` thuộc `AnthropicMessagesCompat` và mặc định là `false`. Với model tích hợp sẵn trong generated catalog của Pi 0.87.1, automatic detection chuyển `modelId` thành chữ thường trước, sau đó bỏ một prefix tùy chọn khớp `^~?anthropic/` (`anthropic/` hoặc `~anthropic/`). Pi chỉ tự động bật cờ khi `provider` chính xác là `anthropic` hoặc `openrouter`. ID đã chuẩn hóa phải khớp chính xác `^claude-opus-5(?:-\d{8})?$` hoặc `^claude-(?:fable|mythos)-5(?:[.-]1)(?:-\d{8})?$`. Đúng model được hỗ trợ vẫn phải chạy trên transport Anthropic Messages trung thực; điều này không có nghĩa mọi provider tương thích Anthropic hoặc API chỉ bắt chước hình dạng Messages đều được hỗ trợ.
+`supportsMidConvoEffort` thuộc `AnthropicMessagesCompat` và mặc định là `false`. Với model tích hợp sẵn trong generated catalog của Pi 0.99.2, automatic detection chuyển `modelId` thành chữ thường trước, sau đó bỏ một prefix tùy chọn khớp `^~?anthropic/` (`anthropic/` hoặc `~anthropic/`). Pi chỉ tự động bật cờ khi `provider` chính xác là `anthropic` hoặc `openrouter`. ID đã chuẩn hóa phải khớp chính xác `^claude-opus-5(?:-\d{8})?$` hoặc `^claude-(?:fable|mythos)-5(?:[.-]1)(?:-\d{8})?$`. Đúng model được hỗ trợ vẫn phải chạy trên transport Anthropic Messages trung thực; điều này không có nghĩa mọi provider tương thích Anthropic hoặc API chỉ bắt chước hình dạng Messages đều được hỗ trợ.
 
 Các biến thể ID đã chuẩn hóa được chấp nhận gồm `claude-opus-5`, có thể kèm `-YYYYMMDD`; `claude-fable-5.1` hoặc `claude-fable-5-1`, mỗi ID có thể kèm ngày; và `claude-mythos-5.1` hoặc `claude-mythos-5-1`, mỗi ID có thể kèm ngày.
 
@@ -705,7 +705,7 @@ Khi kiểm tra request chỉ có image, cần chú ý edge case sau của adapte
 |---|---|---|
 | `OpenAI-compatible` | `không gửi empty text part` | `gửi image block` |
 
-Đây là hành vi của adapter trong `0.87.1`, không phải public option mới. Custom adapter tương thích OpenAI phải giữ image content nhưng không tự tạo empty text item mà endpoint có thể từ chối.
+Đây là hành vi của adapter trong `0.99.2`, không phải public option mới. Custom adapter tương thích OpenAI phải giữ image content nhưng không tự tạo empty text item mà endpoint có thể từ chối.
 
 | Hiện tượng | Cần kiểm tra |
 | --- | --- |

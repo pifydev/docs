@@ -6,15 +6,15 @@ language: en
 chapter: 4
 source_url: "https://www.dgzhuya.com/modules/ch04-model-invocation"
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/README.md"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/types.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/README.md"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/types.ts"
 terms_used:
   - Model
   - Provider
   - Provider Adapter
   - Stream
 status: reviewed
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -27,7 +27,7 @@ Pseudocode: `model`, `context`, and `options` are inputs owned by the caller.
 const stream = models.streamSimple(model, context, options);
 ```
 
-That line crosses a substantial boundary. Pi AI must find the provider that owns the model, resolve its credentials, turn Pi messages and Tools into the provider's request format, consume the provider's streaming dialect, and return one stable event protocol. The implementation at the pinned Pi `0.87.1` revision divides that work among a `Models` collection, provider objects, and API implementations. The old global descriptor/translator registry is available only from the compatibility entry point and is covered later as migration context.
+That line crosses a substantial boundary. Pi AI must find the provider that owns the model, resolve its credentials, turn Pi messages and Tools into the provider's request format, consume the provider's streaming dialect, and return one stable event protocol. The implementation at the pinned Pi `0.99.2` revision divides that work among a `Models` collection, provider objects, and API implementations. The old global descriptor/translator registry is available only from the compatibility entry point and is covered later as migration context.
 
 This chapter opens that boundary without replacing it with a short usage sample. It starts with the provider differences, follows the current dispatch path, then examines streaming, reasoning, caching, aborts, retries, and the work required to add a provider.
 
@@ -113,7 +113,7 @@ A model call cannot branch through all of these rules in Agent Loop code. Pi kee
 
 ## 2. Three boundaries, each with one responsibility
 
-The historical implementation used a global API registry and described API files as translators. Pi `0.87.1` makes ownership explicit. Applications build a `Models` collection from provider factories. Each `Provider` owns a model catalog, authentication behavior, and stream dispatch. API implementations own the wire protocol and normalization. Pseudocode: this boundary map is architectural, not executable syntax.
+The historical implementation used a global API registry and described API files as translators. Pi `0.99.2` makes ownership explicit. Applications build a `Models` collection from provider factories. Each `Provider` owns a model catalog, authentication behavior, and stream dispatch. API implementations own the wire protocol and normalization. Pseudocode: this boundary map is architectural, not executable syntax.
 
 ```text
 Agent Loop or application
@@ -131,13 +131,17 @@ The translation-company analogy still helps if its limits are clear. `Models` is
 
 Dispatch begins with `model.provider`, not `model.api`. The collection looks up that provider, resolves auth, applies an auth-derived `baseUrl` when present, merges request options, and calls the provider. The provider created by `createProvider()` then selects its single API implementation or a map entry keyed by `model.api`.
 
-The following non-self-contained excerpt is from `packages/ai/src/models.ts` at `f07218c4d4bbc12bef056a7058c3dd49dfe41abe`. It is the exact `ModelsImpl.streamSimple()` body and depends on private class methods and imported types from that file.
+Pi 0.99.2 keeps separate generated chat, image, and classifier catalogs. `Models.getModels()` and `getModel()` are chat-only; use `getModelsOfType()`, `getModelOfType()`, or their available-model counterparts for image and classifier entries. Coding Agent's `ModelRuntime` mirrors those typed accessors and resolves runtime auth for every operation, while `generateImages()` and `classify()` dispatch to provider-owned one-shot implementations. Those image/classifier accessors and auth helpers are not chat-model APIs, and their result contracts must not be treated as `AssistantMessageEventStream`.
+
+Generated catalogs are the authority for provider IDs, model IDs, capabilities, limits, and prices. Use the installed `Models` accessors, `pi --list-models`, or the live catalog rather than maintaining a complete model table in application code. TypeSafe Jev is a verified classifier capability that virtual models and codemode scripts can use for routing decisions; its probabilities are signals, not a model-quality guarantee or proof that a chosen route will answer well.
+
+The following non-self-contained excerpt is from `packages/ai/src/models.ts` at `005af57d88ee23b33778f343a9595b32e67ff788`. It is the exact `ModelsImpl.streamSimple()` body and depends on private class methods and imported types from that file.
 
 ```typescript
 streamSimple(model: Model<Api>, context: Context, options?: ModelsSimpleStreamOptions): AssistantMessageEventStream {
   const transcript = normalizeContext(context);
   return lazyStream(model, async () => {
-    const provider = this.requireProvider(model);
+    const provider = this.requireChatProvider(model);
     const { requestModel, requestOptions } = await this.applyAuth(model, options);
     return provider.streamSimple(requestModel, transcript, requestOptions as SimpleStreamOptions);
   });
@@ -178,6 +182,8 @@ streamSimple(..., { deferred: true })
 
 Providers may interleave updates from different blocks. A UI can see `text_delta`, then `toolcall_start`, then another `text_delta`. Consumers must use `contentIndex`, update the corresponding block from `event.partial`, and avoid assuming that each start/delta/end family is contiguous.
 
+At the Extension boundary, `provider_stream_event` reports an adapter-parsed provider frame before Pi normalizes it into the 12 chat events above. Its `provider`, `api`, and `model` identify the route, while adapter-owned `data` is read-only. This hook belongs to the existing provider event taxonomy for observation; it is not another normalized assistant event and must not be used to mutate the provider stream.
+
 ### Boundary 3: provider and API-adapter responsibilities
 
 The provider and API implementation divide a model call into five stages. Pseudocode: this sequence summarizes the boundary hand-offs:
@@ -212,7 +218,7 @@ Pi emits `start` before it begins iterating the SSE body. `message_start` initia
 
 ### The contracts an API implementation must satisfy
 
-The following non-self-contained, source-faithful abridgement contains the exact required stream members from `packages/ai/src/types.ts` at `f07218c4d4bbc12bef056a7058c3dd49dfe41abe`. Imported types and the optional deferred methods described above are outside this excerpt.
+The following non-self-contained, source-faithful abridgement contains the exact required stream members from `packages/ai/src/types.ts` at `005af57d88ee23b33778f343a9595b32e67ff788`. Imported types and the optional deferred methods described above are outside this excerpt.
 
 ```typescript
 export interface ProviderStreams {
@@ -254,7 +260,7 @@ The public API supports two distinct tasks. Most applications assemble known pro
 
 ### Scenario 1: call an existing model
 
-This example is self-contained application code for `@earendil-works/pi-ai` `0.87.1`. It uses one tree-shakeable provider factory and only public exports.
+This example is self-contained application code for `@earendil-works/pi-ai` `0.99.2`. It uses one tree-shakeable provider factory and only public exports.
 
 ```typescript
 import { createModels, type Context } from "@earendil-works/pi-ai";
@@ -317,7 +323,7 @@ An explicit per-request `apiKey` wins. A stored credential owns its provider, so
 
 `getModel(provider, id)` is a synchronous catalog lookup and returns `undefined` when no registered provider currently exposes that ID. It does not fetch a catalog and does not prove that auth is configured. `getAvailable()` applies auth checks, while dynamic providers update their last-known model lists through `refresh()`.
 
-The generated `0.87.1` catalog includes these current routes. This is a focused snapshot, not a substitute for `models.getModels()` or `pi --list-models`:
+The generated `0.99.2` catalog includes these selected current routes. This is a focused snapshot, not a substitute for `models.getModels()` or `pi --list-models`:
 
 | Model | Provider route | Credential path | Catalog behavior |
 |---|---|---|---|
@@ -326,18 +332,21 @@ The generated `0.87.1` catalog includes these current routes. This is a focused 
 | `GPT-6 Luna` | `openai` | `OPENAI_API_KEY` | `OpenAI API key` |
 | `GPT-6 Sol` | `openai-codex` | `OpenAI Codex subscription` | `subscription route` |
 | `GPT-6 Luna` | `openai-codex` | `OpenAI Codex subscription` | `subscription route` |
+| `GPT-6.1 Sol` | `openai` | `OPENAI_API_KEY` or OpenAI's `Sign in with ChatGPT` | `OpenAI Responses route` |
+| `GPT-6.1 Sol` | `azure-openai-responses` | Azure OpenAI credential and deployment configuration | `Azure OpenAI Responses route` |
+| `GPT-6.1 Sol` | `openai-codex` | legacy OpenAI Codex subscription auth | `default model for this provider` |
 | `Claude Opus 5.5` | `github-copilot` | `GitHub Copilot subscription` | `supported route` |
 | `GPT-6 Sol` | `github-copilot` | `GitHub Copilot subscription` | `supported route` |
 | `GPT-6 Luna` | `github-copilot` | `GitHub Copilot subscription` | `supported route` |
 | `Grok 4.7` | `xai` | `XAI_API_KEY` | `default for new xAI sessions` |
 
-The Claude ID is route-specific: Anthropic exposes `claude-opus-5-5`, while GitHub Copilot exposes `claude-opus-5.5`. The one-million-token context and forced adaptive-thinking values shown in the Anthropic row were verified against that catalog record; inspect each route's own metadata instead of carrying those values across routes. `grok-4.7` is the default when Pi resolves a model for a new xAI session. An explicit selection or a model saved in a resumed session still wins.
+The same `gpt-6.1-sol` ID is present through OpenAI, Azure OpenAI Responses, and OpenAI Codex. OpenAI Codex uses it as that provider's default in this release. `Sign in with ChatGPT` belongs to the `openai` provider; `openai-codex` is the legacy provider label and should appear only where the UI or authentication route must distinguish that older backend. The Claude ID is route-specific: Anthropic exposes `claude-opus-5-5`, while GitHub Copilot exposes `claude-opus-5.5`. The one-million-token context and forced adaptive-thinking values shown in the Anthropic row were verified against that catalog record; inspect each route's own metadata instead of carrying those values across routes. `grok-4.7` is the default when Pi resolves a model for a new xAI session. An explicit selection or a model saved in a resumed session still wins.
 
 A `Model` records both routing keys. `provider` names the collection owner; `api` names the provider's wire implementation. The record also carries `id`, `name`, `baseUrl`, input capabilities, reasoning support, token limits, cost rates, compatibility flags, optional headers, and a model-specific `thinkingLevelMap`. Keep a custom model's `provider` aligned with the ID passed to `createProvider()` and configure the endpoint on the model when the reused API implementation reads `model.baseUrl`.
 
 ### Scenario 2: add a provider or a new wire protocol
 
-For an OpenAI-compatible endpoint, reuse the existing lazy API implementation and define only provider-owned concerns. This self-contained construction example compiles against the public `0.87.1` exports; it creates the provider and catalog without making a network request.
+For an OpenAI-compatible endpoint, reuse the existing lazy API implementation and define only provider-owned concerns. This self-contained construction example compiles against the public `0.99.2` exports; it creates the provider and catalog without making a network request.
 
 ```typescript
 import {
@@ -440,7 +449,7 @@ googleThinking.thinkingConfig = {
 };
 ```
 
-Pi 0.87.1 exports two Google-specific types from the side-effect-free package root, and their casing marks different semantic boundaries. `GoogleApiThinkingLevel` is the API-facing enum-like union `"THINKING_LEVEL_UNSPECIFIED" | "MINIMAL" | "LOW" | "MEDIUM" | "HIGH"`; it belongs in `GoogleOptions.thinking.level` and `GoogleVertexOptions.thinking.level`. `ResolvedGoogleThinkingLevel` is the adapter's normalized union `"minimal" | "low" | "medium" | "high"`, produced after Pi resolves a model's semantic `ModelThinkingLevel`. It deliberately excludes `off`, `xhigh`, and `max` because resolution maps or rejects those before request construction.
+Pi 0.99.2 exports two Google-specific types from the side-effect-free package root, and their casing marks different semantic boundaries. `GoogleApiThinkingLevel` is the API-facing enum-like union `"THINKING_LEVEL_UNSPECIFIED" | "MINIMAL" | "LOW" | "MEDIUM" | "HIGH"`; it belongs in `GoogleOptions.thinking.level` and `GoogleVertexOptions.thinking.level`. `ResolvedGoogleThinkingLevel` is the adapter's normalized union `"minimal" | "low" | "medium" | "high"`, produced after Pi resolves a model's semantic `ModelThinkingLevel`. It deliberately excludes `off`, `xhigh`, and `max` because resolution maps or rejects those before request construction.
 
 ```typescript
 import type {
@@ -458,7 +467,7 @@ const adapterLevel: ResolvedGoogleThinkingLevel = "high";
 void [googleOptions, adapterLevel];
 ```
 
-`supportsMidConvoEffort` belongs to `AnthropicMessagesCompat` and defaults to `false`. For built-in models in the Pi 0.87.1 generated catalog, automatic detection lowercases `modelId` first, then strips one optional prefix matching `^~?anthropic/` (`anthropic/` or `~anthropic/`). Pi auto-enables the flag only when `provider` is exactly `anthropic` or `openrouter`. The normalized ID must match exactly `^claude-opus-5(?:-\d{8})?$` or `^claude-(?:fable|mythos)-5(?:[.-]1)(?:-\d{8})?$`. The exact supported model must still use a faithful Anthropic Messages transport; this is not support for all Anthropic-compatible providers or an API that merely imitates the Messages shape.
+`supportsMidConvoEffort` belongs to `AnthropicMessagesCompat` and defaults to `false`. For built-in models in the Pi 0.99.2 generated catalog, automatic detection lowercases `modelId` first, then strips one optional prefix matching `^~?anthropic/` (`anthropic/` or `~anthropic/`). Pi auto-enables the flag only when `provider` is exactly `anthropic` or `openrouter`. The normalized ID must match exactly `^claude-opus-5(?:-\d{8})?$` or `^claude-(?:fable|mythos)-5(?:[.-]1)(?:-\d{8})?$`. The exact supported model must still use a faithful Anthropic Messages transport; this is not support for all Anthropic-compatible providers or an API that merely imitates the Messages shape.
 
 The accepted normalized variants are `claude-opus-5`, optionally followed by `-YYYYMMDD`; `claude-fable-5.1` or `claude-fable-5-1`, each optionally dated; and `claude-mythos-5.1` or `claude-mythos-5-1`, each optionally dated.
 
@@ -495,7 +504,7 @@ Agent turns normally resend a growing conversation prefix. Prompt caching can av
 export type CacheRetention = "none" | "short" | "long";
 ```
 
-This source-faithful declaration is from `packages/ai/src/types.ts` at `f07218c4d4bbc12bef056a7058c3dd49dfe41abe`. Resolution has three steps: an explicit `cacheRetention` option wins; otherwise the compatibility override `PI_CACHE_RETENTION=long` selects `long`; otherwise the adapter uses `short`. A provider-scoped value in `options.env` takes precedence over `process.env`. The resolved `long` preference is honored only where model and API compatibility metadata support it.
+This source-faithful declaration is from `packages/ai/src/types.ts` at `005af57d88ee23b33778f343a9595b32e67ff788`. Resolution has three steps: an explicit `cacheRetention` option wins; otherwise the compatibility override `PI_CACHE_RETENTION=long` selects `long`; otherwise the adapter uses `short`. A provider-scoped value in `options.env` takes precedence over `process.env`. The resolved `long` preference is honored only where model and API compatibility metadata support it.
 
 | Adapter family                     | `none`                                                                            | `short`                                                                                                                                                                   | `long` and placement                                                                                                                  |
 | ---------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
@@ -510,7 +519,7 @@ The baseline's fixed pricing ratios and savings estimate are not part of Pi's AP
 
 ### Errors, retry boundaries, abort, and overflow
 
-The following non-self-contained excerpt is from `packages/ai/src/api/lazy.ts` at `f07218c4d4bbc12bef056a7058c3dd49dfe41abe`. It shows the exact setup-error path; `setup`, `forwardStream`, `createSetupErrorMessage`, and `outer` are defined in the surrounding function.
+The following non-self-contained excerpt is from `packages/ai/src/api/lazy.ts` at `005af57d88ee23b33778f343a9595b32e67ff788`. It shows the exact setup-error path; `setup`, `forwardStream`, `createSetupErrorMessage`, and `outer` are defined in the surrounding function.
 
 ```typescript
 setup()
@@ -567,6 +576,6 @@ Compatibility APIs can preserve an old call shape during migration, but they sho
 
 The model boundary returns normalized `ToolCall` blocks, but it does not execute them. The next chapter follows a Tool call through schema validation, scheduling, safety hooks, execution, progress, and the `ToolResultMessage` sent back to the model.
 
-Source review for this chapter is pinned to Pi `0.87.1` at commit `f07218c4d4bbc12bef056a7058c3dd49dfe41abe`. The primary files are `packages/ai/src/models.ts`, `types.ts`, `api/lazy.ts`, `api/simple-options.ts`, the Anthropic/OpenAI/Google/Bedrock API implementations, `utils/event-stream.ts`, `utils/provider-retry.ts`, `utils/overflow.ts`, and the provider factories under `packages/ai/src/providers/`.
+Source review for this chapter is pinned to Pi `0.99.2` at commit `005af57d88ee23b33778f343a9595b32e67ff788`. The primary files are `packages/ai/src/models.ts`, `types.ts`, `api/lazy.ts`, `api/simple-options.ts`, the Anthropic/OpenAI/Google/Bedrock API implementations, `utils/event-stream.ts`, `utils/provider-retry.ts`, `utils/overflow.ts`, and the provider factories under `packages/ai/src/providers/`.
 
 [Chapter 5: Tool system](ch05-tool-system.md)

@@ -5,7 +5,7 @@ translation_key: how-to-customize-system-prompt
 language: vi
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 ---
 
 Pi tách riêng project context, prompt nền đã chọn, phần prompt bổ sung và thay đổi theo từng lượt của extension. Hướng dẫn này chỉ ra nguồn của từng lớp và cách kiểm tra kết quả mà không dựa vào một quy tắc ưu tiên ngầm.
@@ -150,7 +150,7 @@ Chạy bằng `npx tsx inspect-system-prompt.ts`; ví dụ chủ ý bỏ qua res
 
 Fixture tùy chọn dưới đây tạo các file độc lập, không gọi provider, đồng thời kiểm tra thứ tự context, override trong cùng directory, prompt file của project đã trust và chưa trust, cách chọn nguồn tường minh theo kiểu CLI, output thực tế của builder và `session.reload()`.
 
-Chạy bằng `npx tsx verify-system-prompt.ts` trên Node `>=22.19.0` sau khi cài SDK bằng `npm install @earendil-works/pi-coding-agent@0.87.1`; cài thêm `tsx` và TypeScript.
+Chạy bằng `npx tsx verify-system-prompt.ts` trên Node `>=22.19.0` sau khi cài SDK bằng `npm install @earendil-works/pi-coding-agent@0.99.2`; cài thêm `tsx` và TypeScript.
 
 <Accordions type="single">
 <Accordion title="Fixture DefaultResourceLoader xác định và không cần secret">

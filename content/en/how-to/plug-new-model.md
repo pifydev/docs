@@ -4,9 +4,9 @@ description: Add a model through models.json or a Provider, and implement a stre
 translation_key: how-to-plug-new-model
 language: en
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/models.md"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/custom-provider.md"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/README.md#custom-providers"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/docs/models.md"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/docs/custom-provider.md"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/README.md#custom-providers"
 terms_used:
   - Models
   - Provider
@@ -16,7 +16,7 @@ terms_used:
   - AbortSignal
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 ---
 
 Most model additions describe an endpoint Pi already knows how to call. Start with `~/.pi/agent/models.json` or an Extension `ProviderConfig`; build a native `Provider` when you need provider-owned authentication or discovery; implement `ProviderStreams` only for a genuinely new wire protocol.
@@ -42,12 +42,12 @@ Do not revive the old process-global model/translator registry. Current applicat
 
 ## Prerequisites
 
-Pi `0.87.1` requires Node.js `>=22.19.0`. For the TypeScript examples, use ESM and install each package you import:
+Pi `0.99.2` requires Node.js `>=22.19.0`. For the TypeScript examples, use ESM and install each package you import:
 
 ```bash
 npm init -y
 npm pkg set type=module
-npm install @earendil-works/pi-ai@0.87.1 @earendil-works/pi-coding-agent@0.87.1
+npm install @earendil-works/pi-ai@0.99.2 @earendil-works/pi-coding-agent@0.99.2
 npm install --save-dev typescript tsx @types/node
 ```
 
@@ -137,7 +137,7 @@ Pi uses model metadata for selection, validation, request shaping, usage, and di
 
 Common completions compatibility switches cover `developer` roles, `reasoning_effort`, streaming usage and `finish_reason`, the max-token field, strict/grammar Tools, replay rules for Tool results or reasoning content, thinking format, caching, routing, and session affinity. Set only flags you can demonstrate against the server. Metadata has no general `streaming` or `toolUse` boolean: every `Provider` streams, and Tool support is proven by an actual Tool call.
 
-Image normalization also comes from model metadata. In `0.87.1`, `model.inputLimits.images.resize` is an optional per-model, per-field override applied at each point where a new image enters conversation history:
+Image normalization also comes from model metadata. In `0.99.2`, `model.inputLimits.images.resize` is an optional per-model, per-field override applied at each point where a new image enters conversation history:
 
 | Image ingress | Resize source | History effect |
 |---|---|---|
@@ -320,7 +320,7 @@ export default function nativeLocalProvider(pi: ExtensionAPI) {
 }
 ```
 
-`envApiKeyAuth()` checks a stored credential first, then the listed environment variables. For a custom resolver, implement the public `ApiKeyAuth.resolve({ ctx, credential, signal })` method and read environment values through `ctx.env()`. Its `AuthResult` can return request auth, provider-scoped `env`, and a source label. There is no public `AuthResolver` type in `0.87.1`; do not import or invent one. SDK callers can inspect resolved state with `Models.getAuth()`.
+`envApiKeyAuth()` checks a stored credential first, then the listed environment variables. For a custom resolver, implement the public `ApiKeyAuth.resolve({ ctx, credential, signal })` method and read environment values through `ctx.env()`. Its `AuthResult` can return request auth, provider-scoped `env`, and a source label. There is no public `AuthResolver` type in `0.99.2`; do not import or invent one. SDK callers can inspect resolved state with `Models.getAuth()`.
 
 Built-in factories follow the same contract. For example, `openaiProvider()` is exported from `@earendil-works/pi-ai/providers/openai`. Use a factory when its catalog, auth, and API mix already match your service; use `createProvider()` for your own composition.
 
@@ -356,7 +356,7 @@ interface ProviderStreams {
 }
 ```
 
-Source: pinned [`ProviderStreams`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/types.ts). The deferred-method parameter types and imports are omitted; import the published interface for the full contract.
+Source: pinned [`ProviderStreams`](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/types.ts). The deferred-method parameter types and imports are omitted; import the published interface for the full contract.
 
 `streamSimple()` is the provider-neutral entry point: it maps Pi reasoning levels, `toolChoice`, and optional thinking budgets before delegating to the adapter. A production adapter must preserve ordered `start`, indexed `text_*`, `thinking_*`, and `toolcall_*` events and finish with exactly one `done` or `error`. It must also report usage, classify context overflow, keep Tool-call IDs stable across replay, invoke request/response hooks, and stop network and parser work when `options.signal` aborts.
 
@@ -412,7 +412,7 @@ Run every check that applies before claiming support:
 | One retry | Local fixture | One `429` produces exactly two attempts, then content and `"stop"`. |
 | Delayed abort | Local fixture | The result is `"aborted"` and the connection closes without hanging. |
 
-`supportsMidConvoEffort` belongs in `AnthropicMessagesCompat` and defaults to `false`. For built-in models in the Pi 0.87.1 generated catalog, automatic detection lowercases `modelId` first, then strips one optional prefix matching `^~?anthropic/` (`anthropic/` or `~anthropic/`). Pi auto-enables the flag only when `provider` is exactly `anthropic` or `openrouter`. The normalized ID must match exactly `^claude-opus-5(?:-\d{8})?$` or `^claude-(?:fable|mythos)-5(?:[.-]1)(?:-\d{8})?$`. The exact supported model must still use a faithful Anthropic Messages transport; this is not support for all Anthropic-compatible providers or an API that merely imitates the Messages shape.
+`supportsMidConvoEffort` belongs in `AnthropicMessagesCompat` and defaults to `false`. For built-in models in the Pi 0.99.2 generated catalog, automatic detection lowercases `modelId` first, then strips one optional prefix matching `^~?anthropic/` (`anthropic/` or `~anthropic/`). Pi auto-enables the flag only when `provider` is exactly `anthropic` or `openrouter`. The normalized ID must match exactly `^claude-opus-5(?:-\d{8})?$` or `^claude-(?:fable|mythos)-5(?:[.-]1)(?:-\d{8})?$`. The exact supported model must still use a faithful Anthropic Messages transport; this is not support for all Anthropic-compatible providers or an API that merely imitates the Messages shape.
 
 The accepted normalized variants are `claude-opus-5`, optionally followed by `-YYYYMMDD`; `claude-fable-5.1` or `claude-fable-5-1`, each optionally dated; and `claude-mythos-5.1` or `claude-mythos-5-1`, each optionally dated.
 
@@ -705,7 +705,7 @@ For image-only requests, the OpenAI-compatible adapter follows this payload rule
 |---|---|---|
 | `OpenAI-compatible` | `omit empty text part` | `send image block` |
 
-This is the `0.87.1` adapter behavior, not an extra public option. A custom OpenAI-compatible adapter should preserve the image content without synthesizing an empty text item that the endpoint may reject.
+This is the `0.99.2` adapter behavior, not an extra public option. A custom OpenAI-compatible adapter should preserve the image content without synthesizing an empty text item that the endpoint may reject.
 
 | Symptom | Check |
 | --- | --- |

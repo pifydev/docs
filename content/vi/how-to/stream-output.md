@@ -4,12 +4,12 @@ description: Hiển thị text, thinking và tiến trình Tool từ event của
 translation_key: how-to-stream-output
 language: vi
 official_refs:
-  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/agent-session.ts'
-  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/modes/rpc/rpc-types.ts'
-  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/model-registry.ts'
+  - 'https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/agent-session.ts'
+  - 'https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/modes/rpc/rpc-types.ts'
+  - 'https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/model-registry.ts'
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 ---
 
 Subscribe vào `AgentSession` trước khi gọi `prompt()`. Các event của session cho phép CLI hoặc UI hiển thị partial output, công việc của Tool, retry và trạng thái cuối mà không phải đọc lại toàn bộ transcript.
@@ -22,10 +22,10 @@ Subscribe vào `AgentSession` trước khi gọi `prompt()`. Các event của se
 
 :::
 
-Các ví dụ dùng Node.js `>=22.19.0`, ESM và package phát hành ở phiên bản `0.87.1`:
+Các ví dụ dùng Node.js `>=22.19.0`, ESM và package phát hành ở phiên bản `0.99.2`:
 
 ```bash
-npm install @earendil-works/pi-coding-agent@0.87.1
+npm install @earendil-works/pi-coding-agent@0.99.2
 npm install --save-dev tsx typescript @types/node
 ```
 
@@ -262,7 +262,7 @@ RPC headless tách thao tác hủy khỏi việc dọn queue. Đây là shape ch
 }
 ```
 
-RPC `abort` hủy thao tác đang hoạt động—kể cả compaction thủ công đang chạy ở Pi 0.87.1—và chờ tới khi session idle rồi mới phản hồi. Công việc steering hoặc follow-up trong queue vẫn có thể tiếp tục trừ khi `clear_queue` loại bỏ nó, nên chỉ riêng response của abort không có nghĩa queue đã bị xóa.
+RPC `abort` hủy thao tác đang hoạt động—kể cả compaction thủ công đang chạy ở Pi 0.99.2—và chờ tới khi session idle rồi mới phản hồi. Công việc steering hoặc follow-up trong queue vẫn có thể tiếp tục trừ khi `clear_queue` loại bỏ nó, nên chỉ riêng response của abort không có nghĩa queue đã bị xóa.
 
 Đối với Escape tương tác, hãy gửi `clear_queue` trước `abort`, rồi khôi phục text `steering` và `followUp` được trả về trong editor phía client nếu phù hợp. Đảo thứ tự có thể khiến công việc trong queue bắt đầu khi `abort` còn đang chờ trạng thái idle.
 

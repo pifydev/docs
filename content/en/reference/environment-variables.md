@@ -4,11 +4,11 @@ description: Process flags, provider credentials, child markers, session metadat
 translation_key: reference-environment-variables
 language: en
 official_refs:
-  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/environment-variables.md'
-  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/providers.md'
+  - 'https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/docs/environment-variables.md'
+  - 'https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/docs/providers.md'
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 ---
 
 Pi uses environment variables in three distinct places: its own process configuration, authentication for a selected provider, and the environment of commands launched by the LLM-callable `bash` and `powershell` tools. Scope matters: a variable recognized by one provider is not automatically a Pi-wide setting.
@@ -23,7 +23,7 @@ Most process flags affect startup. Provider authentication is resolved when Pi a
 
 For Pi's built-in providers, credential order is an explicit CLI `--api-key` or runtime override, a matching stored `auth.json` API key or OAuth credential, the configured `models.json` `apiKey` (a literal or `$ENV` reference under that file's contract), then the built-in provider's ambient environment. Extension-defined providers may implement a different contract. Use `/login` to write the protected credential store instead of putting secrets in project files.
 
-| Provider | Environment credential recognized by 0.87.1 |
+| Provider | Environment credential recognized by 0.99.2 |
 |---|---|
 | Anthropic | `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_OAUTH_TOKEN`, `ANTHROPIC_API_KEY` |
 | Ant Ling, OpenAI, Azure OpenAI | `ANT_LING_API_KEY`, `OPENAI_API_KEY`, `AZURE_OPENAI_API_KEY` |
@@ -40,6 +40,8 @@ For Pi's built-in providers, credential order is an explicit CLI `--api-key` or 
 | GitHub Copilot | `COPILOT_GITHUB_TOKEN` |
 | Cloudflare AI Gateway and Workers AI | `CLOUDFLARE_API_KEY`; IDs are covered below |
 
+Anthropic can use workload identity federation when no API key or token is set. All three variables `ANTHROPIC_FEDERATION_RULE_ID`, `ANTHROPIC_ORGANIZATION_ID`, and `ANTHROPIC_IDENTITY_TOKEN_FILE` are required; the SDK exchanges the identity token for a short-lived access token and rereads the file during refresh. `ANTHROPIC_SERVICE_ACCOUNT_ID` and `ANTHROPIC_WORKSPACE_ID` are optional pass-through fields. Keep the token file fresh for a long session, and do not confuse these provider-scoped values with Pi-wide runtime flags.
+
 The following selected catalog entries distinguish direct API-key routes from subscription authentication. The credential column identifies the authentication mechanism for that provider route; subscription entries are not environment-variable names:
 
 | Model | Provider route | Credential path |
@@ -49,6 +51,9 @@ The following selected catalog entries distinguish direct API-key routes from su
 | `GPT-6 Luna` | `openai` | `OPENAI_API_KEY` |
 | `GPT-6 Sol` | `openai-codex` | `OpenAI Codex subscription` |
 | `GPT-6 Luna` | `openai-codex` | `OpenAI Codex subscription` |
+| `GPT-6.1 Sol` | `openai` | `OPENAI_API_KEY` or OpenAI `Sign in with ChatGPT` |
+| `GPT-6.1 Sol` | `azure-openai-responses` | `AZURE_OPENAI_API_KEY` plus Azure endpoint/deployment configuration |
+| `GPT-6.1 Sol` | `openai-codex` | legacy OpenAI Codex subscription route |
 | `Claude Opus 5.5` | `github-copilot` | `GitHub Copilot subscription` |
 | `GPT-6 Sol` | `github-copilot` | `GitHub Copilot subscription` |
 | `GPT-6 Luna` | `github-copilot` | `GitHub Copilot subscription` |
@@ -98,7 +103,7 @@ Use `--offline` or a supported truthy `PI_OFFLINE` value. Unset the variable to 
 
 `PI_HARDWARE_CURSOR=1` makes the TUI hardware cursor visible. `PI_TUI_ESC_TIMEOUT` accepts a positive finite number of milliseconds for distinguishing a lone Escape from a split Alt-key sequence; the default is 100 ms when `SSH_CONNECTION` or `SSH_TTY` exists and 10 ms otherwise.
 
-Pi auto-detects OSC 8 hyperlinks, an inline image protocol, and truecolor. Pi 0.87.1 exposes these exact advanced overrides:
+Pi auto-detects OSC 8 hyperlinks, an inline image protocol, and truecolor. Pi 0.99.2 exposes these exact advanced overrides:
 
 | Capability | Environment value | Matching JSON setting |
 |---|---|---|
@@ -132,7 +137,7 @@ Environment variables are strings, but Pi does not treat every non-empty string 
 
 ## Proxy and TLS
 
-Pi 0.87.1 configures an Undici `EnvHttpProxyAgent` for Pi-managed fetch traffic.
+Pi 0.99.2 configures an Undici `EnvHttpProxyAgent` for Pi-managed fetch traffic.
 
 | Variable | Behavior |
 |---|---|
@@ -142,13 +147,13 @@ Pi 0.87.1 configures an Undici `EnvHttpProxyAgent` for Pi-managed fetch traffic.
 
 Undici also recognizes lowercase forms and gives them precedence over uppercase forms. The global `httpProxy` setting fills `HTTP_PROXY` and `HTTPS_PROXY` only when they are unset. Provider SDKs such as AWS or Google may own separate transports, so these variables are not a guarantee for every extension or cloud client.
 
-`SSL_CERT_FILE` is not read or installed by Pi's published 0.87.1 transport. Configure custom certificate trust through the selected Node runtime or provider SDK and verify that route independently; do not assume this baseline variable changes Pi-managed TLS.
+`SSL_CERT_FILE` is not read or installed by Pi's published 0.99.2 transport. Configure custom certificate trust through the selected Node runtime or provider SDK and verify that route independently; do not assume this baseline variable changes Pi-managed TLS.
 
 ## Provider-specific variables
 
 ### Azure OpenAI
 
-Azure OpenAI Responses requires `AZURE_OPENAI_API_KEY` and either `AZURE_OPENAI_BASE_URL` or `AZURE_OPENAI_RESOURCE_NAME`. Optional controls are `AZURE_OPENAI_API_VERSION` and the comma-separated `AZURE_OPENAI_DEPLOYMENT_NAME_MAP`. The generic `OPENAI_ORG_ID` baseline variable is not consumed by the 0.87.1 OpenAI provider.
+Azure OpenAI Responses requires `AZURE_OPENAI_API_KEY` and either `AZURE_OPENAI_BASE_URL` or `AZURE_OPENAI_RESOURCE_NAME`. Optional controls are `AZURE_OPENAI_API_VERSION` and the comma-separated `AZURE_OPENAI_DEPLOYMENT_NAME_MAP`. The generic `OPENAI_ORG_ID` baseline variable is not consumed by the 0.99.2 OpenAI provider.
 
 ### Amazon Bedrock
 
@@ -173,7 +178,7 @@ The old `ANTHROPIC_BASE_URL` variable is also not a current built-in override. C
 
 ## Process markers and shell-tool metadata
 
-CLI and RPC entry points set `AI_AGENT=pi` and `PI_CODING_AGENT=true`. Child processes inherit them, but they are not session identifiers and an SDK embedding does not set them automatically. Published 0.87.1 does not emit the old `PI_PARENT_SESSION` marker.
+CLI and RPC entry points set `AI_AGENT=pi` and `PI_CODING_AGENT=true`. Child processes inherit them, but they are not session identifiers and an SDK embedding does not set them automatically. Published 0.99.2 does not emit the old `PI_PARENT_SESSION` marker.
 
 Pi can expose the following current session context to commands run by the LLM-callable `bash` and `powershell` tools:
 
@@ -186,6 +191,8 @@ Pi can expose the following current session context to commands run by the LLM-c
 | `PI_REASONING_LEVEL` | Effective level: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`; present only when `ctx.thinkingLevel` is truthy |
 
 Default local Bash and PowerShell operations launch a separate child process for each Tool call and use their respective command syntax. Custom operations instead delegate to their configured backend; that backend owns cancellation, cleanup, and whether any execution state persists. The wrapper first removes inherited values for all five session variables. `exposeSessionEnvironment` defaults to `true`, but injection requires an Agent/Extension execution context. `exposeSessionEnvironment: false` suppresses all five session fields even when that context exists. A standalone or custom invocation without that context does not receive them automatically. When injection occurs, the values are resolved before that shell-tool command, so model or reasoning changes affect the next command. The native `powershell` Tool is Windows-only. These variables are not injected into user-entered `!` or `!!` commands.
+
+The built-in `bash` and PowerShell Tools also publish programmatic `structuredContent`: combined stdout/stderr is bounded to 1 MiB, and longer output keeps the first and last 512 KiB around an omission marker. The result includes truncation metadata through `truncated` and, when available, `full_output_path`, plus `exit_code` and `wall_time_seconds`. This structured path does not promise unlimited terminal output; model-facing `content` has its own tighter line/byte truncation and points to the temporary full-output file when one was created.
 
 When those conditions are met, a custom shell tool created with `createBashTool()` or `createPowerShellTool()` exposes the metadata before `spawnHook`, so preserve the received process environment when adding fields. Without the context, or with exposure disabled, the hook receives an environment with these session fields removed. The existing Bash form remains:
 
@@ -227,7 +234,7 @@ export const isolatedBashTool = createBashTool(process.cwd(), {
 ## Pitfalls and security
 
 - Do not put API keys in committed shell files, `settings.json`, extension source, logs, prompts, or transcripts. Prefer `/login`, a secret manager, or narrowly scoped process injection; remember that child processes inherit exported values.
-- Current names are exact. `PI_HOME`, `PI_LOG_LEVEL`, `PI_PARENT_SESSION`, `GOOGLE_API_KEY`, `GOOGLE_VERTEX_API_KEY`, `GITHUB_TOKEN`, `OPENAI_ORG_ID`, `ANTHROPIC_BASE_URL`, and misspelled `CLOUDflare_*` names are not compatibility aliases in published 0.87.1.
+- Current names are exact. `PI_HOME`, `PI_LOG_LEVEL`, `PI_PARENT_SESSION`, `GOOGLE_API_KEY`, `GOOGLE_VERTEX_API_KEY`, `GITHUB_TOKEN`, `OPENAI_ORG_ID`, `ANTHROPIC_BASE_URL`, and misspelled `CLOUDflare_*` names are not compatibility aliases in published 0.99.2.
 - A stored provider credential and a configured `models.json` `apiKey` both take precedence over ambient variables. Log out or update the stored entry, and remove or change the configured key, before expecting a rotated shell key to win.
 - `PI_EXPERIMENTAL` is unrelated to provider authentication and is not a permission or “yolo” switch.
 - Do not print complete environment dumps while debugging. Inspect only non-secret markers or individual metadata fields, and treat `PI_SESSION_FILE` as sensitive local data.

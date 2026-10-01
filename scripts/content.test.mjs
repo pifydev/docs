@@ -378,6 +378,8 @@ test("release entry points publish the Pi 0.99.2 baseline and exact review autho
     [
       "content/en/index.mdx",
       "content/vi/index.mdx",
+      "content/en/quickstart.md",
+      "content/vi/quickstart.md",
       "content/en/help/faq.md",
       "content/vi/help/faq.md",
     ].map(async (relativePath) => ({
@@ -396,6 +398,16 @@ test("release entry points publish the Pi 0.99.2 baseline and exact review autho
     assert.ok(
       source.includes(releaseURL),
       `${relativePath} must link the official Pi 0.99.2 release`,
+    );
+  }
+
+  for (const { relativePath, source } of pages.filter(({ relativePath }) =>
+    relativePath.endsWith("quickstart.md"),
+  )) {
+    assert.match(
+      source,
+      /npm install @earendil-works\/pi-ai@0\.99\.2 --save-exact/,
+      `${relativePath} must pin the quickstart SDK install`,
     );
   }
 

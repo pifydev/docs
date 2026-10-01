@@ -6,11 +6,11 @@ language: en
 chapter: 6
 source_url: "https://www.dgzhuya.com/modules/ch06-messages"
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/types.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/types.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent-loop.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/messages.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/session-manager.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/types.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/types.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/agent-loop.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/messages.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/session-manager.ts"
 terms_used:
   - Message
   - AgentMessage
@@ -18,14 +18,14 @@ terms_used:
   - ToolCall
   - ToolResultMessage
 status: reviewed
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
 
 Chapter 5 ended with a `ToolResultMessage`: the model requested a Tool, Agent core validated and executed it, and the result re-entered the conversation. That explanation used the word _message_ at several different boundaries. A provider request, the Agent's live transcript, the Coding Agent's terminal view, and a resumed JSONL session do not all consume the same representation.
 
-This chapter follows one Bash command across those boundaries. The route exposes a reusable design: keep the richest useful source representation in the application, then derive the narrower model representation immediately before a call. Pi `0.87.1` implements that design with `Message`, extensible `AgentMessage`, Coding Agent `SessionEntry` records, `transformContext`, and `convertToLlm`.
+This chapter follows one Bash command across those boundaries. The route exposes a reusable design: keep the richest useful source representation in the application, then derive the narrower model representation immediately before a call. Pi `0.99.2` implements that design with `Message`, extensible `AgentMessage`, Coding Agent `SessionEntry` records, `transformContext`, and `convertToLlm`.
 
 ## 1. Opening: follow one Bash message
 
@@ -72,7 +72,7 @@ The message IR now includes `SystemMessage`, so prompt and Tool state travel wit
 
 ### The exact message and content shapes
 
-The following complete interface from `packages/ai/src/types.ts` at pinned commit `f07218c4` shows the user-side shape:
+The following complete interface from `packages/ai/src/types.ts` at pinned commit `005af57d4` shows the user-side shape:
 
 ```typescript
 export interface UserMessage {
@@ -166,7 +166,7 @@ export type ToolResultMessage<TDetails = JsonValue> =
 
 `toolCallId` must match the originating `ToolCall.id`; preserve that pairing when filtering or transforming the transcript. `details` remains available to the runtime and UI but provider encoders build the remote Tool result from content and linkage fields. `usage` can account for work done by the Tool itself. Tool availability is recorded on system messages through `toolsAdded` and `toolsRemoved`.
 
-In Pi 0.87.1, `ToolCall.arguments` is a `JsonObject`, and `ToolResultMessage.details` contains JSON-compatible data. Keep custom Tool inputs and persisted details serializable: encode dates as strings and keep functions, class instances, and process handles outside the transcript. The Tool's schema still determines which JSON argument shapes it accepts.
+In Pi 0.99.2, `ToolCall.arguments` is a `JsonObject`, and `ToolResultMessage.details` contains JSON-compatible data. Keep custom Tool inputs and persisted details serializable: encode dates as strings and keep functions, class instances, and process handles outside the transcript. The Tool's schema still determines which JSON argument shapes it accepts.
 
 `ToolResultMessage<TDetails = JsonValue>` is a conditional type. For a compatible detail type it exposes `details?: JsonRepresentation<TDetails>`; an incompatible type resolves to `never`. Use a concrete JSON-compatible detail type and handle an absent `details` value. The runtime `AgentToolResult<TDetails>` remains a separate generic contract; assigning a detail type there does not prove that it can be persisted as a Tool result message.
 
@@ -227,7 +227,7 @@ An Agent product has readers beyond the provider. A terminal wants command, outp
 
 Flattening all of that into `UserMessage.content` at creation time would make the model call easy and every later consumer poorer. A resumed UI could not recover the original exit code or decide how to render a summary. Keeping only custom objects would fail in the other direction because Pi AI accepts only the four shared roles.
 
-Pi therefore keeps richer runtime messages and projects them late. In Coding Agent `0.87.1`, the four application roles declared in `packages/coding-agent/src/core/messages.ts` are:
+Pi therefore keeps richer runtime messages and projects them late. In Coding Agent `0.99.2`, the four application roles declared in `packages/coding-agent/src/core/messages.ts` are:
 
 ```text
 AgentMessage
@@ -604,7 +604,7 @@ Before accepting a custom message path, test these invariants:
 
 ### The stored source and model projection serve different readers
 
-The baseline described “two readers”: the model and the functional layer. Pi `0.87.1` makes the storage boundary explicit enough to name three views:
+The baseline described “two readers”: the model and the functional layer. Pi `0.99.2` makes the storage boundary explicit enough to name three views:
 
 | View                  | Primary reader                                 | Shape                       | May be lossy?                                                        |
 | --------------------- | ---------------------------------------------- | --------------------------- | -------------------------------------------------------------------- |
@@ -636,4 +636,4 @@ The same route emits `message_start`, `message_update`, `message_end`, Tool exec
 
 > Before moving on, trace one `ToolCall` through its ordered `ToolResultMessage`, then through session persistence, `transformContext`, and the next `convertToLlm` pass. If every boundary and owner is clear, the event sequence in Chapter 7 has a concrete data path to attach to.
 
-Source review for this chapter is pinned to Pi `0.87.1` at commit `f07218c4d4bbc12bef056a7058c3dd49dfe41abe`. Primary paths are `packages/ai/src/types.ts`, `packages/ai/src/api/transform-messages.ts`, the provider API implementations under `packages/ai/src/api/`, `packages/agent/src/types.ts`, `packages/agent/src/agent-loop.ts`, `packages/agent/src/agent.ts`, `packages/coding-agent/src/core/messages.ts`, `packages/coding-agent/src/core/session-manager.ts`, `packages/coding-agent/src/core/sdk.ts`, `packages/coding-agent/src/core/agent-session.ts`, and `packages/coding-agent/src/core/extensions/runner.ts`.
+Source review for this chapter is pinned to Pi `0.99.2` at commit `005af57d88ee23b33778f343a9595b32e67ff788`. Primary paths are `packages/ai/src/types.ts`, `packages/ai/src/api/transform-messages.ts`, the provider API implementations under `packages/ai/src/api/`, `packages/agent/src/types.ts`, `packages/agent/src/agent-loop.ts`, `packages/agent/src/agent.ts`, `packages/coding-agent/src/core/messages.ts`, `packages/coding-agent/src/core/session-manager.ts`, `packages/coding-agent/src/core/sdk.ts`, `packages/coding-agent/src/core/agent-session.ts`, and `packages/coding-agent/src/core/extensions/runner.ts`.

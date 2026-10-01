@@ -1,27 +1,27 @@
 ---
 title: API reference
-description: A curated map of core and experimental Pi package entry points at version 0.87.1.
+description: A curated map of core and experimental Pi package entry points at version 0.99.2.
 translation_key: reference-api
 language: en
 official_refs:
-  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/types.ts'
-  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/settings-manager.ts'
-  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/extensions/types.ts'
-  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/modes/interactive/components/custom-editor.ts'
-  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/modes/rpc/rpc-types.ts'
-  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/utils/mime.ts'
-  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/client/src/index.ts'
-  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/client/README.md'
-  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/protocol/src/index.ts'
-  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/protocol/README.md'
-  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/server/src/index.ts'
-  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/server/README.md'
+  - 'https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/types.ts'
+  - 'https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/settings-manager.ts'
+  - 'https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/extensions/types.ts'
+  - 'https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/modes/interactive/components/custom-editor.ts'
+  - 'https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/modes/rpc/rpc-types.ts'
+  - 'https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/utils/mime.ts'
+  - 'https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/client/src/index.ts'
+  - 'https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/client/README.md'
+  - 'https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/protocol/src/index.ts'
+  - 'https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/protocol/README.md'
+  - 'https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/server/src/index.ts'
+  - 'https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/server/README.md'
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 ---
 
-This curated integration reference omits exhaustive specialist and UI exports. It targets upstream commit `f07218c4d4bbc12bef056a7058c3dd49dfe41abe`, the package roots at `0.87.1`, and Node.js `22.19` or newer.
+This curated integration reference omits exhaustive specialist and UI exports. It targets upstream commit `005af57d88ee23b33778f343a9595b32e67ff788`, the package roots at `0.99.2`, and Node.js `22.19` or newer.
 
 - `@earendil-works/pi-ai` owns provider collections, model metadata, authentication, messages, and LLM streams.
 - `@earendil-works/pi-agent-core` adds the agent loop, tool execution, state, queues, and lifecycle events.
@@ -202,7 +202,7 @@ const normalizedBudgets: Record<ResolvedGoogleThinkingLevel, number> = {
 void [options, normalizedBudgets];
 ```
 
-The following selected declarations preserve the exact optional member signatures published by Pi 0.87.1; they do not reproduce the interfaces' other members:
+The following selected declarations preserve the exact optional member signatures published by Pi 0.99.2; they do not reproduce the interfaces' other members:
 
 ```ts title="compatibility-types.ts"
 export interface OpenAICompletionsCompat {
@@ -220,7 +220,7 @@ export interface AnthropicMessagesCompat {
 
 `vllmPriority` belongs only to `OpenAICompletionsCompat`: lower values are handled earlier, the vLLM server default is `0`, and the field matters only with `--scheduling-policy priority`. It is off by default and is not set on the generated model catalog.
 
-`supportsMaxOutputTokens` belongs to `OpenAIResponsesCompat` and defaults to `true`; set it to `false` when a Responses-compatible gateway rejects `max_output_tokens`. `supportsMidConvoEffort` belongs to `AnthropicMessagesCompat` and defaults to `false`. For built-in models in the Pi 0.87.1 generated catalog, automatic detection lowercases `modelId` first, then strips one optional prefix matching `^~?anthropic/` (`anthropic/` or `~anthropic/`). Pi auto-enables the flag only when `provider` is exactly `anthropic` or `openrouter`. The normalized ID must match exactly `^claude-opus-5(?:-\d{8})?$` or `^claude-(?:fable|mythos)-5(?:[.-]1)(?:-\d{8})?$`. The exact supported model must still use a faithful Anthropic Messages transport; this is not support for all Anthropic-compatible providers or an API that merely imitates the Messages shape.
+`supportsMaxOutputTokens` belongs to `OpenAIResponsesCompat` and defaults to `true`; set it to `false` when a Responses-compatible gateway rejects `max_output_tokens`. `supportsMidConvoEffort` belongs to `AnthropicMessagesCompat` and defaults to `false`. For built-in models in the Pi 0.99.2 generated catalog, automatic detection lowercases `modelId` first, then strips one optional prefix matching `^~?anthropic/` (`anthropic/` or `~anthropic/`). Pi auto-enables the flag only when `provider` is exactly `anthropic` or `openrouter`. The normalized ID must match exactly `^claude-opus-5(?:-\d{8})?$` or `^claude-(?:fable|mythos)-5(?:[.-]1)(?:-\d{8})?$`. The exact supported model must still use a faithful Anthropic Messages transport; this is not support for all Anthropic-compatible providers or an API that merely imitates the Messages shape.
 
 The accepted normalized variants are `claude-opus-5`, optionally followed by `-YYYYMMDD`; `claude-fable-5.1` or `claude-fable-5-1`, each optionally dated; and `claude-mythos-5.1` or `claude-mythos-5-1`, each optionally dated.
 
@@ -252,7 +252,7 @@ console.log(context.tools?.[0]?.name);
 
 `AssistantMessage` content contains text, thinking, or tool-call blocks and carries usage, cost, stop reason, and optional error or deferred-response metadata. Persist opaque signatures unchanged when replaying a conversation.
 
-In Pi 0.87.1, `ToolCall.arguments` is a `JsonObject`, and `ToolResultMessage.details` contains JSON-compatible data. Keep custom Tool inputs and persisted details serializable: encode dates as strings and keep functions, class instances, and process handles outside the transcript. The Tool's schema still determines which JSON argument shapes it accepts.
+In Pi 0.99.2, `ToolCall.arguments` is a `JsonObject`, and `ToolResultMessage.details` contains JSON-compatible data. Keep custom Tool inputs and persisted details serializable: encode dates as strings and keep functions, class instances, and process handles outside the transcript. The Tool's schema still determines which JSON argument shapes it accepts.
 
 `ToolResultMessage<TDetails = JsonValue>` is a conditional type. For a compatible detail type it exposes `details?: JsonRepresentation<TDetails>`; an incompatible type resolves to `never`. Use a concrete JSON-compatible detail type and handle an absent `details` value. The runtime `AgentToolResult<TDetails>` remains a separate generic contract; assigning a detail type there does not prove that it can be persisted as a Tool result message.
 
@@ -514,7 +514,7 @@ Passing `entries` restores the parent-linked tree without enabling Pi file persi
 
 The package root exports `DEFAULT_COMPACTION_SETTINGS`, `shouldCompact()`, `compact()`, `generateSummary()`, `generateSummaryWithUsage()`, `generateBranchSummary()`, and the related public result, settings, preparation, and file-operation types. It does not export the internal `getSummarizationFailure()` helper. Built-in compaction, turn-prefix, and branch-summary generation nevertheless apply that check internally: a response ending with `stopReason: "length"` is incomplete and is not persisted as a summary checkpoint. Branch summary generation now requests at most 4,096 output tokens, further bounded by a smaller positive model limit.
 
-The `Settings` fragment below is a selected exact source-level internal `settings.json` shape; it is not exported or importable public API, while `SettingsManager` and selected settings types are the public importable surface of `@earendil-works/pi-coding-agent` 0.87.1.
+The `Settings` fragment below is a selected exact source-level internal `settings.json` shape; it is not exported or importable public API, while `SettingsManager` and selected settings types are the public importable surface of `@earendil-works/pi-coding-agent` 0.99.2.
 
 ```ts title="thinking-settings-types.ts"
 interface Settings {
@@ -724,7 +724,7 @@ Extensions can register additional flags, so `parseArgs()` retains unknown flags
 
 ## Experimental routed-service packages
 
-The following package-root exports are the current `0.87.1` boundary, not a stable remote-Agent recipe. Applications still own service contracts, transport authentication, Session discovery, worker lifecycle, and retry policy. Subpath exports such as `@earendil-works/pi-client/unix`, `@earendil-works/pi-server/unix`, and `@earendil-works/pi-server/testing` are separate from the roots summarized here.
+The following package-root exports are the current `0.99.2` boundary, not a stable remote-Agent recipe. Applications still own service contracts, transport authentication, Session discovery, worker lifecycle, and retry policy. Subpath exports such as `@earendil-works/pi-client/unix`, `@earendil-works/pi-server/unix`, and `@earendil-works/pi-server/testing` are separate from the roots summarized here.
 
 ### `@earendil-works/pi-client`
 

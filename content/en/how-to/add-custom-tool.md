@@ -4,8 +4,8 @@ description: Define a typed Tool, register it with agent core or Coding Agent, a
 translation_key: how-to-add-custom-tool
 language: en
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/README.md#tools"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/extensions.md#custom-tools"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/README.md#tools"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/docs/extensions.md#custom-tools"
 terms_used:
   - AgentTool
   - ToolDefinition
@@ -13,7 +13,7 @@ terms_used:
   - AbortSignal
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 ---
 
 This guide builds a typed `get_weather` Tool that the model can call during a turn. The example runs against a small in-memory data set, so you can test the Tool without an external service. The same execution contract works with a database or HTTP client once you pass through cancellation and keep credentials out of model-visible output.
@@ -36,12 +36,12 @@ Choose one product route for registration. A Coding Agent session combines `cust
 
 ## Prerequisites
 
-Pi `0.87.1` requires Node.js `>=22.19.0`. Start an ESM TypeScript project and install every package imported directly by the examples:
+Pi `0.99.2` requires Node.js `>=22.19.0`. Start an ESM TypeScript project and install every package imported directly by the examples:
 
 ```bash
 npm init -y
 npm pkg set type=module
-npm install @earendil-works/pi-ai@0.87.1 @earendil-works/pi-agent-core@0.87.1 @earendil-works/pi-coding-agent@0.87.1
+npm install @earendil-works/pi-ai@0.99.2 @earendil-works/pi-agent-core@0.99.2 @earendil-works/pi-coding-agent@0.99.2
 npm install --save-dev typescript tsx @types/node
 ```
 
@@ -160,7 +160,7 @@ execute: (
 
 Throw an `Error` when execution fails. Agent core catches it, emits `tool_execution_end` with `isError: true`, and creates an error `ToolResultMessage`. Return ordinary content only for success. Error messages are model-visible, so remove credentials, headers, private paths, and raw upstream response bodies before throwing.
 
-In Pi 0.87.1, `ToolCall.arguments` is a `JsonObject`, and `ToolResultMessage.details` contains JSON-compatible data. Keep custom Tool inputs and persisted details serializable: encode dates as strings and keep functions, class instances, and process handles outside the transcript. The Tool's schema still determines which JSON argument shapes it accepts.
+In Pi 0.99.2, `ToolCall.arguments` is a `JsonObject`, and `ToolResultMessage.details` contains JSON-compatible data. Keep custom Tool inputs and persisted details serializable: encode dates as strings and keep functions, class instances, and process handles outside the transcript. The Tool's schema still determines which JSON argument shapes it accepts.
 
 `ToolResultMessage<TDetails = JsonValue>` is a conditional type. For a compatible detail type it exposes `details?: JsonRepresentation<TDetails>`; an incompatible type resolves to `never`. Use a concrete JSON-compatible detail type and handle an absent `details` value. The runtime `AgentToolResult<TDetails>` remains a separate generic contract; assigning a detail type there does not prove that it can be persisted as a Tool result message.
 
@@ -370,7 +370,7 @@ Use active-Tool controls for session behavior, not as a substitute for authoriza
 
 Treat model arguments as untrusted even after schema validation. TypeBox checks shape, bounds, and literals; it cannot decide whether a customer ID, filesystem path, URL, or shell command is authorized. Recheck those rules next to the effect. An Extension `tool_call` handler may mutate `event.input`, and Pi does not revalidate after that mutation, so a mutating handler must preserve or recheck the schema invariants.
 
-Do not infer a permanent working directory from the built-in Tool factory argument. In Pi 0.87.1, `bash`, `edit`, `find`, `grep`, `ls`, `read`, and `write` use the live invocation `ctx.cwd` for working-directory and relative-path resolution, with their factory `cwd` only as the fallback when no execution context is present. A custom Tool still owns its authorization boundary: using the current context does not make an arbitrary path safe.
+Do not infer a permanent working directory from the built-in Tool factory argument. In Pi 0.99.2, `bash`, `edit`, `find`, `grep`, `ls`, `read`, and `write` use the live invocation `ctx.cwd` for working-directory and relative-path resolution, with their factory `cwd` only as the fallback when no execution context is present. A custom Tool still owns its authorization boundary: using the current context does not make an arbitrary path safe.
 
 For a Tool that reads an existing project file, resolve both the root and target through `realpath()` and then enforce containment. The following is application code, not a Pi helper:
 
@@ -475,7 +475,7 @@ Do not run `agent-session.ts` for this route. From the project root, first revie
 node --env-file=.env ./node_modules/@earendil-works/pi-coding-agent/dist/cli.js "What is the weather in Tokyo?"
 ```
 
-At interactive startup, approve the project-trust prompt only after reviewing the project resources; declining trust skips the project-local Extension. The pinned [Extensions guide](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/extensions.md#extension-locations) documents discovery locations, reload behavior, and the same trust boundary.
+At interactive startup, approve the project-trust prompt only after reviewing the project resources; declining trust skips the project-local Extension. The pinned [Extensions guide](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/docs/extensions.md#extension-locations) documents discovery locations, reload behavior, and the same trust boundary.
 
 Subscribe before calling `prompt()` when debugging the full loop. Log `tool_execution_start`, `tool_execution_update`, and `tool_execution_end`; redact the payloads if they can contain user data or credentials.
 

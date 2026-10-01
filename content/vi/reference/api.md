@@ -1,27 +1,27 @@
 ---
 title: Tham chiếu API
-description: Bản đồ chọn lọc các entry point của package Pi lõi và thử nghiệm ở phiên bản 0.87.1.
+description: Bản đồ chọn lọc các entry point của package Pi lõi và thử nghiệm ở phiên bản 0.99.2.
 translation_key: reference-api
 language: vi
 official_refs:
-  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/types.ts'
-  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/settings-manager.ts'
-  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/extensions/types.ts'
-  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/modes/interactive/components/custom-editor.ts'
-  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/modes/rpc/rpc-types.ts'
-  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/utils/mime.ts'
-  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/client/src/index.ts'
-  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/client/README.md'
-  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/protocol/src/index.ts'
-  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/protocol/README.md'
-  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/server/src/index.ts'
-  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/server/README.md'
+  - 'https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/types.ts'
+  - 'https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/settings-manager.ts'
+  - 'https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/extensions/types.ts'
+  - 'https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/modes/interactive/components/custom-editor.ts'
+  - 'https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/modes/rpc/rpc-types.ts'
+  - 'https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/utils/mime.ts'
+  - 'https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/client/src/index.ts'
+  - 'https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/client/README.md'
+  - 'https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/protocol/src/index.ts'
+  - 'https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/protocol/README.md'
+  - 'https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/server/src/index.ts'
+  - 'https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/server/README.md'
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 ---
 
-Tài liệu tham chiếu tích hợp có chọn lọc này không liệt kê toàn bộ export chuyên biệt và UI. Nội dung áp dụng cho upstream commit `f07218c4d4bbc12bef056a7058c3dd49dfe41abe`, các package root ở phiên bản `0.87.1` và Node.js `22.19` trở lên.
+Tài liệu tham chiếu tích hợp có chọn lọc này không liệt kê toàn bộ export chuyên biệt và UI. Nội dung áp dụng cho upstream commit `005af57d88ee23b33778f343a9595b32e67ff788`, các package root ở phiên bản `0.99.2` và Node.js `22.19` trở lên.
 
 - `@earendil-works/pi-ai` quản lý provider collection, metadata của model, authentication, message và LLM stream.
 - `@earendil-works/pi-agent-core` bổ sung agent loop, thực thi tool, state, queue và lifecycle event.
@@ -202,7 +202,7 @@ const normalizedBudgets: Record<ResolvedGoogleThinkingLevel, number> = {
 void [options, normalizedBudgets];
 ```
 
-Các declaration chọn lọc dưới đây giữ nguyên chữ ký member tùy chọn được Pi 0.87.1 phát hành; chúng không lặp lại những member khác của các interface:
+Các declaration chọn lọc dưới đây giữ nguyên chữ ký member tùy chọn được Pi 0.99.2 phát hành; chúng không lặp lại những member khác của các interface:
 
 ```ts title="compatibility-types.ts"
 export interface OpenAICompletionsCompat {
@@ -220,7 +220,7 @@ export interface AnthropicMessagesCompat {
 
 `vllmPriority` chỉ thuộc `OpenAICompletionsCompat`: giá trị thấp hơn được xử lý sớm hơn, mặc định của vLLM server là `0`, và field chỉ có ý nghĩa với `--scheduling-policy priority`. Tính năng này tắt theo mặc định và không được đặt trong generated model catalog.
 
-`supportsMaxOutputTokens` thuộc `OpenAIResponsesCompat` và mặc định là `true`; đặt thành `false` khi gateway tương thích Responses từ chối `max_output_tokens`. `supportsMidConvoEffort` thuộc `AnthropicMessagesCompat` và mặc định là `false`. Với model tích hợp sẵn trong generated catalog của Pi 0.87.1, automatic detection chuyển `modelId` thành chữ thường trước, sau đó bỏ một prefix tùy chọn khớp `^~?anthropic/` (`anthropic/` hoặc `~anthropic/`). Pi chỉ tự động bật cờ khi `provider` chính xác là `anthropic` hoặc `openrouter`. ID đã chuẩn hóa phải khớp chính xác `^claude-opus-5(?:-\d{8})?$` hoặc `^claude-(?:fable|mythos)-5(?:[.-]1)(?:-\d{8})?$`. Đúng model được hỗ trợ vẫn phải chạy trên transport Anthropic Messages trung thực; điều này không có nghĩa mọi provider tương thích Anthropic hoặc API chỉ bắt chước hình dạng Messages đều được hỗ trợ.
+`supportsMaxOutputTokens` thuộc `OpenAIResponsesCompat` và mặc định là `true`; đặt thành `false` khi gateway tương thích Responses từ chối `max_output_tokens`. `supportsMidConvoEffort` thuộc `AnthropicMessagesCompat` và mặc định là `false`. Với model tích hợp sẵn trong generated catalog của Pi 0.99.2, automatic detection chuyển `modelId` thành chữ thường trước, sau đó bỏ một prefix tùy chọn khớp `^~?anthropic/` (`anthropic/` hoặc `~anthropic/`). Pi chỉ tự động bật cờ khi `provider` chính xác là `anthropic` hoặc `openrouter`. ID đã chuẩn hóa phải khớp chính xác `^claude-opus-5(?:-\d{8})?$` hoặc `^claude-(?:fable|mythos)-5(?:[.-]1)(?:-\d{8})?$`. Đúng model được hỗ trợ vẫn phải chạy trên transport Anthropic Messages trung thực; điều này không có nghĩa mọi provider tương thích Anthropic hoặc API chỉ bắt chước hình dạng Messages đều được hỗ trợ.
 
 Các biến thể ID đã chuẩn hóa được chấp nhận gồm `claude-opus-5`, có thể kèm `-YYYYMMDD`; `claude-fable-5.1` hoặc `claude-fable-5-1`, mỗi ID có thể kèm ngày; và `claude-mythos-5.1` hoặc `claude-mythos-5-1`, mỗi ID có thể kèm ngày.
 
@@ -252,7 +252,7 @@ console.log(context.tools?.[0]?.name);
 
 Content của `AssistantMessage` gồm text, thinking hoặc tool-call block, kèm usage, cost, stop reason và metadata tùy chọn cho error hoặc deferred response. Khi replay conversation, hãy persist opaque signature nguyên vẹn.
 
-Trong Pi 0.87.1, `ToolCall.arguments` có kiểu `JsonObject`, còn `ToolResultMessage.details` chứa dữ liệu tương thích JSON. Giữ input và details cần lưu của custom Tool ở dạng tuần tự hóa được: mã hóa ngày thành chuỗi, để function, class instance và process handle ngoài transcript. Schema của Tool vẫn quyết định những dạng đối số JSON được chấp nhận.
+Trong Pi 0.99.2, `ToolCall.arguments` có kiểu `JsonObject`, còn `ToolResultMessage.details` chứa dữ liệu tương thích JSON. Giữ input và details cần lưu của custom Tool ở dạng tuần tự hóa được: mã hóa ngày thành chuỗi, để function, class instance và process handle ngoài transcript. Schema của Tool vẫn quyết định những dạng đối số JSON được chấp nhận.
 
 `ToolResultMessage<TDetails = JsonValue>` là kiểu có điều kiện. Với kiểu details tương thích, nó có `details?: JsonRepresentation<TDetails>`; kiểu không tương thích cho kết quả `never`. Dùng kiểu details cụ thể tương thích JSON và xử lý trường hợp không có `details`. `AgentToolResult<TDetails>` ở runtime vẫn là contract generic riêng; gán kiểu details ở đó không chứng minh dữ liệu có thể được lưu thành Tool result message.
 
@@ -514,7 +514,7 @@ Truyền `entries` sẽ khôi phục parent-linked tree mà không bật cơ ch�
 
 Package root export `DEFAULT_COMPACTION_SETTINGS`, `shouldCompact()`, `compact()`, `generateSummary()`, `generateSummaryWithUsage()`, `generateBranchSummary()` cùng các type public liên quan đến result, setting, preparation và file operation. Package không export helper nội bộ `getSummarizationFailure()`. Tuy vậy, các đường generation tích hợp sẵn cho compaction, turn-prefix và branch summary đều áp dụng phép kiểm tra đó bên trong: response kết thúc bằng `stopReason: "length"` là chưa hoàn chỉnh và không được lưu thành summary checkpoint. Branch summary generation hiện yêu cầu tối đa 4.096 output token, đồng thời bị giới hạn thêm bởi model limit dương nhỏ hơn.
 
-Fragment `Settings` dưới đây là shape source-level internal của `settings.json` được trích chính xác; nó không được export hay import như public API, còn `SettingsManager` và các settings type chọn lọc là public surface có thể import của `@earendil-works/pi-coding-agent` 0.87.1.
+Fragment `Settings` dưới đây là shape source-level internal của `settings.json` được trích chính xác; nó không được export hay import như public API, còn `SettingsManager` và các settings type chọn lọc là public surface có thể import của `@earendil-works/pi-coding-agent` 0.99.2.
 
 ```ts title="thinking-settings-types.ts"
 interface Settings {
@@ -724,7 +724,7 @@ Extension có thể đăng ký thêm flag, vì vậy `parseArgs()` giữ unknown
 
 ## Các package routed-service thử nghiệm
 
-Các package-root export dưới đây là boundary hiện hành của `0.87.1`, không phải công thức remote Agent ổn định. Ứng dụng vẫn sở hữu service contract, authentication cho transport, Session discovery, vòng đời worker và retry policy. Những subpath export như `@earendil-works/pi-client/unix`, `@earendil-works/pi-server/unix` và `@earendil-works/pi-server/testing` tách khỏi các root được tóm tắt ở đây.
+Các package-root export dưới đây là boundary hiện hành của `0.99.2`, không phải công thức remote Agent ổn định. Ứng dụng vẫn sở hữu service contract, authentication cho transport, Session discovery, vòng đời worker và retry policy. Những subpath export như `@earendil-works/pi-client/unix`, `@earendil-works/pi-server/unix` và `@earendil-works/pi-server/testing` tách khỏi các root được tóm tắt ở đây.
 
 ### `@earendil-works/pi-client`
 

@@ -4,12 +4,12 @@ description: Render text, thinking, and Tool progress from AgentSession events w
 translation_key: how-to-stream-output
 language: en
 official_refs:
-  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/agent-session.ts'
-  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/modes/rpc/rpc-types.ts'
-  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/model-registry.ts'
+  - 'https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/agent-session.ts'
+  - 'https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/modes/rpc/rpc-types.ts'
+  - 'https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/model-registry.ts'
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 ---
 
 Subscribe to an `AgentSession` before calling `prompt()`. Its events let a CLI or UI render partial output, Tool work, retries, and final state without repeatedly reading the complete transcript.
@@ -22,10 +22,10 @@ Subscribe to an `AgentSession` before calling `prompt()`. Its events let a CLI o
 
 :::
 
-The examples target Node.js `>=22.19.0`, ESM, and the published package at `0.87.1`:
+The examples target Node.js `>=22.19.0`, ESM, and the published package at `0.99.2`:
 
 ```bash
-npm install @earendil-works/pi-coding-agent@0.87.1
+npm install @earendil-works/pi-coding-agent@0.99.2
 npm install --save-dev tsx typescript @types/node
 ```
 
@@ -262,7 +262,7 @@ Headless RPC separates cancellation from queue disposal. The exact public `clear
 }
 ```
 
-RPC `abort` cancels the active operation—including an active manual compaction in Pi 0.87.1—and waits for the session to become idle before it responds. Queued steering or follow-up work can continue unless `clear_queue` removes it, so an abort response alone does not mean the queue was discarded.
+RPC `abort` cancels the active operation—including an active manual compaction in Pi 0.99.2—and waits for the session to become idle before it responds. Queued steering or follow-up work can continue unless `clear_queue` removes it, so an abort response alone does not mean the queue was discarded.
 
 For interactive Escape, send `clear_queue` before `abort`, then restore the returned `steering` and `followUp` text in the client editor if appropriate. Reversing that order can let queued work start while `abort` is waiting for idle.
 

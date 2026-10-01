@@ -93,6 +93,252 @@ function tableRowContaining(markdown, key) {
   return row;
 }
 
+const activeReleaseAuditPages = [
+  "quickstart.md",
+  "ch01-overview.md",
+  "ch02-three-layer-arch.md",
+  "ch03-agent-loop.md",
+  "ch04-model-invocation.md",
+  "ch05-tool-system.md",
+  "ch06-messages.md",
+  "ch07-event-driven.md",
+  "how-to/add-custom-tool.md",
+  "how-to/plug-new-model.md",
+  "how-to/stream-output.md",
+  "how-to/customize-system-prompt.md",
+  "reference/api.md",
+  "reference/configuration.md",
+  "reference/environment-variables.md",
+];
+
+function assertSameParagraph(markdown, needle, patterns, context) {
+  const paragraph = paragraphContaining(markdown, needle);
+  for (const pattern of patterns) {
+    assert.match(paragraph, pattern, `${context} must relate ${pattern}`);
+  }
+  return paragraph;
+}
+
+test("active release contracts use Pi 0.99.2 capabilities and authority", async () => {
+  const releaseCommit = "005af57d88ee23b33778f343a9595b32e67ff788";
+
+  for (const locale of ["en", "vi"]) {
+    const pages = new Map(
+      await Promise.all(
+        activeReleaseAuditPages.map(async (relativePath) => [
+          relativePath,
+          await readFile(
+            new URL(`content/${locale}/${relativePath}`, repositoryRoot),
+            "utf8",
+          ),
+        ]),
+      ),
+    );
+
+    for (const [relativePath, source] of pages) {
+      const context = `${locale} ${relativePath}`;
+      assert.match(
+        source,
+        /^last_updated: '2026-10-01'$/m,
+        `${context} must use the current review date`,
+      );
+      assert.doesNotMatch(
+        source,
+        /github\.com\/earendil-works\/pi\/(?:blob|tree)\/main\//,
+        `${context} must not use a floating Pi source link`,
+      );
+      for (const [, ref] of source.matchAll(
+        /github\.com\/earendil-works\/pi\/(?:blob|tree)\/([^/]+)\//g,
+      )) {
+        assert.equal(
+          ref,
+          releaseCommit,
+          `${context} must pin every Pi source link to the reviewed commit`,
+        );
+      }
+      for (const [command] of source.matchAll(/npm install[^\r\n`]*/g)) {
+        for (const [packageArgument] of command.matchAll(
+          /@earendil-works\/pi-[a-z-]+(?:@[^\s]+)?/g,
+        )) {
+          assert.match(
+            packageArgument,
+            /@0\.99\.2$/,
+            `${context} must exactly pin every current Pi install command`,
+          );
+        }
+      }
+    }
+
+    const quickstart = pages.get("quickstart.md");
+    assert.match(quickstart, /Pi `0\.99\.2`/);
+    assert.match(quickstart, /005af57d/);
+    assert.match(
+      quickstart,
+      /npm install @earendil-works\/pi-ai@0\.99\.2 --save-exact/,
+    );
+
+    const models = pages.get("ch04-model-invocation.md");
+    assertSameParagraph(
+      models,
+      "gpt-6.1-sol",
+      [/OpenAI/, /Azure OpenAI Responses/, /OpenAI Codex/, /default/i],
+      `${locale} model route boundary`,
+    );
+    assertSameParagraph(
+      models,
+      locale === "en"
+        ? "chat, image, and classifier"
+        : "chat, image và classifier",
+      [
+        /generated/i,
+        /ModelRuntime/,
+        /generateImages/,
+        /classify/,
+        /not chat|không phải chat/i,
+      ],
+      `${locale} model catalog boundary`,
+    );
+    assertSameParagraph(
+      models,
+      "Jev",
+      [/classifier/i, /routing/i, /quality guarantee|đảm bảo chất lượng/i],
+      `${locale} Jev boundary`,
+    );
+    assert.match(models, /provider_stream_event/);
+
+    const tools = pages.get("ch05-tool-system.md");
+    assertSameParagraph(
+      tools,
+      locale === "en" ? "`outputSchema` declares" : "`outputSchema` khai báo",
+      [
+        /structuredContent/,
+        /isError/,
+        /content/,
+        /model-facing|model nhìn thấy/i,
+      ],
+      `${locale} structured Tool result boundary`,
+    );
+    assertSameParagraph(
+      tools,
+      locale === "en" ? "`ToolExposure` controls" : "`ToolExposure` kiểm soát",
+      [
+        /direct/,
+        /model-only/,
+        /codemode/,
+        /deferred/,
+        /hidden/,
+        /namespace/,
+        /annotations/,
+      ],
+      `${locale} Tool exposure boundary`,
+    );
+    assertSameParagraph(
+      tools,
+      "ctx.executeTool()",
+      [
+        /prepareLoadout/,
+        /parentToolCallId/,
+        /nestedCalls/,
+        /bounded|giới hạn/i,
+      ],
+      `${locale} nested Tool call boundary`,
+    );
+
+    const events = pages.get("ch07-event-driven.md");
+    assertSameParagraph(
+      events,
+      locale === "en"
+        ? "`provider_stream_event` carries"
+        : "`provider_stream_event` mang",
+      [/parsed|đã parse/i, /before|trước/i, /normaliz/i, /read-only/i],
+      `${locale} provider event boundary`,
+    );
+    assertSameParagraph(
+      events,
+      locale === "en"
+        ? "The `input` hook also exposes `streamingBehavior`"
+        : "Hook `input` chỉ expose `streamingBehavior`",
+      [
+        /prompt/,
+        /steer/,
+        /follow-?up|follow_up/,
+        /disposition/,
+        /handled/,
+        /queued/,
+        /started/,
+      ],
+      `${locale} RPC input disposition boundary`,
+    );
+    assert.match(events, /parentToolCallId/);
+
+    const configuration = pages.get("reference/configuration.md");
+    assertSameParagraph(
+      configuration,
+      locale === "en"
+        ? "The `system` theme is the default"
+        : "`system` theme là default",
+      [
+        /theme/i,
+        /default/i,
+        /3-digit/,
+        /6-digit/,
+        /OKLCH/,
+        /OKHSL/,
+        /ANSI 256/,
+        /variable/,
+        /empty string|chuỗi rỗng/i,
+      ],
+      `${locale} theme boundary`,
+    );
+    assertSameParagraph(
+      configuration,
+      locale === "en"
+        ? "`defaultTools` selects Tools at startup"
+        : "`defaultTools` chọn Tool lúc khởi động",
+      [
+        /\+name/,
+        /-name/,
+        /reload/i,
+        /newly added|mới thêm/i,
+        /does not disable|không tắt/i,
+      ],
+      `${locale} default Tool merge boundary`,
+    );
+    for (const identifier of [
+      "builtin:mcp",
+      "builtin:llama.cpp",
+      "builtin:codemode",
+      "builtin:tool-search",
+      "fullscreenWheelScrollLines",
+    ]) {
+      assert.ok(
+        configuration.includes(identifier),
+        `${locale} config must include ${identifier}`,
+      );
+    }
+
+    const environment = pages.get("reference/environment-variables.md");
+    for (const name of [
+      "ANTHROPIC_FEDERATION_RULE_ID",
+      "ANTHROPIC_ORGANIZATION_ID",
+      "ANTHROPIC_IDENTITY_TOKEN_FILE",
+      "ANTHROPIC_SERVICE_ACCOUNT_ID",
+      "ANTHROPIC_WORKSPACE_ID",
+    ]) {
+      assert.ok(
+        environment.includes(name),
+        `${locale} environment reference must include ${name}`,
+      );
+    }
+    assertSameParagraph(
+      environment,
+      "1 MiB",
+      [/bash/, /PowerShell/, /structuredContent/, /truncat/i, /metadata/i],
+      `${locale} shell structured output boundary`,
+    );
+  }
+});
+
 function firstDatedChangelogBlock(markdown) {
   const datedHeadings = [...markdown.matchAll(/^## (\d{4}-\d{2}-\d{2})$/gm)];
   assert.ok(datedHeadings.length > 0, "changelog must contain a dated block");

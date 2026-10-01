@@ -50,7 +50,7 @@ const releaseContractTestTitles = Object.freeze({
   toolTerminalBaseline:
     "Tool and terminal pages use the current baseline metadata",
   promptRpcBaseline:
-    "Pi 0.87.1 prompt and RPC pages use current source pins and review date",
+    "Pi 0.99.2 prompt and RPC pages use current source pins and review date",
   sourceRefParser:
     "parses the exact GitHub source ref for published Pi release links",
 });
@@ -1074,7 +1074,12 @@ function sdkInstallCommands(markdown) {
   );
 }
 
-function assertSdkInstallPackages(source, scope, context) {
+function assertSdkInstallPackages(
+  source,
+  scope,
+  context,
+  expectedVersion = "0.99.2",
+) {
   const importedPackages = new Set(
     [
       ...source.matchAll(
@@ -1099,8 +1104,8 @@ function assertSdkInstallPackages(source, scope, context) {
   for (const [, packageName, version] of installedPackages) {
     assert.equal(
       version,
-      "0.87.1",
-      `${context} must pin ${packageName} to 0.87.1`,
+      expectedVersion,
+      `${context} must pin ${packageName} to ${expectedVersion}`,
     );
   }
 }
@@ -1551,7 +1556,7 @@ function validateModelConfigurationContracts(localized) {
   }
 
   for (const locale of ["en", "vi"]) {
-    const context = locale + " Pi 0.87.1 model and image contracts";
+    const context = locale + " Pi 0.99.2 model and image contracts";
     const headings =
       locale === "en"
         ? {
@@ -1819,14 +1824,14 @@ function validateModelConfigurationContracts(localized) {
   });
 }
 
-test("0.87.1 models and image limits preserve bilingual technical relationships", async () => {
+test("0.99.2 models and image limits preserve bilingual technical relationships", async () => {
   validateModelConfigurationContracts(await readModelConfigurationContent());
 });
 
-test("0.87.1 models and image limits match the installed catalog and runtime defaults", async () => {
+test("0.99.2 models and image limits match the installed catalog and runtime defaults", async () => {
   const release = await readReleaseFixture();
-  assert.equal(release.packageVersion, "0.87.1");
-  assert.equal(release.commit, "f07218c4d4bbc12bef056a7058c3dd49dfe41abe");
+  assert.equal(release.packageVersion, "0.99.2");
+  assert.equal(release.commit, "005af57d88ee23b33778f343a9595b32e67ff788");
 
   const { builtinModels } = await import("@earendil-works/pi-ai/providers/all");
   const models = builtinModels();
@@ -1863,7 +1868,7 @@ models.getAll();
 `,
       ],
     ]),
-    "Pi 0.87.1 public Models catalog API",
+    "Pi 0.99.2 public Models catalog API",
   );
 
   const activeDocs = await Promise.all(
@@ -1880,6 +1885,9 @@ models.getAll();
     );
   }
   const required = [
+    ["openai", "gpt-6.1-sol", "GPT-6.1 Sol"],
+    ["azure-openai-responses", "gpt-6.1-sol", "GPT-6.1 Sol"],
+    ["openai-codex", "gpt-6.1-sol", "GPT-6.1 Sol"],
     ["anthropic", "claude-opus-5-5", "Claude Opus 5.5"],
     ["openai", "gpt-6-sol", "GPT-6 Sol"],
     ["openai", "gpt-6-luna", "GPT-6 Luna"],
@@ -1906,6 +1914,7 @@ models.getAll();
       repositoryRoot,
     )
   );
+  assert.equal(resolver.defaultModelPerProvider["openai-codex"], "gpt-6.1-sol");
   assert.equal(resolver.defaultModelPerProvider.xai, "grok-4.7");
 
   const resizeCore = await readFile(
@@ -1941,7 +1950,7 @@ models.getAll();
   );
 });
 
-test("0.87.1 models and image limits use the per-model profile at every image ingress", async () => {
+test("0.99.2 models and image limits use the per-model profile at every image ingress", async () => {
   const [agentSession, readTool, toolResults] = await Promise.all(
     [
       "node_modules/@earendil-works/pi-coding-agent/dist/core/agent-session.js",
@@ -1951,7 +1960,7 @@ test("0.87.1 models and image limits use the per-model profile at every image in
   );
   assert.match(
     agentSession,
-    /_normalizePromptImages[\s\S]*?resizeOptions: this\.model\?\.inputLimits\?\.images\?\.resize/,
+    /_normalizePromptImages[\s\S]*?resizeOptions: this\._limitsModel\(\)\?\.inputLimits\?\.images\?\.resize/,
   );
   assert.match(
     readTool,
@@ -1959,7 +1968,7 @@ test("0.87.1 models and image limits use the per-model profile at every image in
   );
   assert.match(
     agentSession,
-    /afterToolCall[\s\S]*?const resizeOptions = this\.model\?\.inputLimits\?\.images\?\.resize;[\s\S]*?normalizeToolResultImages/,
+    /afterToolCall[\s\S]*?const resizeOptions = this\._limitsModel\(\)\?\.inputLimits\?\.images\?\.resize;[\s\S]*?normalizeToolResultImages/,
   );
   assert.match(
     toolResults,
@@ -1967,7 +1976,7 @@ test("0.87.1 models and image limits use the per-model profile at every image in
   );
 });
 
-test("0.87.1 models and image limits preserve adapter and split-turn edge behavior", async () => {
+test("0.99.2 models and image limits preserve adapter and split-turn edge behavior", async () => {
   const [openAiCompletions, compaction, changelog] = await Promise.all(
     [
       "node_modules/@earendil-works/pi-ai/dist/api/openai-completions.js",
@@ -1993,7 +2002,7 @@ test("0.87.1 models and image limits preserve adapter and split-turn edge behavi
   );
 });
 
-test("0.87.1 models and image limits reject missing and invalid CLI modes", () => {
+test("0.99.2 models and image limits reject missing and invalid CLI modes", () => {
   const cli = fileURLToPath(
     new URL(
       "node_modules/@earendil-works/pi-coding-agent/dist/cli.js",
@@ -2015,7 +2024,7 @@ test("0.87.1 models and image limits reject missing and invalid CLI modes", () =
   assert.match(invalid.stderr, /Invalid mode "invalid"/);
 });
 
-test("0.87.1 models and image limits mutation guards reject wrong routes and edge semantics", async () => {
+test("0.99.2 models and image limits mutation guards reject wrong routes and edge semantics", async () => {
   const localized = await readModelConfigurationContent();
   validateModelConfigurationContracts(localized);
   const mutations = [
@@ -2581,7 +2590,7 @@ test("0.86.0 provider and tool contracts are explained in paired guides, API ref
   }
 });
 
-test("0.86.0 provider and tool contracts pages pin current sources and review date", async () => {
+test("0.99.2 provider and tool contracts pages pin current sources and review date", async () => {
   const release = await readReleaseFixture();
   for (const filename of [
     "ch04-model-invocation.md",
@@ -2594,7 +2603,7 @@ test("0.86.0 provider and tool contracts pages pin current sources and review da
     for (const { locale, source } of await readLocalizedContent(filename)) {
       const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---/.exec(source)?.[1];
       assert.ok(frontmatter, `${locale} ${filename} frontmatter`);
-      assert.match(frontmatter, /^last_updated: '2026-09-23'$/m);
+      assert.match(frontmatter, /^last_updated: '2026-10-01'$/m);
       assert.deepEqual(
         invalidPiSourceLinks([{ filename, source }], release),
         [],
@@ -2682,7 +2691,7 @@ test("0.86.0 provider and tool contracts mutation guards reject broken relations
   }
 });
 
-test("0.86.0 provider and tool contracts provider examples typecheck against public 0.87.1 declarations", async () => {
+test("0.99.2 provider and tool contracts provider examples typecheck against public 0.99.2 declarations", async () => {
   const examples = [];
   for (const filename of ["how-to/plug-new-model.md", "reference/api.md"]) {
     for (const { locale, source } of await readLocalizedContent(filename)) {
@@ -2724,7 +2733,7 @@ test("0.86.0 provider and tool contracts provider examples typecheck against pub
   );
 });
 
-test("0.86.0 provider and tool contracts Tool examples typecheck against public 0.87.1 declarations", async () => {
+test("0.99.2 provider and tool contracts Tool examples typecheck against public 0.99.2 declarations", async () => {
   const files = new Map();
   for (const { locale, source } of await readLocalizedContent(
     "how-to/add-custom-tool.md",
@@ -3473,7 +3482,7 @@ test("0.87.0 session context and lifecycle preserves stable bilingual boundary r
   validateLifecycleTechnicalContracts(await readLifecycleScopedContent());
 });
 
-test("0.87.0 session context and lifecycle examples typecheck against Pi 0.87.1", async () => {
+test("0.99.2 session context and lifecycle examples typecheck against installed declarations", async () => {
   const localized = await readLifecycleScopedContent();
   const virtualSources = [];
   const parity = new Map();
@@ -3523,7 +3532,7 @@ test("0.87.0 session context and lifecycle examples typecheck against Pi 0.87.1"
   );
   assertVirtualTypeScriptCompiles(
     virtualSources,
-    "published lifecycle examples must compile against installed 0.87.1 declarations",
+    "published lifecycle examples must compile against installed 0.99.2 declarations",
   );
 });
 
@@ -3637,15 +3646,15 @@ function validateLowLevelLoopExamples(localized) {
 
   assertVirtualTypeScriptCompiles(
     virtualSources,
-    "published low-level loop examples must compile against installed 0.87.1 declarations",
+    "published low-level loop examples must compile against installed 0.99.2 declarations",
   );
 }
 
-test("0.87.1 low-level loop examples preserve system transcript state and compile", async () => {
+test("0.99.2 low-level loop examples preserve system transcript state and compile", async () => {
   validateLowLevelLoopExamples(await readLifecycleScopedContent());
 });
 
-test("0.87.1 CompactionEntry examples match the installed public declaration", async () => {
+test("0.99.2 CompactionEntry examples match the installed public declaration", async () => {
   const localized = await readLifecycleScopedContent();
   const expectedProperties = [
     ["type", false, '"compaction"'],
@@ -3699,11 +3708,11 @@ test("0.87.1 CompactionEntry examples match the installed public declaration", a
 
   assertVirtualTypeScriptCompiles(
     virtualSources,
-    "published CompactionEntry declarations must compile against installed 0.87.1 types",
+    "published CompactionEntry declarations must compile against installed 0.99.2 types",
   );
 });
 
-test("0.87.1 actionable boundaries publish the hard-exit and recovery order", async () => {
+test("0.99.2 actionable boundaries publish the hard-exit and recovery order", async () => {
   const localized = await readLifecycleScopedContent();
   const expected = [
     "turn_end + outcome=completed + continue=true + context.canContinue=true -> next provider request",
@@ -3734,7 +3743,7 @@ test("0.87.1 actionable boundaries publish the hard-exit and recovery order", as
   }
 });
 
-test("installed Pi 0.87.1 enforces hard turn exits before the recovery boundary", async () => {
+test("installed Pi 0.99.2 enforces hard turn exits before the recovery boundary", async () => {
   const {
     DefaultResourceLoader,
     ModelRuntime,
@@ -5322,7 +5331,7 @@ function assertCurrentRollupAccuracy(entryBody, locale, context) {
   return structures;
 }
 
-test("the first bilingual changelog entry is the structured Pi 0.87.1 documentation rollup", async () => {
+test("the historical bilingual changelog preserves the structured Pi 0.87.1 documentation rollup", async () => {
   const references = await readLocalizedContent("changelog.md");
   const requiredReleaseTokens = [
     "TranscriptContext",
@@ -5407,14 +5416,9 @@ test("the first bilingual changelog entry is the structured Pi 0.87.1 documentat
   ];
   const structures = [];
   for (const { locale, source } of references) {
-    const context = `${locale} first changelog entry`;
+    const context = `${locale} historical Pi 0.87.1 changelog entry`;
     const headings = currentRollupHeadings[locale];
-    assert.equal(
-      source.match(/^## ([^\r\n]+)$/m)?.[1],
-      "2026-09-23",
-      `${context} must be dated 2026-09-23`,
-    );
-    assert.match(source, /last_updated: '2026-09-23'/);
+    assert.match(source, /last_updated: '2026-10-01'/);
     const entry = extractMarkdownSection(source, "## 2026-09-23", context);
     for (const tag of ["v0.85.1", "v0.86.0", "v0.86.1", "v0.87.0", "v0.87.1"]) {
       assert.ok(
@@ -5441,17 +5445,17 @@ test("the first bilingual changelog entry is the structured Pi 0.87.1 documentat
   assert.deepEqual(structures[0], structures[1]);
 });
 
-test("first bilingual changelog accuracy guard rejects migration and scope regressions", async () => {
+test("historical Pi 0.87.1 changelog accuracy guard rejects migration and scope regressions", async () => {
   const [{ source }] = await readLocalizedContent("changelog.md");
   const entry = extractMarkdownSection(
     source,
     "## 2026-09-23",
-    "EN current rollup mutation baseline",
+    "EN historical Pi 0.87.1 rollup mutation baseline",
   );
   assertCurrentRollupAccuracy(
     entry.body,
     "en",
-    "EN current rollup mutation baseline",
+    "EN historical Pi 0.87.1 rollup mutation baseline",
   );
   const mutations = [
     ["`TranscriptContext`", "`Context`"],
@@ -5486,7 +5490,7 @@ test("first bilingual changelog accuracy guard rejects migration and scope regre
   }
 });
 
-test("first bilingual changelog guard rejects deleted or reordered reliability topics", async () => {
+test("historical Pi 0.87.1 changelog guard rejects deleted or reordered reliability topics", async () => {
   for (const { locale, source } of await readLocalizedContent("changelog.md")) {
     const context = `${locale} rollup topic mutations`;
     const entry = extractMarkdownSection(source, "## 2026-09-23", context);
@@ -5600,7 +5604,7 @@ function assertRollupPublicationScope(entryBody, locale, context) {
   }
 }
 
-test("first bilingual changelog distinguishes publication scope and includes GPT-6 Astra", async () => {
+test("historical Pi 0.87.1 changelog distinguishes publication scope and includes GPT-6 Astra", async () => {
   for (const { locale, source } of await readLocalizedContent("changelog.md")) {
     const context = `${locale} rollup publication scope`;
     const entry = extractMarkdownSection(source, "## 2026-09-23", context);
@@ -5613,7 +5617,7 @@ test("first bilingual changelog distinguishes publication scope and includes GPT
   }
 });
 
-test("first bilingual changelog publication guard allows rewrites and rejects known overclaim fragments", async () => {
+test("historical Pi 0.87.1 changelog publication guard allows rewrites and rejects known overclaim fragments", async () => {
   const rewrites = {
     en: {
       published:
@@ -5673,7 +5677,7 @@ test("first bilingual changelog publication guard allows rewrites and rejects kn
   }
 });
 
-test("first bilingual changelog scope checks leave unrestricted wording to editorial review", async () => {
+test("historical Pi 0.87.1 changelog scope checks leave unrestricted wording to editorial review", async () => {
   const editorialExamples = {
     en: "The chapters are fully migrated and the guides are not yet migrated",
     vi: "Các chương dự kiến hoàn tất migration trong các commit tiếp theo",
@@ -6422,7 +6426,7 @@ test("Chapter 11 compile fixture aborts and drains a stalled Agent before removi
   }
 });
 
-test("Pi 0.87.1 SDK install recipes omit the fixed 0.85.0 packaging workaround", async () => {
+test("Pi 0.99.2 SDK install recipes omit the fixed 0.85.0 packaging workaround", async () => {
   const guideContracts = [
     {
       path: "how-to/add-custom-tool.md",
@@ -6437,29 +6441,18 @@ test("Pi 0.87.1 SDK install recipes omit the fixed 0.85.0 packaging workaround",
       headings: { en: "## Prerequisites", vi: "## Điều kiện cần" },
     },
     {
-      path: "how-to/persist-sessions.md",
-      beforeHeadings: {
-        en: "## The session model",
-        vi: "## Mô hình session",
-      },
-    },
-    {
       path: "how-to/customize-system-prompt.md",
       headings: {
         en: "## 5. Inspect the effective prompt",
         vi: "## 5. Kiểm tra prompt thực tế",
       },
     },
-    {
-      path: "how-to/host-session-runtime.md",
-      beforeHeadings: { en: "## Outcome", vi: "## Kết quả" },
-    },
   ];
   for (const guideContract of guideContracts) {
     for (const { locale, source } of await readLocalizedContent(
       guideContract.path,
     )) {
-      const context = `${locale} ${guideContract.path} Pi 0.87.1 SDK install`;
+      const context = `${locale} ${guideContract.path} Pi 0.99.2 SDK install`;
       const scope = guideContract.headings
         ? extractMarkdownSection(
             source,
@@ -6489,6 +6482,36 @@ test("Pi 0.87.1 SDK install recipes omit the fixed 0.85.0 packaging workaround",
   }
 });
 
+test("historical/deferred Pi 0.87.1 session guides retain their audited SDK install contract", async () => {
+  const guideContracts = [
+    {
+      path: "how-to/persist-sessions.md",
+      beforeHeadings: {
+        en: "## The session model",
+        vi: "## Mô hình session",
+      },
+    },
+    {
+      path: "how-to/host-session-runtime.md",
+      beforeHeadings: { en: "## Outcome", vi: "## Kết quả" },
+    },
+  ];
+
+  for (const guideContract of guideContracts) {
+    for (const { locale, source } of await readLocalizedContent(
+      guideContract.path,
+    )) {
+      const context = `${locale} ${guideContract.path} historical/deferred Pi 0.87.1 SDK install`;
+      const scope = extractMarkdownPreamble(
+        source,
+        guideContract.beforeHeadings[locale],
+        context,
+      );
+      assertSdkInstallPackages(source, scope, context, "0.87.1");
+    }
+  }
+});
+
 test("SDK install recipes reject extra Pi packages on continuation lines", () => {
   const source =
     'import { createAgentSession } from "@earendil-works/pi-coding-agent";';
@@ -6499,8 +6522,8 @@ test("SDK install recipes reject extra Pi packages on continuation lines", () =>
   ]) {
     const scope = [
       `\`\`\`${language}`,
-      `npm install @earendil-works/pi-coding-agent@0.87.1 ${continuation}`,
-      "  @earendil-works/pi-server@0.87.1",
+      `npm install @earendil-works/pi-coding-agent@0.99.2 ${continuation}`,
+      "  @earendil-works/pi-server@0.99.2",
       "```",
     ].join("\n");
     assert.throws(
@@ -6522,25 +6545,25 @@ test("SDK install recipes recognize and pin required packages on continuation li
   ]) {
     const scope = [
       `\`\`\`${language}`,
-      `npm install @earendil-works/pi-ai@0.87.1 ${continuation}`,
-      "  @earendil-works/pi-coding-agent@0.87.1",
+      `npm install @earendil-works/pi-ai@0.99.2 ${continuation}`,
+      "  @earendil-works/pi-coding-agent@0.99.2",
       "```",
     ].join("\r\n");
     assert.doesNotThrow(() =>
       assertSdkInstallPackages(source, scope, language),
     );
-    for (const version of ["0.87.0", "^0.87.1", "0.87.10"]) {
+    for (const version of ["0.99.1", "^0.99.2", "0.99.20"]) {
       assert.throws(
         () =>
           assertSdkInstallPackages(
             source,
             scope.replace(
-              "pi-coding-agent@0.87.1",
+              "pi-coding-agent@0.99.2",
               `pi-coding-agent@${version}`,
             ),
             language,
           ),
-        /must pin @earendil-works\/pi-coding-agent to 0\.87\.1/,
+        /must pin @earendil-works\/pi-coding-agent to 0\.99\.2/,
       );
     }
   }
@@ -6550,9 +6573,9 @@ test("SDK install recipes keep following commands and prose outside the install 
   const source =
     'import { createAgentSession } from "@earendil-works/pi-coding-agent";';
   for (const scope of [
-    "```bash\nnpm install @earendil-works/pi-coding-agent@0.87.1 \\\n  --save-exact\nnpm view @earendil-works/pi-server@0.87.1\n```\nThe old npm install @earendil-works/pi-server@0.85.0 command is obsolete.",
-    "Install with `npm install @earendil-works/pi-coding-agent@0.87.1`, then run `npm view @earendil-works/pi-server@0.87.1`.",
-    "```bash\nnpm install @earendil-works/pi-coding-agent@0.87.1 && npm view @earendil-works/pi-server@0.87.1\n```",
+    "```bash\nnpm install @earendil-works/pi-coding-agent@0.99.2 \\\n  --save-exact\nnpm view @earendil-works/pi-server@0.99.2\n```\nThe old npm install @earendil-works/pi-server@0.85.0 command is obsolete.",
+    "Install with `npm install @earendil-works/pi-coding-agent@0.99.2`, then run `npm view @earendil-works/pi-server@0.99.2`.",
+    "```bash\nnpm install @earendil-works/pi-coding-agent@0.99.2 && npm view @earendil-works/pi-server@0.99.2\n```",
   ]) {
     assert.doesNotThrow(() =>
       assertSdkInstallPackages(source, scope, "command boundary"),
@@ -6571,7 +6594,7 @@ test("SDK install recipes accept quoted package arguments", () => {
     for (const quote of quotes) {
       const scope = [
         `\`\`\`${language}`,
-        `npm install --save-exact ${quote}@earendil-works/pi-coding-agent@0.87.1${quote}`,
+        `npm install --save-exact ${quote}@earendil-works/pi-coding-agent@0.99.2${quote}`,
         "```",
       ].join("\n");
       assert.doesNotThrow(() =>
@@ -6592,7 +6615,7 @@ test("SDK install recipes ignore shell comments without stripping quoted hashes"
   ]) {
     const unquotedScope = [
       `\`\`\`${language}`,
-      `npm install @earendil-works/pi-coding-agent@0.87.1 ${comment} @earendil-works/pi-server@0.87.1 "unmatched quote in comment`,
+      `npm install @earendil-works/pi-coding-agent@0.99.2 ${comment} @earendil-works/pi-server@0.99.2 "unmatched quote in comment`,
       "```",
     ].join("\n");
     assert.doesNotThrow(() =>
@@ -6600,7 +6623,7 @@ test("SDK install recipes ignore shell comments without stripping quoted hashes"
     );
     const scope = [
       `\`\`\`${language}`,
-      `npm install --registry="https://registry.example/#mirror;cache" "@earendil-works/pi-coding-agent@0.87.1" ${comment} @earendil-works/pi-server@0.87.1`,
+      `npm install --registry="https://registry.example/#mirror;cache" "@earendil-works/pi-coding-agent@0.99.2" ${comment} @earendil-works/pi-server@0.99.2`,
       "```",
     ].join("\n");
     assert.doesNotThrow(() =>
@@ -6611,12 +6634,12 @@ test("SDK install recipes ignore shell comments without stripping quoted hashes"
         assertSdkInstallPackages(
           source,
           scope.replace(
-            "pi-coding-agent@0.87.1",
-            "pi-coding-agent@0.87.1#invalid",
+            "pi-coding-agent@0.99.2",
+            "pi-coding-agent@0.99.2#invalid",
           ),
           language,
         ),
-      /must pin @earendil-works\/pi-coding-agent to 0\.87\.1/,
+      /must pin @earendil-works\/pi-coding-agent to 0\.99\.2/,
     );
   }
 });
@@ -6627,7 +6650,7 @@ test("SDK install recipes preserve Bash and PowerShell hashes within unquoted ar
   for (const language of ["bash", "powershell", "pwsh"]) {
     const scope = [
       `\`\`\`${language}`,
-      "npm install --cache=/tmp/build#1 @earendil-works/pi-coding-agent@0.87.1",
+      "npm install --cache=/tmp/build#1 @earendil-works/pi-coding-agent@0.99.2",
       "```",
     ].join("\n");
     assert.doesNotThrow(() =>
@@ -7497,7 +7520,7 @@ test("both replaceable session runtime guides preserve the ten-step lifecycle an
 
 function assertDeterministicPageReleaseAuthority(
   source,
-  { locale, filename, release },
+  { locale, filename, release, historicalRelease },
 ) {
   const context = `${locale} ${filename}`;
   const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---/.exec(source)?.[1];
@@ -7505,12 +7528,12 @@ function assertDeterministicPageReleaseAuthority(
   assert.match(
     frontmatter,
     /^last_updated: '2026-09-23'$/m,
-    `${context} must record the current review date`,
+    `${context} must retain its historical/deferred review date`,
   );
   assert.deepEqual(
-    invalidPiSourceLinks([{ filename, source }], release),
+    invalidPiSourceLinks([{ filename, source }], historicalRelease),
     [],
-    `${context} must use current Pi source authority`,
+    `${context} must retain its audited Pi 0.87.1 source authority`,
   );
   assert.doesNotMatch(
     source,
@@ -7518,12 +7541,12 @@ function assertDeterministicPageReleaseAuthority(
     `${context} must not retain active Pi 0.85 authority`,
   );
   assert.ok(
-    source.includes(`\`${release.tag}\``),
-    `${context} must name the current release tag`,
+    source.includes(`\`${historicalRelease.tag}\``),
+    `${context} must name the audited historical release tag`,
   );
   assert.ok(
-    source.includes(`\`${release.commit}\``),
-    `${context} must name the current release commit`,
+    source.includes(`\`${historicalRelease.commit}\``),
+    `${context} must name the audited historical release commit`,
   );
 
   const chapter = filename === "ch11-testing-evaluation.md";
@@ -7572,18 +7595,23 @@ function assertDeterministicPageReleaseAuthority(
   );
 
   if (!chapter) {
-    assertSdkInstallPackages(example, source, context);
+    assertSdkInstallPackages(example, source, context, "0.87.1");
   }
 }
 
-test("deterministic displayed examples use current release dependencies and fixture authority", async () => {
+test("historical/deferred deterministic pages retain Pi 0.87.1 authority while examples compile on 0.99.2", async () => {
   const release = await readReleaseFixture();
+  const historicalRelease = {
+    packageVersion: "0.87.1",
+    tag: "v0.87.1",
+    commit: "f07218c4d4bbc12bef056a7058c3dd49dfe41abe",
+  };
   for (const filename of [
     "ch11-testing-evaluation.md",
     "how-to/test-agent-deterministically.md",
   ]) {
     for (const { locale, source } of await readLocalizedContent(filename)) {
-      const options = { locale, filename, release };
+      const options = { locale, filename, release, historicalRelease };
       const context = `${locale} ${filename}`;
       assertDeterministicPageReleaseAuthority(source, options);
 
@@ -8389,8 +8417,8 @@ test(releaseContractTestTitles.toolTerminalBaseline, async () => {
       );
       assert.match(
         source,
-        /last_updated:\s*["']2026-09-23["']/,
-        `${locale} ${relativePath} must record the Pi 0.87.1 review date`,
+        /last_updated:\s*["']2026-10-01["']/,
+        `${locale} ${relativePath} must record the Pi 0.99.2 review date`,
       );
       const links = piSourceLinks([{ filename: relativePath, source }]);
       for (const { link } of links) {
@@ -8824,15 +8852,15 @@ test(releaseContractTestTitles.promptRpcBaseline, async () => {
       );
       assert.match(
         source,
-        /last_updated:\s*["']2026-09-23["']/,
-        `${locale} ${relativePath} must record the Pi 0.87.1 review date`,
+        /last_updated:\s*["']2026-10-01["']/,
+        `${locale} ${relativePath} must record the Pi 0.99.2 review date`,
       );
       for (const { link } of piSourceLinks([
         { filename: relativePath, source },
       ])) {
         assert.ok(
           isPublishedReleaseSourceLink(link, release),
-          `${locale} ${relativePath} must pin Pi source links to 0.87.1`,
+          `${locale} ${relativePath} must pin Pi source links to 0.99.2`,
         );
       }
     }
@@ -9210,7 +9238,7 @@ test("all model docs separate generated-catalog detection from verified custom-m
   const localeContracts = {
     en: {
       automaticDetection: [
-        /built-in models?[^.]*Pi 0\.87\.1 generated catalog/i,
+        /built-in models?[^.]*Pi 0\.99\.2 generated catalog/i,
         /automatic detection[^.]*lowercases `modelId` first[^.]*then strips/i,
         /only when `provider` is exactly `anthropic` or `openrouter`\./,
       ],
@@ -9224,11 +9252,11 @@ test("all model docs separate generated-catalog detection from verified custom-m
       exactProviders:
         /only when `provider` is exactly `anthropic` or `openrouter`\./,
       overbroadProhibition:
-        /Outside that Pi 0\.87\.1 provider\/ID set[^.]*do not manually opt in/i,
+        /Outside that Pi 0\.99\.2 provider\/ID set[^.]*do not manually opt in/i,
     },
     vi: {
       automaticDetection: [
-        /model tích hợp sẵn[^.]*generated catalog của Pi 0\.87\.1/i,
+        /model tích hợp sẵn[^.]*generated catalog của Pi 0\.99\.2/i,
         /automatic detection[^.]*chuyển `modelId` thành chữ thường trước[^.]*sau đó bỏ/i,
         /chỉ tự động bật[^.]*`provider` chính xác là `anthropic` hoặc `openrouter`\./i,
       ],
@@ -9242,7 +9270,7 @@ test("all model docs separate generated-catalog detection from verified custom-m
       exactProviders:
         /chỉ tự động bật[^.]*`provider` chính xác là `anthropic` hoặc `openrouter`\./i,
       overbroadProhibition:
-        /Ngoài tập provider\/ID của Pi 0\.87\.1[^.]*không bật thủ công/i,
+        /Ngoài tập provider\/ID của Pi 0\.99\.2[^.]*không bật thủ công/i,
     },
   };
   const exactIdPatterns = [
@@ -9299,7 +9327,7 @@ test("all model docs separate generated-catalog detection from verified custom-m
   }
 });
 
-test("both model guides record the Pi 0.87.1 review date in frontmatter", async () => {
+test("both model guides record the Pi 0.99.2 review date in frontmatter", async () => {
   const guides = await readLocalizedContent("how-to/plug-new-model.md");
 
   for (const { locale, source } of guides) {
@@ -9313,8 +9341,8 @@ test("both model guides record the Pi 0.87.1 review date in frontmatter", async 
 
     assert.deepEqual(
       reviewDates,
-      ["2026-09-23"],
-      `${locale} model guide must record exactly one Pi 0.87.1 review date`,
+      ["2026-10-01"],
+      `${locale} model guide must record exactly one Pi 0.99.2 review date`,
     );
   }
 });
@@ -9660,21 +9688,87 @@ test("both environment locales preserve Bash guidance and add concrete PowerShel
   assert.deepEqual(structures[0], structures[1]);
 });
 
-test("active content satisfies the published Pi migration contract", async () => {
+test("active and explicitly deferred content satisfy their published Pi authority contracts", async () => {
   const release = await readReleaseFixture();
   const activeSources = await readActiveSources();
+  const historicalRelease = {
+    tag: "v0.87.1",
+    commit: "f07218c4d4bbc12bef056a7058c3dd49dfe41abe",
+  };
+  const historicalDeferredSuffixes = new Set([
+    "ch08-context-engineering.md",
+    "ch09-compaction.md",
+    "ch10-session.md",
+    "ch11-testing-evaluation.md",
+    "how-to/host-session-runtime.md",
+    "how-to/persist-sessions.md",
+    "how-to/run-pi-evals.md",
+    "how-to/test-agent-deterministically.md",
+    ...pi0871BilingualAuditSuffixes.filter((suffix) =>
+      suffix.startsWith("course/"),
+    ),
+  ]);
+  const currentSources = [];
+  const historicalDeferredSources = [];
+
+  for (const entry of activeSources) {
+    const normalizedFilename = entry.filename.replaceAll("\\", "/");
+    const suffix = /content\/(?:en|vi)\/(.+)$/.exec(normalizedFilename)?.[1];
+    if (suffix && historicalDeferredSuffixes.has(suffix)) {
+      assert.match(
+        entry.source,
+        /^last_updated:\s*["']2026-09-23["']$/m,
+        `${entry.filename} must retain its historical/deferred review date`,
+      );
+      historicalDeferredSources.push(entry);
+    } else {
+      currentSources.push(entry);
+    }
+  }
+
+  assert.equal(
+    historicalDeferredSources.length,
+    historicalDeferredSuffixes.size * 2,
+    "every explicitly deferred Pi 0.87.1 page must exist in both locales",
+  );
   const staleFiles = activeSources
     .filter(({ source }) => /0\.84\.2|a470b121/.test(source))
     .map(({ filename }) => filename);
-  const invalidSourceLinks = invalidPiSourceLinks(activeSources, release);
+  const currentAuthoritySources = currentSources.map((entry) => {
+    if (!entry.filename.endsWith("changelog.md")) return entry;
+    const datedHeadings = [
+      ...entry.source.matchAll(/^## \d{4}-\d{2}-\d{2}$/gm),
+    ];
+    assert.ok(
+      datedHeadings.length >= 2,
+      `${entry.filename} must preserve current and historical changelog sections`,
+    );
+    return { ...entry, source: entry.source.slice(0, datedHeadings[1].index) };
+  });
+  const invalidCurrentSourceLinks = invalidPiSourceLinks(
+    currentAuthoritySources,
+    release,
+  );
+  const invalidHistoricalSourceLinks = invalidPiSourceLinks(
+    historicalDeferredSources,
+    historicalRelease,
+  );
 
   assert.deepEqual(
-    { staleFiles, invalidSourceLinks },
-    { staleFiles: [], invalidSourceLinks: [] },
+    {
+      staleFiles,
+      invalidCurrentSourceLinks,
+      invalidHistoricalSourceLinks,
+    },
+    {
+      staleFiles: [],
+      invalidCurrentSourceLinks: [],
+      invalidHistoricalSourceLinks: [],
+    },
   );
 });
 
-test("Chapter 3 preserves the Pi 0.87.1 post-turn steering order", async () => {
+test("Chapter 3 preserves the Pi 0.99.2 post-turn steering order", async () => {
   const chapters = await readLocalizedContent("ch03-agent-loop.md");
 
   for (const { locale, source } of chapters) {
@@ -9949,7 +10043,7 @@ test("stale current-baseline scanner normalizes CRLF before occurrence blocks", 
   );
 });
 
-test("Pi 0.87.1 bilingual audit ledger covers every public pair with file evidence", async () => {
+test("historical Pi 0.87.1 bilingual audit ledger covers every public pair with file evidence", async () => {
   const ledger = await readFile(
     new URL("docs/translation-review/2026-09-23-pi-0871.md", repositoryRoot),
     "utf8",
@@ -10145,23 +10239,23 @@ test("active docs contain no stale Pi 0.85.0 baseline", async () => {
   assert.deepEqual(findStaleCurrentBaselineOccurrences(activeSources), []);
 });
 
-test("opening chapters describe the Pi 0.87.1 package and transcript boundaries", async () => {
-  const commit = "f07218c4d4bbc12bef056a7058c3dd49dfe41abe";
+test("opening chapters describe the Pi 0.99.2 package and transcript boundaries", async () => {
+  const commit = "005af57d88ee23b33778f343a9595b32e67ff788";
   const overviews = await readLocalizedContent("ch01-overview.md");
   const architectures = await readLocalizedContent("ch02-three-layer-arch.md");
 
   for (const { locale, source } of overviews) {
     assert.match(source, new RegExp(commit, "g"));
-    assert.match(source, /Package version\s+\| `0\.87\.1`/);
+    assert.match(source, /Package version\s+\| `0\.99\.2`/);
     assert.match(source, locale === "en" ? /\| Chapter 11 / : /\| Chương 11 /);
   }
 
   for (const { locale, source } of architectures) {
     assert.match(source, /├── chord\//);
     assert.match(source, /├── durable\//);
-    assert.match(source, /"@earendil-works\/pi-agent-core": "\^0\.87\.1"/);
-    assert.match(source, /"@earendil-works\/pi-ai": "\^0\.87\.1"/);
-    assert.match(source, /"@earendil-works\/pi-tui": "\^0\.87\.1"/);
+    assert.match(source, /"@earendil-works\/pi-agent-core": "\^0\.99\.2"/);
+    assert.match(source, /"@earendil-works\/pi-ai": "\^0\.99\.2"/);
+    assert.match(source, /"@earendil-works\/pi-tui": "\^0\.99\.2"/);
 
     const agentTypesFence = extractTypeScriptFenceContaining(
       source,
@@ -10552,7 +10646,7 @@ test("current API boundaries are accurate across chapters and public entry point
   assert.match(repositoryGlossary, /`--print \/ -p`/);
 });
 
-test("compaction guidance follows the canonical 0.87.1 session projection", async () => {
+test("historical/deferred Pi 0.87.1 compaction guidance preserves its canonical session projection", async () => {
   const compacted = await readLocalizedContent("ch09-compaction.md");
 
   for (const { source } of compacted) {
@@ -10721,7 +10815,7 @@ test("detects invalid Pi source refs without a release version claim", () => {
   ]);
 });
 
-test("bilingual semantic source links pin the Pi 0.87.1 implementation paths", async () => {
+test("bilingual semantic source links pin the Pi 0.99.2 implementation paths", async () => {
   const { commit } = await readReleaseFixture();
   const sourceBase = `https://github.com/earendil-works/pi/blob/${commit}/`;
   const contracts = [
@@ -10738,6 +10832,33 @@ test("bilingual semantic source links pin the Pi 0.87.1 implementation paths", a
         },
       ],
     },
+  ];
+
+  for (const contract of contracts) {
+    for (const { locale, source } of await readLocalizedContent(
+      contract.path,
+    )) {
+      const markdownLinks = [
+        ...source.matchAll(/\[([^\]]+)]\((https:\/\/github\.com\/[^)]+)\)/g),
+      ].map((match) => ({ label: match[1], target: match[2] }));
+      for (const expected of contract.links) {
+        assert.ok(
+          markdownLinks.some(
+            (link) =>
+              expected.label.test(link.label) &&
+              link.target === expected.target,
+          ),
+          `${locale} ${contract.path} must pin ${expected.target}`,
+        );
+      }
+    }
+  }
+});
+
+test("historical/deferred Pi 0.87.1 semantic source links retain their audited implementation paths", async () => {
+  const sourceBase =
+    "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/";
+  const contracts = [
     {
       path: "ch08-context-engineering.md",
       links: [
@@ -10776,14 +10897,14 @@ test("bilingual semantic source links pin the Pi 0.87.1 implementation paths", a
               expected.label.test(link.label) &&
               link.target === expected.target,
           ),
-          `${locale} ${contract.path} must pin ${expected.target}`,
+          `${locale} ${contract.path} must retain ${expected.target}`,
         );
       }
     }
   }
 });
 
-test("0.85.0 source links point to the published tag or release commit", async () => {
+test("0.99.2 source links point to the published tag or release commit", async () => {
   const release = await readReleaseFixture();
   const activeSources = await readActiveSources();
   const releaseClaimSources = activeSources.filter(({ source }) =>
@@ -10796,7 +10917,7 @@ test("0.85.0 source links point to the published tag or release commit", async (
   if (releaseClaimSources.length > 0) {
     assert.ok(
       publishedReleaseSourceLinks.length > 0,
-      "0.85.0 claims require at least one source link pinned to the published tag or release commit",
+      "0.99.2 claims require at least one source link pinned to the published tag or release commit",
     );
   }
 });
@@ -10834,7 +10955,7 @@ function assertCourseEvalReleaseAuthority(sources) {
   }
 }
 
-test("Course comparisons and eval guidance use Pi 0.87.1 authority", async () => {
+test("historical/deferred Course comparisons and eval guidance retain Pi 0.87.1 authority", async () => {
   const sources = [];
   for (const locale of ["en", "vi"]) {
     const courseDirectory = new URL(

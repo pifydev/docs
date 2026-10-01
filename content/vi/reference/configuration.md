@@ -4,15 +4,15 @@ description: File setting, quy tắc merge, ranh giới trust, các nhóm settin
 translation_key: reference-configuration
 language: vi
 official_refs:
-  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/settings.md'
-  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/models.md'
-  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/settings-manager.ts'
+  - 'https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/docs/settings.md'
+  - 'https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/docs/models.md'
+  - 'https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/settings-manager.ts'
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 ---
 
-Pi đọc setting JSON khi khởi động và khi reload resource. Reference này mô tả `@earendil-works/pi-coding-agent` 0.87.1 trên Node.js 22.19 trở lên.
+Pi đọc setting JSON khi khởi động và khi reload resource. Reference này mô tả `@earendil-works/pi-coding-agent` 0.99.2 trên Node.js 22.19 trở lên.
 
 ## File setting và thứ tự ưu tiên
 
@@ -85,7 +85,7 @@ Model resolver cung cấp fallback khi cả lựa chọn tường minh lẫn tr�
 |---|---|---|
 | `xai` | `session mới` | `grok-4.7` |
 
-Đây là default cho xAI session mới hoặc trường hợp cần default resolution trong `0.87.1`. Nó không thay thế model được chọn qua `--model`, chọn tương tác, cấu hình bằng `defaultModel` hoặc khôi phục từ session được resume.
+Đây là default cho xAI session mới hoặc trường hợp cần default resolution trong `0.99.2`. Nó không thay thế model được chọn qua `--model`, chọn tương tác, cấu hình bằng `defaultModel` hoặc khôi phục từ session được resume.
 
 `modelThinkingLevels` lưu thinking level khởi động theo từng model với khóa `provider/modelId`; hãy cấu hình qua `/settings` → Default thinking level per model hoặc sửa JSON thủ công. Giá trị khớp theo model chọn level khởi động của model đó, còn `defaultThinkingLevel` vẫn là global fallback. `thinkingBudgets` là setting riêng để cung cấp token budget cho provider hoặc compatible model có hỗ trợ.
 
@@ -138,9 +138,7 @@ Radius model discovery dùng ba lớp: catalog offline tích hợp sẵn có nga
 
 ### Chọn tool
 
-`defaultTools` chọn built-in tool lúc khởi động. Khi bỏ qua setting này, chính xác `read`, `bash`, `edit` và `write` là các mặc định được bật. Các built-in khác có thể chọn là `powershell`, `grep`, `find` và `ls`; `powershell` là shell Tool Windows native tùy chọn và không tự động được thêm vào tập mặc định. Array rỗng bỏ các built-in mặc định nhưng vẫn để extension tool và SDK custom tool hoạt động.
-
-`--tools` là allowlist nghiêm ngặt cho built-in, extension và custom tool. `--no-tools` tắt toàn bộ tool, `--no-builtin-tools` chỉ bỏ built-in, còn `--exclude-tools` lọc kết quả. Array ở project thay thế toàn bộ array global.
+`defaultTools` chọn Tool lúc khởi động. Khi bỏ qua setting này, chính xác `read`, `bash`, `edit` và `write` là các mặc định được bật. Các built-in thông thường khác là `powershell`, `grep`, `find` và `ls`; `powershell` là shell Tool Windows native tùy chọn và không tự động được thêm. `codemode` cùng `tool_search` là các Tool inactive do built-in extension đăng ký và cũng có thể được nêu ở đây. Array rỗng bỏ các built-in mặc định nhưng vẫn để extension Tool và SDK custom Tool hoạt động. Tên thuần thay toàn bộ selection kế thừa; danh sách chỉ gồm entry `+name` và `-name` sẽ sửa selection đó theo thứ tự. Ví dụ `["-bash", "+powershell", "+grep"]` thay Bash bằng PowerShell và thêm grep mà không cần lặp lại mọi Tool kế thừa. Project settings áp dụng cùng rule này trên user settings. `--tools` là allowlist nghiêm ngặt cho built-in, extension và custom Tool; nó cùng các CLI Tool switch khác override `defaultTools` cho invocation và không nhận ký hiệu thêm/bớt. Khi `/reload`, `defaultTools` activate tên mới thêm; nó không tắt tên đã bị xóa và không bật lại một Tool không đổi mà bạn đã tắt thủ công.
 
 ```json title="tool-settings.json"
 {
@@ -270,7 +268,7 @@ Force capability không được hỗ trợ ở bất kỳ đoạn nào trên đ
 
 ## Interface và output
 
-`--mode` nhận `text`, `json` hoặc `rpc`. Pi `0.87.1` coi cả giá trị bị thiếu lẫn giá trị không hợp lệ là CLI error thay vì fallback sang interactive mode:
+`--mode` nhận `text`, `json` hoặc `rpc`. Pi `0.99.2` coi cả giá trị bị thiếu lẫn giá trị không hợp lệ là CLI error thay vì fallback sang interactive mode:
 
 | Cách gọi | Kết quả | Trạng thái process |
 |---|---|---|
@@ -283,9 +281,13 @@ Validation này chạy trước khi session bắt đầu, vì vậy mode viết 
 
 `theme`, `externalEditor`, `quietStartup` và `collapseChangelog` điều khiển startup và cách trình bày. `externalEditor` override `VISUAL`, rồi `EDITOR`; dùng `code --wait` khi Pi cần chờ VS Code. `doubleEscapeAction` nhận `tree`, `fork` hoặc `none`, còn `treeFilterMode` chọn filter mặc định cho `/tree`.
 
+`system` theme là default và dựng palette từ màu terminal. Custom theme chấp nhận đúng sáu dạng màu: RGB hex 3-digit như `#0af`, RGB hex 6-digit như `#00aaff`, OKLCH, OKHSL, ANSI 256 index từ 0 đến 255, variable reference, hoặc empty string `""` để dùng terminal default. Hai cách viết RGB là một dạng hexadecimal; variable reference bị thiếu hoặc tạo vòng lặp làm theme không hợp lệ.
+
 `editorPaddingX` được clamp từ 0 đến 3, `outputPad` là 0 hoặc 1, còn `autocompleteMaxVisible` được clamp từ 3 đến 20. `showHardwareCursor` hỗ trợ nhập bằng IME. `tuiMode` nhận `regular` hoặc `fullscreen` đang thử nghiệm; các key flat liên quan là `fullscreenExitOutput` (`transcript` hoặc `resume-hint`) và `fullscreenScrollbar` (`auto`, `always` hoặc `hidden`). Hai shape lồng cũ `tui.*` và `fullscreen.*` không còn dùng. Thời gian chờ phím Escape là environment control được mô tả ở <a href="/vi/reference/environment-variables">Biến môi trường</a>.
 
 `fullscreenCopyOnSelect` mặc định là `true`, nên drag selection ở fullscreen được copy tự động. Khi setting này bị tắt, selection vẫn active và được highlight; `Ctrl+X` thử copy selection đang active đủ điều kiện rồi kết thúc action bất kể clipboard write thành công hay thất bại. Action chỉ fallback sang assistant message cuối khi không có selection đang active đủ điều kiện. Setting này chỉ tác động đến text selection trong fullscreen, còn `/tree` vẫn giữ hành vi copy message đang được chọn.
+
+`fullscreenWheelScrollLines` nhận `"auto"` hoặc một số từ 1 đến 100. Auto mode di chuyển một dòng mỗi event trên terminal macOS local, nơi wheel/trackpad đã tự tăng tốc; ở nơi khác và qua SSH, nó tăng tốc wheel input nhanh lên tối đa sáu dòng mỗi event. Alt+wheel di chuyển gấp năm lần khoảng cách đã resolve.
 
 Control có thể click `Jump to latest message` chỉ xuất hiện khi fullscreen transcript đã scroll lên phía trên message mới nhất; control nằm ở hàng dưới cùng và hiển thị shortcut `tui.altScreen.bottom`. Với `fullscreenScrollbar: "auto"`, scrollbar hiện ra trong lúc scroll hoặc khi pointer đi vào track ở cột ngoài cùng bên phải. Click vào track sẽ nhảy qua transcript; `always` luôn dành cột và hiển thị scrollbar, còn `hidden` loại bỏ nó.
 
@@ -304,6 +306,8 @@ Control có thể click `Jump to latest message` chỉ xuất hiện khi fullscr
 ### Danh sách resource và package filter
 
 `extensions`, `skills`, `prompts` và `themes` chứa local path hoặc directory. Trong global setting, relative path được resolve từ `~/.pi/agent`; trong project setting, nó được resolve từ `.pi`. Các array này hỗ trợ glob, exclusion `!pattern`, force-include `+path` và force-exclude `-path`. `enableSkillCommands` điều khiển việc đăng ký thành `/skill:name` và mặc định `true`.
+
+Các identifier chính xác của built-in extension là `builtin:mcp`, `builtin:llama.cpp`, `builtin:codemode` và `builtin:tool-search`. Chúng được load mặc định; dùng `-builtin:mcp` (hoặc exact name tương ứng) để tắt một extension, và dùng `+builtin:<name>` hay `-builtin:<name>` trong project settings để override resource selection ở user level. `--no-extensions` tắt chúng cùng các extension khác, còn `-e builtin:<name>` load tường minh một extension.
 
 Dùng `packages` cho nguồn npm hoặc Git; đừng đặt package name vào `extensions`. Package entry dạng string tự load mọi resource. Dạng object có thể đặt `autoload: false` và lọc `extensions`, `skills`, `prompts` hoặc `themes`. Project resource và thao tác cài project package còn thiếu vẫn chịu project trust.
 

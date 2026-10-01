@@ -7,9 +7,9 @@ translation_key: quickstart
 language: en
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 ---
-This guide targets the official [Pi `0.87.1` release](https://github.com/earendil-works/pi/releases/tag/v0.87.1), reviewed against [`f07218c`](https://github.com/earendil-works/pi/commit/f07218c4d4bbc12bef056a7058c3dd49dfe41abe), and creates a small TypeScript program that streams a model response. You will install `@earendil-works/pi-ai`, register the built-in providers, resolve one model, and consume its event stream. No prior Pi knowledge is required.
+This guide targets the official [Pi `0.99.2` release](https://github.com/earendil-works/pi/releases/tag/v0.99.2), reviewed against [`005af57d`](https://github.com/earendil-works/pi/commit/005af57d88ee23b33778f343a9595b32e67ff788), and creates a small TypeScript program that streams a model response. You will install `@earendil-works/pi-ai`, register the built-in providers, resolve one model, and consume its event stream. No prior Pi knowledge is required.
 
 :::tip[What you will have at the end]
 
@@ -19,7 +19,7 @@ A TypeScript file that calls one model through the `Models.streamSimple()` inter
 
 ## Before you start
 
-The example below deliberately stays with Anthropic Claude Sonnet so the first run remains small. If you choose one of the newer direct API-key routes in the `0.87.1` catalog, use the matching provider/model ID and credential:
+The example below deliberately stays with Anthropic Claude Sonnet so the first run remains small. If you choose one of the newer direct API-key routes in the `0.99.2` catalog, use the matching provider/model ID and credential:
 
 | Provider/model ID | Catalog name | Environment credential |
 |---|---|---|
@@ -48,7 +48,7 @@ This guide makes real API calls. Set a low spending limit on your provider accou
 mkdir pi-quickstart && cd pi-quickstart
 npm init -y
 npm pkg set type=module
-npm install @earendil-works/pi-ai@0.87.1
+npm install @earendil-works/pi-ai@0.99.2 --save-exact
 npm install --save-dev tsx
 ```
 

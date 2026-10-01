@@ -6,16 +6,16 @@ language: vi
 chapter: 1
 source_url: "https://www.dgzhuya.com/modules/ch01-overview"
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/README.md"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/quickstart.md"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/models.md"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/sdk.md"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/extensions.md"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/README.md"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/README.md"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/client/README.md"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/protocol/README.md"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/server/README.md"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/README.md"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/docs/quickstart.md"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/docs/models.md"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/docs/sdk.md"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/docs/extensions.md"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/README.md"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/README.md"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/client/README.md"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/protocol/README.md"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/server/README.md"
 terms_used:
   - Pi
   - Agent
@@ -32,7 +32,7 @@ terms_used:
   - Provider
   - SDK
 status: reviewed
-last_updated: "2026-09-23"
+last_updated: '2026-10-01'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -41,7 +41,7 @@ reviewed_by: Pify maintainers
 
 :::info[Phạm vi phiên bản]
 
-Các thông tin và ví dụ trong chương đã được đối chiếu với upstream commit [`f07218c`](https://github.com/earendil-works/pi/commit/f07218c4d4bbc12bef056a7058c3dd49dfe41abe), package version `0.87.1`. Cả bốn package nền tảng đều yêu cầu Node.js `>=22.19.0`. Catalog package và API có thể thay đổi ở các release sau.
+Các thông tin và ví dụ trong chương đã được đối chiếu với upstream commit [`005af57d`](https://github.com/earendil-works/pi/commit/005af57d88ee23b33778f343a9595b32e67ff788), package version `0.99.2`. Cả bốn package nền tảng đều yêu cầu Node.js `>=22.19.0`. Catalog package và API có thể thay đổi ở các release sau.
 
 :::
 
@@ -66,7 +66,7 @@ Câu trả lời ba phần đó quyết định thứ tự chương này. Ta l�
 Mỗi từ trong định nghĩa đều thu hẹp phạm vi thiết kế:
 
 - **Coding Agent shell:** Pi nối Model, system prompt, context của dự án, Tool và session state thành một ứng dụng có thể đọc rồi thay đổi codebase. Từ “shell” mô tả bộ khung và các điểm kết nối, còn Model và policy vẫn có thể thay thế.
-- **Terminal:** giao diện tương tác mặc định chạy ngay nơi developer đã dùng shell, version control và công cụ quản lý process. TUI mode thông thường giữ terminal-owned scrollback. Version `0.87.1` còn có fullscreen TUI mode thử nghiệm với application-owned scrolling, vì vậy “terminal” không còn đồng nghĩa với một chiến lược render duy nhất.
+- **Terminal:** giao diện tương tác mặc định chạy ngay nơi developer đã dùng shell, version control và công cụ quản lý process. TUI mode thông thường giữ terminal-owned scrollback. Version `0.99.2` còn có fullscreen TUI mode thử nghiệm với application-owned scrolling, vì vậy “terminal” không còn đồng nghĩa với một chiến lược render duy nhất.
 - **Mặc định tối giản:** Model nhận bốn Tool theo mặc định: `read`, `write`, `edit` và `bash`. Ba helper tích hợp chỉ đọc tùy chọn, `grep`, `find` và `ls`, có sẵn qua Tool options. Tool `powershell` tùy chọn được chọn riêng khi cần PowerShell native. Các tính năng như plan mode và sub-agent nằm ngoài bề mặt sản phẩm mặc định.
 - **Có thể mở rộng:** Extension có thể đăng ký Tool, command, shortcut, event hook, Provider và UI. Skill, Prompt Template, Theme và Pi Package lần lượt phụ trách instruction tái sử dụng, prompt, presentation và distribution.
 
@@ -78,7 +78,7 @@ Số star hay số lượng Provider thay đổi nhanh, nên ảnh chụp này c
 
 | Chỉ số                   | Giá trị đã pin | Điều có thể rút ra                                                                                   |
 | ------------------------ | -------------- | ---------------------------------------------------------------------------------------------------- |
-| Package version          | `0.87.1`       | Chương mô tả một release cụ thể, không dựa trên nhánh `main` không xác định.                         |
+| Package version          | `0.99.2`       | Chương mô tả một release cụ thể, không dựa trên nhánh `main` không xác định.                         |
 | Node.js runtime          | `>=22.19.0`    | Cùng yêu cầu engine xuất hiện trong manifest của các package nền tảng.                               |
 | Tool mặc định            | 4              | `read`, `write`, `edit` và `bash` tạo thành bề mặt mặc định mà Model nhìn thấy.                      |
 | Helper tích hợp tùy chọn | 3              | Có thể chọn `grep`, `find` và `ls` qua Tool options.                                                 |
@@ -224,7 +224,7 @@ Kiểm tra Node.js version, cài CLI rồi khởi động Pi trong repository m�
 
 ```bash
 node --version # must satisfy >=22.19.0
-npm install -g --ignore-scripts @earendil-works/pi-coding-agent
+npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.99.2
 cd /path/to/project
 pi
 ```
@@ -523,6 +523,6 @@ Phép trừ của Pi có chi phí: team sở hữu nhiều policy, package revie
 
 :::note[Source đã review]
 
-Chương này mô tả Pi `0.87.1` tại commit [`f07218c`](https://github.com/earendil-works/pi/tree/f07218c4d4bbc12bef056a7058c3dd49dfe41abe). Các link trong `official_refs` được pin vào đúng revision đó để dữ kiện vẫn kiểm tra được sau khi upstream `main` thay đổi.
+Chương này mô tả Pi `0.99.2` tại commit [`005af57d`](https://github.com/earendil-works/pi/tree/005af57d88ee23b33778f343a9595b32e67ff788). Các link trong `official_refs` được pin vào đúng revision đó để dữ kiện vẫn kiểm tra được sau khi upstream `main` thay đổi.
 
 :::

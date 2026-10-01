@@ -6,8 +6,8 @@ language: vi
 chapter: 5
 source_url: "https://www.dgzhuya.com/modules/ch05-tool-system"
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/README.md#tools"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/extensions.md#custom-tools"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/README.md#tools"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/docs/extensions.md#custom-tools"
 terms_used:
   - Tool
   - ToolCall
@@ -15,7 +15,7 @@ terms_used:
   - AgentTool
   - ToolDefinition
 status: reviewed
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -33,7 +33,7 @@ Chương 3 theo dõi một lượt của Agent: từ phản hồi của model, q
 
 Khối này không cấp quyền thực hiện thao tác và cũng không chứa mã có thể chạy. Runtime vẫn phải tìm đúng Tool theo tên, chuẩn bị và xác thực các đối số không đáng tin cậy, áp dụng chính sách của sản phẩm, xử lý yêu cầu hủy, chạy thao tác, báo tiến độ, chốt kết quả rồi tạo `ToolResultMessage` tương ứng. Khi một thông điệp chứa cả lô, runtime còn phải xác định những thao tác nào có thể chạy đồng thời mà không làm hỏng trạng thái dùng chung.
 
-Pi `0.87.1` giải quyết các yêu cầu đó bằng ba lớp kiểu có liên hệ với nhau và một luồng thực thi gồm nhiều giai đoạn. Mô hình giảng dạy năm bước trước đây vẫn hữu ích—chuẩn bị, xác thực, hook trước, thực thi, hook sau—nhưng phần triển khai hiện tại còn quy định cách lập lịch, thứ tự sự kiện, ranh giới hủy, cách tạo kết quả và điều kiện dừng cho cả lô. Chương này đi qua toàn bộ luồng đó theo commit được ghim `f07218c4d4bbc12bef056a7058c3dd49dfe41abe`.
+Pi `0.99.2` giải quyết các yêu cầu đó bằng ba lớp kiểu có liên hệ với nhau và một luồng thực thi gồm nhiều giai đoạn. Mô hình giảng dạy năm bước trước đây vẫn hữu ích—chuẩn bị, xác thực, hook trước, thực thi, hook sau—nhưng phần triển khai hiện tại còn quy định cách lập lịch, thứ tự sự kiện, ranh giới hủy, cách tạo kết quả và điều kiện dừng cho cả lô. Chương này đi qua toàn bộ luồng đó theo commit được ghim `005af57d88ee23b33778f343a9595b32e67ff788`.
 
 ## 1. Ba lớp kiểu giữ hướng phụ thuộc về phía lõi
 
@@ -62,7 +62,9 @@ Agent core phải biến lời gọi đã chuẩn hóa thành một thao tác v�
 export interface AgentToolResult<T = JsonValue | undefined> {
   content: (TextContent | ImageContent)[];
   details: T;
+  structuredContent?: JsonValue;
   usage?: Usage;
+  isError?: boolean;
   terminate?: boolean;
 }
 
@@ -76,6 +78,7 @@ export interface AgentTool<
 > extends Tool<TParameters> {
   label: string;
   prepareArguments?: (args: unknown) => Static<TParameters>;
+  outputSchema?: TSchema;
   execute: (
     toolCallId: string,
     params: Static<TParameters>,
@@ -90,6 +93,8 @@ export interface AgentTool<
 `label` dành cho người dùng; nó có thể là `Read file` trong khi tên giao thức vẫn là `read`. `prepareArguments` xử lý một cấu trúc dữ liệu cũ hoặc sai lệch đã biết trên đường truyền trước khi xác thực. `execute` nhận các tham số đã xác thực, ID của lời gọi, `AbortSignal` tùy chọn của lượt chạy và callback tiến độ tùy chọn. `executionMode` nhận `"parallel"` hoặc `"sequential"`.
 
 Kết quả phục vụ hai phía. `content` chứa các khối văn bản hoặc hình ảnh dành cho model. `details` chứa dữ liệu có cấu trúc của ứng dụng để hiển thị, ghi log hoặc tái tạo trạng thái. Kết quả cuối còn có thể báo `usage` của Tool lồng bên trong hoặc yêu cầu dừng sớm. Interface TypeScript bắt buộc có `details`, kể cả khi kiểu chi tiết tương ứng cho phép giá trị `{}` hoặc `undefined`.
+
+`outputSchema` khai báo JSON Schema cho giá trị `AgentToolResult.structuredContent` dành cho programmatic caller; `content` vẫn là result mà model nhìn thấy. Tool khai báo schema nên trả `structuredContent` khớp schema khi thành công. Với failure muốn expose, Tool có thể trả `isError: true` thay vì throw, đồng thời giữ `details` và `structuredContent` cho UI cùng programmatic consumer. `ToolResultMessage` trong transcript là contract khác: nó persist `content` dành cho model, `details` tương thích JSON, cờ `isError` đã finalize, usage tùy chọn và `nestedCalls` tùy chọn; nó không chép `structuredContent` vào model history.
 
 Ví dụ `AgentTool` cấp thấp dưới đây có thể sao chép. Nó truyền đủ hai tham số generic để giữ kiểu cho `params.path` và dữ liệu chi tiết về tiến độ. Mã kiểm tra yêu cầu hủy trước và sau thao tác với hệ thống tệp; lớp bọc dùng trong thực tế cũng có thể truyền `signal` xuống thao tác bên dưới.
 
@@ -140,7 +145,7 @@ export const readText: AgentTool<
 };
 ```
 
-Trong Pi 0.87.1, `ToolCall.arguments` có kiểu `JsonObject`, còn `ToolResultMessage.details` chứa dữ liệu tương thích JSON. Giữ input và details cần lưu của custom Tool ở dạng tuần tự hóa được: mã hóa ngày thành chuỗi, để function, class instance và process handle ngoài transcript. Schema của Tool vẫn quyết định những dạng đối số JSON được chấp nhận.
+Trong Pi 0.99.2, `ToolCall.arguments` có kiểu `JsonObject`, còn `ToolResultMessage.details` chứa dữ liệu tương thích JSON. Giữ input và details cần lưu của custom Tool ở dạng tuần tự hóa được: mã hóa ngày thành chuỗi, để function, class instance và process handle ngoài transcript. Schema của Tool vẫn quyết định những dạng đối số JSON được chấp nhận.
 
 `ToolResultMessage<TDetails = JsonValue>` là kiểu có điều kiện. Với kiểu details tương thích, nó có `details?: JsonRepresentation<TDetails>`; kiểu không tương thích cho kết quả `never`. Dùng kiểu details cụ thể tương thích JSON và xử lý trường hợp không có `details`. `AgentToolResult<TDetails>` ở runtime vẫn là contract generic riêng; gán kiểu details ở đó không chứng minh dữ liệu có thể được lưu thành Tool result message.
 
@@ -165,13 +170,21 @@ export interface ToolDefinition<
   constrainedSampling?: false | ConstrainedSamplingConfig;
   renderShell?: "default" | "self";
   prepareArguments?: (args: unknown) => Static<TParams>;
+  outputSchema?: TSchema;
+  exposure?: ToolExposure;
+  namespace?: ToolNamespace;
+  annotations?: ToolAnnotations;
+  defaultActive?: boolean;
+  prepareLoadout?: (
+    loadout: ToolLoadout,
+  ) => ToolLoadoutChanges | undefined;
   executionMode?: ToolExecutionMode;
   execute(
     toolCallId: string,
     params: Static<TParams>,
     signal: AbortSignal | undefined,
     onUpdate: AgentToolUpdateCallback<TDetails> | undefined,
-    ctx: ExtensionContext,
+    ctx: ExtensionToolContext,
   ): Promise<AgentToolResult<TDetails>>;
   renderCall?: (
     args: Static<TParams>,
@@ -190,6 +203,10 @@ export interface ToolDefinition<
 `promptSnippet` đưa Tool vào danh sách Tool khả dụng rút gọn trong system prompt mặc định. `promptGuidelines` thêm hướng dẫn riêng khi Tool đang hoạt động. Mỗi hướng dẫn phải ghi rõ tên Tool vì Coding Agent nối các gạch đầu dòng vào cùng một mục. `renderCall` và `renderResult` tạo thành phần TUI; `TState` định kiểu trạng thái dùng chung giữa các vị trí kết xuất. `renderShell: "self"` báo rằng bộ kết xuất tự cung cấp phần khung hiển thị.
 
 Đối số thứ năm của `execute` là Extension `ctx`. Nó cung cấp thư mục làm việc hiện tại, chế độ, khả năng UI, trình quản lý session chỉ đọc, bộ đăng ký model, model hiện tại, các model trong phạm vi, mức suy luận, `signal` hiện tại và các thao tác có kiểm soát như `abort()`, `compact()` cùng `getSystemPrompt()`. Đây là trách nhiệm của Coding Agent, không thuộc Agent core.
+
+`ToolExposure` kiểm soát khả năng tiếp cận, không phải execution policy. `direct` được khai báo cho model và callable khi active; `model-only` được khai báo nhưng Tool khác không bao giờ gọi được; `codemode` luôn callable khi đã register và được liệt kê cho codemode; `deferred` callable nhưng bị bỏ khỏi listing thông thường của codemode; `hidden` không thể tiếp cận ngay cả khi được activate. `namespace` nhóm các Tool liên quan và có thể mang hướng dẫn dài hơn, còn `annotations` chưa được kiểm chứng cung cấp các hint kiểu MCP về read-only, destructive, idempotent và open-world cho permission policy.
+
+Tool điều phối có thể dùng `prepareLoadout()` để viết lại description dành cho model hoặc ẩn một số declaration trong khi vẫn giữ rõ registered/callable set. Khi execute, `ctx.executeTool()` chạy một callable Tool qua validation, hook, permission và scheduling policy của session. Nested event mang `parentToolCallId`; nested Tool call không trở thành message transcript riêng. Thay vào đó, `ToolResultMessage` của parent nhận record `nestedCalls` có giới hạn: tối đa 256 call, tối đa 8 KiB argument mỗi call và tổng cộng 32 KiB, còn error text dài sẽ bị truncate. Record đặt `complete: false` khi call hoặc argument bị lược bỏ, hoặc khi một call chưa hoàn tất.
 
 ### `defineTool()` và `pi.registerTool()` phục vụ hai thời điểm khác nhau
 
@@ -951,11 +968,11 @@ Backend SSH hoặc container có thể triển khai cùng interface, nhưng ph�
 
 ### Bash và PowerShell là các phiên shell-tool riêng biệt
 
-Pi `0.87.1` đã publish cung cấp `powershell` như một built-in tùy chọn cho command Windows native và giữ Tool này riêng với `bash`. Với backend cục bộ mặc định, Bash resolve shell tương thích Bash và render prompt `$`; PowerShell ưu tiên `pwsh.exe`, fallback sang `powershell.exe`, khởi động bằng các flag non-interactive và render `PS>`. Các chi tiết về executable resolution, launch flag và prompt này thuộc implementation cục bộ mặc định. Custom `BashOperations` hoặc `PowerShellOperations` có thể ủy quyền sang nơi khác mà không resolve hay spawn host executable. Chọn một Tool không viết lại command cho Tool kia và cũng không đổi shell đã khởi chạy Pi.
+Pi `0.99.2` đã publish cung cấp `powershell` như một built-in tùy chọn cho command Windows native và giữ Tool này riêng với `bash`. Với backend cục bộ mặc định, Bash resolve shell tương thích Bash và render prompt `$`; PowerShell ưu tiên `pwsh.exe`, fallback sang `powershell.exe`, khởi động bằng các flag non-interactive và render `PS>`. Các chi tiết về executable resolution, launch flag và prompt này thuộc implementation cục bộ mặc định. Custom `BashOperations` hoặc `PowerShellOperations` có thể ủy quyền sang nơi khác mà không resolve hay spawn host executable. Chọn một Tool không viết lại command cho Tool kia và cũng không đổi shell đã khởi chạy Pi.
 
 Hai Tool dùng cùng contract tùy chọn cho metadata của Pi session, chứ không được bảo đảm chia sẻ một child-shell process persistent. Các operations Bash và PowerShell cục bộ mặc định khởi động một child process riêng cho mỗi Tool call. Custom operations thay vào đó ủy quyền cho backend đã cấu hình và không nhất thiết tạo local child process; backend đó quyết định persistence semantics. Việc expose session có điều kiện: `exposeSessionEnvironment` mặc định là `true`, nhưng Pi chỉ inject các field `PI_*` khi Tool được execute với Agent/Extension context. `exposeSessionEnvironment: false` chặn các field này ngay cả khi context đó tồn tại. Standalone hoặc custom invocation không có context đó sẽ không tự động nhận các field này; wrapper xóa session field kế thừa trước khi quyết định có inject giá trị hiện tại hay không. Khi các điều kiện đó cho phép inject, `PI_SESSION_ID` luôn có mặt. `PI_SESSION_FILE` chỉ có với file-backed session có session file path. `PI_PROVIDER` và `PI_MODEL` chỉ có khi `ctx.model` tồn tại, còn `PI_REASONING_LEVEL` chỉ có khi `ctx.thinkingLevel` là truthy. Với operations cục bộ mặc định, thay đổi trên filesystem tồn tại qua nhiều call, còn shell-local variable, function và thay đổi working directory thì không, trừ khi command persist chúng ở nơi khác.
 
-`powershell` có thể được chọn qua `defaultTools`, lựa chọn tool của CLI/SDK hoặc public factory. Nó **không** thuộc tập `defaultTools` mặc định trong Pi `0.87.1`: bỏ setting này chỉ bật `read`, `bash`, `edit` và `write`. Vì vậy cấu hình Windows phải chọn `powershell` tường minh khi model cần dùng PowerShell native thay cho, hoặc cùng với, Bash.
+`powershell` có thể được chọn qua `defaultTools`, lựa chọn tool của CLI/SDK hoặc public factory. Nó **không** thuộc tập `defaultTools` mặc định trong Pi `0.99.2`: bỏ setting này chỉ bật `read`, `bash`, `edit` và `write`. Vì vậy cấu hình Windows phải chọn `powershell` tường minh khi model cần dùng PowerShell native thay cho, hoặc cùng với, Bash.
 
 `createPowerShellTool()` nhận một object `PowerShellToolOptions` tùy chọn. Các option công khai là `operations`, `exposeSessionEnvironment` và `spawnHook`; `commandPrefix` cùng `shellPath` chỉ dành cho Bash, không phải PowerShell option. Factory và type `PowerShellOperations` được export từ package root:
 
@@ -1065,6 +1082,6 @@ Việc thực thi Tool là một giao thức có kiểm soát bao quanh thao tá
 
 Chương 6 sẽ theo dõi các thông điệp đó qua transcript Agent giàu thông tin hơn và ranh giới chuyển đổi của provider. Chương tiếp theo cũng giải thích vì sao `details` của Tool có thể phục vụ UI trong khi chỉ nội dung văn bản và hình ảnh đi vào kết quả thông thường dành cho model.
 
-Việc rà soát mã nguồn cho chương này dùng Pi `0.87.1` tại commit `f07218c4d4bbc12bef056a7058c3dd49dfe41abe`. Các đường dẫn chính gồm `packages/ai/src/types.ts`, `packages/ai/src/utils/validation.ts`, `packages/agent/src/types.ts`, `packages/agent/src/agent-loop.ts`, `packages/agent/src/agent.ts`, `packages/coding-agent/src/core/extensions/types.ts`, `packages/coding-agent/src/core/extensions/runner.ts`, `packages/coding-agent/src/core/extensions/wrapper.ts`, `packages/coding-agent/src/core/extensions/loader.ts`, `packages/coding-agent/src/core/agent-session.ts` và các phần triển khai Tool trong `packages/coding-agent/src/core/tools/`.
+Việc rà soát mã nguồn cho chương này dùng Pi `0.99.2` tại commit `005af57d88ee23b33778f343a9595b32e67ff788`. Các đường dẫn chính gồm `packages/ai/src/types.ts`, `packages/ai/src/utils/validation.ts`, `packages/agent/src/types.ts`, `packages/agent/src/agent-loop.ts`, `packages/agent/src/agent.ts`, `packages/coding-agent/src/core/extensions/types.ts`, `packages/coding-agent/src/core/extensions/runner.ts`, `packages/coding-agent/src/core/extensions/wrapper.ts`, `packages/coding-agent/src/core/extensions/loader.ts`, `packages/coding-agent/src/core/agent-session.ts` và các phần triển khai Tool trong `packages/coding-agent/src/core/tools/`.
 
 [Chương 6: Hệ thống thông điệp](ch06-messages.md)
