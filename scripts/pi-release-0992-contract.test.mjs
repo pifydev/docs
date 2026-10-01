@@ -931,3 +931,412 @@ test("Virtual Model guides separate selection, dispatch, state, and accounting",
     );
   }
 });
+
+test("Durable guides preserve replay, cancellation, ownership, and storage boundaries", async () => {
+  const [english, vietnamese, fixture] = await Promise.all([
+    readGuide("en", "build-durable-agent"),
+    readGuide("vi", "build-durable-agent"),
+    readFile(
+      new URL("tests/fixtures/pi-durable-0992.contract.ts", repositoryRoot),
+      "utf8",
+    ),
+  ]);
+
+  assert.deepEqual(headings(english), [
+    "# Build an experimental Durable Agent",
+    "## Status and when to use it",
+    "## Mental model: Harness, Conversation, and run",
+    "## Open an in-memory Harness",
+    "## Submit input and commit immutable Entries",
+    "## Persist Documents and Tasks atomically",
+    "## Recover work and deduplicate requests",
+    "## Declare Tool replay policy",
+    "## Schedule the inbox and reset context",
+    "## Compact without losing durable work",
+    "## Observe views, events, and hooks",
+    "## Fork conversations and structure subagents",
+    "## Choose foreground or background ownership",
+    "## Track usage and choose storage",
+    "## Failure modes and operational checklist",
+    "## Release-pinned sources",
+  ]);
+  assert.deepEqual(headings(vietnamese), [
+    "# Xây dựng Durable Agent thử nghiệm",
+    "## Trạng thái và thời điểm sử dụng",
+    "## Mô hình tư duy: Harness, Conversation và run",
+    "## Mở Harness trong bộ nhớ",
+    "## Gửi input và commit Entry bất biến",
+    "## Duy trì Document và Task nguyên tử",
+    "## Khôi phục work và loại bỏ request trùng lặp",
+    "## Khai báo policy replay cho Tool",
+    "## Lập lịch inbox và reset context",
+    "## Compact mà không làm mất durable work",
+    "## Quan sát view, event và hook",
+    "## Fork conversation và cấu trúc subagent",
+    "## Chọn ownership foreground hoặc background",
+    "## Theo dõi usage và chọn storage",
+    "## Failure mode và checklist vận hành",
+    "## Nguồn được ghim theo release",
+  ]);
+  assert.deepEqual(headingShape(english), headingShape(vietnamese));
+  assert.equal(codeFenceCount(english), codeFenceCount(vietnamese));
+
+  const englishFences = codeFences(english);
+  const vietnameseFences = codeFences(vietnamese);
+  assert.deepEqual(englishFences, vietnameseFences);
+  assert.equal(englishFences.length, 2);
+  assert.equal(
+    `${englishFences[0].replace(/^```[^\n]*\n/, "").replace(/\n```$/, "")}\n`,
+    fixture,
+    "Harness example must stay byte-synchronized with its compile-checked fixture",
+  );
+  assertTypeScriptSourceCompiles(
+    "tests/fixtures/build-durable-agent-harness-guide.contract.ts",
+    englishFences[0].replace(/^```[^\n]*\n/, "").replace(/\n```$/, ""),
+  );
+
+  const submitCommitExample = `import { AssistantEntry } from "@earendil-works/pi-durable";
+
+const submission = await root.submit(
+  {
+    type: "input",
+    content: "What is the capital of France?",
+    requestId: "capital-france-1",
+  },
+  context,
+);
+const settled = await submission.wait(context);
+if (settled.status === "done" && settled.type === "input") {
+  const answer = await root.commit(
+    (tx) => tx.entry(AssistantEntry, settled.answer),
+    context,
+  );
+  console.log(answer?.model?.[0]);
+}`;
+  assert.equal(
+    englishFences[1].replace(/^```[^\n]*\n/, "").replace(/\n```$/, ""),
+    submitCommitExample,
+  );
+  assertTypeScriptSourceCompiles(
+    "tests/fixtures/build-durable-agent-submit-guide.contract.ts",
+    `import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
+import { createModels } from "@earendil-works/pi-ai/models";
+import {
+  AssistantEntry,
+  createRegistry,
+  Harness,
+  MemoryStorage,
+  type Conversation,
+} from "@earendil-works/pi-durable";
+
+async function verify(root: Conversation): Promise<void> {
+  const context = BACKGROUND_CONTEXT;
+${submitCommitExample
+  .split("\n")
+  .slice(2)
+  .map((line) => `  ${line}`)
+  .join("\n")}
+}
+
+void createModels;
+void createRegistry;
+void Harness;
+void MemoryStorage;
+void verify;`,
+  );
+
+  const requiredTerms = [
+    "Experimental",
+    "Harness",
+    "Conversation",
+    "Entry",
+    "Commit",
+    "Document",
+    "Task",
+    "Submission",
+    "Registry",
+    "requestId",
+    'replay: "safe"',
+    "MemoryStorage",
+    "openNodeSqliteStorage",
+    "openNodeJsonlStorage",
+  ];
+  const pinnedRoot =
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/";
+  const pinnedPaths = [
+    "packages/durable/README.md",
+    "packages/durable/src/index.ts",
+    "packages/durable/src/harness/harness.ts",
+    "packages/durable/src/harness/types.ts",
+    "packages/durable/src/tasks.ts",
+    "packages/durable/src/storage/memory.ts",
+    "packages/durable/src/storage/sqlite/node.ts",
+    "packages/durable/src/storage/jsonl/node.ts",
+    "packages/chord/src/context/index.ts",
+    "packages/durable/package.json",
+  ];
+
+  for (const [locale, guide] of [
+    ["en", english],
+    ["vi", vietnamese],
+  ]) {
+    for (const term of requiredTerms) {
+      assert.ok(guide.includes(term), `${locale} guide must include ${term}`);
+    }
+    for (const sourcePath of pinnedPaths) {
+      assert.ok(
+        guide.includes(`${pinnedRoot}${sourcePath}`),
+        `${locale} guide must pin ${sourcePath}`,
+      );
+    }
+    assert.ok(
+      guide.includes(
+        "https://github.com/earendil-works/pi/commit/005af57d88ee23b33778f343a9595b32e67ff788",
+      ),
+      `${locale} guide must link the exact release commit page`,
+    );
+    for (const tag of ["v0.99.0", "v0.99.1", "v0.99.2"]) {
+      assert.ok(
+        guide.includes(
+          `https://github.com/earendil-works/pi/releases/tag/${tag}`,
+        ),
+        `${locale} guide must link release ${tag}`,
+      );
+    }
+    assert.doesNotMatch(guide, /\/(?:blob|tree)\/main\/|\/latest(?:\/|\b)/);
+
+    const localizedHeadings =
+      locale === "en"
+        ? {
+            status: "## Status and when to use it",
+            mental: "## Mental model: Harness, Conversation, and run",
+            entries: "## Submit input and commit immutable Entries",
+            persistence: "## Persist Documents and Tasks atomically",
+            recovery: "## Recover work and deduplicate requests",
+            replay: "## Declare Tool replay policy",
+            scheduling: "## Schedule the inbox and reset context",
+            compaction: "## Compact without losing durable work",
+            observation: "## Observe views, events, and hooks",
+            forks: "## Fork conversations and structure subagents",
+            ownership: "## Choose foreground or background ownership",
+            storage: "## Track usage and choose storage",
+            failures: "## Failure modes and operational checklist",
+            sources: "## Release-pinned sources",
+          }
+        : {
+            status: "## Trạng thái và thời điểm sử dụng",
+            mental: "## Mô hình tư duy: Harness, Conversation và run",
+            entries: "## Gửi input và commit Entry bất biến",
+            persistence: "## Duy trì Document và Task nguyên tử",
+            recovery: "## Khôi phục work và loại bỏ request trùng lặp",
+            replay: "## Khai báo policy replay cho Tool",
+            scheduling: "## Lập lịch inbox và reset context",
+            compaction: "## Compact mà không làm mất durable work",
+            observation: "## Quan sát view, event và hook",
+            forks: "## Fork conversation và cấu trúc subagent",
+            ownership: "## Chọn ownership foreground hoặc background",
+            storage: "## Theo dõi usage và chọn storage",
+            failures: "## Failure mode và checklist vận hành",
+            sources: "## Nguồn được ghim theo release",
+          };
+    const statusSection = sectionContaining(guide, localizedHeadings.status);
+    const mentalSection = sectionContaining(guide, localizedHeadings.mental);
+    const entriesSection = sectionContaining(guide, localizedHeadings.entries);
+    const persistenceSection = sectionContaining(
+      guide,
+      localizedHeadings.persistence,
+    );
+    const recoverySection = sectionContaining(
+      guide,
+      localizedHeadings.recovery,
+    );
+    const replaySection = sectionContaining(guide, localizedHeadings.replay);
+    const schedulingSection = sectionContaining(
+      guide,
+      localizedHeadings.scheduling,
+    );
+    const compactionSection = sectionContaining(
+      guide,
+      localizedHeadings.compaction,
+    );
+    const observationSection = sectionContaining(
+      guide,
+      localizedHeadings.observation,
+    );
+    const forksSection = sectionContaining(guide, localizedHeadings.forks);
+    const ownershipSection = sectionContaining(
+      guide,
+      localizedHeadings.ownership,
+    );
+    const storageSection = sectionContaining(guide, localizedHeadings.storage);
+    const failuresSection = sectionContaining(
+      guide,
+      localizedHeadings.failures,
+    );
+    const sourcesSection = sectionContaining(guide, localizedHeadings.sources);
+
+    const replacement = paragraphContaining(
+      statusSection,
+      locale === "en"
+        ? "not a mandatory replacement"
+        : "không bắt buộc thay thế",
+    );
+    assert.match(replacement, /Agent Core[^.]*SessionManager/is);
+
+    const runBoundary = paragraphContaining(
+      mentalSection,
+      locale === "en" ? "A turn is" : "Một turn là",
+    );
+    assert.match(
+      runBoundary,
+      locale === "en"
+        ? /turn is one model response[^.]*Tool calls[^.]*run spans[^.]*admitted input[^.]*final answer[\s\S]*busy/i
+        : /turn là một model response[^.]*Tool call[^.]*run kéo dài[^.]*input được nhận[^.]*final answer[\s\S]*busy/i,
+    );
+
+    const cancellation = paragraphContaining(
+      mentalSection,
+      locale === "en" ? "Cancelling a wait" : "Cancel một wait",
+    );
+    assert.match(
+      cancellation,
+      locale === "en"
+        ? /Cancelling a wait[^.]*cancels only that wait[^.]*never[^.]*durable work/i
+        : /Cancel một wait[^.]*chỉ hủy wait đó[^.]*không bao giờ[^.]*durable work/i,
+    );
+    assert.match(cancellation, /Chord `Context`/i);
+
+    const commitVisibility = paragraphContaining(
+      entriesSection,
+      locale === "en" ? "A Commit is atomic" : "Commit có tính nguyên tử",
+    );
+    assert.match(
+      commitVisibility,
+      locale === "en"
+        ? /Commit is atomic[^.]*observer[^.]*all[^.]*Entries[^.]*Documents[^.]*Tasks[^.]*none/i
+        : /Commit có tính nguyên tử[^.]*observer[^.]*toàn bộ[^.]*Entry[^.]*Document[^.]*Task[^.]*không phần nào/i,
+    );
+
+    const taskAtomicity = paragraphContaining(
+      persistenceSection,
+      locale === "en" ? "same transaction" : "cùng transaction",
+    );
+    assert.match(taskAtomicity, /Entry[^.]*Document[^.]*Task/is);
+
+    const requestDeduplication = paragraphContaining(
+      recoverySection,
+      "requestId",
+    );
+    assert.match(
+      requestDeduplication,
+      locale === "en"
+        ? /requestId[^.]*same request[^.]*existing Submission[^.]*not[^.]*second run/i
+        : /requestId[^.]*cùng request[^.]*Submission đã có[^.]*không[^.]*run thứ hai/i,
+    );
+    assert.match(
+      recoverySection,
+      locale === "en"
+        ? /crash[^.]*close[^.]*scheduler[^.]*resume/i
+        : /crash[^.]*close[^.]*scheduler[^.]*resume/i,
+    );
+
+    const replayPolicy = paragraphContaining(replaySection, 'replay: "safe"');
+    assert.match(
+      replayPolicy,
+      locale === "en"
+        ? /only[^.]*replay: "safe"[^.]*rerun[^.]*interruption/i
+        : /chỉ[^.]*replay: "safe"[^.]*chạy lại[^.]*gián đoạn/i,
+    );
+    const sideEffect = paragraphContaining(
+      replaySection,
+      locale === "en" ? "charged a card" : "đã trừ tiền thẻ",
+    );
+    assert.match(
+      sideEffect,
+      locale === "en"
+        ? /charged a card[^.]*crash[^.]*recorded[^.]*persistence[^.]*cannot[^.]*safe/i
+        : /đã trừ tiền thẻ[^.]*crash[^.]*ghi lại[^.]*persistence[^.]*không thể[^.]*safe/i,
+    );
+
+    assert.match(
+      schedulingSection,
+      /inbox[\s\S]*interrupt[\s\S]*follow-up[\s\S]*reset/is,
+    );
+    assert.match(
+      compactionSection,
+      locale === "en"
+        ? /background[\s\S]*blocking[\s\S]*usage[\s\S]*context overflow[\s\S]*retry/i
+        : /background[\s\S]*blocking[\s\S]*usage[\s\S]*context overflow[\s\S]*retry/i,
+    );
+
+    const exactFrame = paragraphContaining(
+      observationSection,
+      locale === "en" ? "exact frame" : "frame chính xác",
+    );
+    assert.match(
+      exactFrame,
+      /viewState[\s\S]*watch[\s\S]*event[\s\S]*Experimental/is,
+    );
+    assert.match(observationSection, /hook[^.]*scope/is);
+
+    assert.match(forksSection, /fork[^.]*branch[^.]*ancestry/is);
+    const ownership = paragraphContaining(
+      ownershipSection,
+      locale === "en" ? "Foreground children" : "Child foreground",
+    );
+    assert.match(
+      ownership,
+      locale === "en"
+        ? /Foreground children[^.]*parent[^.]*join[^.]*structured concurrency[\s\S]*background[^.]*independent ownership/i
+        : /Child foreground[^.]*parent[^.]*join[^.]*structured concurrency[\s\S]*background[^.]*ownership độc lập/i,
+    );
+    const abortBoundary = paragraphContaining(
+      ownershipSection,
+      locale === "en" ? "abort boundary" : "abort boundary",
+    );
+    assert.match(
+      abortBoundary,
+      locale === "en"
+        ? /background Task[^.]*abort boundary[\s\S]*bottom-up/i
+        : /Task background[^.]*abort boundary[\s\S]*từ dưới lên/i,
+    );
+
+    const storageTradeoffs = paragraphContaining(
+      storageSection,
+      "MemoryStorage",
+    );
+    assert.match(
+      storageTradeoffs,
+      /MemoryStorage[^.]*openNodeSqliteStorage[^.]*openNodeJsonlStorage/is,
+    );
+    assert.match(storageSection, /usage[\s\S]*spend/is);
+    assert.match(storageSection, /WAL[\s\S]*fsync|fsync[\s\S]*WAL/is);
+    const processOwnership = paragraphContaining(
+      storageSection,
+      locale === "en" ? "one process" : "một process",
+    );
+    assert.match(
+      processOwnership,
+      locale === "en"
+        ? /one process[^.]*owns[^.]*storage[^.]*no cross-process locking/i
+        : /một process[^.]*sở hữu[^.]*storage[^.]*không có cross-process locking/i,
+    );
+
+    assert.match(
+      failuresSection,
+      locale === "en"
+        ? /requestId[^.]*replay[^.]*Context[^.]*close[^.]*one process/is
+        : /requestId[^.]*replay[^.]*Context[^.]*close[^.]*một process/is,
+    );
+    const authority = paragraphContaining(
+      sourcesSection,
+      locale === "en" ? "source of truth" : "nguồn chuẩn",
+    );
+    assert.match(
+      authority,
+      locale === "en"
+        ? /exact tag[^.]*source of truth[\s\S]*release pages[^.]*histor/i
+        : /tag chính xác[^.]*nguồn chuẩn[\s\S]*release page[^.]*lịch sử/i,
+    );
+  }
+});
