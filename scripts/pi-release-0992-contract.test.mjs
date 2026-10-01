@@ -418,6 +418,63 @@ function assertConfigurationRelationships(source, locale) {
   }
 }
 
+const releaseCommitCitationPrefix = expectedRelease.commit.slice(0, 9);
+
+function invalidPi0992CommitCitations(source) {
+  return [...source.matchAll(/\b005af57d[0-9a-f]+\b/gi)]
+    .map((match) => ({
+      line: source.slice(0, match.index).split(/\r?\n/).length,
+      token: match[0].toLowerCase(),
+    }))
+    .filter(
+      ({ token }) =>
+        token !== releaseCommitCitationPrefix &&
+        token !== expectedRelease.commit,
+    );
+}
+
+test("current public docs use the exact Pi 0.99.2 revision in plain text and links", async () => {
+  const manifest = await readJson(
+    new URL("content/translation-manifest.json", repositoryRoot),
+  );
+  const failures = [];
+
+  for (const page of manifest.pages) {
+    for (const locale of ["en", "vi"]) {
+      const relativePath = page[locale];
+      const source = await readFile(
+        new URL(`content/${locale}/${relativePath}`, repositoryRoot),
+        "utf8",
+      );
+      for (const citation of invalidPi0992CommitCitations(source)) {
+        failures.push(
+          `${locale}/${relativePath}:${citation.line}: ${citation.token}`,
+        );
+      }
+    }
+  }
+
+  assert.deepEqual(
+    failures,
+    [],
+    `Pi 0.99.2 revision citations must use ${releaseCommitCitationPrefix} or the full release SHA`,
+  );
+  assert.deepEqual(
+    invalidPi0992CommitCitations(
+      "Pi 0.99.2 source excerpt at commit 005af57d4.",
+    ),
+    [{ line: 1, token: "005af57d4" }],
+    "plain-text non-prefix citations must be rejected",
+  );
+  assert.deepEqual(
+    invalidPi0992CommitCitations(
+      "Historical authorities 20dd3a7 and f07218c4d4bbc12bef056a7058c3dd49dfe41abe remain valid.",
+    ),
+    [],
+    "unrelated historical SHAs must not be treated as Pi 0.99.2 citations",
+  );
+});
+
 test("active release contracts use Pi 0.99.2 capabilities and authority", async () => {
   const releaseCommit = "005af57d88ee23b33778f343a9595b32e67ff788";
 

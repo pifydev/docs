@@ -246,7 +246,7 @@ Vì vậy báo cáo termination phải nêu cả provider result lẫn runtime s
 Quyết định cốt lõi dựa vào content và state của Tool đã finalize, không dựa vào một string:
 
 ```typescript
-// Abridged from packages/agent/src/agent-loop.ts at 005af57d4.
+// Abridged from packages/agent/src/agent-loop.ts at 005af57d8.
 const toolCalls = message.content.filter((part) => part.type === "toolCall");
 hasMoreToolCalls = false;
 
@@ -782,7 +782,7 @@ Provider adapter sở hữu cách serialize cache control. Việc dựng lại o
 `streamAssistantResponse()` dành một slot transcript ở event `start`, thay slot đó bằng từng partial, rồi thay lần cuối bằng message hoàn chỉnh:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at 005af57d4.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 005af57d8.
 case "start":
   partialMessage = event.partial;
   context.messages.push(partialMessage);
@@ -857,7 +857,7 @@ Hai mode giữ conversation order theo cách khác nhau:
 Nếu bất kỳ Tool được gọi nào khai báo `executionMode: "sequential"`, toàn bộ assistant batch chạy sequential. Preflight resolve Tool, áp dụng `prepareArguments`, validate schema rồi gọi `beforeToolCall`:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at 005af57d4.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 005af57d8.
 const preparedToolCall = prepareToolCallArguments(tool, toolCall);
 const validatedArgs = validateToolArguments(tool, preparedToolCall);
 const beforeResult = await config.beforeToolCall?.(
@@ -869,7 +869,7 @@ const beforeResult = await config.beforeToolCall?.(
 Tool không tồn tại, argument sai, preflight code throw, call bị block và abort đã được quan sát đều trở thành immediate error result. `afterToolCall` chỉ chạy sau khi một Tool được phép đã thực thi; hook có thể thay `content`, `details`, `usage`, `isError` hoặc `terminate` trước final event:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at 005af57d4.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 005af57d8.
 const afterResult = await config.afterToolCall?.(
   {
     assistantMessage,
@@ -897,7 +897,7 @@ Với mỗi call đã finalize, Pi phát `tool_execution_end` rồi một cặp 
 Batch termination dùng `every`:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at 005af57d4.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 005af57d8.
 const terminate =
   finalizedCalls.length > 0 &&
   finalizedCalls.every((entry) => entry.result.terminate === true);
@@ -944,7 +944,7 @@ Settlement kéo dài qua thời điểm phát event. `agent_end` bảo đảm lo
 ### 4.8 Quay lại đầu vòng lặp
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at 005af57d4.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 005af57d8.
 while (hasMoreToolCalls || pendingMessages.length > 0) {
   // one assistant response and its Tool batch
 }
@@ -957,7 +957,7 @@ Automatic continuation đến từ Tool batch không terminate. Steering continu
 Tại boundary ổn định, Agent Core chỉ poll follow-up queue:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at 005af57d4.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 005af57d8.
 const followUpMessages = (await config.getFollowUpMessages?.()) || [];
 if (followUpMessages.length > 0) {
   explicitContinuation = false;

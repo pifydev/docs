@@ -72,7 +72,7 @@ Message IR hiện có `SystemMessage`, nên trạng thái prompt và Tool đi c�
 
 ### Cấu trúc chính xác của message và content
 
-Interface hoàn chỉnh sau lấy từ `packages/ai/src/types.ts` tại commit được ghim `005af57d4` và cho thấy cấu trúc phía người dùng:
+Interface hoàn chỉnh sau lấy từ `packages/ai/src/types.ts` tại commit được ghim `005af57d8` và cho thấy cấu trúc phía người dùng:
 
 ```typescript
 export interface UserMessage {

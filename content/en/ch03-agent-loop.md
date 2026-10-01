@@ -246,7 +246,7 @@ This explains why a termination report must name both the provider result and th
 The core decision is based on content and finalized Tool state, not one string:
 
 ```typescript
-// Abridged from packages/agent/src/agent-loop.ts at 005af57d4.
+// Abridged from packages/agent/src/agent-loop.ts at 005af57d8.
 const toolCalls = message.content.filter((part) => part.type === "toolCall");
 hasMoreToolCalls = false;
 
@@ -782,7 +782,7 @@ Provider adapters own cache-control serialization. Rebuilding the small `Transcr
 `streamAssistantResponse()` reserves one transcript slot on `start`, replaces that slot with each partial, and finally replaces it with the completed message:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at 005af57d4.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 005af57d8.
 case "start":
   partialMessage = event.partial;
   context.messages.push(partialMessage);
@@ -857,7 +857,7 @@ The two modes preserve conversation order in different ways:
 If any targeted Tool declares `executionMode: "sequential"`, the whole assistant batch runs sequentially. Preflight resolves the Tool, applies `prepareArguments`, validates the schema, and calls `beforeToolCall`:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at 005af57d4.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 005af57d8.
 const preparedToolCall = prepareToolCallArguments(tool, toolCall);
 const validatedArgs = validateToolArguments(tool, preparedToolCall);
 const beforeResult = await config.beforeToolCall?.(
@@ -869,7 +869,7 @@ const beforeResult = await config.beforeToolCall?.(
 Unknown Tools, invalid arguments, thrown preflight code, blocked calls, and observed aborts become immediate error results. `afterToolCall` runs only after an allowed Tool actually executes; it may replace `content`, `details`, `usage`, `isError`, or `terminate` before final events:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at 005af57d4.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 005af57d8.
 const afterResult = await config.afterToolCall?.(
   {
     assistantMessage,
@@ -897,7 +897,7 @@ For each finalized call, Pi emits `tool_execution_end`, then a `message_start`/`
 Batch termination uses `every`:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at 005af57d4.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 005af57d8.
 const terminate =
   finalizedCalls.length > 0 &&
   finalizedCalls.every((entry) => entry.result.terminate === true);
@@ -944,7 +944,7 @@ Settlement extends past event emission. `agent_end` guarantees that the loop wil
 ### 4.8 Back to the top of the loop
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at 005af57d4.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 005af57d8.
 while (hasMoreToolCalls || pendingMessages.length > 0) {
   // one assistant response and its Tool batch
 }
@@ -957,7 +957,7 @@ Automatic continuation comes from a non-terminating Tool batch. Steering continu
 At the stable boundary, Agent Core polls only the follow-up queue:
 
 ```typescript
-// Faithfully abridged from packages/agent/src/agent-loop.ts at 005af57d4.
+// Faithfully abridged from packages/agent/src/agent-loop.ts at 005af57d8.
 const followUpMessages = (await config.getFollowUpMessages?.()) || [];
 if (followUpMessages.length > 0) {
   explicitContinuation = false;

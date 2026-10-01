@@ -72,7 +72,7 @@ The message IR now includes `SystemMessage`, so prompt and Tool state travel wit
 
 ### The exact message and content shapes
 
-The following complete interface from `packages/ai/src/types.ts` at pinned commit `005af57d4` shows the user-side shape:
+The following complete interface from `packages/ai/src/types.ts` at pinned commit `005af57d8` shows the user-side shape:
 
 ```typescript
 export interface UserMessage {
