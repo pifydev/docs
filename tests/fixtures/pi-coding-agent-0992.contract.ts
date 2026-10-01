@@ -69,10 +69,7 @@ export function registerPi0992ExtensionContracts(pi: ExtensionAPI): void {
     thinkingLevels: ["low", "high"],
     route(request, ctx) {
       const sticky = request.failed ?? request.previous;
-      if (
-        (request.reason === "continuation" || request.reason === "retry") &&
-        sticky
-      ) {
+      if (request.reason !== "user" && sticky) {
         return {
           model: sticky.model,
           thinkingLevel: sticky.thinkingLevel ?? "medium",
