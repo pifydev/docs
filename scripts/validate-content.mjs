@@ -75,6 +75,9 @@ const navigation = {
       "test-agent-deterministically",
       "run-pi-evals",
       "host-session-runtime",
+      "use-codemode-and-mcp",
+      "route-virtual-models",
+      "build-durable-agent",
     ],
     reference: ["api", "configuration", "environment-variables"],
     course: ["index", ...courseSlugs],
@@ -116,6 +119,9 @@ const navigation = {
       "test-agent-deterministically",
       "run-pi-evals",
       "host-session-runtime",
+      "use-codemode-and-mcp",
+      "route-virtual-models",
+      "build-durable-agent",
     ],
     reference: ["api", "configuration", "environment-variables"],
     course: ["index", ...courseSlugs],
@@ -257,9 +263,9 @@ export async function validateRepository(rootURL, options = {}) {
   if (!manifest) return errors;
   if (manifest.version !== 1)
     errors.push("translation-manifest.json: version must be 1");
-  if (!Array.isArray(manifest.pages) || manifest.pages.length !== 43) {
+  if (!Array.isArray(manifest.pages) || manifest.pages.length !== 46) {
     errors.push(
-      "translation-manifest.json: exactly 43 page pairs are required",
+      "translation-manifest.json: exactly 46 page pairs are required",
     );
     return errors;
   }
@@ -399,5 +405,5 @@ if (invokedPath === import.meta.url) {
     for (const error of errors) console.error(`- ${error}`);
     process.exit(1);
   }
-  console.log("Fumadocs content validation passed: 43 EN/VI page pairs.");
+  console.log("Fumadocs content validation passed: 46 EN/VI page pairs.");
 }

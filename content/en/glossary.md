@@ -5,7 +5,7 @@ translation_key: glossary
 language: en
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-08-25'
+last_updated: '2026-10-01'
 ---
 These definitions follow the current Pi packages. Code identifiers, package names, commands, paths, configuration keys, and environment variables are always preserved exactly.
 
@@ -134,3 +134,31 @@ One assistant response plus the Tool batch accepted from that response, bounded 
 ## Verdict
 
 The structured outcome produced by a [judge](#judge), such as pass/fail, a score or label, and supporting reasons. The judge is the decision mechanism; the verdict is the recorded result.
+
+## Codemode
+
+A Pi coding-agent execution mode that gives the model a JavaScript environment for orchestrating deferred tools. It exposes compact discovery metadata first, then loads and calls only the tools a script needs.
+
+## MCP server/Tool exposure
+
+The boundary that makes an MCP server available through Codemode or exposes one of its tools directly to the model. Server-level Codemode exposure and direct Tool exposure have different prompt, naming, and result contracts.
+
+## Virtual Model
+
+A registered model-like route whose selector chooses a physical model at request time. Session history records the Virtual Model identity while routing metadata preserves the selected physical target for the request.
+
+## physical model
+
+The concrete provider and model descriptor selected behind a Virtual Model. Provider credentials, thinking support, token limits, and usage accounting come from this physical model.
+
+## Durable Harness
+
+The experimental `@earendil-works/pi-durable` runtime entry point that owns durable storage, registered Tools, Conversations, Documents, and Tasks. It replays persisted operations and coordinates recovery across process restarts.
+
+## Submission
+
+A durable handle returned when input or a write is admitted to a Conversation. It can be awaited or aborted independently; cancelling a wait does not cancel the durable work.
+
+## replay policy
+
+A Tool declaration that states whether interrupted execution may be replayed. Only `replay: "safe"` authorizes the Durable Harness to rerun that Tool after recovery.

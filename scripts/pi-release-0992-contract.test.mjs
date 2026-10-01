@@ -93,6 +93,17 @@ function tableRowContaining(markdown, key) {
   return row;
 }
 
+function firstDatedChangelogBlock(markdown) {
+  const datedHeadings = [...markdown.matchAll(/^## (\d{4}-\d{2}-\d{2})$/gm)];
+  assert.ok(datedHeadings.length > 0, "changelog must contain a dated block");
+  const first = datedHeadings[0];
+  const next = datedHeadings[1];
+  return {
+    date: first[1],
+    body: markdown.slice(first.index, next?.index ?? markdown.length),
+  };
+}
+
 test("release fixture identifies the exact published Pi 0.99.2 authority", async () => {
   assert.deepEqual(await readJson(releaseFixtureURL), expectedRelease);
 });
@@ -112,6 +123,45 @@ test("all six Pi direct dependencies use exact 0.99.2 pins", async () => {
       packageLock.packages[""].devDependencies[packageName],
       expectedRelease.packageVersion,
     );
+  }
+});
+
+test("the first bilingual changelog entry rolls up Pi 0.99.0 through 0.99.2", async () => {
+  const expectations = {
+    en: [
+      "Release coverage",
+      "Major platform capabilities",
+      "Models, authentication, and interface",
+      "Reliability and behavioral corrections",
+      "Documentation and verification scope",
+    ],
+    vi: [
+      "Phạm vi release",
+      "Các capability chính của nền tảng",
+      "Model, xác thực và giao diện",
+      "Các sửa lỗi về độ tin cậy và hành vi",
+      "Phạm vi tài liệu và kiểm chứng",
+    ],
+  };
+
+  for (const locale of ["en", "vi"]) {
+    const changelog = await readFile(
+      new URL(`content/${locale}/changelog.md`, repositoryRoot),
+      "utf8",
+    );
+    const firstBlock = firstDatedChangelogBlock(changelog);
+    assert.equal(firstBlock.date, "2026-10-01");
+
+    const actualHeadings = [...firstBlock.body.matchAll(/^### (.+)$/gm)].map(
+      ([, heading]) => heading,
+    );
+    assert.deepEqual(actualHeadings, expectations[locale]);
+    for (const token of ["v0.99.0", "v0.99.1", "v0.99.2", "gpt-6.1-sol"]) {
+      assert.ok(
+        firstBlock.body.includes(token),
+        `${locale} first changelog block must include ${token}`,
+      );
+    }
   }
 });
 
@@ -246,7 +296,6 @@ test("Codemode and MCP guides preserve paired structure and safety boundaries", 
   assert.equal(codeFenceCount(english), codeFenceCount(vietnamese));
 
   assert.deepEqual(headings(english), [
-    "# Use Codemode and MCP",
     "## Mental model",
     "## Choose how Tools reach the model",
     "## Configure MCP servers",
@@ -261,7 +310,6 @@ test("Codemode and MCP guides preserve paired structure and safety boundaries", 
     "## Release-pinned sources",
   ]);
   assert.deepEqual(headings(vietnamese), [
-    "# Sử dụng Codemode và MCP",
     "## Mô hình tư duy",
     "## Chọn cách model tiếp cận Tool",
     "## Cấu hình MCP server",
@@ -527,7 +575,6 @@ test("Virtual Model guides separate selection, dispatch, state, and accounting",
   ]);
 
   assert.deepEqual(headings(english), [
-    "# Route requests with Virtual Models",
     "## Selection and dispatch",
     "## Register a virtual model",
     "## Route user, continuation, retry, and direct requests",
@@ -540,7 +587,6 @@ test("Virtual Model guides separate selection, dispatch, state, and accounting",
     "## Release-pinned sources",
   ]);
   assert.deepEqual(headings(vietnamese), [
-    "# Định tuyến request bằng Virtual Model",
     "## Selection và dispatch",
     "## Đăng ký Virtual Model",
     "## Định tuyến request user, continuation, retry và direct",
@@ -943,7 +989,6 @@ test("Durable guides preserve replay, cancellation, ownership, and storage bound
   ]);
 
   assert.deepEqual(headings(english), [
-    "# Build an experimental Durable Agent",
     "## Status and when to use it",
     "## Mental model: Harness, Conversation, and run",
     "## Open an in-memory Harness",
@@ -961,7 +1006,6 @@ test("Durable guides preserve replay, cancellation, ownership, and storage bound
     "## Release-pinned sources",
   ]);
   assert.deepEqual(headings(vietnamese), [
-    "# Xây dựng Durable Agent thử nghiệm",
     "## Trạng thái và thời điểm sử dụng",
     "## Mô hình tư duy: Harness, Conversation và run",
     "## Mở Harness trong bộ nhớ",

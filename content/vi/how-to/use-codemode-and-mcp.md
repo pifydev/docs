@@ -23,7 +23,7 @@ reviewed_by: Pify maintainers
 last_updated: '2026-10-01'
 ---
 
-# Sử dụng Codemode và MCP
+
 
 Pi `0.99.2` có thể kết nối MCP server và cho model phối hợp các Tool call trong `codemode`. Hướng dẫn này bao quát toàn bộ ranh giới vận hành chứ không chỉ bước cài đặt: model khám phá được gì, khi nào server làm chậm prompt, authentication được lưu ở đâu, permission hook nào vẫn chạy và Pi retry lỗi nào.
 

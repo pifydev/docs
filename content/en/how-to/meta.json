@@ -8,6 +8,9 @@
     "customize-system-prompt",
     "test-agent-deterministically",
     "run-pi-evals",
-    "host-session-runtime"
+    "host-session-runtime",
+    "use-codemode-and-mcp",
+    "route-virtual-models",
+    "build-durable-agent"
   ]
 }

@@ -5,7 +5,7 @@ translation_key: faq
 language: vi
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 ---
 Các câu trả lời dưới đây đề cập tới Pi và dự án tài liệu này. Hãy mở [GitHub issue](https://github.com/pifydev/docs/issues) nếu câu hỏi của bạn chưa có trong danh sách.
 
@@ -23,16 +23,31 @@ Pi giữ phần core nhỏ và cho phép tùy chỉnh bằng extension, skill, p
 
 Pi đăng ký sẵn provider cho Anthropic, OpenAI, Google, Bedrock, OpenRouter, một số subscription endpoint và nhiều dịch vụ hosted hoặc local khác. Bạn cũng có thể đăng ký custom provider hoặc server tương thích OpenAI. Xem [Tích hợp model provider](../how-to/plug-new-model.md).
 
-Các bổ sung chọn lọc của `0.87.1` dưới đây cho thấy một tên trong catalog có thể có nhiều provider route:
+Các model chọn lọc của `0.99.x` dưới đây cho thấy một tên trong catalog có thể có nhiều provider route:
 
 | Model | Route hiện tại | Hành vi của route |
 |---|---|---|
+| `GPT-6.1 Sol` (`gpt-6.1-sol`) | `openai + azure-openai-responses + openai-codex` | `default hiện tại của provider OpenAI Codex cũ` |
 | `Claude Opus 5.5` | `anthropic + github-copilot` | `adaptive thinking + route Copilot được hỗ trợ` |
 | `GPT-6 Sol` | `openai + openai-codex + github-copilot` | `API key + OpenAI Codex subscription + route Copilot được hỗ trợ` |
 | `GPT-6 Luna` | `openai + openai-codex + github-copilot` | `API key + OpenAI Codex subscription + route Copilot được hỗ trợ` |
 | `Grok 4.7` | `xai` | `default cho xAI session mới` |
 
 Đây không phải toàn bộ catalog. Dùng `/model` hoặc `pi --list-models` để xem bản đã cài, và lưu ý model được chọn tường minh hoặc model đã lưu trong session được resume có độ ưu tiên cao hơn xAI default dành cho session mới.
+
+### Khi nào nên dùng direct Tool, Codemode, MCP, Virtual Model hoặc Durable?
+
+Hãy chọn boundary nhỏ nhất đáp ứng được bài toán:
+
+| Cơ chế | Thời điểm sử dụng |
+|---|---|
+| direct Tool | Model cần một tập operation nhỏ, xác định trước và mỗi call nên xuất hiện trực tiếp trong transcript. |
+| Codemode | Tập Tool lớn hoặc deferred sẽ làm prompt phình to, hay một chương trình JavaScript chạy trong sandbox cần tìm, sắp xếp và gọi song song nhiều Tool. |
+| MCP | Tool nằm trong server stdio hoặc HTTP bên ngoài. Hãy cấu hình server, sau đó chọn exposure direct, Codemode hoặc deferred cho các Tool của nó. |
+| Virtual Model | Extension cần route từng model request tới một physical model, trong khi session giữ một virtual identity ổn định. Cơ chế này route model call, không expose Tool. |
+| Durable | Work thử nghiệm cần Document và Task được lưu bền vững, replay policy, recovery hoặc structured concurrency qua các lần khởi động lại process. Session Agent Core thông thường không bắt buộc dùng Durable. |
+
+Xem [Dùng Codemode và MCP](../how-to/use-codemode-and-mcp.md), [Route Virtual Model](../how-to/route-virtual-models.md) và [Xây dựng Durable Agent](../how-to/build-durable-agent.md) để biết đầy đủ boundary và ví dụ.
 
 ### Pi có miễn phí không?
 
@@ -46,7 +61,7 @@ Hãy đọc chương 1 đến 3 theo thứ tự để nắm tổng quan dự án
 
 ### Tài liệu này mô tả revision nào của Pi?
 
-Baseline hiện tại của tài liệu là [release Pi `0.87.1` chính thức](https://github.com/earendil-works/pi/releases/tag/v0.87.1). Review ledger ghim việc kiểm chứng tại [`f07218c`](https://github.com/earendil-works/pi/commit/f07218c4d4bbc12bef056a7058c3dd49dfe41abe). Hãy kiểm tra lại upstream trước khi phụ thuộc vào API hoặc giá trị mặc định có thể thay đổi theo version.
+Baseline hiện tại của tài liệu là [release Pi `0.99.2` chính thức](https://github.com/earendil-works/pi/releases/tag/v0.99.2). Review ledger ghim việc kiểm chứng tại [`005af57d`](https://github.com/earendil-works/pi/commit/005af57d88ee23b33778f343a9595b32e67ff788). Hãy kiểm tra lại upstream trước khi phụ thuộc vào API hoặc giá trị mặc định có thể thay đổi theo version.
 
 ### Vì sao ví dụ dùng TypeScript?
 

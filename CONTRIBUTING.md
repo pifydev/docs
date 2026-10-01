@@ -29,6 +29,9 @@ routes and include the relevant validation output.
 6. Update the relevant `meta.json` when adding, removing, or reordering a page.
 7. Run the local quality gate and open a pull request.
 
+Every content change must update its English/Vietnamese pair and the current
+46-row review ledger.
+
 For a new public page, create both locale files and add one unique manifest
 entry. The English and Vietnamese paths should remain identical unless there is
 a documented routing reason not to do so.
@@ -104,8 +107,8 @@ npm run build
 
 The individual content checks are also available:
 
-- `npm run lint:sync` compares all 43 public EN/VI page pairs.
-- `npm run lint:frontmatter` validates all 86 public files.
+- `npm run lint:sync` compares all 46 public EN/VI page pairs.
+- `npm run lint:frontmatter` validates all 92 public files.
 - `npm run lint:content` checks the manifest, navigation, links, headings, and
   retired authoring syntax.
 - `npm run lint:mermaid` validates every public Mermaid block.

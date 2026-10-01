@@ -28,7 +28,7 @@ reviewed_by: Pify maintainers
 last_updated: '2026-10-01'
 ---
 
-# Build an experimental Durable Agent
+
 
 > **Experimental.** `@earendil-works/pi-durable` can change without notice between releases. Pin its version, test recovery against the pinned version, and treat upgrades as migrations.
 

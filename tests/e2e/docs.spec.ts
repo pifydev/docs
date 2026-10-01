@@ -204,6 +204,30 @@ test("publishes one page title and paired canonical metadata", async ({
   ).toHaveAttribute("href", "https://docs.pify.dev/en/quickstart");
 });
 
+test("publishes the three Pi 0.99.2 guides in both locales with exact alternates", async ({
+  page,
+}) => {
+  for (const slug of [
+    "use-codemode-and-mcp",
+    "route-virtual-models",
+    "build-durable-agent",
+  ]) {
+    for (const locale of ["en", "vi"] as const) {
+      const targetLocale = locale === "en" ? "vi" : "en";
+      const response = await page.goto(`/${locale}/how-to/${slug}`);
+
+      expect(response?.ok(), `/${locale}/how-to/${slug}`).toBe(true);
+      await expect(page.locator("main h1")).toBeVisible();
+      await expect(
+        page.locator(`link[rel="alternate"][hreflang="${targetLocale}"]`),
+      ).toHaveAttribute(
+        "href",
+        `${publicDocsOrigin}/${targetLocale}/how-to/${slug}`,
+      );
+    }
+  }
+});
+
 test("publishes one adaptive Pify favicon for both locales", async ({
   page,
   request,
@@ -563,14 +587,14 @@ test("serves machine-readable documentation surfaces", async ({ request }) => {
   ] = machineReadableBodies;
 
   expect(robotsBody).toContain("Sitemap: https://docs.pify.dev/sitemap.xml");
-  expect(sitemapBody.match(/<url>/g)).toHaveLength(86);
+  expect(sitemapBody.match(/<url>/g)).toHaveLength(92);
 
   for (const [response, body] of [
     [englishIndex, englishIndexBody],
     [vietnameseIndex, vietnameseIndexBody],
   ] as const) {
     expect(response.headers()["content-type"]).toContain("text/plain");
-    expect(body.match(/^- \[/gm)).toHaveLength(43);
+    expect(body.match(/^- \[/gm)).toHaveLength(46);
   }
 
   expect(englishIndexBody).toContain(
@@ -652,7 +676,7 @@ test("renders every internal Markdown source link as a clean public route", asyn
     ),
     (match) => match[1],
   );
-  expect(paths).toHaveLength(86);
+  expect(paths).toHaveLength(92);
 
   const verifierPages = await Promise.all(
     Array.from({ length: 6 }, () => page.context().newPage()),

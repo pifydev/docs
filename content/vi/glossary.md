@@ -5,7 +5,7 @@ translation_key: glossary
 language: vi
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-08-25'
+last_updated: '2026-10-01'
 ---
 Các định nghĩa dưới đây bám theo package Pi hiện tại. Identifier, tên package, command, đường dẫn, configuration key và biến môi trường luôn được giữ nguyên.
 
@@ -134,3 +134,31 @@ Một assistant response cùng lô Tool được chấp nhận từ response đ�
 ## Verdict
 
 Verdict là kết luận có cấu trúc do [judge](#judge) tạo ra, chẳng hạn pass/fail, score hoặc label kèm lý do. Judge là cơ chế ra quyết định; verdict là kết quả được ghi lại.
+
+## Codemode
+
+Chế độ thực thi của Pi coding agent, cung cấp môi trường JavaScript để model điều phối các Tool được nạp theo yêu cầu. Ban đầu Codemode chỉ đưa vào metadata khám phá nhỏ gọn, sau đó mới nạp và gọi đúng Tool mà script cần.
+
+## MCP server/Tool exposure
+
+Ranh giới đưa một MCP server vào Codemode hoặc expose trực tiếp một Tool của server cho model. Exposure ở cấp server qua Codemode và exposure Tool trực tiếp có contract khác nhau về prompt, cách đặt tên và result.
+
+## Virtual Model
+
+Route có giao diện như model, trong đó selector chọn physical model tại thời điểm gửi request. Session history ghi identity của Virtual Model, còn routing metadata lưu physical target đã chọn cho request đó.
+
+## physical model
+
+Provider và model descriptor cụ thể được chọn phía sau Virtual Model. Credential của provider, khả năng thinking, giới hạn token và usage accounting đều lấy từ physical model này.
+
+## Durable Harness
+
+Entry point runtime thử nghiệm của `@earendil-works/pi-durable`, quản lý durable storage, Tool đã đăng ký, Conversation, Document và Task. Harness replay operation đã lưu và điều phối recovery qua các lần khởi động lại process.
+
+## Submission
+
+Handle bền vững được trả về khi input hoặc write được nhận vào Conversation. Có thể chờ hoặc abort handle này độc lập; việc cancel một wait không hủy durable work.
+
+## replay policy
+
+Khai báo của Tool cho biết execution bị gián đoạn có được replay hay không. Chỉ `replay: "safe"` cho phép Durable Harness chạy lại Tool đó sau recovery.

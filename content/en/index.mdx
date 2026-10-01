@@ -5,9 +5,9 @@ translation_key: home
 language: en
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 ---
-Source-reading notes for the [Pi Agent SDK](https://github.com/earendil-works/pi), published in English and Vietnamese. This edition follows the official [Pi `0.87.1` release](https://github.com/earendil-works/pi/releases/tag/v0.87.1), reviewed against [`f07218c`](https://github.com/earendil-works/pi/commit/f07218c4d4bbc12bef056a7058c3dd49dfe41abe). The numbered chapters retain the structure of the original Pi Agent Book, but current upstream code and documentation take precedence when the implementation has changed.
+Source-reading notes for the [Pi Agent SDK](https://github.com/earendil-works/pi), published in English and Vietnamese. This edition follows the official [Pi `0.99.2` release](https://github.com/earendil-works/pi/releases/tag/v0.99.2), reviewed against the exact release commit [`005af57d`](https://github.com/earendil-works/pi/commit/005af57d88ee23b33778f343a9595b32e67ff788). The numbered chapters retain the structure of the original Pi Agent Book, but current upstream code and documentation take precedence when the implementation has changed.
 
 <Callout type="info">
 New here? Start with the [Quickstart](quickstart.md) to make a streaming model call. Go straight to the numbered chapters for the architecture and source walkthroughs.
@@ -17,16 +17,16 @@ New here? Start with the [Quickstart](quickstart.md) to make a streaming model c
 
 - **New to Pi:** [Quickstart](quickstart.md) first, then chapters in order.
 - **Reading for the architecture:** chapters 1 through 3 establish the three-layer model and the agent loop. Read the remaining chapters as focused explanations of models, tools, messages, events, context, compaction, and sessions.
-- **Building on Pi:** the [How-to Guides](how-to/add-custom-tool.md) are short task-oriented recipes.
+- **Building on Pi:** the [How-to Guides](how-to/add-custom-tool.md) are short task-oriented recipes. Start with [Codemode and MCP](how-to/use-codemode-and-mcp.md), [Virtual Models](how-to/route-virtual-models.md), or the experimental [Durable Agent](how-to/build-durable-agent.md) for the major `0.99.x` capabilities.
 - **Looking up an API or env var:** the [Reference](reference/api.md) is structured for lookup, not reading.
 
-Technical claims are checked against that pinned revision of the official Pi repository. Code identifiers and package names follow the `0.87.1` `@earendil-works/pi-*` packages.
+Technical claims are checked against that pinned revision of the official Pi repository. The `0.99.2` baseline covers six directly verified package families: `@earendil-works/pi-ai`, `@earendil-works/pi-agent-core`, `@earendil-works/pi-coding-agent`, `@earendil-works/pi-server`, `@earendil-works/pi-durable`, and `@earendil-works/chord`.
 
 ## Sections
 
 - [**Quickstart**](quickstart.md) - make your first streaming model call.
 - [**Glossary**](glossary.md) - the terms Pi uses for itself, and how this book uses them.
-- [**How-to Guides**](how-to/add-custom-tool.md) - 8 task-oriented recipes covering tools, model providers, streaming, sessions, prompts, deterministic testing, evaluation, and runtime hosting.
+- [**How-to Guides**](how-to/add-custom-tool.md) - 11 task-oriented recipes covering tools, model providers, streaming, sessions, prompts, deterministic testing, evaluation, runtime hosting, Codemode/MCP, Virtual Models, and Durable Agent workflows.
 - [**Reference**](reference/api.md) - package exports, configuration, and environment variables.
 - [**Chapters**](ch01-overview.md) - 11 long-form chapters covering the SDK end to end, including testing and evaluation.
 - [**FAQ**](help/faq.md) - common questions about Pi and this book.

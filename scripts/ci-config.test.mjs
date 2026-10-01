@@ -411,7 +411,7 @@ test("content workflow validates the Fumadocs source tree", async () => {
   assert.equal(packageLock.packages[""].engines.node, ">=22.19 <23");
   assert.equal(
     packageJSON.scripts["test:release"],
-    "node --test scripts/pi-release-contract.test.mjs",
+    "node --test scripts/pi-release-contract.test.mjs scripts/pi-release-0992-contract.test.mjs",
   );
   assert.equal(
     packageJSON.scripts["test:evals-guide"],

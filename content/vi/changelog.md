@@ -5,9 +5,43 @@ translation_key: changelog
 language: vi
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 ---
 Trang này ghi các thay đổi của website tài liệu Pify. Để xem release của Pi, hãy dùng [lịch sử release upstream](https://github.com/earendil-works/pi/releases).
+
+## 2026-10-01
+
+### Phạm vi release
+
+Pify nâng baseline tài liệu lên [release Pi `v0.99.2` chính thức](https://github.com/earendil-works/pi/releases/tag/v0.99.2). Mục này tổng hợp đầy đủ chuỗi phát hành `0.99.x`—[`v0.99.0`](https://github.com/earendil-works/pi/releases/tag/v0.99.0), [`v0.99.1`](https://github.com/earendil-works/pi/releases/tag/v0.99.1) và `v0.99.2`—đồng thời ghim source review tại commit phát hành chính xác [`005af57d`](https://github.com/earendil-works/pi/commit/005af57d88ee23b33778f343a9595b32e67ff788). Nội dung dưới đây tóm tắt các thay đổi hướng tới người dùng có ảnh hưởng đến tài liệu này, không sao chép changelog của từng package upstream.
+
+### Các capability chính của nền tảng
+
+- `v0.99.0` bổ sung Codemode, Tool search và MCP dưới dạng extension tích hợp của coding agent. Extension có thể chọn exposure `direct`, `model-only`, `codemode`, `deferred` hoặc `hidden`, gom Tool vào namespace, trả về `structuredContent` và điều phối nested call có giới hạn qua `ctx.executeTool()`.
+- Virtual Model thử nghiệm giữ một model identity ổn định trong session history, còn extension chọn physical model và thinking level cho từng request. Physical model đã route vẫn hiển thị trong cost accounting và diagnostic.
+- Model runtime nay phân biệt rõ operation type `chat`, `image` và `classifier`. Runtime bổ sung `generateImages()` và `classify()` với credential được resolve theo provider, trong khi các model read không chỉ định type vẫn chỉ trả về chat model.
+- Package thử nghiệm `@earendil-works/pi-durable` phát triển từ Harness có thể mở cùng chat/Tool turn đầu tiên thành Document, Task, Conversation được lưu bền vững, cơ chế lập lịch inbox/reset, view và event, ownership cho subagent, structured concurrency, compaction và recovery khi overflow với đúng một lần retry.
+- `v0.99.2` không còn đưa MCP server mặc định vào mô tả Tool của Codemode và không chờ server trước prompt đầu tiên. Script khám phá Tool của server qua `searchTools()` và `describeNamespace()`; `/reload` cũng bật Tool mới được thêm vào `defaultTools`.
+
+### Model, xác thực và giao diện
+
+- `v0.99.1` bổ sung `gpt-6.1-sol` cho OpenAI, Azure OpenAI Responses và OpenAI Codex, đồng thời đặt model này làm default cho provider OpenAI Codex cũ. Bản bundle cũng khôi phục module cho luồng đăng nhập OpenAI.
+- `v0.99.0` bổ sung Claude Sonnet 5.5, Sign in with ChatGPT cho provider OpenAI, catalog classifier cùng các route Jev, system theme theo terminal và các accessor đầy đủ hơn cho catalog theo model operation. Trong `v0.99.2`, `@earendil-works/pi-ai/models` cung cấp entry point nhẹ để tạo model collection và provider.
+- Anthropic workload identity federation có thể đọc các biến môi trường SDK đã được tài liệu hóa; API key và `ANTHROPIC_AUTH_TOKEN` có độ ưu tiên cao hơn. MCP HTTP server có thể dùng token hiện tại từ provider login, còn `oauth.clientName` hỗ trợ server yêu cầu OAuth client đã biết; xác thực bằng provider token chỉ được phép trong global config hoặc khi extension đăng ký và yêu cầu HTTPS, trừ loopback.
+- Mô tả MCP server xuất hiện trong danh sách server ngắn gọn của system prompt và được dùng để xếp hạng Tool search. Direct MCP call cùng Tool dùng fallback renderer hiển thị arguments, còn Codemode cung cấp structured result cho JavaScript và ghi nhận nested usage vào session cost.
+
+### Các sửa lỗi về độ tin cậy và hành vi
+
+- Các bản sửa Codemode/MCP đồng bộ tên MCP Tool với identifier của Codemode, nạp worker trong Windows binary, kiểm tra dữ liệu image được tạo, giới hạn preview result theo dòng đã wrap, loại Tool bị ẩn khỏi system prompt và không để quá trình khởi động hay xác thực MCP chậm chặn prompt đầu tiên.
+- Các bản sửa model/provider từ chối OpenAI Responses Tool call chưa hoàn tất, giữ thinking level đã yêu cầu cho Mistral và sampling parameter khi gọi trực tiếp, nhận diện context overflow của Z.AI CN, gửi non-strict khi Anthropic không hỗ trợ keyword trong strict schema và dùng exponential backoff khi không parse được `Retry-After`.
+- Các bản sửa catalog và routing merge remote model theo thời gian tuyến tính và resolve lựa chọn Virtual Model của từng branch bằng một lần lookup catalog. Session mới được lưu ngay ở user message đầu tiên; `RpcClient` không còn bỏ qua listener kế tiếp khi một listener khác unsubscribe trong lúc dispatch.
+- Durable recovery nay xác định rõ ownership và thứ tự abort, chờ foreground descendant trước khi owner hoàn tất, từ chối child background do Task sở hữu, loại request trùng lặp sau khi được nhận và chỉ cho phép replay sau gián đoạn khi Tool khai báo `replay: "safe"`.
+
+### Phạm vi tài liệu và kiểm chứng
+
+- Các dependency trực tiếp được ghim chính xác ở `0.99.2`, gồm `@earendil-works/pi-ai`, `@earendil-works/pi-agent-core`, `@earendil-works/pi-coding-agent`, `@earendil-works/pi-server`, `@earendil-works/pi-durable` và `@earendil-works/chord`. Nguồn xác thực release được lưu trong `scripts/fixtures/pi-release-0992.json`.
+- Compile fixture kiểm tra các public surface của SDK, coding agent và Durable trong `tests/fixtures/pi-sdk-0992.contract.ts`, `tests/fixtures/pi-coding-agent-0992.contract.ts` và `tests/fixtures/pi-durable-0992.contract.ts`. Bộ kiểm chứng cũng mở rồi đóng Durable Harness offline và không gọi tài khoản provider thật.
+- Bổ sung các cặp hướng dẫn Anh/Việt đồng bộ cho Codemode và MCP, Virtual Model và Durable Agent thử nghiệm. Inventory công khai hiện có 46 cặp trang song ngữ, tương ứng 92 tài liệu công khai, kèm kiểm tra số lượng route, frontmatter, language alternate, navigation và LLM index.
 
 ## 2026-09-23
 

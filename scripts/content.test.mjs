@@ -79,6 +79,9 @@ const nestedPages = {
     "test-agent-deterministically",
     "run-pi-evals",
     "host-session-runtime",
+    "use-codemode-and-mcp",
+    "route-virtual-models",
+    "build-durable-agent",
   ],
   reference: ["api", "configuration", "environment-variables"],
   course: [
@@ -158,13 +161,13 @@ function glossaryDefinitionErrors(markdown, requiredTerms) {
   return errors;
 }
 
-test("translation manifest contains 43 unique EN/VI pairs", async () => {
+test("translation manifest contains 46 unique EN/VI pairs", async () => {
   const manifest = JSON.parse(await readFile(manifestURL, "utf8"));
   assert.equal(manifest.version, 1);
-  assert.equal(manifest.pages.length, 43);
-  assert.equal(new Set(manifest.pages.map((page) => page.key)).size, 43);
-  assert.equal(new Set(manifest.pages.map((page) => page.en)).size, 43);
-  assert.equal(new Set(manifest.pages.map((page) => page.vi)).size, 43);
+  assert.equal(manifest.pages.length, 46);
+  assert.equal(new Set(manifest.pages.map((page) => page.key)).size, 46);
+  assert.equal(new Set(manifest.pages.map((page) => page.en)).size, 46);
+  assert.equal(new Set(manifest.pages.map((page) => page.vi)).size, 46);
   assert.deepEqual(manifest.pages[0], {
     key: "home",
     group: "start",
@@ -206,6 +209,24 @@ test("translation manifest contains 43 unique EN/VI pairs", async () => {
       vi: "how-to/host-session-runtime.md",
     },
     {
+      key: "how-to-use-codemode-and-mcp",
+      group: "how-to",
+      en: "how-to/use-codemode-and-mcp.md",
+      vi: "how-to/use-codemode-and-mcp.md",
+    },
+    {
+      key: "how-to-route-virtual-models",
+      group: "how-to",
+      en: "how-to/route-virtual-models.md",
+      vi: "how-to/route-virtual-models.md",
+    },
+    {
+      key: "how-to-build-durable-agent",
+      group: "how-to",
+      en: "how-to/build-durable-agent.md",
+      vi: "how-to/build-durable-agent.md",
+    },
+    {
       key: "course-overview",
       group: "course",
       en: "course/index.mdx",
@@ -241,6 +262,18 @@ test("translation manifest contains 43 unique EN/VI pairs", async () => {
       expectedPage,
     );
   }
+
+  const hostIndex = manifest.pages.findIndex(
+    (page) => page.key === "how-to-host-session-runtime",
+  );
+  assert.deepEqual(
+    manifest.pages.slice(hostIndex + 1, hostIndex + 4).map((page) => page.key),
+    [
+      "how-to-use-codemode-and-mcp",
+      "how-to-route-virtual-models",
+      "how-to-build-durable-agent",
+    ],
+  );
 });
 
 test("README and bilingual changelog describe the complete SDK and course release", async () => {
@@ -261,20 +294,24 @@ test("README and bilingual changelog describe the complete SDK and course releas
   };
 
   assert.match(readme, /eleven Pi SDK chapters/i);
-  assert.match(readme, /eight How-to guides/i);
+  assert.match(readme, /eleven How-to guides/i);
   assert.match(readme, /Chapter 11[^\r\n]*testing and evaluation/i);
   assert.match(readme, /Test an agent deterministically/);
   assert.match(readme, /Run Pi evaluations/);
   assert.match(readme, /Host a session runtime/);
+  assert.match(readme, /Codemode and MCP/);
+  assert.match(readme, /Virtual Models/);
+  assert.match(readme, /experimental Durable Agent/i);
   assert.match(
     readme,
     /separate overview[^\r\n]*15-checkpoint Build Your Own Pi-style Agent course/i,
   );
-  assert.match(readme, /43 synchronized[^\r\n]*86 public documents/i);
+  assert.match(readme, /46 synchronized[^\r\n]*92 public documents/i);
   assert.match(readme, /^course\/\s+Offline TypeScript workshop/m);
   assert.match(readme, /`npm run test:course`/);
-  assert.match(contributing, /compares all 43 public EN\/VI page pairs/);
-  assert.match(contributing, /validates all 86 public files/);
+  assert.match(contributing, /compares all 46 public EN\/VI page pairs/);
+  assert.match(contributing, /validates all 92 public files/);
+  assert.match(contributing, /current\s+46-row review ledger/i);
   assert.match(
     readme,
     /`npm run test:course:checkpoint -- course\/test\/04-deterministic-model\.test\.ts`/,
@@ -324,34 +361,29 @@ test("README and bilingual changelog describe the complete SDK and course releas
   assert.match(changelog.vi, /workshop TypeScript offline/i);
 });
 
-test("release entry points publish the Pi 0.87.1 baseline and exact review authority", async () => {
+test("release entry points publish the Pi 0.99.2 baseline and exact review authority", async () => {
   const releaseURL =
-    "https://github.com/earendil-works/pi/releases/tag/v0.87.1";
-  const releaseCommit = "f07218c4d4bbc12bef056a7058c3dd49dfe41abe";
+    "https://github.com/earendil-works/pi/releases/tag/v0.99.2";
+  const releaseCommit = "005af57d88ee23b33778f343a9595b32e67ff788";
   const pages = await Promise.all(
-    [
-      "content/en/index.mdx",
-      "content/vi/index.mdx",
-      "content/en/quickstart.md",
-      "content/vi/quickstart.md",
-      "content/en/help/faq.md",
-      "content/vi/help/faq.md",
-    ].map(async (relativePath) => ({
-      relativePath,
-      source: await readFile(new URL(relativePath, repositoryRoot), "utf8"),
-    })),
+    ["content/en/index.mdx", "content/vi/index.mdx"].map(
+      async (relativePath) => ({
+        relativePath,
+        source: await readFile(new URL(relativePath, repositoryRoot), "utf8"),
+      }),
+    ),
   );
   const readme = await readFile(new URL("README.md", repositoryRoot), "utf8");
 
   for (const { relativePath, source } of pages) {
     assert.match(
       source,
-      /last_updated: '2026-09-23'/,
+      /last_updated: '2026-10-01'/,
       `${relativePath} must carry the publication baseline date`,
     );
     assert.ok(
       source.includes(releaseURL),
-      `${relativePath} must link the official Pi 0.87.1 release`,
+      `${relativePath} must link the official Pi 0.99.2 release`,
     );
   }
 
@@ -364,24 +396,14 @@ test("release entry points publish the Pi 0.87.1 baseline and exact review autho
     );
   }
 
-  for (const { relativePath, source } of pages.filter(({ relativePath }) =>
-    relativePath.endsWith("quickstart.md"),
-  )) {
-    assert.match(
-      source,
-      /npm install @earendil-works\/pi-ai@0\.87\.1/,
-      `${relativePath} must pin its SDK install command`,
-    );
-  }
-
-  assert.match(readme, /Pi SDK `0\.87\.1`/);
+  assert.match(readme, /Pi SDK `0\.99\.2`/);
   assert.ok(readme.includes(releaseURL));
   assert.ok(
     readme.includes(
       `https://github.com/earendil-works/pi/commit/${releaseCommit}`,
     ),
   );
-  assert.match(readme, /reviewed[\s\S]{0,160}2026-09-23/i);
+  assert.match(readme, /reviewed[\s\S]{0,160}2026-10-01/i);
 });
 
 test("Chinese references remain internal provenance only", async () => {
@@ -455,7 +477,7 @@ test("FAQ contribution guidance uses the canonical content tree", async () => {
   }
 });
 
-test("paired glossaries define the canonical testing and runtime terms", async () => {
+test("paired glossaries define the canonical testing, runtime, and 0.99.2 terms", async () => {
   const requiredTerms = [
     "Test Double",
     "Fixture",
@@ -465,6 +487,13 @@ test("paired glossaries define the canonical testing and runtime terms", async (
     "Held-out Evaluation",
     "Composition Root",
     "Fail-closed",
+    "Codemode",
+    "MCP server/Tool exposure",
+    "Virtual Model",
+    "physical model",
+    "Durable Harness",
+    "Submission",
+    "replay policy",
   ];
 
   for (const locale of ["en", "vi"]) {

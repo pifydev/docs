@@ -5,9 +5,43 @@ translation_key: changelog
 language: en
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 ---
 This page records changes to the Pify documentation site. For Pi releases, use the [upstream release history](https://github.com/earendil-works/pi/releases).
+
+## 2026-10-01
+
+### Release coverage
+
+Pify advances its documentation baseline to the official [Pi `v0.99.2` release](https://github.com/earendil-works/pi/releases/tag/v0.99.2). This entry rolls up the complete `0.99.x` publication chain—[`v0.99.0`](https://github.com/earendil-works/pi/releases/tag/v0.99.0), [`v0.99.1`](https://github.com/earendil-works/pi/releases/tag/v0.99.1), and `v0.99.2`—and pins source review to the exact release commit [`005af57d`](https://github.com/earendil-works/pi/commit/005af57d88ee23b33778f343a9595b32e67ff788). It summarizes user-visible changes that affect this documentation rather than reproducing the upstream package changelogs.
+
+### Major platform capabilities
+
+- `v0.99.0` introduced Codemode, Tool search, and MCP as built-in coding-agent extensions. Extensions can select `direct`, `model-only`, `codemode`, `deferred`, or `hidden` exposure, group Tools into namespaces, return `structuredContent`, and orchestrate bounded nested calls through `ctx.executeTool()`.
+- Experimental Virtual Models can keep a stable model identity in session history while an extension selects a physical model and thinking level for each request. The routed physical model remains visible for cost accounting and diagnostics.
+- The model runtime now treats chat, image, and classifier models as explicit operation types. It adds provider-resolved `generateImages()` and `classify()` operations while keeping existing unqualified model reads chat-only.
+- The experimental `@earendil-works/pi-durable` package grew from an openable Harness and first chat/Tool turns into persisted Documents, Tasks, Conversations, inbox/reset scheduling, views and events, subagent ownership, structured concurrency, compaction, and one-retry overflow recovery.
+- `v0.99.2` keeps default MCP servers out of the Codemode Tool description and stops waiting for them before the first prompt. Scripts discover server Tools through `searchTools()` and `describeNamespace()`; `/reload` also enables Tools newly added to `defaultTools`.
+
+### Models, authentication, and interface
+
+- `v0.99.1` added `gpt-6.1-sol` to OpenAI, Azure OpenAI Responses, and OpenAI Codex, and made it the default model for the legacy OpenAI Codex provider. The bundled release also restores the OpenAI login flow module.
+- `v0.99.0` added Claude Sonnet 5.5, Sign in with ChatGPT for the OpenAI provider, classifier catalogs and Jev routes, the system terminal theme, and richer model-operation catalog accessors. `@earendil-works/pi-ai/models` in `v0.99.2` offers a lightweight entry point for model collections and provider construction.
+- Anthropic workload identity federation can read the documented SDK environment variables, with API keys and `ANTHROPIC_AUTH_TOKEN` taking precedence. MCP HTTP servers can use a current provider-login token, while `oauth.clientName` supports servers that require a known OAuth client; provider-token authentication is limited to global configuration or extension registration and requires HTTPS except on loopback.
+- MCP server descriptions now appear in the compact system-prompt server list and participate in Tool-search ranking. Direct MCP calls and fallback-rendered Tool calls show their arguments, while Codemode exposes structured results to JavaScript and records nested usage in session cost.
+
+### Reliability and behavioral corrections
+
+- Codemode/MCP fixes align MCP Tool names with Codemode identifiers, load the worker in Windows binaries, validate generated image data, cap wrapped result previews, omit hidden Tools from the system prompt, and keep late MCP startup or authentication from blocking the first user prompt.
+- Model/provider fixes reject unfinished OpenAI Responses Tool calls, preserve requested Mistral thinking levels and direct-call sampling parameters, recognize Z.AI CN context overflow, send unsupported Anthropic strict schemas non-strict, and fall back to exponential backoff when `Retry-After` cannot be parsed.
+- Catalog and routing fixes merge remote models in linear time and resolve each branch's Virtual Model selection with one catalog lookup. New sessions are persisted at the first user message, and `RpcClient` no longer skips the next listener when another listener unsubscribes during dispatch.
+- Durable recovery now makes ownership and abort order explicit, waits for foreground descendants before owner completion, rejects background task-owned children, deduplicates admitted requests, and allows replay after interruption only when a Tool declares `replay: "safe"`.
+
+### Documentation and verification scope
+
+- Direct dependencies are pinned exactly to `0.99.2` for `@earendil-works/pi-ai`, `@earendil-works/pi-agent-core`, `@earendil-works/pi-coding-agent`, `@earendil-works/pi-server`, `@earendil-works/pi-durable`, and `@earendil-works/chord`. Release authority is recorded in `scripts/fixtures/pi-release-0992.json`.
+- Compile fixtures cover the public SDK, coding-agent, and Durable surfaces in `tests/fixtures/pi-sdk-0992.contract.ts`, `tests/fixtures/pi-coding-agent-0992.contract.ts`, and `tests/fixtures/pi-durable-0992.contract.ts`. The verification suite also opens and closes a Durable Harness offline; it does not call a live provider account.
+- Added synchronized English/Vietnamese guides for Codemode and MCP, Virtual Models, and the experimental Durable Agent. The public inventory now contains 46 bilingual page pairs and 92 public documents, with route, frontmatter, language-alternate, navigation, and LLM-index count checks.
 
 ## 2026-09-23
 

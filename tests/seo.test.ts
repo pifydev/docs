@@ -11,10 +11,13 @@ describe("public documentation SEO", () => {
   it("publishes exactly one English and Vietnamese URL per source page", () => {
     const paths = buildPublicPagePaths();
 
-    expect(paths).toHaveLength(86);
-    expect(new Set(paths).size).toBe(86);
-    expect(paths.filter((path) => path.startsWith("/en"))).toHaveLength(43);
-    expect(paths.filter((path) => path.startsWith("/vi"))).toHaveLength(43);
+    expect(paths).toHaveLength(92);
+    expect(new Set(paths).size).toBe(92);
+    expect(paths.filter((path) => path.startsWith("/en"))).toHaveLength(46);
+    expect(paths.filter((path) => path.startsWith("/vi"))).toHaveLength(46);
+    expect(paths).toContain("/en/how-to/use-codemode-and-mcp");
+    expect(paths).toContain("/vi/how-to/route-virtual-models");
+    expect(paths).toContain("/vi/how-to/build-durable-agent");
     expect(paths.filter((path) => path === "/en/course")).toHaveLength(1);
     expect(
       paths.filter((path) => path === "/vi/course/14-agent-evaluation"),
@@ -44,7 +47,7 @@ describe("public documentation SEO", () => {
       (entry) => entry.url === `${SITE_ORIGIN}/vi/course/14-agent-evaluation`,
     );
 
-    expect(sitemap).toHaveLength(86);
+    expect(sitemap).toHaveLength(92);
     expect(quickstart?.alternates?.languages).toEqual({
       en: `${SITE_ORIGIN}/en/quickstart`,
       vi: `${SITE_ORIGIN}/vi/quickstart`,

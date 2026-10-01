@@ -65,15 +65,15 @@ test("frontmatter validation covers every public document", async () => {
       "utf8",
     ),
   );
-  assert.equal(manifest.pages.length, 43);
+  assert.equal(manifest.pages.length, 46);
   const expectedCount = publicDocumentCount(manifest);
-  assert.equal(expectedCount, 86);
+  assert.equal(expectedCount, 92);
   const { stdout } = await exec("node", ["scripts/validate-frontmatter.mjs"]);
-  assert.match(stdout, /Validated 86 public content files/);
+  assert.match(stdout, /Validated 92 public content files/);
   assert.match(stdout, /All frontmatter is valid/);
 
   const result = await validateFrontmatter(new URL("../", import.meta.url));
-  assert.equal(result.count, 86);
+  assert.equal(result.count, 92);
   assert.deepEqual(result.errors, []);
 });
 

@@ -5,7 +5,7 @@ translation_key: faq
 language: en
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 ---
 These answers cover Pi and this documentation project. Open a [GitHub issue](https://github.com/pifydev/docs/issues) if your question is not listed.
 
@@ -23,16 +23,31 @@ Pi keeps the core small and exposes customization through extensions, skills, pr
 
 Pi registers built-in providers for Anthropic, OpenAI, Google, Bedrock, OpenRouter, several subscription endpoints, and other hosted or local services. It can also register a custom provider or an OpenAI-compatible server. See [Integrate a model provider](../how-to/plug-new-model.md).
 
-These selected `0.87.1` additions show how one catalog name can have several provider routes:
+These selected `0.99.x` models show how one catalog name can have several provider routes:
 
 | Model | Current routes | Route behavior |
 |---|---|---|
+| `GPT-6.1 Sol` (`gpt-6.1-sol`) | `openai + azure-openai-responses + openai-codex` | `current default for the legacy OpenAI Codex provider` |
 | `Claude Opus 5.5` | `anthropic + github-copilot` | `adaptive thinking + supported Copilot route` |
 | `GPT-6 Sol` | `openai + openai-codex + github-copilot` | `API key + OpenAI Codex subscription + supported Copilot route` |
 | `GPT-6 Luna` | `openai + openai-codex + github-copilot` | `API key + OpenAI Codex subscription + supported Copilot route` |
 | `Grok 4.7` | `xai` | `default for new xAI sessions` |
 
 This is not the complete catalog. Use `/model` or `pi --list-models` for the installed build, and remember that an explicit model or the saved model in a resumed session takes precedence over the new-session xAI default.
+
+### When should I use direct Tools, Codemode, MCP, Virtual Models, or Durable?
+
+Choose the smallest boundary that solves the problem:
+
+| Mechanism | Use it when |
+|---|---|
+| direct Tools | The model needs a small, known set of callable operations and each call should appear directly in the transcript. |
+| Codemode | A large or deferred Tool set would bloat the prompt, or one sandboxed JavaScript program should search, sequence, and parallelize several calls. |
+| MCP | Tools live in an external stdio or HTTP server. Configure that server, then choose direct, Codemode, or deferred exposure for its Tools. |
+| Virtual Models | An extension must route each model request to a physical model while the session keeps one stable virtual identity. This routes model calls; it does not expose Tools. |
+| Durable | Experimental work needs persisted Documents, Tasks, replay policy, recovery, or structured concurrency across process restarts. It is not required for an ordinary Agent Core session. |
+
+See [Use Codemode and MCP](../how-to/use-codemode-and-mcp.md), [Route Virtual Models](../how-to/route-virtual-models.md), and [Build a Durable Agent](../how-to/build-durable-agent.md) for the complete boundaries and examples.
 
 ### Is Pi free?
 
@@ -46,7 +61,7 @@ Read chapters 1 through 3 in order for the project overview, package architectur
 
 ### Which Pi revision does this documentation describe?
 
-The current documentation baseline is the official [Pi `0.87.1` release](https://github.com/earendil-works/pi/releases/tag/v0.87.1). The editorial review ledger pins verification to [`f07218c`](https://github.com/earendil-works/pi/commit/f07218c4d4bbc12bef056a7058c3dd49dfe41abe). Recheck the upstream source before relying on a version-sensitive API or default.
+The current documentation baseline is the official [Pi `0.99.2` release](https://github.com/earendil-works/pi/releases/tag/v0.99.2). The editorial review ledger pins verification to [`005af57d`](https://github.com/earendil-works/pi/commit/005af57d88ee23b33778f343a9595b32e67ff788). Recheck the upstream source before relying on a version-sensitive API or default.
 
 ### Why do examples use TypeScript?
 

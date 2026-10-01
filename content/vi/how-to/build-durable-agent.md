@@ -28,7 +28,7 @@ reviewed_by: Pify maintainers
 last_updated: '2026-10-01'
 ---
 
-# Xây dựng Durable Agent thử nghiệm
+
 
 > **Experimental.** `@earendil-works/pi-durable` có thể thay đổi mà không báo trước giữa các release. Hãy ghim version, test recovery với đúng version đó và coi mỗi lần nâng cấp là một migration.
 

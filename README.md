@@ -34,29 +34,30 @@ This is a community-maintained learning resource. For authoritative product
 behavior, cross-check the [official Pi documentation](https://pi.dev/docs/latest)
 and [Pi source code](https://github.com/earendil-works/pi).
 
-The current documentation baseline is Pi SDK `0.87.1`: see the
-[official release notes](https://github.com/earendil-works/pi/releases/tag/v0.87.1).
+The current documentation baseline is Pi SDK `0.99.2`: see the
+[official release notes](https://github.com/earendil-works/pi/releases/tag/v0.99.2).
 Technical claims were reviewed against
-[`f07218c`](https://github.com/earendil-works/pi/commit/f07218c4d4bbc12bef056a7058c3dd49dfe41abe)
-on 2026-09-23; the rollup also includes the intervening releases
-[`0.85.1`](https://github.com/earendil-works/pi/releases/tag/v0.85.1),
-[`0.86.0`](https://github.com/earendil-works/pi/releases/tag/v0.86.0),
-[`0.86.1`](https://github.com/earendil-works/pi/releases/tag/v0.86.1), and
-[`0.87.0`](https://github.com/earendil-works/pi/releases/tag/v0.87.0).
+[`005af57d`](https://github.com/earendil-works/pi/commit/005af57d88ee23b33778f343a9595b32e67ff788)
+on 2026-10-01. The current rollup covers the published `v0.99.0` through
+`v0.99.2` release chain.
 
 ## What is included
 
 - Eleven Pi SDK chapters covering architecture, runtime behavior, and the Agent
   Loop. Chapter 11 focuses on testing and evaluation.
-- A ten-minute quickstart and eight How-to guides, including
+- A ten-minute quickstart and eleven How-to guides, including
   [Test an agent deterministically](https://docs.pify.dev/en/how-to/test-agent-deterministically),
   [Run Pi evaluations](https://docs.pify.dev/en/how-to/run-pi-evals), and
-  [Host a session runtime](https://docs.pify.dev/en/how-to/host-session-runtime).
+  [Host a session runtime](https://docs.pify.dev/en/how-to/host-session-runtime),
+  plus focused guides for
+  [Codemode and MCP](https://docs.pify.dev/en/how-to/use-codemode-and-mcp),
+  [Virtual Models](https://docs.pify.dev/en/how-to/route-virtual-models), and the
+  [experimental Durable Agent](https://docs.pify.dev/en/how-to/build-durable-agent).
 - A separate overview and 15-checkpoint Build Your Own Pi-style Agent course,
   paired with a runnable offline TypeScript workshop.
 - API, configuration, and environment-variable references.
 - A glossary, FAQ, changelog, Mermaid diagrams, and runnable code examples.
-- 43 synchronized English/Vietnamese page pairs: 86 public documents.
+- 46 synchronized English/Vietnamese page pairs: 92 public documents.
 - Locale-aware navigation and search, dark and light themes, responsive layouts,
   canonical metadata, sitemap, robots, and LLM-friendly text endpoints.
 
