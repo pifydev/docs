@@ -1080,6 +1080,20 @@ void verify;`,
     ["en", english],
     ["vi", vietnamese],
   ]) {
+    const guideLines = guide.trimEnd().split(/\r?\n/);
+    assert.ok(
+      guideLines.length >= 246,
+      `${locale} Durable guide must retain implementation depth`,
+    );
+    assert.match(guide, /^last_updated: '2026-10-01'$/m);
+    const experimentalCallout = guideLines.findIndex((line) =>
+      /^> \*\*Experimental\.\*\*/.test(line),
+    );
+    assert.ok(
+      experimentalCallout >= 0 && experimentalCallout < 40,
+      `${locale} Experimental callout must remain visible near the top`,
+    );
+
     for (const term of requiredTerms) {
       assert.ok(guide.includes(term), `${locale} guide must include ${term}`);
     }
@@ -1206,6 +1220,34 @@ void verify;`,
     );
     assert.match(cancellation, /Chord `Context`/i);
 
+    const taskOwnership = paragraphContaining(
+      mentalSection,
+      locale === "en" ? "Every Task" : "Mọi Task",
+    );
+    assert.match(
+      taskOwnership,
+      locale === "en"
+        ? /Every Task[^.]*owned by a Conversation or another Task[^.]*only a Conversation[^.]*ownerless/i
+        : /Mọi Task[^.]*thuộc về một Conversation hoặc một Task khác[^.]*chỉ Conversation[^.]*ownerless/i,
+    );
+
+    const admission = paragraphContaining(
+      entriesSection,
+      locale === "en" ? "admission Commit" : "admission Commit",
+    );
+    assert.match(
+      admission,
+      locale === "en"
+        ? /idle input[^.]*admission Commit[^.]*atomically[^.]*UserEntry[^.]*Submission[^.]*generation Task/i
+        : /input idle[^.]*admission Commit[^.]*nguyên tử[^.]*UserEntry[^.]*Submission[^.]*Task generation/i,
+    );
+    assert.doesNotMatch(
+      admission,
+      locale === "en"
+        ? /generation Task[^.]*appends?[^.]*user Entry/i
+        : /Task generation[^.]*append[^.]*user Entry/i,
+    );
+
     const commitVisibility = paragraphContaining(
       entriesSection,
       locale === "en" ? "A Commit is atomic" : "Commit có tính nguyên tử",
@@ -1258,15 +1300,50 @@ void verify;`,
         : /đã trừ tiền thẻ[^.]*crash[^.]*ghi lại[^.]*persistence[^.]*không thể[^.]*safe/i,
     );
 
+    const toolPublication = paragraphContaining(
+      replaySection,
+      locale === "en"
+        ? "Progress and terminal state"
+        : "Progress và terminal state",
+    );
+    assert.match(
+      toolPublication,
+      locale === "en"
+        ? /api\.output\(\)[\s\S]*api\.details\(\)[\s\S]*api\.diagnostic\(\)[\s\S]*pi\.live[\s\S]*during execution[\s\S]*result diagnostics[^.]*usage[\s\S]*terminal[^.]*pi\.tool-result[^.]*Commit/i
+        : /api\.output\(\)[\s\S]*api\.details\(\)[\s\S]*api\.diagnostic\(\)[\s\S]*pi\.live[\s\S]*trong execution[\s\S]*result diagnostics[^.]*usage[\s\S]*terminal[^.]*pi\.tool-result[^.]*Commit/i,
+    );
+
     assert.match(
       schedulingSection,
       /inbox[\s\S]*interrupt[\s\S]*follow-up[\s\S]*reset/is,
+    );
+    const submissionAbort = paragraphContaining(
+      schedulingSection,
+      "Submission.abort()",
+    );
+    assert.match(
+      submissionAbort,
+      locale === "en"
+        ? /Submission\.abort\(\)[\s\S]*any queued Submission[^.]*input[^.]*write[\s\S]*Conversation\.abort\(\)[\s\S]*only queued inputs[^.]*queued writes stay/i
+        : /Submission\.abort\(\)[\s\S]*mọi Submission còn trong queue[^.]*input[^.]*write[\s\S]*Conversation\.abort\(\)[\s\S]*chỉ rút queued input[^.]*queued write vẫn ở lại/i,
     );
     assert.match(
       compactionSection,
       locale === "en"
         ? /background[\s\S]*blocking[\s\S]*usage[\s\S]*context overflow[\s\S]*retry/i
         : /background[\s\S]*blocking[\s\S]*usage[\s\S]*context overflow[\s\S]*retry/i,
+    );
+    const overflowRecovery = paragraphContaining(
+      compactionSection,
+      locale === "en"
+        ? "Overflow recovery is conditional"
+        : "Recovery khi overflow có điều kiện",
+    );
+    assert.match(
+      overflowRecovery,
+      locale === "en"
+        ? /automatic compaction[^.]*enabled[^.]*no prior overflow compaction[^.]*valid cut[^.]*compacts[^.]*retries once[^.]*otherwise[^.]*no retry/i
+        : /automatic compaction[^.]*enabled[^.]*chưa có overflow compaction trước đó[^.]*điểm cắt hợp lệ[^.]*compact[^.]*retry đúng một lần[^.]*nếu không[^.]*không retry/i,
     );
 
     const exactFrame = paragraphContaining(
@@ -1287,8 +1364,18 @@ void verify;`,
     assert.match(
       ownership,
       locale === "en"
-        ? /Foreground children[^.]*parent[^.]*join[^.]*structured concurrency[\s\S]*background[^.]*independent ownership/i
-        : /Child foreground[^.]*parent[^.]*join[^.]*structured concurrency[\s\S]*background[^.]*ownership độc lập/i,
+        ? /Foreground children[^.]*parent[^.]*join[^.]*structured concurrency[\s\S]*background[^.]*does not keep[^.]*busy/i
+        : /Child foreground[^.]*parent[^.]*join[^.]*structured concurrency[\s\S]*background[^.]*không giữ[^.]*busy/i,
+    );
+    const backgroundRestriction = paragraphContaining(
+      ownershipSection,
+      "`background: true`",
+    );
+    assert.match(
+      backgroundRestriction,
+      locale === "en"
+        ? /background: true[^.]*only[^.]*conversation-owned Task[^.]*task-owned child[^.]*rejected/i
+        : /background: true[^.]*chỉ[^.]*Task do Conversation sở hữu[^.]*child do Task sở hữu[^.]*bị từ chối/i,
     );
     const abortBoundary = paragraphContaining(
       ownershipSection,

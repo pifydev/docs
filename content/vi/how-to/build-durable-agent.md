@@ -45,7 +45,7 @@ Dùng Durable khi một run phải sống qua worker crash hoặc lần restart 
 - **Harness** sở hữu một storage đang mở, tuần tự hóa các Commit nguyên tử và schedule durable work.
 - **Conversation** là handle không giữ state cho một transcript; hãy so sánh handle bằng `id`. Các **Entry** bất biến của nó gồm user input, assistant output, Tool result, thay đổi system, reset marker và kind do ứng dụng định nghĩa.
 - **Commit** là đơn vị publication. Nó có thể đồng thời append Entry, cập nhật state JSON có type trong **Document** và tạo **Task** bền vững.
-- Task là state machine có checkpoint. Mỗi Task thuộc về một Conversation hoặc Task khác, trừ khi Conversation của nó được khai báo ownerless.
+- Task là state machine có checkpoint. Mọi Task đều thuộc về một Conversation hoặc một Task khác; chỉ Conversation mới có thể là ownerless.
 - **Submission** là input hoặc thao tác ghi Entry thụ động đã được nhận bền vững; host có thể inspect, wait, abort khi còn trong queue hoặc tìm lại theo ID.
 - **Registry** cung cấp định nghĩa Tool, định nghĩa Task, các section của system prompt, hook và setup theo Conversation. Work mới dùng state Registry đang được publish.
 
@@ -106,7 +106,7 @@ export async function verifyPi0992DurableContracts(): Promise<number> {
 
 ## Gửi input và commit Entry bất biến
 
-Hãy cấu hình model và provider trước một submission thật. `submit()` nhận input vào storage trước rồi trả về `Submission`; Task generation built-in tiếp tục append user Entry, gọi model, sở hữu các Tool Task của turn và cuối cùng settle Submission thành `done` hoặc `unanswered`. Pattern ở host dưới đây tách admission khỏi việc sử dụng kết quả:
+Hãy cấu hình model và provider trước một submission thật. Với input idle và inbox rỗng, admission Commit tạo theo cách nguyên tử `UserEntry`, placed `Submission`, Task generation do Conversation sở hữu và live run. Input gửi khi busy được queue; khi boundary đặt input đó, boundary append user Entry rồi bắt đầu run trong cùng commit nguyên tử. Task generation sử dụng input đã commit, gọi model, sở hữu các Tool Task của turn và cuối cùng settle Submission thành `done` hoặc `unanswered`. Pattern ở host dưới đây tách admission khỏi việc sử dụng kết quả:
 
 ```ts
 import { AssistantEntry } from "@earendil-works/pi-durable";
@@ -155,13 +155,13 @@ Mỗi Tool call là một durable Task. Intent của nó được commit trướ
 
 Giả sử Tool đã trừ tiền thẻ rồi process crash trước khi kết quả thành công được ghi lại; persistence của Tool intent không thể biến side effect đó thành safe vì replay có thể trừ tiền lần nữa. Hãy dùng provider idempotency key ổn định và reconcile kết quả từ provider, hoặc giữ `replay` ở unsafe rồi yêu cầu recovery tường minh. Lưu thêm local state không tạo được bảo đảm exactly-once cho một remote effect tùy ý.
 
-`api.output()`, `api.details()`, diagnostic và usage của Tool result được commit trong khi execution diễn ra. Error bị throw trở thành error result cho model. Trả về `control.terminate` có thể kết thúc run, còn handoff yêu cầu reset; cả hai không làm thay đổi replay classification của side effect bên ngoài.
+Progress và terminal state dùng các commit riêng: `api.output()`, `api.details()` và `api.diagnostic()` stream progress có throttle vào `pi.live` trong execution. Ngược lại, result diagnostics và usage do `execute()` trả về chỉ được ghi trong terminal `pi.tool-result` Commit; Commit đó cũng cộng Tool usage vào `pi.usage`. Error bị throw trở thành error result cho model. Trả về `control.terminate` có thể kết thúc run, còn handoff yêu cầu reset; cả hai không làm thay đổi replay classification của side effect bên ngoài.
 
 ## Lập lịch inbox và reset context
 
 Khi Conversation busy, Document `pi.inbox` làm cho ordering trở nên tường minh. `followUp` mặc định đợi final answer rồi bắt đầu run kế tiếp; `steer` đóng vai trò interrupt có kiểm soát chỉ sau Tool round hiện tại rồi tham gia run đang chạy; `reject` throw `ConversationBusy` và không ghi gì; `write` append Entry mà không gọi model. Follow-up mode và steering mode có thể đặt một hoặc tất cả item trong queue tại một boundary. Nếu run lỗi, item vẫn nằm trong inbox cho đến khi một submission sau đó đặt chúng theo thứ tự cũ nhất trước.
 
-`Submission.abort()` chỉ rút input còn trong queue; nó không thể thu hồi item đã được đặt. Queued write vẫn ở lại khi `Conversation.abort()` rút queued input. Host UI phải thể hiện các khác biệt này thay vì hiển thị mọi nút abort như cùng một thao tác.
+`Submission.abort()` rút mọi Submission còn trong queue, dù là input hay write; nó không thể thu hồi item đã được đặt. Ngược lại, `Conversation.abort()` chỉ rút queued input, nên queued write vẫn ở lại trong inbox. Host UI phải thể hiện các khác biệt này thay vì hiển thị mọi nút abort như cùng một thao tác.
 
 `reset(handoff, context)` submit một Entry `pi.reset`. Model context bắt đầu từ marker đó và có thể nhận handoff như user message, nhưng Entry cũ vẫn nằm trong storage. Reset được queue lúc busy sẽ được đặt tại boundary; nếu được đặt trong Tool round, nó kết thúc run hiện tại.
 
@@ -169,7 +169,9 @@ Khi Conversation busy, Document `pi.inbox` làm cho ordering trở nên tường
 
 Compaction thay đổi model context chứ không thay đổi durable history. Nó tóm tắt các active Entry cũ thành head marker `pi.compaction` và vẫn giữ source Entry trong storage. `keepRecentTokens` ước lượng phần giữ nguyên văn, `reserveTokens` đặt blocking threshold bên dưới context window của model, còn `backgroundTokens` khởi động background work sớm hơn; đặt giá trị cuối thành zero chỉ tắt background compaction.
 
-Nếu background compaction chưa xong tại threshold, generation chạy blocking compaction trước request. Usage cho summarization được cộng vào spend trong `pi.usage`. Khi provider báo context overflow, generation compact rồi retry đúng một lần; đây là retry boundary hẹp, không phải quyền replay side effect Tool đã hoàn tất.
+Nếu background compaction chưa xong tại threshold, generation chạy blocking compaction trước request. Usage cho summarization được cộng vào spend trong `pi.usage`.
+
+Provider có thể báo context overflow. Recovery khi overflow có điều kiện: chỉ khi automatic compaction đang enabled, chưa có overflow compaction trước đó hoặc blocking compaction khác được ghi nhận, và tồn tại điểm cắt hợp lệ thì generation compact rồi retry đúng một lần; nếu không, nó ghi lại overflow và không retry. Retry boundary hẹp này không phải quyền replay side effect Tool đã hoàn tất.
 
 `compact()` thủ công trả về Task ID. Summary chạy trong khi Conversation tiếp tục làm việc và được đặt ngay nếu idle hoặc tại turn boundary kế tiếp nếu busy. Nhiều summary đang chạy có thể thành `stale`, nên chỉ summary có điểm cắt hợp lệ được áp dụng. `beforeCompact` có thể từ chối compaction hoặc cung cấp summary; attempt đang chạy và retry backoff vẫn hiển thị trong `pi.live`.
 
@@ -191,7 +193,9 @@ Ownership có tính transitive: Conversation do child Task sở hữu thuộc c�
 
 ## Chọn ownership foreground hoặc background
 
-Child foreground thuộc về parent, giữ parent ở trạng thái busy và phải join trước khi parent thành terminal; đây là structured concurrency. Task background tạo ownership độc lập, không giữ parent busy và cho phép subtree nó sở hữu sống qua ordinary parent abort.
+Child foreground thuộc về parent, giữ parent ở trạng thái busy và phải join trước khi parent thành terminal; đây là structured concurrency. Task background do Conversation sở hữu không giữ Conversation busy và cho phép subtree nó sở hữu sống qua ordinary Conversation abort.
+
+`background: true` chỉ hợp lệ với Task do Conversation sở hữu; child do Task sở hữu nếu dùng option này sẽ bị từ chối. Background xác định nơi ordinary abort và idle wait dừng lại; nó không phải ownership độc lập, và Task vẫn thuộc về Conversation của nó.
 
 Task background là một abort boundary. Ordinary abort dừng non-background owned work, còn `abort(context, { background: true })` vượt qua cả background boundary đã tồn tại. Abort diễn ra từ dưới lên: owned Conversation và child Task settle trước, rồi abort handler của owner mới chạy, để mỗi Task có thể undo effect của chính nó sau khi descendant dừng.
 

@@ -45,7 +45,7 @@ Do not add it merely to wrap one short-lived model request, and do not mistake d
 - A **Harness** owns one open storage and serializes atomic commits while scheduling durable work.
 - A **Conversation** is a stateless handle to a transcript; compare handles by `id`. Its immutable **Entry** records include user input, assistant output, Tool results, system changes, reset markers, and application-defined kinds.
 - A **Commit** is the publication unit. It may append Entries, update typed JSON **Document** state, and create a durable **Task** together.
-- A Task is a checkpointed state machine. Each Task is owned by a Conversation or another Task, unless its Conversation is explicitly ownerless.
+- A Task is a checkpointed state machine. Every Task is owned by a Conversation or another Task; only a Conversation can be ownerless.
 - A **Submission** is durably admitted input or a passive Entry write that the host can inspect, wait for, abort while queued, or reacquire by ID.
 - A **Registry** supplies Tool definitions, Task definitions, system-prompt sections, hooks, and per-Conversation setup. New work uses the currently published Registry state.
 
@@ -106,7 +106,7 @@ export async function verifyPi0992DurableContracts(): Promise<number> {
 
 ## Submit input and commit immutable Entries
 
-Configure a model and provider before a real submission. `submit()` first admits the input durably and returns a `Submission`; the built-in generation Task then appends the user Entry, calls the model, owns the Tool Tasks for that turn, and eventually settles the Submission as `done` or `unanswered`. This host-level pattern keeps admission separate from consuming the result:
+Configure a model and provider before a real submission. For an idle input with an empty inbox, the admission Commit atomically appends its `UserEntry`, creates the placed `Submission`, creates the conversation-owned generation Task, and records the live run. A busy input is queued instead; when a boundary places it, that boundary appends its user Entry and starts the run atomically. The generation Task consumes the already committed input, calls the model, owns the Tool Tasks for that turn, and eventually settles the Submission as `done` or `unanswered`. This host-level pattern keeps admission separate from consuming the result:
 
 ```ts
 import { AssistantEntry } from "@earendil-works/pi-durable";
@@ -155,13 +155,13 @@ A Tool call is itself a durable Task. Its intent is committed before `execute()`
 
 Suppose a Tool charged a card, then the process had a crash before the success was recorded; persistence of the Tool intent cannot make that side effect safe because replay could charge the card again. Use a stable provider idempotency key and reconcile the provider result, or keep `replay` unsafe and require explicit recovery. Storing more local state does not manufacture an exactly-once guarantee for an arbitrary remote effect.
 
-`api.output()`, `api.details()`, diagnostics, and Tool result usage are committed while execution proceeds. A thrown error becomes an error result for the model. Returning `control.terminate` can end a run, while a handoff requests a reset; neither changes the replay classification of the Tool's external effects.
+Progress and terminal state use separate commits: `api.output()`, `api.details()`, and `api.diagnostic()` stream throttled progress into `pi.live` during execution. By contrast, result diagnostics and usage returned by `execute()` are recorded only in the terminal `pi.tool-result` Commit; that Commit also adds Tool usage to `pi.usage`. A thrown error becomes an error result for the model. Returning `control.terminate` can end a run, while a handoff requests a reset; neither changes the replay classification of the Tool's external effects.
 
 ## Schedule the inbox and reset context
 
 While a Conversation is busy, the `pi.inbox` Document makes ordering explicit. A default `followUp` waits for the final answer and starts the next run; `steer` acts as a controlled interrupt only after the current Tool round and joins the active run; `reject` throws `ConversationBusy` and writes nothing; a `write` appends an Entry without invoking the model. Follow-up and steering modes can place one queued item or all queued items at a boundary. If a run fails, queued items remain until a later submission places them, oldest first.
 
-`Submission.abort()` only withdraws queued input; it cannot retract an item already placed. A queued write stays when `Conversation.abort()` withdraws queued inputs. Model these distinctions in the host UI instead of displaying every abort button as equivalent.
+`Submission.abort()` withdraws any queued Submission, whether input or write; it cannot retract an item already placed. By contrast, `Conversation.abort()` withdraws only queued inputs, so queued writes stay in the inbox. Model these distinctions in the host UI instead of displaying every abort button as equivalent.
 
 `reset(handoff, context)` submits a `pi.reset` Entry. The model context begins at that marker and optionally receives the handoff as a user message, but older Entries remain stored. A reset queued during busy work is placed at a boundary; if placed during a Tool round, it ends the current run.
 
@@ -169,7 +169,9 @@ While a Conversation is busy, the `pi.inbox` Document makes ordering explicit. A
 
 Compaction changes model context, not durable history. It summarizes older active Entries into a `pi.compaction` head marker and retains the source Entries in storage. `keepRecentTokens` estimates what remains verbatim, `reserveTokens` establishes the blocking threshold below the model context window, and `backgroundTokens` starts earlier background work; setting it to zero disables only background compaction.
 
-When background compaction is not ready at the threshold, generation performs blocking compaction before the request. Summarization usage contributes to spend in `pi.usage`. On a provider context overflow, generation compacts and retries once; this is a narrow retry boundary, not permission to replay completed Tool side effects.
+When background compaction is not ready at the threshold, generation performs blocking compaction before the request. Summarization usage contributes to spend in `pi.usage`.
+
+A provider can report context overflow. Overflow recovery is conditional: only when automatic compaction is enabled, no prior overflow compaction or other blocking compaction is recorded, and a valid cut exists, generation compacts and retries once; otherwise it records the overflow and performs no retry. This narrow retry boundary is not permission to replay completed Tool side effects.
 
 Manual `compact()` returns a Task ID. Its summary runs while the Conversation works and is placed immediately when idle or at the next turn boundary when busy. Multiple in-flight summaries can become `stale`, so only a summary with a valid cut is applied. `beforeCompact` may decline compaction or provide a summary; running attempts and retry backoff remain visible in `pi.live`.
 
@@ -191,7 +193,9 @@ Ownership is transitive: a Conversation owned by a child Task belongs to the sam
 
 ## Choose foreground or background ownership
 
-Foreground children belong to the parent, keep it busy, and must join before it becomes terminal; this is structured concurrency. A background Task establishes independent ownership, does not keep the parent busy, and allows its owned subtree to survive an ordinary parent abort.
+Foreground children belong to the parent, keep it busy, and must join before it becomes terminal; this is structured concurrency. A conversation-owned background Task does not keep its Conversation busy and allows its owned subtree to survive an ordinary Conversation abort.
+
+`background: true` is valid only for a conversation-owned Task; a task-owned child using it is rejected. Background defines where ordinary abort and idle waits stop; it is not independent ownership, and the Task remains owned by its Conversation.
 
 A background Task is an abort boundary. Ordinary abort stops non-background owned work, whereas `abort(context, { background: true })` crosses existing background boundaries too. Abort proceeds bottom-up: owned Conversations and child Tasks settle first, then the owner's abort handler runs, so each Task can undo its own effects after its descendants stop.
 
