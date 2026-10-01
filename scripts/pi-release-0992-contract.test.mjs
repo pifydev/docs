@@ -192,6 +192,14 @@ test("Codemode and MCP guides preserve paired structure and safety boundaries", 
     );
   assert.deepEqual(codeFences(english), codeFences(vietnamese));
 
+  const paragraphContaining = (markdown, needle) => {
+    const paragraph = markdown
+      .split(/\r?\n\r?\n/)
+      .find((candidate) => candidate.includes(needle));
+    assert.ok(paragraph, `guide must contain paragraph with ${needle}`);
+    return paragraph;
+  };
+
   const requiredTerms = [
     "QuickJS",
     "tool_search",
@@ -296,6 +304,111 @@ test("Codemode and MCP guides preserve paired structure and safety boundaries", 
     vietnamese,
     /Chỉ các trường hợp lỗi còn lại[^.]*ném `Error` trong script/i,
   );
+  for (const [locale, guide] of [
+    ["en", english],
+    ["vi", vietnamese],
+  ]) {
+    const firstPrompt = paragraphContaining(
+      guide,
+      locale === "en" ? "The first prompt waits" : "Prompt đầu tiên chỉ chờ",
+    );
+    assert.match(
+      firstPrompt,
+      locale === "en"
+        ? /first prompt waits[^.]*only[^.]*servers with `direct` Tools/i
+        : /Prompt đầu tiên chỉ chờ[^.]*server có Tool `direct`/i,
+      `${locale} first prompt must wait only for direct MCP Tools`,
+    );
+    assert.match(
+      firstPrompt,
+      locale === "en"
+        ? /Servers without `direct` Tools are awaited only on demand/i
+        : /Server không có Tool `direct` chỉ được chờ khi cần/i,
+      `${locale} indirect MCP servers must be awaited only on demand`,
+    );
+    assert.match(
+      firstPrompt,
+      locale === "en"
+        ? /Codemode script waits on demand[^.]*server namespace/i
+        : /Codemode script chờ theo nhu cầu[^.]*server namespace/i,
+      `${locale} Codemode must await named servers on demand`,
+    );
+    assert.match(
+      firstPrompt,
+      locale === "en"
+        ? /`tool_search`[^.]*MCP resource Tools wait[^.]*servers/i
+        : /`tool_search`[^.]*MCP resource Tool chờ[^.]*server/i,
+      `${locale} tool_search and MCP resource reads must await servers on demand`,
+    );
+
+    const providerAuth = paragraphContaining(
+      guide,
+      "Provider-token authentication",
+    );
+    assert.match(
+      providerAuth,
+      locale === "en"
+        ? /prohibited in project `.pi\/mcp\.json`/i
+        : /bị cấm trong `.pi\/mcp\.json` của project/i,
+      `${locale} provider auth must be prohibited in project config`,
+    );
+    assert.match(
+      providerAuth,
+      locale === "en"
+        ? /`auth\.provider` requires HTTPS except[^.]*loopback/i
+        : /`auth\.provider` bắt buộc dùng HTTPS[^.]*ngoại trừ[^.]*loopback/i,
+      `${locale} provider auth must require HTTPS except loopback`,
+    );
+
+    const normalization = paragraphContaining(guide, "Namespace normalization");
+    assert.match(
+      normalization,
+      locale === "en"
+        ? /replaces hyphens with underscores/i
+        : /thay hyphen bằng underscore/i,
+      `${locale} namespace normalization must replace hyphens`,
+    );
+    assert.match(
+      normalization,
+      /stable hash suffix/i,
+      `${locale} normalized collisions must use stable hashes`,
+    );
+    assert.match(
+      normalization,
+      locale === "en"
+        ? /server names that differ only[^.]*rejected[^.]*silently merging/i
+        : /Tên server chỉ khác nhau[^.]*bị từ chối[^.]*không bị gộp ngầm/i,
+      `${locale} invalid normalized names must reject instead of merge`,
+    );
+
+    const reload = paragraphContaining(guide, "`/reload`");
+    assert.match(
+      reload,
+      locale === "en"
+        ? /`\/reload` activates entries newly added to `defaultTools`/i
+        : /`\/reload` activate các entry mới thêm vào `defaultTools`/i,
+      `${locale} reload must activate newly added defaultTools entries`,
+    );
+
+    const codemodeOutput = paragraphContaining(
+      guide,
+      locale === "en" ? "unawaited work" : "work chưa được await",
+    );
+    assert.match(
+      codemodeOutput,
+      locale === "en"
+        ? /`text\(\)`, `image\(\)`, `console\.\*`[^.]*top-level `return`[^.]*append script output/i
+        : /`text\(\)`, `image\(\)`, `console\.\*`[^.]*`return` ở top-level[^.]*thêm[^.]*script output/i,
+      `${locale} output helpers must append script output`,
+    );
+    assert.match(
+      codemodeOutput,
+      locale === "en"
+        ? /`exit\(\)`[^.]*terminates[^.]*success[^.]*no output/i
+        : /`exit\(\)`[^.]*chỉ kết thúc sớm[^.]*thành công[^.]*không thêm output/i,
+      `${locale} exit must terminate successfully without output`,
+    );
+  }
   for (const [locale, guide, projectTrustPattern] of [
     ["en", english, /project trust[^.]*not an? sandbox[^.]*not authorization/i],
     [

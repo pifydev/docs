@@ -82,7 +82,7 @@ pi --tools read,bash,edit,write,codemode,tool_search
 
 ## Cấu hình MCP server
 
-Dùng cấu hình file cho server cần quay lại ở mọi session. Dùng `pi.registerMcpServer()` cho server do Extension sở hữu và chỉ tồn tại trong session hiện tại của Extension đó.
+Dùng file cấu hình cho những server cần được nạp trong mọi session. Dùng `pi.registerMcpServer()` cho server do Extension sở hữu và chỉ tồn tại trong session hiện tại của Extension đó.
 
 ### Cấu hình global và trusted project
 
@@ -112,7 +112,7 @@ Cấu hình global sau khởi động một stdio server local và kết nối m
 }
 ```
 
-Entry stdio dùng `command`, `args`, `env` và `cwd`; `command` là một executable, không phải chuỗi shell command. Entry HTTP dùng `url`, `headers` và setting authentication. Pi hỗ trợ streamable HTTP, không hỗ trợ legacy SSE. Cả hai transport nhận `timeout`, `enabled`, `exposure`, `toolExposure` và `description`. Viết `description` thành một câu tóm tắt capability: Pi hiển thị câu đó trong phần `mcp_servers` của prompt, dùng nó để xếp hạng Tool và trả nó từ `describeNamespace()`.
+Entry stdio dùng `command`, `args`, `env` và `cwd`; `command` là một executable, không phải chuỗi shell command. Entry HTTP dùng `url`, `headers` và setting authentication. Pi hỗ trợ streamable HTTP, không hỗ trợ legacy SSE. Cả hai transport nhận `timeout`, `enabled`, `exposure`, `toolExposure` và `description`. Viết `description` thành một câu tóm tắt capability. Với server có Tool gián tiếp mang exposure `codemode` hoặc `deferred`, Pi hiển thị câu đó trong phần `mcp_servers` của prompt. Tool search dùng nó để xếp hạng các Tool của server, còn `describeNamespace()` trả về description đó cho namespace tương ứng.
 
 CLI mặc định ghi cấu hình global; thêm `--local` hoặc `-l` để ghi `.pi/mcp.json`. `add` chỉ ghi cấu hình chứ không chứng minh kết nối, vì vậy hãy chạy tiếp `list`:
 
@@ -132,11 +132,11 @@ Trong session, `/mcp` hiển thị state, source, số Tool, exposure hiệu l�
 /reload
 ```
 
-Pi kết nối enabled server ở background. Prompt đầu tiên chỉ chờ tối đa mười giây cho server có Tool `direct`, vì declaration đó phải hiện diện trong request. Codemode script chờ theo nhu cầu với từng server namespace được nêu; `searchTools()` và `ALL_TOOLS`, `tool_search` và MCP resource Tool chờ mọi server liên quan.
+Pi kết nối enabled server ở background. Prompt đầu tiên chỉ chờ tối đa mười giây cho server có Tool `direct`, vì declaration đó phải hiện diện trong request. Server không có Tool `direct` chỉ được chờ khi cần: Codemode script chờ theo nhu cầu với từng server namespace được nêu; `searchTools()` và `ALL_TOOLS`, `tool_search` và MCP resource Tool chờ mọi server liên quan.
 
 Connection retry được giới hạn: HTTP network error và response tạm thời 408, 429, 5xx được retry hai lần; resource read và listing được retry một lần sau các lỗi HTTP tạm thời đó. Connection bị rớt chuyển sang trạng thái disconnected và reconnect ở call kế tiếp.
 
-Tên server nhận chữ cái, chữ số, `_` và `-`. Namespace normalization thay hyphen bằng underscore, nên `mcp__dev-radius` thành `mcp__dev_radius`. Khi các tên Tool trùng nhau sau normalization, Pi gắn stable hash suffix cho từng Tool. Tên server chỉ khác nhau ở `-` và `_` sẽ bị từ chối, không bị gộp ngầm. Pi báo lỗi rồi bỏ qua từng entry không hợp lệ; server cấu hình bằng file vẫn chủ động override Extension registration cùng tên.
+Tên server chỉ được chứa chữ cái, chữ số, `_` và `-`. Namespace normalization thay hyphen bằng underscore, nên `mcp__dev-radius` thành `mcp__dev_radius`. Khi các tên Tool trùng nhau sau normalization, Pi gắn stable hash suffix cho từng Tool. Tên server chỉ khác nhau ở `-` và `_` sẽ bị từ chối, không bị gộp ngầm. Pi báo lỗi rồi bỏ qua từng entry không hợp lệ; server cấu hình bằng file vẫn chủ động override Extension registration cùng tên.
 
 ### OAuth và xác thực bằng provider token
 
@@ -202,7 +202,7 @@ text({
 
 `searchTools()` xếp hạng bằng BM25 và nhận `limit` cùng `namespace`. `describeTool()` trả description và declaration của một Tool. `describeNamespace()` trả summary của namespace, MCP server instruction và tên Tool. Namespace lookup nhận các dạng như `mcp__dev-radius`, `mcp__dev_radius`, `dev-radius` và `dev_radius`. Đọc `ALL_TOOLS` khám phá mọi callable Tool nhưng có thể phải chờ mọi MCP server, vì vậy hãy ưu tiên tên Tool hoặc namespace đã biết khi latency quan trọng.
 
-Codemode script nhận đầy đủ MCP `CallToolResult`, gồm `content`, `structuredContent` và `isError`. Output trực tiếp cho model có thể bị truncate, trong khi script nhận kết quả hoàn chỉnh và có thể rút gọn trước khi gọi `text()` hay `image()`. `return` ở top-level, `text()`, `image()`, `console.*` và `exit()` tạo script output; work chưa được await sẽ bị cancel khi evaluation kết thúc.
+Codemode script nhận đầy đủ MCP `CallToolResult`, gồm `content`, `structuredContent` và `isError`. Output trực tiếp cho model có thể bị truncate, trong khi script nhận kết quả hoàn chỉnh và có thể rút gọn trước khi gọi `text()` hay `image()`. `text()`, `image()`, `console.*` và `return` ở top-level thêm dữ liệu vào script output. `exit()` chỉ kết thúc sớm script với trạng thái thành công và không thêm output; work chưa được await sẽ bị cancel khi evaluation kết thúc.
 
 ## Đăng ký MCP từ extension
 

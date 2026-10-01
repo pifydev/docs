@@ -112,7 +112,7 @@ The following global configuration starts one local stdio server and connects on
 }
 ```
 
-A stdio entry uses `command`, `args`, `env`, and `cwd`; `command` is one executable, not a shell command string. An HTTP entry uses `url`, `headers`, and authentication settings. Pi supports streamable HTTP, not legacy SSE. Both transports accept `timeout`, `enabled`, `exposure`, `toolExposure`, and `description`. Write `description` as a one-sentence capability summary: Pi shows it in the `mcp_servers` prompt section, uses it for Tool ranking, and returns it from `describeNamespace()`.
+A stdio entry uses `command`, `args`, `env`, and `cwd`; `command` is one executable, not a shell command string. An HTTP entry uses `url`, `headers`, and authentication settings. Pi supports streamable HTTP, not legacy SSE. Both transports accept `timeout`, `enabled`, `exposure`, `toolExposure`, and `description`. Write `description` as a one-sentence capability summary. For a server with indirect `codemode` or `deferred` Tools, Pi shows it in the `mcp_servers` prompt section. Tool search uses it to rank the server's Tools, and `describeNamespace()` returns it for that namespace.
 
 The CLI writes global configuration by default; add `--local` or `-l` for `.pi/mcp.json`. `add` writes configuration but does not prove the connection, so follow it with `list`:
 
@@ -132,7 +132,7 @@ Inside a session, `/mcp` shows state, source, Tool count, effective exposure, er
 /reload
 ```
 
-Pi connects enabled servers in the background. The first prompt waits up to ten seconds only for servers with `direct` Tools because those declarations must be present in the request. A Codemode script waits on demand for each server namespace it names; `searchTools()` and `ALL_TOOLS`, `tool_search`, and MCP resource Tools wait for all relevant servers.
+Pi connects enabled servers in the background. The first prompt waits up to ten seconds only for servers with `direct` Tools because those declarations must be present in the request. Servers without `direct` Tools are awaited only on demand: a Codemode script waits on demand for each server namespace it names; `searchTools()` and `ALL_TOOLS`, `tool_search`, and MCP resource Tools wait for all relevant servers.
 
 Connection retries are bounded: HTTP network errors and transient 408, 429, and 5xx responses retry two times; resource reads and listings retry one time after those transient HTTP failures. A dropped connection becomes disconnected and reconnects on the next call.
 
@@ -202,7 +202,7 @@ text({
 
 `searchTools()` ranks with BM25 and accepts `limit` plus `namespace`. `describeTool()` returns one Tool's description and declaration. `describeNamespace()` returns a namespace summary, MCP server instructions, and Tool names. The namespace lookup accepts forms such as `mcp__dev-radius`, `mcp__dev_radius`, `dev-radius`, and `dev_radius`. Reading `ALL_TOOLS` discovers every callable Tool but can wait for all MCP servers, so prefer a known Tool name or namespace when latency matters.
 
-A Codemode script receives the full MCP `CallToolResult`, including `content`, `structuredContent`, and `isError`. Direct model output can be truncated, while a script receives the complete result and can reduce it before calling `text()` or `image()`. Top-level `return`, `text()`, `image()`, `console.*`, and `exit()` produce script output; unawaited work is cancelled when evaluation ends.
+A Codemode script receives the full MCP `CallToolResult`, including `content`, `structuredContent`, and `isError`. Direct model output can be truncated, while a script receives the complete result and can reduce it before calling `text()` or `image()`. `text()`, `image()`, `console.*`, and a top-level `return` append script output. `exit()` terminates the script early with success and produces no output by itself; unawaited work is cancelled when evaluation ends.
 
 ## Register MCP from an extension
 
