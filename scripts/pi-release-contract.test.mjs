@@ -15,7 +15,7 @@ import {
 
 const repositoryRoot = new URL("../", import.meta.url);
 const releaseFixtureURL = new URL(
-  "fixtures/pi-release-0871.json",
+  "fixtures/pi-release-0992.json",
   import.meta.url,
 );
 const releaseContractPackages = [
@@ -23,6 +23,8 @@ const releaseContractPackages = [
   "@earendil-works/pi-agent-core",
   "@earendil-works/pi-coding-agent",
   "@earendil-works/pi-server",
+  "@earendil-works/pi-durable",
+  "@earendil-works/chord",
 ];
 const chapter11ExampleFunction = "verifyDeterministicAgentRoundTrip";
 const deterministicGuideFunction = "verifyDeterministicAgentTestingGuide";
@@ -4955,20 +4957,18 @@ function invalidPiSourceLinks(sources, release) {
   );
 }
 
-test("release fixture identifies published Pi 0.87.1 authority", async () => {
+test("release fixture identifies published Pi 0.99.2 authority", async () => {
   const release = await readReleaseFixture();
-  assert.equal(release.packageVersion, "0.87.1");
-  assert.equal(release.tag, "v0.87.1");
-  assert.equal(release.commit, "f07218c4d4bbc12bef056a7058c3dd49dfe41abe");
-  assert.equal(release.publishedAt, "2026-09-22T19:43:43Z");
+  assert.equal(release.packageVersion, "0.99.2");
+  assert.equal(release.tag, "v0.99.2");
+  assert.equal(release.commit, "005af57d88ee23b33778f343a9595b32e67ff788");
+  assert.equal(release.publishedAt, "2026-09-30T19:30:47Z");
   assert.equal(release.nodeRequirement, ">=22.19.0");
-  assert.equal(release.previousDocumentationVersion, "0.85.0");
+  assert.equal(release.previousDocumentationVersion, "0.87.1");
   assert.deepEqual(release.includedReleaseTags, [
-    "v0.85.1",
-    "v0.86.0",
-    "v0.86.1",
-    "v0.87.0",
-    "v0.87.1",
+    "v0.99.0",
+    "v0.99.1",
+    "v0.99.2",
   ]);
   assert.equal(release.sourceStatus, "published");
 });

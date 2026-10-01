@@ -1,0 +1,10 @@
+{
+  "packageVersion": "0.99.2",
+  "tag": "v0.99.2",
+  "commit": "005af57d88ee23b33778f343a9595b32e67ff788",
+  "publishedAt": "2026-09-30T19:30:47Z",
+  "nodeRequirement": ">=22.19.0",
+  "previousDocumentationVersion": "0.87.1",
+  "includedReleaseTags": ["v0.99.0", "v0.99.1", "v0.99.2"],
+  "sourceStatus": "published"
+}
