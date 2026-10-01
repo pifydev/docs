@@ -29,7 +29,6 @@ last_updated: '2026-10-01'
 ---
 
 
-
 > **Experimental.** `@earendil-works/pi-durable` can change without notice between releases. Pin its version, test recovery against the pinned version, and treat upgrades as migrations.
 
 Pi Durable is a storage-backed agent harness. It commits conversations, model turns, Tool calls, and application state before publishing them, then resumes admitted work after a process restart. This guide builds the smallest useful host while preserving the boundaries that keep replay and cancellation correct.

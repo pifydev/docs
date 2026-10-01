@@ -29,7 +29,6 @@ last_updated: '2026-10-01'
 ---
 
 
-
 > **Experimental.** `@earendil-works/pi-durable` có thể thay đổi mà không báo trước giữa các release. Hãy ghim version, test recovery với đúng version đó và coi mỗi lần nâng cấp là một migration.
 
 Pi Durable là agent harness có storage làm nền tảng. Nó commit Conversation, model turn, Tool call và state của ứng dụng trước khi công khai chúng, rồi tiếp tục work đã được nhận sau khi process khởi động lại. Hướng dẫn này xây dựng host hữu ích nhỏ nhất nhưng vẫn giữ đúng các boundary về replay và cancellation.

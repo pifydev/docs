@@ -21,7 +21,6 @@ last_updated: '2026-10-01'
 ---
 
 
-
 A Virtual Model is a selectable catalog entry whose router chooses a physical chat model for every request. It is useful when routing must depend on task shape, cost, the selected thinking level, or branch-local state while the user keeps one model selected. This guide covers the operational contract in Pi `0.99.2`; a router is policy that you own, not an automatic quality oracle.
 
 ## Selection and dispatch

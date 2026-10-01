@@ -24,7 +24,6 @@ last_updated: '2026-10-01'
 ---
 
 
-
 Pi `0.99.2` can connect MCP servers and let the model compose Tool calls in `codemode`. This guide covers the operating boundary, not just setup: what the model can discover, when a server delays a prompt, where authentication may be stored, which permission hooks still run, and which failures Pi retries.
 
 ## Mental model

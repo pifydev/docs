@@ -21,7 +21,6 @@ last_updated: '2026-10-01'
 ---
 
 
-
 Virtual Model là một entry có thể chọn trong catalog; router của nó chọn một physical chat model cho từng request. Cơ chế này phù hợp khi việc định tuyến cần dựa trên dạng task, cost, thinking level đã chọn hoặc state cục bộ của branch trong khi người dùng vẫn giữ nguyên một model selection. Hướng dẫn này trình bày contract vận hành của Pi `0.99.2`; router là policy do bạn chịu trách nhiệm, không phải bộ máy tự động biết model nào tốt nhất.
 
 ## Selection và dispatch
