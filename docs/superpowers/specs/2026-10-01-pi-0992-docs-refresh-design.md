@@ -1,7 +1,7 @@
 # Pi 0.99.2 Documentation Refresh — Design Spec
 
 - **Date:** 2026-10-01
-- **Status:** Approved in conversation; pending written-spec review
+- **Status:** Approved
 - **Owner:** Pify Docs maintainers
 - **Documentation baseline:** Pi `0.87.1`
 - **Target release:** Pi `0.99.2`
