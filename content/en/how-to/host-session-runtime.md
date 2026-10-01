@@ -27,6 +27,8 @@ Before importing that public root on Node.js `>=22.19.0`, install the SDK with `
 
 For RPC prompts, a handled input is resolved before any streaming queue decision and produces disposition `handled` without starting or queueing a run. An unhandled prompt received while streaming must set `streamingBehavior` to `steer` or `followUp`; the authoritative preflight disposition then distinguishes `started` from `queued`. Extension commands and input handlers therefore keep their interception boundary, and the response acknowledges prompt acceptance rather than completion of the resulting Agent run.
 
+Separate from the `prompt` options, the direct RPC wire commands are exactly `steer` and `follow_up`; `followUp` is not a direct wire command. Each returns `QueuedInputDisposition`: `handled` when an Extension input handler consumes the input, or `queued` when Pi queues it. If an input handler transforms rather than consumes the input, Pi queues the transformed input and still reports `queued`. The acknowledgement describes the command's preflight outcome; it does not guarantee that the message remains queued afterward.
+
 For replacement, `abort()` stops the active run and the runtime awaits it to settle before replacement teardown continues, preserving the aborted turn and completed Tool results in the outgoing session. The boundary is non-transactional: a replacement failure after teardown has no rollback to the disposed old session. A host that must not expose a half-replaced runtime therefore needs the fail-closed wrapper described below.
 
 ## Outcome

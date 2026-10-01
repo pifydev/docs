@@ -27,6 +27,8 @@ Trước khi import public root đó trên Node.js `>=22.19.0`, hãy cài SDK b�
 
 Với RPC prompt, input được handle tại Extension boundary trước mọi quyết định streaming queue và trả disposition `handled` mà không start hay queue một run. Prompt chưa được handle nhận trong lúc streaming phải đặt `streamingBehavior` thành `steer` hoặc `followUp`; preflight disposition chuẩn khi đó phân biệt `started` với `queued`. Vì vậy Extension command và input handler vẫn giữ interception boundary, còn response chỉ xác nhận prompt đã được chấp nhận chứ không xác nhận Agent run đã hoàn tất.
 
+Tách biệt với các option của `prompt`, hai direct RPC wire command có tên chính xác là `steer` và `follow_up`; `followUp` không phải direct wire command. Mỗi command trả về `QueuedInputDisposition`: `handled` khi Extension input handler consume input, hoặc `queued` khi Pi đưa input vào queue. Nếu input handler transform thay vì consume input, Pi queue input đã transform và vẫn báo `queued`. Acknowledgement này mô tả kết quả preflight của command; nó không bảo đảm message vẫn còn trong queue sau đó.
+
 Khi replacement, `abort()` dừng active run và runtime await nó settle trước khi replacement teardown tiếp tục, nhờ đó aborted turn cùng Tool result đã hoàn tất vẫn được ghi trong session sắp rời đi. Boundary này là non-transactional: replacement failure sau teardown không rollback về old session đã dispose. Host không được phép công khai runtime bị thay dở vì thế cần fail-closed wrapper được mô tả bên dưới.
 
 ## Kết quả

@@ -130,6 +130,30 @@ function assertSameParagraph(markdown, needle, patterns, context) {
   return paragraph;
 }
 
+function assertDirectRpcQueueContracts(markdown, locale) {
+  const context = `${locale} direct RPC queue boundary`;
+  return assertSameParagraph(
+    markdown,
+    locale === "en" ? "direct RPC wire commands" : "direct RPC wire command",
+    locale === "en"
+      ? [
+          /separate[^.]*`prompt`[^.]*direct RPC wire commands[^.]*`steer`[^.]*`follow_up`/i,
+          /`followUp`[^.]*not[^.]*direct wire command/i,
+          /`QueuedInputDisposition`[^.]*`handled`[^.]*input handler[^.]*consumes[^.]*`queued`[^.]*Pi queues/i,
+          /input handler[^.]*transforms[^.]*queues[^.]*transformed input[^.]*reports[^.]*`queued`/i,
+          /acknowledgement[^.]*does not guarantee[^.]*remains queued/i,
+        ]
+      : [
+          /tách biệt[^.]*`prompt`[^.]*direct RPC wire command[^.]*`steer`[^.]*`follow_up`/i,
+          /`followUp`[^.]*không phải[^.]*direct wire command/i,
+          /`QueuedInputDisposition`[^.]*`handled`[^.]*input handler[^.]*consume[^.]*`queued`[^.]*Pi[^.]*queue/i,
+          /input handler[^.]*transform[^.]*queue[^.]*input đã transform[^.]*vẫn báo[^.]*`queued`/i,
+          /acknowledgement[^.]*không bảo đảm[^.]*vẫn còn trong queue/i,
+        ],
+    context,
+  );
+}
+
 function markdownTableRows(markdown) {
   return markdown
     .split(/\r?\n/)
@@ -1011,6 +1035,53 @@ test("session lifecycle, runtime, compaction, and eval guides use 0.99.2 boundar
             /disposition[^.]*`started`[^.]*`queued`/i,
           ],
       `${locale} host runtime RPC disposition`,
+    );
+    assertDirectRpcQueueContracts(runtime, locale);
+
+    const directWireNeedle =
+      locale === "en" ? "direct RPC wire commands" : "direct RPC wire command";
+    assert.throws(
+      () =>
+        assertDirectRpcQueueContracts(
+          replaceParagraph(
+            runtime,
+            directWireNeedle,
+            (paragraph) => paragraph.replace("`follow_up`", "`followUp`"),
+            `${locale} direct follow-up wire-name mutation`,
+          ),
+          locale,
+        ),
+      assert.AssertionError,
+    );
+    assert.throws(
+      () =>
+        assertDirectRpcQueueContracts(
+          replaceParagraph(
+            runtime,
+            directWireNeedle,
+            (paragraph) => swapTokens(paragraph, "`handled`", "`queued`"),
+            `${locale} direct RPC disposition inversion`,
+          ),
+          locale,
+        ),
+      assert.AssertionError,
+    );
+    assert.throws(
+      () =>
+        assertDirectRpcQueueContracts(
+          replaceParagraph(
+            runtime,
+            directWireNeedle,
+            (paragraph) =>
+              paragraph.replace(
+                locale === "en" ? "does not guarantee" : "không bảo đảm",
+                locale === "en" ? "guarantees" : "bảo đảm",
+              ),
+            `${locale} direct RPC queue-retention guarantee mutation`,
+          ),
+          locale,
+        ),
+      assert.AssertionError,
     );
     assertSameParagraph(
       runtime,
