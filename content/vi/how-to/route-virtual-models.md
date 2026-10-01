@@ -95,7 +95,7 @@ Callback `route` chạy trước mỗi request thông qua Virtual Model đang đ
 | `retry` | Automatic retry sau physical request thất bại, gồm retry sau compaction vì context overflow. |
 | `direct` | Công việc ngoài agent loop, chẳng hạn compaction summary hoặc extension gọi `ctx.modelRegistry.streamSimple()`. |
 
-Request còn cung cấp virtual `model` và `thinkingLevel` đang được chọn, conversation `messages` gồm cả system message, abort `signal` và các routing field mô tả bên dưới. Pi clamp thinking level trả về về một giá trị mà physical model hỗ trợ.
+Request còn cung cấp virtual `model` và `thinkingLevel` đang được chọn, conversation `messages` gồm cả system message, abort `signal` và các routing field mô tả bên dưới. Pi điều chỉnh thinking level trả về thành một giá trị mà physical model hỗ trợ.
 
 ## Giữ đúng sticky turn và retry
 

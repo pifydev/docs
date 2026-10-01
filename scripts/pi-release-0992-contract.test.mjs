@@ -73,6 +73,26 @@ function paragraphContaining(markdown, needle) {
   return paragraph;
 }
 
+function sectionContaining(markdown, heading) {
+  const marker = `${heading}\n`;
+  const start = markdown.indexOf(marker);
+  assert.notEqual(start, -1, `guide must contain section ${heading}`);
+  const contentStart = start + marker.length;
+  const nextSection = markdown.indexOf("\n## ", contentStart);
+  return markdown.slice(
+    start,
+    nextSection === -1 ? markdown.length : nextSection,
+  );
+}
+
+function tableRowContaining(markdown, key) {
+  const row = markdown
+    .split(/\r?\n/)
+    .find((candidate) => candidate.startsWith(`| \`${key}\` |`));
+  assert.ok(row, `section must contain table row for ${key}`);
+  return row;
+}
+
 test("release fixture identifies the exact published Pi 0.99.2 authority", async () => {
   assert.deepEqual(await readJson(releaseFixtureURL), expectedRelease);
 });
@@ -534,6 +554,11 @@ test("Virtual Model guides separate selection, dispatch, state, and accounting",
   ]);
   assert.deepEqual(headingShape(english), headingShape(vietnamese));
   assert.equal(codeFenceCount(english), codeFenceCount(vietnamese));
+  assert.doesNotMatch(
+    vietnamese,
+    /trả về về/,
+    "vi guide must not duplicate the Vietnamese return preposition",
+  );
   const englishFences = codeFences(english);
   const vietnameseFences = codeFences(vietnamese);
   assert.deepEqual(englishFences, vietnameseFences);
@@ -608,8 +633,52 @@ test("Virtual Model guides separate selection, dispatch, state, and accounting",
     }
     assert.doesNotMatch(guide, /\/(?:blob|tree)\/main\/|\/latest(?:\/|\b)/);
 
-    const selection = paragraphContaining(
+    const localizedHeadings =
+      locale === "en"
+        ? {
+            selection: "## Selection and dispatch",
+            registration: "## Register a virtual model",
+            reasons: "## Route user, continuation, retry, and direct requests",
+            sticky: "## Keep sticky turns and retries correct",
+            accounting: "## Account for context, compaction, and cost",
+            operations: "## Use classifier and image operations deliberately",
+            failures: "## Failure modes and operational checklist",
+          }
+        : {
+            selection: "## Selection và dispatch",
+            registration: "## Đăng ký Virtual Model",
+            reasons:
+              "## Định tuyến request user, continuation, retry và direct",
+            sticky: "## Giữ đúng sticky turn và retry",
+            accounting: "## Tính context, compaction và cost",
+            operations: "## Dùng classifier và image operation có chủ đích",
+            failures: "## Failure mode và checklist vận hành",
+          };
+    const selectionSection = sectionContaining(
       guide,
+      localizedHeadings.selection,
+    );
+    const registrationSection = sectionContaining(
+      guide,
+      localizedHeadings.registration,
+    );
+    const reasonsSection = sectionContaining(guide, localizedHeadings.reasons);
+    const stickySection = sectionContaining(guide, localizedHeadings.sticky);
+    const accountingSection = sectionContaining(
+      guide,
+      localizedHeadings.accounting,
+    );
+    const operationsSection = sectionContaining(
+      guide,
+      localizedHeadings.operations,
+    );
+    const failuresSection = sectionContaining(
+      guide,
+      localizedHeadings.failures,
+    );
+
+    const selection = paragraphContaining(
+      selectionSection,
       locale === "en" ? "The selected pair" : "Cặp được chọn",
     );
     assert.match(
@@ -620,8 +689,22 @@ test("Virtual Model guides separate selection, dispatch, state, and accounting",
       `${locale} guide must distinguish virtual selection from physical dispatch`,
     );
 
+    const recordedSelection = paragraphContaining(
+      selectionSection,
+      locale === "en"
+        ? "Pi stores the virtual selection"
+        : "Pi lưu virtual selection",
+    );
+    assert.match(
+      recordedSelection,
+      locale === "en"
+        ? /virtual selection[^.]*`model_change`[^.]*`thinking_level_change`[\s\S]*current selection remains visible through[^.]*`\/model`[^.]*`ctx\.model`[^.]*`ctx\.thinkingLevel`[^.]*`PI_MODEL`[^.]*`PI_REASONING_LEVEL`/i
+        : /virtual selection[^.]*`model_change`[^.]*`thinking_level_change`[\s\S]*Selection hiện tại vẫn hiển thị qua[^.]*`\/model`[^.]*`ctx\.model`[^.]*`ctx\.thinkingLevel`[^.]*`PI_MODEL`[^.]*`PI_REASONING_LEVEL`/i,
+      `${locale} selection entries and current identifiers must remain virtual`,
+    );
+
     const messages = paragraphContaining(
-      guide,
+      selectionSection,
       locale === "en"
         ? "Provider requests receive only"
         : "Provider request chỉ nhận",
@@ -639,6 +722,78 @@ test("Virtual Model guides separate selection, dispatch, state, and accounting",
         ? /routing fails before dispatch[^.]*error assistant message retains the virtual model/i
         : /routing thất bại trước dispatch[^.]*error assistant message vẫn giữ virtual model/i,
       `${locale} guide must preserve the virtual model on routing failures`,
+    );
+
+    const routeRegistration = tableRowContaining(
+      registrationSection,
+      "route(request, ctx)",
+    );
+    assert.match(
+      routeRegistration,
+      locale === "en"
+        ? /Public extension callback[^|]*physical `model`[^|]*`thinkingLevel`[^|]*router `state`/i
+        : /Public extension callback[^|]*physical `model`[^|]*`thinkingLevel`[^|]*router `state`/i,
+      `${locale} registration table must define the public route callback`,
+    );
+
+    const lookup = paragraphContaining(
+      registrationSection,
+      locale === "en"
+        ? "Use `ctx.modelRegistry.find(provider, id)`"
+        : "Dùng `ctx.modelRegistry.find(provider, id)`",
+    );
+    assert.match(
+      lookup,
+      locale === "en"
+        ? /look up a physical chat model[^.]*handle `undefined` explicitly[\s\S]*returned model must be physical[^.]*provider must have usable credentials[^.]*routing from one Virtual Model to another Virtual Model is invalid/i
+        : /lookup physical chat model[^.]*xử lý `undefined`[^.]*tường minh[\s\S]*Model trả về phải là physical[^.]*provider của nó phải có credential sử dụng được[^.]*route từ một Virtual Model sang Virtual Model khác là không hợp lệ/i,
+      `${locale} lookup must require a credentialed physical target and reject virtual-to-virtual routing`,
+    );
+
+    const reasonRows = ["user", "continuation", "retry", "direct"].map(
+      (reason) => tableRowContaining(reasonsSection, reason),
+    );
+    assert.match(
+      reasonRows[0],
+      locale === "en"
+        ? /first request after a user-authored prompt[^|]*steering message[^|]*follow-up/i
+        : /Request đầu tiên sau prompt[^|]*steering message[^|]*follow-up[^|]*người dùng viết/i,
+      `${locale} user reason must describe the first user-authored request`,
+    );
+    assert.match(
+      reasonRows[1],
+      locale === "en"
+        ? /Another request inside the agent loop[^|]*after Tool results[^|]*extension messages/i
+        : /Request khác bên trong agent loop[^|]*sau Tool result[^|]*extension message/i,
+      `${locale} continuation reason must stay inside the agent loop`,
+    );
+    assert.match(
+      reasonRows[2],
+      locale === "en"
+        ? /automatic retry after a failed physical request[^|]*after compaction[^|]*context overflow/i
+        : /Automatic retry sau physical request thất bại[^|]*sau compaction[^|]*context overflow/i,
+      `${locale} retry reason must cover failed requests and overflow compaction`,
+    );
+    assert.match(
+      reasonRows[3],
+      locale === "en"
+        ? /outside the agent loop[^|]*compaction summary[^|]*`ctx\.modelRegistry\.streamSimple\(\)`/i
+        : /ngoài agent loop[^|]*compaction summary[^|]*`ctx\.modelRegistry\.streamSimple\(\)`/i,
+      `${locale} direct reason must describe work outside the agent loop`,
+    );
+
+    const sticky = paragraphContaining(
+      stickySection,
+      locale === "en"
+        ? "`request.failed` takes precedence"
+        : "`request.failed` có precedence",
+    );
+    assert.match(
+      sticky,
+      locale === "en"
+        ? /`request\.failed` takes precedence[^.]*`request\.previous`[^.]*`request\.failed \?\? request\.previous`[\s\S]*continuation[^.]*`request\.previous`[^.]*retry[^.]*`request\.failed`[^.]*preserves provider prompt caches and thinking signatures/i
+        : /`request\.failed` có precedence[^.]*`request\.previous`[^.]*`request\.failed \?\? request\.previous`[\s\S]*continuation[^.]*`request\.previous`[^.]*retry[^.]*`request\.failed`[^.]*bảo toàn provider prompt cache và thinking signature/i,
+      `${locale} failed routing context must take precedence and preserve cache/signature continuity`,
     );
 
     const state = paragraphContaining(
@@ -670,7 +825,7 @@ test("Virtual Model guides separate selection, dispatch, state, and accounting",
     );
 
     const accounting = paragraphContaining(
-      guide,
+      accountingSection,
       locale === "en" ? "Usage and cost belong" : "Usage và cost thuộc",
     );
     assert.match(
@@ -681,8 +836,47 @@ test("Virtual Model guides separate selection, dispatch, state, and accounting",
       `${locale} accounting, context, and compaction must follow physical models`,
     );
 
+    const contextLimits = paragraphContaining(
+      accountingSection,
+      locale === "en"
+        ? "Before any successful physical response exists"
+        : "Trước khi có successful physical response",
+    );
+    assert.match(
+      contextLimits,
+      locale === "en"
+        ? /Before any successful physical response[^.]*Virtual Model[^.]*`contextWindow`[^.]*`maxTokens`[\s\S]*checks compaction[^.]*physical model selected for that dispatch[^.]*compacts before sending[^.]*without changing the router's choice/i
+        : /Trước khi có successful physical response[^.]*`contextWindow`[^.]*`maxTokens`[^.]*Virtual Model[\s\S]*kiểm tra compaction[^.]*physical model được chọn cho dispatch[^.]*compact trước khi gửi[^.]*không thay đổi lựa chọn của router/i,
+      `${locale} pre-response limits and per-dispatch compaction must follow the routed model without rerouting`,
+    );
+
+    const classifierLatency = paragraphContaining(
+      operationsSection,
+      locale === "en" ? "A router can use" : "Router có thể dùng",
+    );
+    assert.match(
+      classifierLatency,
+      locale === "en"
+        ? /`ctx\.modelRegistry\.findOfType\('classifier', provider, id\)`[^.]*`ctx\.modelRegistry\.classify\(\)`[\s\S]*adds latency[^.]*first token/i
+        : /`ctx\.modelRegistry\.findOfType\('classifier', provider, id\)`[^.]*`ctx\.modelRegistry\.classify\(\)`[\s\S]*làm tăng latency[^.]*first token/i,
+      `${locale} classifier-assisted routing must disclose latency`,
+    );
+    const separateOperations = paragraphContaining(
+      operationsSection,
+      locale === "en"
+        ? "Classifier and image generation"
+        : "Classifier và image generation",
+    );
+    assert.match(
+      separateOperations,
+      locale === "en"
+        ? /separate `ModelRuntime` operations[^.]*not chat models[\s\S]*`getModelsOfType\(\)`[^.]*`getModelOfType\(\)`[^.]*`getAvailableOfType\(\)`[^.]*`classify\(\)`[^.]*`generateImages\(\)`[^.]*`getModels\(\)`[^.]*`getModel\(\)`[^.]*chat-only accessors/i
+        : /operation riêng của `ModelRuntime`[^.]*không phải chat model[\s\S]*`getModelsOfType\(\)`[^.]*`getModelOfType\(\)`[^.]*`getAvailableOfType\(\)`[^.]*`classify\(\)`[^.]*`generateImages\(\)`[^.]*`getModels\(\)`[^.]*`getModel\(\)`[^.]*accessor chỉ dành cho chat/i,
+      `${locale} classifier and image operations must stay separate from chat accessors`,
+    );
+
     const guarantee = paragraphContaining(
-      guide,
+      failuresSection,
       locale === "en" ? "Pi does not guarantee" : "Pi không bảo đảm",
     );
     assert.match(
@@ -691,6 +885,20 @@ test("Virtual Model guides separate selection, dispatch, state, and accounting",
         ? /does not guarantee[^.]*optimal choice/i
         : /không bảo đảm[^.]*lựa chọn tối ưu/i,
       `${locale} guide must reject an optimal-routing guarantee`,
+    );
+
+    const routeFailure = paragraphContaining(
+      failuresSection,
+      locale === "en"
+        ? "The request ends with an error response"
+        : "Request kết thúc bằng error response",
+    );
+    assert.match(
+      routeFailure,
+      locale === "en"
+        ? /ends with an error response[^.]*`route\(\)` throws[^.]*returns another Virtual Model[^.]*physical provider without credentials/i
+        : /kết thúc bằng error response[^.]*`route\(\)` throw[^.]*return một Virtual Model khác[^.]*physical provider không có credential/i,
+      `${locale} invalid routing and missing credentials must end in an error response`,
     );
 
     const resume = paragraphContaining(
