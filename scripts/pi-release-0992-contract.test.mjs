@@ -966,7 +966,7 @@ test("Durable guides preserve replay, cancellation, ownership, and storage bound
     "## Mô hình tư duy: Harness, Conversation và run",
     "## Mở Harness trong bộ nhớ",
     "## Gửi input và commit Entry bất biến",
-    "## Duy trì Document và Task nguyên tử",
+    "## Lưu bền vững Document và Task theo cách nguyên tử",
     "## Khôi phục work và loại bỏ request trùng lặp",
     "## Khai báo policy replay cho Tool",
     "## Lập lịch inbox và reset context",
@@ -1141,7 +1141,7 @@ void verify;`,
             status: "## Trạng thái và thời điểm sử dụng",
             mental: "## Mô hình tư duy: Harness, Conversation và run",
             entries: "## Gửi input và commit Entry bất biến",
-            persistence: "## Duy trì Document và Task nguyên tử",
+            persistence: "## Lưu bền vững Document và Task theo cách nguyên tử",
             recovery: "## Khôi phục work và loại bỏ request trùng lặp",
             replay: "## Khai báo policy replay cho Tool",
             scheduling: "## Lập lịch inbox và reset context",
@@ -1264,6 +1264,28 @@ void verify;`,
       locale === "en" ? "same transaction" : "cùng transaction",
     );
     assert.match(taskAtomicity, /Entry[^.]*Document[^.]*Task/is);
+    const waitingContract = paragraphContaining(
+      persistenceSection,
+      locale === "en" ? "A waiting state" : "Trạng thái waiting",
+    );
+    assert.match(
+      waitingContract,
+      locale === "en"
+        ? /`on` may reference any Task[^.]*already terminal[^.]*waiter does not own/i
+        : /`on` có thể tham chiếu Task bất kỳ[^.]*đã terminal[^.]*waiter không sở hữu/i,
+    );
+    assert.match(
+      waitingContract,
+      locale === "en"
+        ? /non-owned Task requires `allSettled`[^.]*`failFast`[^.]*only[^.]*owned child/i
+        : /Task không được sở hữu[^.]*`allSettled`[^.]*`failFast`[^.]*chỉ[^.]*child do waiter sở hữu/i,
+    );
+    assert.match(
+      waitingContract,
+      locale === "en"
+        ? /waiter resumes[^.]*every Task in `on`[^.]*terminal/i
+        : /Waiter resume[^.]*mọi Task trong `on`[^.]*terminal/i,
+    );
 
     const requestDeduplication = paragraphContaining(
       recoverySection,
@@ -1357,15 +1379,27 @@ void verify;`,
     assert.match(observationSection, /hook[^.]*scope/is);
 
     assert.match(forksSection, /fork[^.]*branch[^.]*ancestry/is);
-    const ownership = paragraphContaining(
+    const busyBoundary = paragraphContaining(
       ownershipSection,
-      locale === "en" ? "Foreground children" : "Child foreground",
+      locale === "en"
+        ? "Conversation busy means"
+        : "Conversation busy nghĩa là",
     );
     assert.match(
-      ownership,
+      busyBoundary,
       locale === "en"
-        ? /Foreground children[^.]*parent[^.]*join[^.]*structured concurrency[\s\S]*background[^.]*does not keep[^.]*busy/i
-        : /Child foreground[^.]*parent[^.]*join[^.]*structured concurrency[\s\S]*background[^.]*không giữ[^.]*busy/i,
+        ? /Conversation busy means[^.]*`pi\.live\.run` exists[^.]*ownership[^.]*idle traversal[^.]*do not define busy/i
+        : /Conversation busy nghĩa là[^.]*`pi\.live\.run` tồn tại[^.]*Ownership[^.]*idle traversal[^.]*không định nghĩa busy/i,
+    );
+    const ownershipTraversal = paragraphContaining(
+      ownershipSection,
+      locale === "en" ? "Foreground owned work" : "Foreground owned work",
+    );
+    assert.match(
+      ownershipTraversal,
+      locale === "en"
+        ? /Foreground owned work[^.]*Task-owned[^.]*holds owner completion[^.]*ordinary idle traversal[^.]*background work[^.]*excluded[^.]*ordinary idle traversal/i
+        : /Foreground owned work[^.]*Task sở hữu[^.]*giữ owner[^.]*`completing`[^.]*ordinary idle traversal[^.]*work background[^.]*bị loại khỏi[^.]*ordinary idle traversal/i,
     );
     const backgroundRestriction = paragraphContaining(
       ownershipSection,

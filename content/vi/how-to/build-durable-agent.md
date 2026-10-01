@@ -133,13 +133,13 @@ Entry không bao giờ thay đổi sau publication. Commit có tính nguyên t�
 
 Ví dụ chủ động ghi thêm một `AssistantEntry` để minh họa cách tạo typed Entry; UI production thường render assistant Entry mà Task generation đã commit thay vì nhân đôi nó.
 
-## Duy trì Document và Task nguyên tử
+## Lưu bền vững Document và Task theo cách nguyên tử
 
 Document là state JSON có type được lưu bên cạnh transcript. Dùng `defineDoc()` hoặc `defineDocFamily()` để khai báo kind, version, scope, history behavior, fork behavior và initializer. Chỉ cập nhật nó qua Commit và đọc qua snapshot hoặc Document state đã attach. Chỉ chọn `history: "rewindable"` khi cần snapshot lịch sử; `latest` tránh giữ nội dung cũ.
 
 Hãy tạo Entry, sửa Document và tạo Task trong cùng transaction khi chúng mô tả một business transition. Ví dụ, thao tác nhận job có thể cùng lúc append audit Entry, đổi job Document và tạo Task xử lý; nếu bất kỳ bước nào lỗi thì không phần nào được lưu. Commit từ Conversation dùng Conversation đó làm owner mặc định cho Task, còn Task ownership tường minh liên kết child work với parent.
 
-Định nghĩa application Task bằng `defineTask()`, đăng ký chúng trước recovery và để mỗi phase commit checkpoint kế tiếp hoặc terminal outcome. Trạng thái waiting nêu ID của các child Task cần join rồi chọn `allSettled` hoặc `failFast`; Task đã hoàn tất vẫn ở `completing` cho tới khi ordinary work nó sở hữu drain xong. Đây là durable structured concurrency, không phải queue Promise tách rời.
+Định nghĩa application Task bằng `defineTask()`, đăng ký chúng trước recovery và để mỗi phase commit checkpoint kế tiếp hoặc terminal outcome. Trạng thái waiting liệt kê Task ID trong `on` rồi chọn `allSettled` hoặc `failFast`. `on` có thể tham chiếu Task bất kỳ, kể cả Task đã terminal hoặc Task mà waiter không sở hữu. Task không được sở hữu bắt buộc dùng `allSettled`; `failFast` chỉ hợp lệ khi mọi Task được nêu đều là child do waiter sở hữu. Waiter resume sau khi mọi Task trong `on` đều terminal. Task đã hoàn tất vẫn ở `completing` cho tới khi ordinary work nó sở hữu drain xong. Đây là durable structured concurrency, không phải queue Promise tách rời.
 
 ## Khôi phục work và loại bỏ request trùng lặp
 
@@ -193,7 +193,9 @@ Ownership có tính transitive: Conversation do child Task sở hữu thuộc c�
 
 ## Chọn ownership foreground hoặc background
 
-Child foreground thuộc về parent, giữ parent ở trạng thái busy và phải join trước khi parent thành terminal; đây là structured concurrency. Task background do Conversation sở hữu không giữ Conversation busy và cho phép subtree nó sở hữu sống qua ordinary Conversation abort.
+Conversation busy nghĩa là chỉ khi `pi.live.run` tồn tại; ownership và idle traversal không định nghĩa busy. Application Task có thể khiến một scope non-idle hoặc giữ Task owner ở trạng thái `completing` mà không làm Conversation busy.
+
+Foreground owned work, khi do Task sở hữu, giữ owner ở trạng thái `completing` cho tới lúc join và tham gia ordinary idle traversal; work background bị loại khỏi ordinary idle traversal. Đây là structured concurrency: child foreground phải join trước khi Task owner thành terminal, còn Task background do Conversation sở hữu cho phép subtree nó sở hữu sống qua ordinary Conversation abort.
 
 `background: true` chỉ hợp lệ với Task do Conversation sở hữu; child do Task sở hữu nếu dùng option này sẽ bị từ chối. Background xác định nơi ordinary abort và idle wait dừng lại; nó không phải ownership độc lập, và Task vẫn thuộc về Conversation của nó.
 

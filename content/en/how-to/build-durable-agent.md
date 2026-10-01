@@ -139,7 +139,7 @@ A Document is typed JSON state stored beside transcripts. Use `defineDoc()` or `
 
 Create an Entry, edit a Document, and create a Task in the same transaction when they describe one business transition. For example, an accepted job can append the audit Entry, change the job Document, and create its processing Task together; if any operation fails, no part is stored. A Conversation Commit supplies that Conversation as the default owner for Tasks, while an explicit Task ownership links child work to its parent.
 
-Define application Tasks with `defineTask()`, register them before recovery, and make every phase commit its next checkpoint or terminal outcome. A waiting state names the child Task IDs to join and selects `allSettled` or `failFast`; a completed Task remains `completing` until ordinary work it owns drains. This is durable structured concurrency rather than a detached Promise queue.
+Define application Tasks with `defineTask()`, register them before recovery, and make every phase commit its next checkpoint or terminal outcome. A waiting state lists Task IDs in `on` and selects `allSettled` or `failFast`. `on` may reference any Task, including one already terminal or one the waiter does not own. A non-owned Task requires `allSettled`; `failFast` is valid only when every named Task is an owned child. The waiter resumes after every Task in `on` is terminal. A completed Task remains `completing` until ordinary work it owns drains. This is durable structured concurrency rather than a detached Promise queue.
 
 ## Recover work and deduplicate requests
 
@@ -193,7 +193,9 @@ Ownership is transitive: a Conversation owned by a child Task belongs to the sam
 
 ## Choose foreground or background ownership
 
-Foreground children belong to the parent, keep it busy, and must join before it becomes terminal; this is structured concurrency. A conversation-owned background Task does not keep its Conversation busy and allows its owned subtree to survive an ordinary Conversation abort.
+Conversation busy means only that `pi.live.run` exists; ownership and idle traversal do not define busy. Application Tasks can make a scope non-idle or hold a Task owner in `completing` without making the Conversation busy.
+
+Foreground owned work, when Task-owned, holds owner completion until it joins and participates in ordinary idle traversal; background work is excluded from ordinary idle traversal. This is structured concurrency: foreground children must join before their Task owner becomes terminal, while a conversation-owned background Task allows its owned subtree to survive an ordinary Conversation abort.
 
 `background: true` is valid only for a conversation-owned Task; a task-owned child using it is rejected. Background defines where ordinary abort and idle waits stop; it is not independent ownership, and the Task remains owned by its Conversation.
 
