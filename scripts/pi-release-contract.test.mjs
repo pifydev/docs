@@ -7001,7 +7001,7 @@ test("Chapters 8 and 9 document released incomplete-summary rejection", async ()
   }
 });
 
-test("both replaceable session runtime guides name the public 0.85.0 contracts", async () => {
+test("both replaceable session runtime guides name the public session runtime contracts", async () => {
   const guides = await readLocalizedContent("how-to/host-session-runtime.md");
 
   for (const { locale, source } of guides) {

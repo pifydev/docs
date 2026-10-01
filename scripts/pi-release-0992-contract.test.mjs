@@ -87,7 +87,7 @@ for (const relativePath of [
   "tests/fixtures/pi-coding-agent-0992.contract.ts",
   "tests/fixtures/pi-durable-0992.contract.ts",
 ]) {
-  test(`Pi 0.99.2 compile contract typechecks: ${relativePath}`, () => {
+  test(`${relativePath} compiles against published Pi 0.99.2 declarations`, () => {
     assertTypeScriptFixtureCompiles(relativePath);
   });
 }

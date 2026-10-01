@@ -1,4 +1,4 @@
-import { Type } from "@earendil-works/pi-ai";
+import { Type, type Static } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 const LookupParameters = Type.Object({
@@ -6,8 +6,7 @@ const LookupParameters = Type.Object({
 });
 
 const LookupOutput = Type.Object({
-  query: Type.String(),
-  readFailed: Type.Boolean(),
+  matches: Type.Array(Type.String()),
 });
 
 type RouterState = {
@@ -53,10 +52,13 @@ export function registerPi0992ExtensionContracts(pi: ExtensionAPI): void {
     }),
     async execute(_toolCallId, { query }, signal, _onUpdate, ctx) {
       const nested = await ctx.executeTool("read", { path: query }, { signal });
+      const structuredContent = {
+        matches: nested.isError ? [] : [query],
+      } satisfies Static<typeof LookupOutput>;
       return {
         content: nested.result.content,
         details: { query, nested },
-        structuredContent: { query, readFailed: nested.isError },
+        structuredContent,
         isError: nested.isError,
       };
     },
