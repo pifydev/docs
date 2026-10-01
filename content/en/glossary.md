@@ -141,7 +141,7 @@ A Pi coding-agent execution mode that gives the model a JavaScript environment f
 
 ## MCP server/Tool exposure
 
-The boundary that makes an MCP server available through Codemode or exposes one of its tools directly to the model. Server-level Codemode exposure and direct Tool exposure have different prompt, naming, and result contracts.
+An MCP server supplies a default exposure, while `toolExposure` is the per-Tool override boundary. A `direct` Tool is declared to the model; a `codemode` Tool stays out of model declarations; a `deferred` Tool stays undeclared until `tool_search` loads it for direct model use; and a `hidden` Tool cannot be discovered or called. Eligible `direct`, `codemode`, and `deferred` Tools can all be invoked from Codemode; `hidden` Tools cannot.
 
 ## Virtual Model
 
@@ -153,7 +153,7 @@ The concrete provider and model descriptor selected behind a Virtual Model. Prov
 
 ## Durable Harness
 
-The experimental `@earendil-works/pi-durable` runtime entry point that owns durable storage, registered Tools, Conversations, Documents, and Tasks. It replays persisted operations and coordinates recovery across process restarts.
+The experimental `@earendil-works/pi-durable` runtime entry point that owns durable storage, registered Tools, Conversations, Documents, and Tasks. After a process restart, it resumes durable Tasks from committed checkpoints. Interrupted Tool execution is rerun only when its replay policy is safe (`replay: "safe"`); unsafe execution becomes an error Tool result instead.
 
 ## Submission
 

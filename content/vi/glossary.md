@@ -141,7 +141,7 @@ Chế độ thực thi của Pi coding agent, cung cấp môi trường JavaScri
 
 ## MCP server/Tool exposure
 
-Ranh giới đưa một MCP server vào Codemode hoặc expose trực tiếp một Tool của server cho model. Exposure ở cấp server qua Codemode và exposure Tool trực tiếp có contract khác nhau về prompt, cách đặt tên và result.
+MCP server cung cấp exposure mặc định, còn `toolExposure` là boundary override theo từng Tool. Tool `direct` được khai báo cho model; Tool `codemode` không nằm trong declaration của model; Tool `deferred` chưa được khai báo cho đến khi `tool_search` nạp nó để model gọi trực tiếp; Tool `hidden` không thể được khám phá hay gọi. Các Tool hợp lệ mang exposure `direct`, `codemode` và `deferred` đều có thể được gọi từ Codemode; Tool `hidden` thì không.
 
 ## Virtual Model
 
@@ -153,7 +153,7 @@ Provider và model descriptor cụ thể được chọn phía sau Virtual Model
 
 ## Durable Harness
 
-Entry point runtime thử nghiệm của `@earendil-works/pi-durable`, quản lý durable storage, Tool đã đăng ký, Conversation, Document và Task. Harness replay operation đã lưu và điều phối recovery qua các lần khởi động lại process.
+Entry point runtime thử nghiệm của `@earendil-works/pi-durable`, quản lý durable storage, Tool đã đăng ký, Conversation, Document và Task. Sau khi process khởi động lại, Harness tiếp tục durable Task từ checkpoint đã commit. Execution của Tool bị gián đoạn chỉ được chạy lại khi replay policy là safe (`replay: "safe"`); execution unsafe sẽ trở thành error Tool result.
 
 ## Submission
 

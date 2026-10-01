@@ -161,6 +161,15 @@ function glossaryDefinitionErrors(markdown, requiredTerms) {
   return errors;
 }
 
+function glossaryDefinition(markdown, term) {
+  const heading = `## ${term}`;
+  const start = markdown.indexOf(heading);
+  assert.notEqual(start, -1, `glossary must define ${term}`);
+  const bodyStart = start + heading.length;
+  const next = markdown.indexOf("\n## ", bodyStart);
+  return markdown.slice(bodyStart, next === -1 ? markdown.length : next);
+}
+
 test("translation manifest contains 46 unique EN/VI pairs", async () => {
   const manifest = JSON.parse(await readFile(manifestURL, "utf8"));
   assert.equal(manifest.version, 1);
@@ -366,12 +375,15 @@ test("release entry points publish the Pi 0.99.2 baseline and exact review autho
     "https://github.com/earendil-works/pi/releases/tag/v0.99.2";
   const releaseCommit = "005af57d88ee23b33778f343a9595b32e67ff788";
   const pages = await Promise.all(
-    ["content/en/index.mdx", "content/vi/index.mdx"].map(
-      async (relativePath) => ({
-        relativePath,
-        source: await readFile(new URL(relativePath, repositoryRoot), "utf8"),
-      }),
-    ),
+    [
+      "content/en/index.mdx",
+      "content/vi/index.mdx",
+      "content/en/help/faq.md",
+      "content/vi/help/faq.md",
+    ].map(async (relativePath) => ({
+      relativePath,
+      source: await readFile(new URL(relativePath, repositoryRoot), "utf8"),
+    })),
   );
   const readme = await readFile(new URL("README.md", repositoryRoot), "utf8");
 
@@ -505,6 +517,57 @@ test("paired glossaries define the canonical testing, runtime, and 0.99.2 terms"
       glossaryDefinitionErrors(glossary, requiredTerms),
       [],
       `content/${locale}/glossary.md must define every canonical term exactly once with prose`,
+    );
+
+    const exposure = glossaryDefinition(glossary, "MCP server/Tool exposure");
+    for (const token of [
+      "`direct`",
+      "`codemode`",
+      "`deferred`",
+      "`tool_search`",
+      "`hidden`",
+      "`toolExposure`",
+    ]) {
+      assert.ok(
+        exposure.includes(token),
+        `content/${locale}/glossary.md exposure definition must include ${token}`,
+      );
+    }
+    assert.match(
+      exposure,
+      locale === "en"
+        ? /per-Tool override[\s\S]*Eligible `direct`, `codemode`, and `deferred` Tools[^.]*invoked from Codemode/i
+        : /override theo từng Tool[\s\S]*Tool[^.]*`direct`, `codemode` và `deferred`[^.]*gọi từ Codemode/i,
+      `content/${locale}/glossary.md must preserve the per-Tool override and Codemode callability boundaries`,
+    );
+    assert.match(
+      exposure,
+      locale === "en"
+        ? /`direct` Tool[^;]*declared to the model;[^;]*`codemode` Tool[^;]*stays out of model declarations/i
+        : /Tool `direct`[^;]*được khai báo cho model;[^;]*Tool `codemode`[^;]*không nằm trong declaration của model/i,
+      `content/${locale}/glossary.md must distinguish direct from codemode exposure`,
+    );
+    assert.match(
+      exposure,
+      locale === "en"
+        ? /`deferred` Tool[^;]*`tool_search`[^;]*direct model use;[^;]*`hidden` Tool[^.]*cannot be discovered or called/i
+        : /Tool `deferred`[^;]*`tool_search`[^;]*model gọi trực tiếp;[^;]*Tool `hidden`[^.]*không thể được khám phá hay gọi/i,
+      `content/${locale}/glossary.md must preserve deferred discovery and hidden callability boundaries`,
+    );
+
+    const durable = glossaryDefinition(glossary, "Durable Harness");
+    assert.match(
+      durable,
+      locale === "en"
+        ? /resumes durable Tasks[^.]*committed checkpoints[\s\S]*Interrupted Tool execution[^.]*rerun only[^.]*`replay: "safe"`/i
+        : /tiếp tục durable Task[^.]*checkpoint đã commit[\s\S]*execution của Tool bị gián đoạn[^.]*chỉ được chạy lại[^.]*`replay: "safe"`/i,
+      `content/${locale}/glossary.md must bound Durable recovery and Tool replay`,
+    );
+    assert.doesNotMatch(
+      durable,
+      locale === "en"
+        ? /replays persisted operations/i
+        : /replay (?:các )?operation đã lưu/i,
     );
   }
 });
