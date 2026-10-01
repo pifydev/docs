@@ -4,7 +4,7 @@ import { test } from "node:test";
 
 import matter from "gray-matter";
 
-const RELEASE_COMMIT = "f07218c4d4bbc12bef056a7058c3dd49dfe41abe";
+const RELEASE_COMMIT = "005af57d88ee23b33778f343a9595b32e67ff788";
 const GUIDE_PATHS = {
   en: new URL("../content/en/how-to/run-pi-evals.md", import.meta.url),
   vi: new URL("../content/vi/how-to/run-pi-evals.md", import.meta.url),
@@ -162,7 +162,7 @@ function validateGuideDocument(source, locale) {
   assert.equal(frontmatter.language, locale);
   assert.equal(frontmatter.status, "reviewed");
   assert.equal(frontmatter.reviewed_by, "Pify maintainers");
-  assert.equal(frontmatter.last_updated, "2026-09-23");
+  assert.equal(frontmatter.last_updated, "2026-10-01");
   assert.deepEqual(
     frontmatter.official_refs,
     PINNED_SOURCE_URLS,
@@ -251,6 +251,18 @@ function validateGuideDocument(source, locale) {
     numbered[5].body,
     /without_docs[\s\S]*with_docs|with_docs[\s\S]*without_docs/,
     `${locale}: section 5 current documentation variants`,
+  );
+  assert.match(
+    numbered[5].body,
+    /`without_docs`[^.\n]*control[\s\S]*`with_docs`[^.\n]*treatment/i,
+    `${locale}: section 5 release source defines control then treatment`,
+  );
+  assert.match(
+    numbered[5].body,
+    locale === "en"
+      ? /same cohort[^.]*task[^.]*model[^.]*run number[^.]*same runtime[^.]*scoring/i
+      : /cùng cohort[^.]*task[^.]*model[^.]*run number[^.]*cùng runtime[^.]*scoring/i,
+    `${locale}: section 5 paired arms must share comparison identity and execution boundaries`,
   );
   assert.match(
     numbered[5].body,
@@ -428,7 +440,7 @@ test("rejects a removed shell command", async () => {
 test("rejects source links that survive only in frontmatter", async () => {
   const source = normalizeLineEndings(await readFile(GUIDE_PATHS.en, "utf8"));
   const mutated = source.replace(
-    /^## Source map for Pi 0\.87\.1\n[\s\S]*?(?=^## Acceptance checklist)/m,
+    /^## Source map for Pi 0\.99\.2\n[\s\S]*?(?=^## Acceptance checklist)/m,
     "",
   );
   assert.notEqual(mutated, source, "the source-map section must be removed");

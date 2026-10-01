@@ -5,7 +5,7 @@ translation_key: how-to-persist-sessions
 language: en
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 ---
 
 Use `SessionManager` when a conversation must outlive the current process. A persistent manager owns a Pi session file and appends state as an `AgentSession` runs; an in-memory manager can instead project entries whose durable storage is owned by your host.
@@ -18,7 +18,7 @@ Use `SessionManager` when a conversation must outlive the current process. A per
 
 :::
 
-The examples target Node.js `>=22.19.0` and ESM. Install the SDK with `npm install @earendil-works/pi-coding-agent@0.87.1`, plus `tsx`, TypeScript, and Node types for the commands below.
+The examples target Node.js `>=22.19.0` and ESM. Install the SDK with `npm install @earendil-works/pi-coding-agent@0.99.2`, plus `tsx`, TypeScript, and Node types for the commands below.
 
 ## The session model
 
@@ -57,7 +57,7 @@ try {
 }
 ```
 
-Run it with `npx tsx start-session.ts`. The agent appends completed messages and state changes automatically; there is no `save()` call. A new manager can report its prospective path immediately, but Pi delays creating the file until the first assistant message arrives. An in-flight first response is therefore not yet durable.
+Run it with `npx tsx start-session.ts`. The agent appends messages and state changes automatically; there is no `save()` call. Creating a `SessionManager` or session object can report a prospective path and hold setup entries, but does not create the session file. In the normal prompt lifecycle, the session file is created when the first user message is appended, before the provider response starts, so that prompt survives even if the first assistant turn never completes.
 
 ## 2. Resume a session
 
@@ -95,7 +95,7 @@ To resume a chosen file, pass an absolute path from `SessionManager.list()` or `
 
 ## Restore externally stored entries
 
-Pi 0.87.1 can rebuild the Coding Agent tree from a `FileEntry[]` held in a database, object store, or another application-owned medium:
+Pi 0.99.2 can rebuild the Coding Agent tree from a `FileEntry[]` held in a database, object store, or another application-owned medium:
 
 ```ts title="restore-external-session.ts"
 import {
@@ -225,7 +225,7 @@ console.log({
 });
 ```
 
-Run it with `npx tsx extract-branch.ts /absolute/session.jsonl ENTRY_ID`. `forkFrom(sourcePath, targetCwd, sessionDir)` is the cross-project alternative: it creates a new file and copies the source file's full non-header history, while recording the source path as `parentSession`. Pi 0.87.1 also preserves the applicable compaction boundary when a session path is forked, so the extracted context does not accidentally expose history that the source projection had already summarized.
+Run it with `npx tsx extract-branch.ts /absolute/session.jsonl ENTRY_ID`. `forkFrom(sourcePath, targetCwd, sessionDir)` is the cross-project alternative: it creates a new file and copies the source file's full non-header history, while recording the source path as `parentSession`. Pi 0.99.2 also preserves the applicable compaction boundary when a session path is forked, so the extracted context does not accidentally expose history that the source projection had already summarized.
 
 ## 4. Walk the tree
 
@@ -402,14 +402,16 @@ Back up files before upgrades or bulk cleanup. The loader automatically migrates
 ## Pitfalls
 
 - **Calling `save()`:** there is no current save step. `AgentSession` appends completed events through its manager.
-- **Expecting the file too early:** a new persistent session is held in memory until its first assistant message. A crash can lose that in-flight response. Completed later entries are appended synchronously, while malformed JSONL lines—including a partial tail—are skipped on reload; this is recovery behavior, not an atomic-durability guarantee.
+- **Expecting the file too early:** setup-only entries remain in memory, but the first user message creates the file before the provider response. A crash can still leave a prompt without an assistant reply. Later entries are appended synchronously, while malformed JSONL lines—including a partial tail—are skipped on reload; this is recovery behavior, not an atomic-durability guarantee.
 - **Sharing one file between writers:** the implementation has no inter-process locking. Use one live manager/process per file, and never edit a file while it is open. This follows from the synchronous append and rewrite paths rather than a concurrency contract.
 - **Confusing CLI and SDK storage rules:** the CLI resolves `--session-dir`, then `PI_CODING_AGENT_SESSION_DIR`, then `sessionDir` in `settings.json`. Direct SDK calls do not read that precedence chain; pass `sessionDir` explicitly or accept the default.
 - **Passing a project path to `listAll()`:** its first string argument is a storage directory. Use `list(cwd)` for one project or zero-argument `listAll()` for all default project directories.
 - **Overriding `cwd` accidentally:** prefer the absolute `SessionInfo.path` returned by the list methods and let `open()` restore the header's working directory.
-- **Reading collision fixes as a locking guarantee:** Pi 0.87.1 gives imported JSONL a suffixed destination when the same filename already exists, and concurrent session shares no longer overwrite one another. Neither fix adds inter-process locking to a live `SessionManager` file; retain the one-writer rule above.
+- **Reading collision fixes as a locking guarantee:** Pi 0.99.2 gives imported JSONL a suffixed destination when the same filename already exists, and concurrent session shares no longer overwrite one another. Neither fix adds inter-process locking to a live `SessionManager` file; retain the one-writer rule above.
 
 ## Next
+
+This guide was audited against Pi `v0.99.2`, commit `005af57d88ee23b33778f343a9595b32e67ff788`.
 
 - [Chapter 10: Session Management](../ch10-session.md) explains the JSONL tree, compaction-aware projection, rewinds, and rewrite boundaries.
 - [Reference: Configuration](../reference/configuration.md) lists the current session and resource settings.

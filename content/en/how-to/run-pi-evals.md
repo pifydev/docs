@@ -5,12 +5,12 @@ translation_key: how-to-run-pi-evals
 language: en
 source_url: "https://docs.pify.dev/en/how-to/run-pi-evals"
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/README.md"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/evals/smoke.eval.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/src/harness.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/src/plan.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/src/report.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/src/cli.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/evals/README.md"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/evals/evals/smoke.eval.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/evals/src/harness.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/evals/src/plan.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/evals/src/report.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/evals/src/cli.ts"
 terms_used:
   - harness
   - judge
@@ -20,7 +20,7 @@ terms_used:
   - fail-closed
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 translator: Pify maintainers
 ---
 
@@ -53,13 +53,13 @@ Use Node.js `>=22.19.0`. The following block is the complete checkout boundary f
 ```bash
 git clone https://github.com/earendil-works/pi.git
 cd pi
-git checkout f07218c4d4bbc12bef056a7058c3dd49dfe41abe
+git checkout 005af57d88ee23b33778f343a9595b32e67ff788
 npm install
 ```
 
 The root install hydrates the monorepo workspaces and their lockfile. At this commit, `packages/evals/package.json` declares `private: true`. Its relevant scripts are `eval`, `eval:host`, `eval:docs`, `test`, and `clean`. The commands below use npm's `-w packages/evals` workspace selector from the repository root so the execution mode stays explicit.
 
-Before spending a provider request, confirm `git rev-parse HEAD` prints `f07218c4d4bbc12bef056a7058c3dd49dfe41abe`. If it does not, stop: flags, report formats, and artifact behavior from another commit are outside this guide's release contract.
+Before spending a provider request, confirm `git rev-parse HEAD` prints `005af57d88ee23b33778f343a9595b32e67ff788`. If it does not, stop: flags, report formats, and artifact behavior from another commit are outside this guide's release contract.
 
 ## 2. Run one smoke eval
 
@@ -133,7 +133,7 @@ The Pi package supplies the Coding Agent harness and imports judge implementatio
 
 ## 5. Compare baseline and candidate with repetitions
 
-Pi 0.87.1 has a dedicated documentation comparison instead of asking each eval file to build its own baseline/candidate table. The runner builds two images: `without_docs` is the control and `with_docs` is the treatment. Both install the same local workspace packages and run the same discovered `*.docs.eval.ts` cases with the same provider/model and judge definitions. The treatment keeps Pi documentation; the control removes the coding-agent documentation surfaces and the corresponding default-prompt section.
+Pi 0.99.2 has a dedicated documentation comparison instead of asking each eval file to build its own baseline/candidate table. The runner builds two images: `without_docs` is the control and `with_docs` is the treatment. Both arms use the same cohort identity—the same task/case, model, and run number—and the same runtime and scoring; only documentation exposure differs. The treatment keeps Pi documentation; the control removes the coding-agent documentation surfaces and the corresponding default-prompt section, while both install the same local workspace packages and use the same provider/model and judge definitions.
 
 ```typescript
 const harness = createPiDocumentationEvalHarness({
@@ -201,7 +201,7 @@ Read direction and coverage together. `report.txt` prints paired deltas plus ope
 
 ## 8. Inspect, redact, and retain artifacts safely
 
-The documentation runner creates `packages/evals/.eval/<timestamp>_<uuid>/` and prints that resolved path. Pi 0.87.1 does not expose a public CLI option for a custom artifact root. The directory contains:
+The documentation runner creates `packages/evals/.eval/<timestamp>_<uuid>/` and prints that resolved path. Pi 0.99.2 does not expose a public CLI option for a custom artifact root. The directory contains:
 
 | Path | Contents | Handling |
 | --- | --- | --- |
@@ -230,22 +230,22 @@ Finish review and copy only approved, redacted evidence before running cleanup. 
 
 For automation, clean up in a final step that runs on both success and failure, but upload only approved redacted outputs. Do not log session contents or secret-bearing environment variables as part of cleanup diagnostics.
 
-## Source map for Pi 0.87.1
+## Source map for Pi 0.99.2
 
-Every link below is pinned to release commit `f07218c4d4bbc12bef056a7058c3dd49dfe41abe`:
+Every link below is pinned to release commit `005af57d88ee23b33778f343a9595b32e67ff788`:
 
 | Source | What to verify |
 | --- | --- |
-| [`packages/evals/README.md`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/README.md) | Host/documentation runner commands, isolation model, results, and artifact warning |
-| [`evals/smoke.eval.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/evals/smoke.eval.ts) | End-to-end host smoke prompt and hard infrastructure assertions |
-| [`src/harness.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/src/harness.ts) | Model resolution, isolated session lifecycle, traces, telemetry, snapshot, and temporary cleanup |
-| [`src/plan.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/src/plan.ts) | Variant identities, case parsing, repeated task planning, and alternating order |
-| [`src/report.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/src/report.ts) | Observation validation, blocked pairs, telemetry deltas, session retention, and report formatting |
-| [`src/cli.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/src/cli.ts) | CLI validation, Docker orchestration, protocol/artifact writing, and nonzero blocked-pair exit |
+| [`packages/evals/README.md`](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/evals/README.md) | Host/documentation runner commands, isolation model, results, and artifact warning |
+| [`evals/smoke.eval.ts`](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/evals/evals/smoke.eval.ts) | End-to-end host smoke prompt and hard infrastructure assertions |
+| [`src/harness.ts`](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/evals/src/harness.ts) | Model resolution, isolated session lifecycle, traces, telemetry, snapshot, and temporary cleanup |
+| [`src/plan.ts`](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/evals/src/plan.ts) | Variant identities, case parsing, repeated task planning, and alternating order |
+| [`src/report.ts`](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/evals/src/report.ts) | Observation validation, blocked pairs, telemetry deltas, session retention, and report formatting |
+| [`src/cli.ts`](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/evals/src/cli.ts) | CLI validation, Docker orchestration, protocol/artifact writing, and nonzero blocked-pair exit |
 
 ## Acceptance checklist
 
-- [ ] The checkout is at exact commit `f07218c4d4bbc12bef056a7058c3dd49dfe41abe` and Node.js is `>=22.19.0`.
+- [ ] The checkout is at exact commit `005af57d88ee23b33778f343a9595b32e67ff788` and Node.js is `>=22.19.0`.
 - [ ] The eval runs from the Pi monorepo; no application attempts to install the private eval workspace as a public package.
 - [ ] Host evals receive the paired `PI_PROVIDER`/`PI_MODEL`; documentation CLI flags `--provider`/`--model` are also supplied together.
 - [ ] The host smoke eval passes before the containerized documentation comparison runs.

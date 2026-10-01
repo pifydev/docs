@@ -5,7 +5,7 @@ translation_key: how-to-persist-sessions
 language: vi
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 ---
 
 Dùng `SessionManager` khi hội thoại phải tồn tại lâu hơn process hiện tại. Persistent manager sở hữu một Pi session file và append trạng thái trong lúc `AgentSession` chạy; in-memory manager có thể chiếu các entry mà host của bạn lưu bền vững ở nơi khác.
@@ -18,7 +18,7 @@ Dùng `SessionManager` khi hội thoại phải tồn tại lâu hơn process hi
 
 :::
 
-Các ví dụ dùng Node.js `>=22.19.0` và ESM. Cài SDK bằng `npm install @earendil-works/pi-coding-agent@0.87.1`; thêm `tsx`, TypeScript và Node types để chạy các lệnh bên dưới.
+Các ví dụ dùng Node.js `>=22.19.0` và ESM. Cài SDK bằng `npm install @earendil-works/pi-coding-agent@0.99.2`; thêm `tsx`, TypeScript và Node types để chạy các lệnh bên dưới.
 
 ## Mô hình session
 
@@ -57,7 +57,7 @@ try {
 }
 ```
 
-Chạy bằng `npx tsx start-session.ts`. Agent tự append message đã hoàn tất và các thay đổi trạng thái; không có lệnh `save()`. Manager mới có thể trả về path dự kiến ngay, nhưng Pi trì hoãn việc tạo file đến khi nhận assistant message đầu tiên. Vì vậy, response đầu tiên còn đang chạy chưa được lưu bền vững.
+Chạy bằng `npx tsx start-session.ts`. Agent tự append message và các thay đổi trạng thái; không có lệnh `save()`. Việc tạo `SessionManager` hoặc session object có thể trả về path dự kiến và giữ setup entry, nhưng không tạo session file. Trong prompt lifecycle thông thường, session file được tạo khi user message đầu tiên được append, trước lúc provider response bắt đầu, nên prompt vẫn tồn tại ngay cả khi assistant turn đầu tiên không hoàn tất.
 
 ## 2. Resume session
 
@@ -95,7 +95,7 @@ Luôn hiển thị `modelFallbackMessage`. Thông báo này cho biết provider/
 
 ## Khôi phục entry do storage bên ngoài quản lý
 
-Pi 0.87.1 có thể dựng lại tree của Coding Agent từ `FileEntry[]` nằm trong database, object store hoặc medium khác do application sở hữu:
+Pi 0.99.2 có thể dựng lại tree của Coding Agent từ `FileEntry[]` nằm trong database, object store hoặc medium khác do application sở hữu:
 
 ```ts title="restore-external-session.ts"
 import {
@@ -225,7 +225,7 @@ console.log({
 });
 ```
 
-Chạy bằng `npx tsx extract-branch.ts /absolute/session.jsonl ENTRY_ID`. `forkFrom(sourcePath, targetCwd, sessionDir)` là lựa chọn cho project khác: nó tạo file mới, chép toàn bộ lịch sử không phải header của source file và ghi source path vào `parentSession`. Pi 0.87.1 còn giữ ranh giới compaction áp dụng cho path được fork, nên context đã tách không vô tình làm lộ lại lịch sử mà phép chiếu nguồn đã tóm tắt.
+Chạy bằng `npx tsx extract-branch.ts /absolute/session.jsonl ENTRY_ID`. `forkFrom(sourcePath, targetCwd, sessionDir)` là lựa chọn cho project khác: nó tạo file mới, chép toàn bộ lịch sử không phải header của source file và ghi source path vào `parentSession`. Pi 0.99.2 còn giữ ranh giới compaction áp dụng cho path được fork, nên context đã tách không vô tình làm lộ lại lịch sử mà phép chiếu nguồn đã tóm tắt.
 
 ## 4. Duyệt cây
 
@@ -402,14 +402,16 @@ Hãy backup file trước khi nâng cấp hoặc cleanup hàng loạt. Loader t�
 ## Các lỗi thường gặp
 
 - **Gọi `save()`:** API hiện tại không có bước save. `AgentSession` append event đã hoàn tất qua manager.
-- **Chờ file quá sớm:** persistent session mới được giữ trong memory cho đến assistant message đầu tiên. Crash có thể làm mất response đang chạy đó. Các entry hoàn tất sau này được append đồng bộ, còn dòng JSONL lỗi—kể cả phần đuôi dở dang—bị bỏ qua khi reload; đây là cơ chế phục hồi, không phải bảo đảm atomic durability.
+- **Chờ file quá sớm:** setup-only entry vẫn ở trong memory, nhưng user message đầu tiên tạo file trước provider response. Crash vẫn có thể để lại prompt chưa có assistant reply. Các entry sau được append đồng bộ, còn dòng JSONL lỗi—kể cả phần đuôi dở dang—bị bỏ qua khi reload; đây là cơ chế phục hồi, không phải bảo đảm atomic durability.
 - **Nhiều writer dùng chung một file:** implementation không có inter-process lock. Chỉ dùng một manager/process đang hoạt động cho mỗi file và đừng sửa file khi nó đang mở. Kết luận này dựa trên các đường append và rewrite đồng bộ, không phải concurrency contract.
 - **Nhầm quy tắc lưu trữ của CLI và SDK:** CLI xét `--session-dir`, rồi `PI_CODING_AGENT_SESSION_DIR`, rồi `sessionDir` trong `settings.json`. Lời gọi SDK trực tiếp không đọc chuỗi ưu tiên này; hãy truyền `sessionDir` tường minh hoặc dùng mặc định.
 - **Truyền project path vào `listAll()`:** đối số string đầu tiên là storage directory. Dùng `list(cwd)` cho một project hoặc `listAll()` không đối số cho mọi thư mục project mặc định.
 - **Vô tình override `cwd`:** ưu tiên absolute `SessionInfo.path` do các hàm list trả về và để `open()` khôi phục working directory trong header.
-- **Hiểu collision fix thành bảo đảm locking:** Pi 0.87.1 chọn destination có suffix khi imported JSONL trùng filename, và các thao tác share session đồng thời không ghi đè nhau nữa. Hai fix này không thêm inter-process lock cho file đang được một `SessionManager` dùng; vẫn giữ quy tắc một writer ở trên.
+- **Hiểu collision fix thành bảo đảm locking:** Pi 0.99.2 chọn destination có suffix khi imported JSONL trùng filename, và các thao tác share session đồng thời không ghi đè nhau nữa. Hai fix này không thêm inter-process lock cho file đang được một `SessionManager` dùng; vẫn giữ quy tắc một writer ở trên.
 
 ## Tiếp theo
+
+Hướng dẫn này được audit theo Pi `v0.99.2`, commit `005af57d88ee23b33778f343a9595b32e67ff788`.
 
 - [Chương 10: Quản lý session](../ch10-session.md) giải thích JSONL tree, phép chiếu có xét compaction, rewind và các ranh giới rewrite.
 - [Tham chiếu: Cấu hình](../reference/configuration.md) liệt kê các thiết lập session và resource hiện tại.

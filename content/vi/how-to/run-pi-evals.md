@@ -5,12 +5,12 @@ translation_key: how-to-run-pi-evals
 language: vi
 source_url: "https://docs.pify.dev/vi/how-to/run-pi-evals"
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/README.md"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/evals/smoke.eval.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/src/harness.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/src/plan.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/src/report.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/src/cli.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/evals/README.md"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/evals/evals/smoke.eval.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/evals/src/harness.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/evals/src/plan.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/evals/src/report.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/evals/src/cli.ts"
 terms_used:
   - harness
   - judge
@@ -20,7 +20,7 @@ terms_used:
   - fail-closed
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 translator: Pify maintainers
 ---
 
@@ -53,13 +53,13 @@ Dùng Node.js `>=22.19.0`. Block sau là toàn bộ checkout boundary cho hướ
 ```bash
 git clone https://github.com/earendil-works/pi.git
 cd pi
-git checkout f07218c4d4bbc12bef056a7058c3dd49dfe41abe
+git checkout 005af57d88ee23b33778f343a9595b32e67ff788
 npm install
 ```
 
 Lệnh install ở root hydrate các monorepo workspace theo lockfile. Tại commit này, `packages/evals/package.json` khai báo `private: true`. Các script liên quan là `eval`, `eval:host`, `eval:docs`, `test` và `clean`. Các lệnh bên dưới dùng workspace selector `-w packages/evals` của npm từ repository root để execution mode luôn tường minh.
 
-Trước khi tốn một provider request, hãy xác nhận `git rev-parse HEAD` in ra `f07218c4d4bbc12bef056a7058c3dd49dfe41abe`. Nếu không đúng, hãy dừng lại: flag, định dạng report và hành vi artifact từ commit khác nằm ngoài release contract của hướng dẫn này.
+Trước khi tốn một provider request, hãy xác nhận `git rev-parse HEAD` in ra `005af57d88ee23b33778f343a9595b32e67ff788`. Nếu không đúng, hãy dừng lại: flag, định dạng report và hành vi artifact từ commit khác nằm ngoài release contract của hướng dẫn này.
 
 ## 2. Chạy một smoke eval
 
@@ -133,7 +133,7 @@ Pi package cung cấp Coding Agent harness và import judge implementation từ 
 
 ## 5. So sánh baseline và candidate bằng repetitions
 
-Pi 0.87.1 có documentation comparison riêng thay vì yêu cầu mỗi eval file tự dựng bảng baseline/candidate. Runner build hai image: `without_docs` là control và `with_docs` là treatment. Cả hai cài cùng local workspace package, rồi chạy cùng các case `*.docs.eval.ts` đã discover với cùng provider/model và judge definition. Treatment giữ tài liệu Pi; control loại các bề mặt tài liệu của coding-agent và section tương ứng trong default prompt.
+Pi 0.99.2 có documentation comparison riêng thay vì yêu cầu mỗi eval file tự dựng bảng baseline/candidate. Runner build hai image: `without_docs` là control và `with_docs` là treatment. Hai arm dùng cùng cohort identity—cùng task/case, model và run number—cùng runtime và scoring; chỉ mức tiếp cận tài liệu là khác nhau. Treatment giữ tài liệu Pi; control loại các bề mặt tài liệu của coding-agent và section tương ứng trong default prompt, còn cả hai cài cùng local workspace package và dùng cùng provider/model cùng judge definition.
 
 ```typescript
 const harness = createPiDocumentationEvalHarness({
@@ -201,7 +201,7 @@ Pi harness ghi identity của provider/model, input/output token, total token, s
 
 ## 8. Kiểm tra, redact và lưu artifact an toàn
 
-Documentation runner tạo `packages/evals/.eval/<timestamp>_<uuid>/` và in resolved path đó. Pi 0.87.1 không expose public CLI option cho custom artifact root. Directory gồm:
+Documentation runner tạo `packages/evals/.eval/<timestamp>_<uuid>/` và in resolved path đó. Pi 0.99.2 không expose public CLI option cho custom artifact root. Directory gồm:
 
 | Path | Nội dung | Cách xử lý |
 | --- | --- | --- |
@@ -230,22 +230,22 @@ Hoàn tất review và chỉ copy phần bằng chứng đã redact, được du
 
 Trong automation, đặt cleanup ở final step chạy cả khi success lẫn failure, nhưng chỉ upload output đã redact và được duyệt. Đừng log session content hoặc environment variable chứa secret trong cleanup diagnostic.
 
-## Source map cho Pi 0.87.1
+## Source map cho Pi 0.99.2
 
-Mọi link dưới đây đều pin vào release commit `f07218c4d4bbc12bef056a7058c3dd49dfe41abe`:
+Mọi link dưới đây đều pin vào release commit `005af57d88ee23b33778f343a9595b32e67ff788`:
 
 | Source | Nội dung cần kiểm tra |
 | --- | --- |
-| [`packages/evals/README.md`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/README.md) | Command cho host/documentation runner, isolation model, result và artifact warning |
-| [`evals/smoke.eval.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/evals/smoke.eval.ts) | Host smoke prompt end-to-end và hard infrastructure assertion |
-| [`src/harness.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/src/harness.ts) | Model resolution, isolated session lifecycle, trace, telemetry, snapshot và temporary cleanup |
-| [`src/plan.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/src/plan.ts) | Variant identity, case parsing, repeated task plan và alternating order |
-| [`src/report.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/src/report.ts) | Observation validation, blocked pair, telemetry delta, session retention và report formatting |
-| [`src/cli.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/src/cli.ts) | CLI validation, Docker orchestration, ghi protocol/artifact và nonzero blocked-pair exit |
+| [`packages/evals/README.md`](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/evals/README.md) | Command cho host/documentation runner, isolation model, result và artifact warning |
+| [`evals/smoke.eval.ts`](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/evals/evals/smoke.eval.ts) | Host smoke prompt end-to-end và hard infrastructure assertion |
+| [`src/harness.ts`](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/evals/src/harness.ts) | Model resolution, isolated session lifecycle, trace, telemetry, snapshot và temporary cleanup |
+| [`src/plan.ts`](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/evals/src/plan.ts) | Variant identity, case parsing, repeated task plan và alternating order |
+| [`src/report.ts`](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/evals/src/report.ts) | Observation validation, blocked pair, telemetry delta, session retention và report formatting |
+| [`src/cli.ts`](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/evals/src/cli.ts) | CLI validation, Docker orchestration, ghi protocol/artifact và nonzero blocked-pair exit |
 
 ## Acceptance checklist
 
-- [ ] Checkout ở đúng commit `f07218c4d4bbc12bef056a7058c3dd49dfe41abe` và Node.js là `>=22.19.0`.
+- [ ] Checkout ở đúng commit `005af57d88ee23b33778f343a9595b32e67ff788` và Node.js là `>=22.19.0`.
 - [ ] Eval chạy từ Pi monorepo; không application nào cố cài private eval workspace như public package.
 - [ ] Host eval nhận cặp `PI_PROVIDER`/`PI_MODEL`; documentation CLI flag `--provider`/`--model` cũng được truyền cùng nhau.
 - [ ] Host smoke eval pass trước khi chạy containerized documentation comparison.

@@ -6,15 +6,15 @@ language: vi
 chapter: 9
 source_url: 'https://www.dgzhuya.com/modules/ch09-compaction'
 official_refs:
-  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/compaction.md'
-  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/cache-warmer.ts'
+  - 'https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/docs/compaction.md'
+  - 'https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/cache-warmer.ts'
 terms_used:
   - Context Compaction
   - CompactionEntry
   - BranchSummaryEntry
   - Session
 status: reviewed
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -130,7 +130,7 @@ Trong `compaction.modelOverrides`, mỗi giá trị `reserveTokens` và `keepRec
 
 ### Mức sử dụng hiện tại ưu tiên dữ liệu từ nhà cung cấp
 
-Mô tả cũ dùng `chars / 4` làm kích thước ngữ cảnh hiện tại. Pi `0.87.1` ưu tiên `usage` hợp lệ gần nhất của assistant. `calculateContextTokens()` lấy `usage.totalTokens` khi giá trị này khác 0; nếu không, hàm cộng `input + output + cacheRead + cacheWrite`.
+Mô tả cũ dùng `chars / 4` làm kích thước ngữ cảnh hiện tại. Pi `0.99.2` ưu tiên `usage` hợp lệ gần nhất của assistant. `calculateContextTokens()` lấy `usage.totalTokens` khi giá trị này khác 0; nếu không, hàm cộng `input + output + cacheRead + cacheWrite`.
 
 Với phản hồi bình thường của trợ lý có mức sử dụng khác 0, `_checkCompaction()` kiểm tra trực tiếp giá trị đó. Với phản hồi lỗi hoặc mức sử dụng toàn 0, `estimateContextTokens()` tìm mức sử dụng gần nhất của trợ lý không thuộc phản hồi lỗi hay bị hủy trong danh sách thông điệp đang hoạt động, rồi cộng ước lượng của các thông điệp theo sau. Nếu không có mức sử dụng hợp lệ, hàm ước lượng toàn bộ danh sách.
 
@@ -180,7 +180,7 @@ Vì vậy Pi giữ ba điểm kiểm tra: kiểm tra giữa lượt chạy ở t
 
 ### Prompt cache warming quanh Tool execution dài
 
-Pi `0.87.1` có thể giữ prompt cache đủ điều kiện của provider còn hiệu lực khi một Tool execution dài làm chậm model request kế tiếp. Mode mặc định `cacheWarming: "streaming"` chỉ lên lịch refresh khi Agent run còn active. `cacheWarming: "idle"` cho phép tiếp tục lên lịch khi Agent đã settle, còn `"off"` tắt tính năng. Model chỉ đủ điều kiện khi metadata khai báo cache lifetime trong `promptCache` cho retention tier đang dùng của request; thiếu lifetime thì warming dừng.
+Pi `0.99.2` có thể giữ prompt cache đủ điều kiện của provider còn hiệu lực khi một Tool execution dài làm chậm model request kế tiếp. Mode mặc định `cacheWarming: "streaming"` chỉ lên lịch refresh khi Agent run còn active. `cacheWarming: "idle"` cho phép tiếp tục lên lịch khi Agent đã settle, còn `"off"` tắt tính năng. Model chỉ đủ điều kiện khi metadata khai báo cache lifetime trong `promptCache` cho retention tier đang dùng của request; thiếu lifetime thì warming dừng.
 
 Quyết định này có cân nhắc chi phí. Pi so sánh chi phí ước lượng của một cache read cộng một output token với chi phí tăng thêm dự kiến của cache miss sau đó, và chỉ warm khi mức tiết kiệm ước lượng đạt ngưỡng của runtime đã pin. Usage của warming được tính vào session total nhưng không đi vào model context. Cơ chế này không loại bỏ chi phí provider và không bảo đảm cache hit: provider vẫn quyết định việc nhận cache, thời điểm hết hạn và cách tính phí.
 
@@ -224,6 +224,8 @@ cắt tại mục người dùng số 4
 
 `firstKeptEntryId` xác định một mục trong cây phiên thay vì vị trí trong mảng. Nhờ đó, bước dựng lại có thể tìm đúng ranh giới sau khi tải lại và trên đường dẫn liên kết qua các mục cha. Nếu một phiên cũ không cung cấp được mã cho mục đã chọn, bước chuẩn bị trả `undefined` thay vì ghi một điểm kiểm tra không thể dùng.
 
+Pi lấy `firstKeptEntryId` từ một điểm cắt hợp lệ trong các canonical projected entry của branch đã chọn, còn summary bao phủ các projected message cũ hơn nằm trước boundary đó. Plain `custom` entry bị loại khỏi LLM context và không thể là điểm cắt; `custom_message` được chiếu thành role `custom` và có thể là điểm cắt hợp lệ. Việc append checkpoint thay đổi projection về sau nhưng không xóa raw tree.
+
 ### Đi ngược theo ngân sách và ranh giới của lần nén tiếp theo
 
 Quá trình tìm điểm cắt đi từ `boundaryEnd - 1` về `boundaryStart`, cộng số token ước lượng của mọi thông điệp mà từng mục chiếu ra. Khi tổng đạt `keepRecentTokens`, thuật toán chọn điểm cắt hợp lệ gần nhất tại hoặc sau vị trí đó. Nếu tổng không đạt ngân sách, ứng viên ban đầu vẫn là điểm cắt hợp lệ sớm nhất; bước chuẩn bị sau đó trả `undefined` nếu không còn gì để tóm tắt.
@@ -262,6 +264,8 @@ chuẩn bị lần tiếp theo
 thông điệp [boundaryStart, điểm cắt mới) → đầu vào cho bản tóm tắt mới
 thông điệp [điểm cắt mới, lá hiện tại]   → vùng giữ lại
 ```
+
+Với Virtual Model đã chọn, entry `model_change` là session/tree state của selection đó, còn router state được lưu riêng trong một `custom` entry có tên `pi.virtual-model-state`. Khi restore hoặc chọn branch, Pi dựng lại selection đã đăng ký từ active path; nếu Virtual Model không còn đăng ký, Pi fallback về physical response mới nhất trên branch. Physical model dùng cho mỗi assistant turn được ghi trong assistant message. Compaction thay đổi canonical context projection; nó không replay routing decision cũ và không reroute turn đã lưu.
 
 ## 4. Nội dung thay thế các thông điệp cũ
 
@@ -320,7 +324,7 @@ Request dùng `SUMMARIZATION_SYSTEM_PROMPT`, không cung cấp định nghĩa To
 
 ### Từ chối summary chưa hoàn chỉnh
 
-Pi 0.87.1 chạy `getSummarizationFailure` sau từng request history summary tích hợp sẵn và turn-prefix summary; branch summarization dùng cùng phép kiểm tra. Response có `stopReason: "length"` là chưa hoàn chỉnh, nên Pi báo failure và không append hay lưu partial text thành `CompactionEntry` hoặc `BranchSummaryEntry`. Đường main và prefix throw vào lifecycle compaction failure đã mô tả; đường branch trả error result. `getSummarizationFailure` không được export từ package root.
+Pi 0.99.2 chạy `getSummarizationFailure` sau từng request history summary tích hợp sẵn và turn-prefix summary; branch summarization dùng cùng phép kiểm tra. Response có `stopReason: "length"` là chưa hoàn chỉnh, nên Pi báo failure và không append hay lưu partial text thành `CompactionEntry` hoặc `BranchSummaryEntry`. Đường main và prefix throw vào lifecycle compaction failure đã mô tả; đường branch trả error result. `getSummarizationFailure` không được export từ package root.
 
 Branch summarization hiện cho phép output cap 4.096 token, bị chặn bởi `model.maxTokens` dương nhỏ hơn, thay vì cap 2.048 token cũ. Thay đổi này sửa failure khi reasoning dùng allowance trước đó trước khi đủ final summary text được emit. Cap lớn hơn không làm yếu validation: history summary, turn-prefix summary và branch summary vẫn từ chối `stopReason: "length"`.
 
@@ -697,15 +701,15 @@ Trước khi bàn giao một phần tích hợp nén, hãy kiểm tra các trư�
 
 [Chương 10](ch10-session.md) đi sâu vào cây JSONL liên kết qua các mục cha mà `getBranch()`, `appendCompaction()` và `buildContextEntries()` sử dụng, cùng thao tác quay lại và điều hướng nhánh. Mô hình lưu trữ đó giải thích vì sao cơ chế nén có thể bỏ các mục cũ khỏi yêu cầu mô hình tiếp theo mà không xóa chúng.
 
-Các tham chiếu triển khai của chương này được ghim tại Pi `0.87.1`, commit `f07218c4d4bbc12bef056a7058c3dd49dfe41abe`:
+Các tham chiếu triển khai của chương này được ghim tại Pi `0.99.2`, commit `005af57d88ee23b33778f343a9595b32e67ff788`:
 
-- [Giá trị mặc định, cách tính token, điểm cắt, mẫu, bước chuẩn bị và tạo kết quả nén](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/compaction/compaction.ts)
-- [Tuần tự hóa bản tóm tắt và theo dõi thao tác tệp](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/compaction/utils.ts)
-- [`CompactionEntry`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/session-manager.ts), [`appendCompaction()`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/session-manager.ts) và [`buildSessionContext()`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/session-manager.ts)
-- [Đường xử lý vòng đời, thử lại, hủy và thất bại trong chế độ thủ công hoặc tự động](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/agent-session.ts)
-- [Hợp đồng nén trong context của Extension](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/extensions/types.ts) và [các event hook](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/extensions/types.ts)
-- [Chuyển đổi thông điệp tóm tắt nén](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/messages.ts) và [thứ tự biến đổi cho từng lần gọi](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent-loop.ts)
-- [Hợp nhất thiết lập toàn cục/dự án](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/settings-manager.ts), [giá trị ghi đè từ SDK](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/settings-manager.ts) và [giá trị nén có hiệu lực](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/settings-manager.ts)
-- [Lược đồ `retainedTail` của Agent dùng chung](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/harness/session/types.ts), khác với Coding Agent `SessionManager`
+- [Giá trị mặc định, cách tính token, điểm cắt, mẫu, bước chuẩn bị và tạo kết quả nén](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/compaction/compaction.ts)
+- [Tuần tự hóa bản tóm tắt và theo dõi thao tác tệp](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/compaction/utils.ts)
+- [`CompactionEntry`](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/session-manager.ts), [`appendCompaction()`](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/session-manager.ts) và [`buildSessionContext()`](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/session-manager.ts)
+- [Đường xử lý vòng đời, thử lại, hủy và thất bại trong chế độ thủ công hoặc tự động](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/agent-session.ts)
+- [Hợp đồng nén trong context của Extension](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/extensions/types.ts) và [các event hook](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/extensions/types.ts)
+- [Chuyển đổi thông điệp tóm tắt nén](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/messages.ts) và [thứ tự biến đổi cho từng lần gọi](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/agent-loop.ts)
+- [Hợp nhất thiết lập toàn cục/dự án](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/settings-manager.ts), [giá trị ghi đè từ SDK](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/settings-manager.ts) và [giá trị nén có hiệu lực](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/settings-manager.ts)
+- [Lược đồ `retainedTail` của Agent dùng chung](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/harness/session/types.ts), khác với Coding Agent `SessionManager`
 
 > **Tiếp theo:** [Chương 10: Quản lý phiên](ch10-session.md)

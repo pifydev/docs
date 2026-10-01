@@ -6,8 +6,8 @@ language: vi
 chapter: 10
 source_url: "https://www.dgzhuya.com/modules/ch10-session"
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/sessions.md"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/modes/interactive/bug-report.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/docs/sessions.md"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/modes/interactive/bug-report.ts"
 terms_used:
   - Session
   - Session Tree
@@ -16,7 +16,7 @@ terms_used:
   - CompactionEntry
   - BranchSummaryEntry
 status: reviewed
-last_updated: "2026-09-23"
+last_updated: "2026-10-01"
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -548,6 +548,8 @@ Hai user message đứng liền nhau vì ví dụ gọi `branch("e2")` rồi app
 
 Bước lấy trạng thái đi qua toàn bộ đường dẫn đã chọn từ root đến leaf. `thinkingLevel` bắt đầu bằng `"off"`; mỗi `thinking_level_change` ghi đè giá trị. `model` bắt đầu bằng `null`; mỗi `model_change` ghi đè nó, và một message của assistant cũng cập nhật model từ provider cùng model đã tạo phản hồi đó.
 
+Với Virtual Model đã chọn, entry `model_change` là session/tree state của selection đó, còn router state được lưu riêng trong một `custom` entry có tên `pi.virtual-model-state`. Khi restore hoặc chọn branch, Pi dựng lại selection đã đăng ký từ active path; nếu Virtual Model không còn đăng ký, Pi fallback về physical response mới nhất trên branch. Physical model dùng cho mỗi assistant turn được ghi trong assistant message. Compaction thay đổi canonical context projection; nó không replay routing decision cũ và không reroute turn đã lưu.
+
 ```text
 e1 model_change anthropic/claude-sonnet-4-6 -> model = cặp đó
 e7 assistant từ cùng cặp                         -> model = cặp đó
@@ -606,18 +608,18 @@ ID của entry lấy tám ký tự đầu của UUID ngẫu nhiên, thử tối 
 
 JSONL giúp thao tác ghi phổ biến chỉ append một dòng thay vì tuần tự hóa lại một mảng JSON ngày càng lớn. Nó cũng để lộ branch: hai bản ghi có cùng `parentId` là các nút cùng cha dù giữa chúng có nhiều dòng vật lý.
 
-### Trì hoãn tạo file đến khi có assistant
+### Trì hoãn tạo file đến khi hội thoại bắt đầu
 
-Manager lưu bền vững mới cấp một đường dẫn và giữ entry trong vùng đệm `fileEntries`, nhưng thông thường chưa tạo file cho đến khi message đầu tiên của assistant được append. Chính sách trong `_persist()` là:
+Việc tạo `SessionManager` hoặc session object chỉ cấp path dự kiến và có thể append setup entry, nhưng không tạo session file. Trong prompt flow thông thường, session file được tạo khi user message đầu tiên được append, trước khi provider tạo assistant response. Bên trong, `_hasConversation()` chấp nhận cả user message lẫn assistant message, nên host append trực tiếp một assistant message cũng vượt qua boundary này. Chính sách trong `_persist()` là:
 
-| Đã có assistant trong `fileEntries` | `flushed` | Hành vi ghi                                                                             |
-| ----------------------------------- | --------- | --------------------------------------------------------------------------------------- |
-| Chưa                                | `false`   | Giữ entry trong bộ nhớ; chưa tạo file                                                   |
-| Chưa                                | `true`    | Append entry hiện tại, trường hợp biên sau khi mở file đã được ghi                      |
-| Có                                  | `false`   | Mở đường dẫn mới bằng `"wx"`, ghi header và mọi entry trong vùng đệm, rồi đặt `flushed` |
-| Có                                  | `true`    | Chỉ append entry hiện tại bằng `appendFileSync`                                         |
+| Có user hoặc assistant trong `fileEntries` | `flushed` | Hành vi ghi                                                                             |
+| ------------------------------------------ | --------- | --------------------------------------------------------------------------------------- |
+| Chưa                                       | `false`   | Giữ setup entry trong bộ nhớ; chưa tạo file                                             |
+| Chưa                                       | `true`    | Append entry hiện tại, trường hợp biên sau khi mở file đã được ghi                      |
+| Có                                         | `false`   | Mở đường dẫn mới bằng `"wx"`, ghi header và mọi entry trong vùng đệm, rồi đặt `flushed` |
+| Có                                         | `true`    | Chỉ append entry hiện tại bằng `appendFileSync`                                         |
 
-Việc trì hoãn giúp một yêu cầu mới thất bại không để lại file session chỉ có câu hỏi của người dùng. Nó không bảo đảm mọi lượt đã lưu về sau luôn hoàn chỉnh. Sau lần ghi đầu, message của người dùng được append ngay, nên sự cố tiến trình hoặc lỗi provider vẫn có thể để lại câu hỏi chưa có phản hồi của assistant.
+Việc trì hoãn ngăn thao tác mở rồi đóng Pi mà không chat tạo ra file chỉ có setup. Ghi từ user message đầu tiên giúp giữ lại prompt khi turn đầu không bao giờ tạo assistant response. Điều đó không bảo đảm mọi turn đã lưu luôn hoàn chỉnh: sự cố process hoặc lỗi provider vẫn có thể để lại user message chưa có assistant response theo sau.
 
 `isPersisted()` cho biết manager có được cấu hình để lưu bền vững hay không. Nó không kiểm tra cơ chế tạo muộn đã tạo file chưa. Vì vậy, một manager lưu bền vững có thể trả về đường dẫn dự kiến từ `getSessionFile()` dù đường dẫn đó chưa tồn tại.
 
@@ -659,7 +661,7 @@ Flow xác nhận cho phép kèm hoặc bỏ transcript của session. Nếu bỏ
 
 Radius upload không yêu cầu login; Radius session đã xác thực sẽ gắn report với tài khoản để maintainer có thể follow up. Sau khi upload, Pi ghi report ID vào session dưới dạng entry `pi.bug-report`. Process crash được ghi riêng ở `~/.pi/agent/crashes.json`, thông báo một lần trong lần khởi động kế tiếp và đính kèm vào report tiếp theo. Crash file đó là diagnostic state, không thay thế session JSONL.
 
-### Các bản sửa độ tin cậy của session được giữ trong Pi 0.87.1
+### Các bản sửa độ tin cậy của session được giữ trong Pi 0.99.2
 
 Bốn fix làm chặt các workflow cụ thể mà không đổi storage model. Imported JSONL trùng filename với destination đã có giờ nhận suffix dạng số thay vì ghi đè file đó. Các thao tác share session đồng thời không ghi đè nhau nữa. Một fork nay giữ ranh giới compaction áp dụng, nên context dựng lại tôn trọng checkpoint của source. Một fork in-memory được yêu cầu trước khi active turn settle chỉ được xử lý sau khi runtime teardown đã await active response, nhờ đó giữ turn đã hoàn tất hoặc bị abort trước khi manager thay đổi.
 
@@ -667,7 +669,7 @@ Bốn fix làm chặt các workflow cụ thể mà không đổi storage model. 
 
 ## 7. Tách hai tầng lưu trữ và dùng SessionManager
 
-Pi 0.87.1 có hai hệ thống session cùng chia sẻ một số ý tưởng nhưng không tương thích về quy ước:
+Pi 0.99.2 có hai hệ thống session cùng chia sẻ một số ý tưởng nhưng không tương thích về quy ước:
 
 | Thuộc tính                  | Bộ khung Pi Agent Core                                               | `SessionManager` của Coding Agent                                        |
 | --------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------ |
@@ -775,9 +777,9 @@ Từ Chương 3 đến Chương 10, đường chạy đã nối liền: vòng l�
 
 Hệ thống Extension của Pi nằm ở cả hai phía ranh giới này. Extension có thể append trạng thái `custom`, đưa context `custom_message` vào, cung cấp bản tóm tắt compaction hoặc branch, gắn label cho entry và quan sát điều hướng. Các file mã nguồn nên đọc tiếp gồm:
 
-- [`lược đồ`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/session-manager.ts), [`phép chiếu`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/session-manager.ts) và phần triển khai [`SessionManager`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/session-manager.ts) của Coding Agent;
-- phần [`thu thập entry`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/compaction/branch-summarization.ts) và [`sinh bản tóm tắt`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/compaction/branch-summarization.ts);
-- [`quy ước entry và lưu trữ`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/harness/session/types.ts) cùng [`cơ chế an toàn JSONL`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/harness/session/jsonl/storage.ts) của bộ khung tổng quát;
-- [Hành vi CLI hiện tại](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/sessions.md).
+- [`lược đồ`](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/session-manager.ts), [`phép chiếu`](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/session-manager.ts) và phần triển khai [`SessionManager`](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/session-manager.ts) của Coding Agent;
+- phần [`thu thập entry`](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/compaction/branch-summarization.ts) và [`sinh bản tóm tắt`](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/compaction/branch-summarization.ts);
+- [`quy ước entry và lưu trữ`](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/harness/session/types.ts) cùng [`cơ chế an toàn JSONL`](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/harness/session/jsonl/storage.ts) của bộ khung tổng quát;
+- [Hành vi CLI hiện tại](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/docs/sessions.md).
 
-Chương này bám theo Pi `0.87.1` tại commit `f07218c4d4bbc12bef056a7058c3dd49dfe41abe`.
+Chương này bám theo Pi `0.99.2` tại commit `005af57d88ee23b33778f343a9595b32e67ff788`.

@@ -6482,7 +6482,7 @@ test("Pi 0.99.2 SDK install recipes omit the fixed 0.85.0 packaging workaround",
   }
 });
 
-test("historical/deferred Pi 0.87.1 session guides retain their audited SDK install contract", async () => {
+test("Pi 0.99.2 session guides retain their audited SDK install contract", async () => {
   const guideContracts = [
     {
       path: "how-to/persist-sessions.md",
@@ -6501,13 +6501,13 @@ test("historical/deferred Pi 0.87.1 session guides retain their audited SDK inst
     for (const { locale, source } of await readLocalizedContent(
       guideContract.path,
     )) {
-      const context = `${locale} ${guideContract.path} historical/deferred Pi 0.87.1 SDK install`;
+      const context = `${locale} ${guideContract.path} Pi 0.99.2 SDK install`;
       const scope = extractMarkdownPreamble(
         source,
         guideContract.beforeHeadings[locale],
         context,
       );
-      assertSdkInstallPackages(source, scope, context, "0.87.1");
+      assertSdkInstallPackages(source, scope, context);
     }
   }
 });
@@ -7520,20 +7520,20 @@ test("both replaceable session runtime guides preserve the ten-step lifecycle an
 
 function assertDeterministicPageReleaseAuthority(
   source,
-  { locale, filename, release, historicalRelease },
+  { locale, filename, release },
 ) {
   const context = `${locale} ${filename}`;
   const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---/.exec(source)?.[1];
   assert.ok(frontmatter, `${context} must contain frontmatter`);
   assert.match(
     frontmatter,
-    /^last_updated: '2026-09-23'$/m,
-    `${context} must retain its historical/deferred review date`,
+    /^last_updated: '2026-10-01'$/m,
+    `${context} must use the current release review date`,
   );
   assert.deepEqual(
-    invalidPiSourceLinks([{ filename, source }], historicalRelease),
+    invalidPiSourceLinks([{ filename, source }], release),
     [],
-    `${context} must retain its audited Pi 0.87.1 source authority`,
+    `${context} must use its audited Pi 0.99.2 source authority`,
   );
   assert.doesNotMatch(
     source,
@@ -7541,12 +7541,12 @@ function assertDeterministicPageReleaseAuthority(
     `${context} must not retain active Pi 0.85 authority`,
   );
   assert.ok(
-    source.includes(`\`${historicalRelease.tag}\``),
-    `${context} must name the audited historical release tag`,
+    source.includes(`\`${release.tag}\``),
+    `${context} must name the audited release tag`,
   );
   assert.ok(
-    source.includes(`\`${historicalRelease.commit}\``),
-    `${context} must name the audited historical release commit`,
+    source.includes(`\`${release.commit}\``),
+    `${context} must name the audited release commit`,
   );
 
   const chapter = filename === "ch11-testing-evaluation.md";
@@ -7595,23 +7595,18 @@ function assertDeterministicPageReleaseAuthority(
   );
 
   if (!chapter) {
-    assertSdkInstallPackages(example, source, context, "0.87.1");
+    assertSdkInstallPackages(example, source, context, release.packageVersion);
   }
 }
 
-test("historical/deferred deterministic pages retain Pi 0.87.1 authority while examples compile on 0.99.2", async () => {
+test("deterministic pages use Pi 0.99.2 authority and compile against the matching fixture", async () => {
   const release = await readReleaseFixture();
-  const historicalRelease = {
-    packageVersion: "0.87.1",
-    tag: "v0.87.1",
-    commit: "f07218c4d4bbc12bef056a7058c3dd49dfe41abe",
-  };
   for (const filename of [
     "ch11-testing-evaluation.md",
     "how-to/test-agent-deterministically.md",
   ]) {
     for (const { locale, source } of await readLocalizedContent(filename)) {
-      const options = { locale, filename, release, historicalRelease };
+      const options = { locale, filename, release };
       const context = `${locale} ${filename}`;
       assertDeterministicPageReleaseAuthority(source, options);
 
@@ -9695,19 +9690,11 @@ test("active and explicitly deferred content satisfy their published Pi authorit
     tag: "v0.87.1",
     commit: "f07218c4d4bbc12bef056a7058c3dd49dfe41abe",
   };
-  const historicalDeferredSuffixes = new Set([
-    "ch08-context-engineering.md",
-    "ch09-compaction.md",
-    "ch10-session.md",
-    "ch11-testing-evaluation.md",
-    "how-to/host-session-runtime.md",
-    "how-to/persist-sessions.md",
-    "how-to/run-pi-evals.md",
-    "how-to/test-agent-deterministically.md",
-    ...pi0871BilingualAuditSuffixes.filter((suffix) =>
+  const historicalDeferredSuffixes = new Set(
+    pi0871BilingualAuditSuffixes.filter((suffix) =>
       suffix.startsWith("course/"),
     ),
-  ]);
+  );
   const currentSources = [];
   const historicalDeferredSources = [];
 
@@ -10646,7 +10633,7 @@ test("current API boundaries are accurate across chapters and public entry point
   assert.match(repositoryGlossary, /`--print \/ -p`/);
 });
 
-test("historical/deferred Pi 0.87.1 compaction guidance preserves its canonical session projection", async () => {
+test("Pi 0.99.2 compaction guidance preserves its canonical session projection", async () => {
   const compacted = await readLocalizedContent("ch09-compaction.md");
 
   for (const { source } of compacted) {
@@ -10855,9 +10842,9 @@ test("bilingual semantic source links pin the Pi 0.99.2 implementation paths", a
   }
 });
 
-test("historical/deferred Pi 0.87.1 semantic source links retain their audited implementation paths", async () => {
-  const sourceBase =
-    "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/";
+test("Pi 0.99.2 semantic source links retain their audited implementation paths", async () => {
+  const { commit } = await readReleaseFixture();
+  const sourceBase = `https://github.com/earendil-works/pi/blob/${commit}/`;
   const contracts = [
     {
       path: "ch08-context-engineering.md",
@@ -10955,7 +10942,7 @@ function assertCourseEvalReleaseAuthority(sources) {
   }
 }
 
-test("historical/deferred Course comparisons and eval guidance retain Pi 0.87.1 authority", async () => {
+test("historical Course comparisons retain Pi 0.87.1 authority", async () => {
   const sources = [];
   for (const locale of ["en", "vi"]) {
     const courseDirectory = new URL(
@@ -10971,64 +10958,9 @@ test("historical/deferred Course comparisons and eval guidance retain Pi 0.87.1 
         ),
       });
     }
-    for (const suffix of [
-      "how-to/run-pi-evals.md",
-      "how-to/test-agent-deterministically.md",
-    ]) {
-      sources.push({
-        filename: `content/${locale}/${suffix}`,
-        source: normalizeLineEndings(
-          await readFile(
-            new URL(`content/${locale}/${suffix}`, repositoryRoot),
-            "utf8",
-          ),
-        ),
-      });
-    }
   }
 
   assertCourseEvalReleaseAuthority(sources);
-  const runGuide = sources.find(
-    ({ filename }) => filename === "content/en/how-to/run-pi-evals.md",
-  );
-  assert.ok(runGuide);
-  for (const currentContract of [
-    "eval:host -w packages/evals",
-    "evals/smoke.eval.ts",
-    "eval:docs -w packages/evals",
-    "without_docs",
-    "with_docs",
-    "protocol.json",
-    "expected-runs.json",
-    "observations.jsonl",
-    "report.json",
-    "report.txt",
-  ]) {
-    assert.ok(
-      runGuide.source.includes(currentContract),
-      `run-pi-evals must include ${currentContract}`,
-    );
-  }
-
-  const mutatedPin = sources.map((entry) => ({
-    ...entry,
-    source:
-      entry === runGuide
-        ? entry.source.replace(
-            "f07218c4d4bbc12bef056a7058c3dd49dfe41abe",
-            "107d79f11072bbc8a3a757ed7fd69596bee7d68c",
-          )
-        : entry.source,
-  }));
-  assert.notDeepEqual(
-    mutatedPin,
-    sources,
-    "the current eval source pin must mutate",
-  );
-  assert.throws(
-    () => assertCourseEvalReleaseAuthority(mutatedPin),
-    assert.AssertionError,
-  );
 
   const courseTen = sources.find(
     ({ filename }) => filename === "content/en/course/10-session-tree.md",

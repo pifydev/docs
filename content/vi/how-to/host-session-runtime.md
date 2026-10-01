@@ -1,29 +1,33 @@
 ---
 title: Host một Pi session runtime có thể thay thế
-description: Xây host tuần tự hóa quanh Pi 0.87.1 để thay session an toàn qua thao tác new, resume, fork, clone và import.
+description: Xây host tuần tự hóa quanh Pi 0.99.2 để thay session an toàn qua thao tác new, resume, fork, clone và import.
 translation_key: how-to-host-session-runtime
 language: vi
 source_url: "https://docs.pify.dev/vi/how-to/host-session-runtime"
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/agent-session.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/agent-session-runtime.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/agent-session-services.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/sdk.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/agent-session.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/agent-session-runtime.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/agent-session-services.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/sdk.ts"
 terms_used:
   - composition root
   - fail-closed
   - harness
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 translator: Pify maintainers
 ---
 
-Một server chạy lâu, desktop shell hoặc RPC process không thể coi `AgentSession` là cố định khi người dùng có thể tạo session mới, resume project khác, fork lịch sử, clone một branch hoặc import JSONL. Pi `0.87.1` cung cấp `AgentSessionRuntime` làm boundary thay thế: nó sở hữu session hiện tại cùng các service gắn với cwd, còn host chịu trách nhiệm tuần tự hóa, subscription, diagnostic và failure policy.
+Một server chạy lâu, desktop shell hoặc RPC process không thể coi `AgentSession` là cố định khi người dùng có thể tạo session mới, resume project khác, fork lịch sử, clone một branch hoặc import JSONL. Pi `0.99.2` cung cấp `AgentSessionRuntime` làm boundary thay thế: nó sở hữu session hiện tại cùng các service gắn với cwd, còn host chịu trách nhiệm tuần tự hóa, subscription, diagnostic và failure policy.
 
-Hướng dẫn này xây boundary đó chỉ bằng các public export ban đầu được ghi nhận cho `@earendil-works/pi-coding-agent@0.87.1`. Toàn bộ TypeScript shape được đồng bộ với `tests/fixtures/pi-sdk-0992.contract.ts` và compile-check bằng các declaration `@earendil-works/pi-coding-agent@0.99.2` đã cài đặt. Code nhận dependency thay vì tạo resource thật trong lúc kiểm tra.
+Hướng dẫn này xây boundary đó chỉ bằng các public export ban đầu được ghi nhận cho `@earendil-works/pi-coding-agent@0.99.2`. Toàn bộ TypeScript shape được đồng bộ với `tests/fixtures/pi-sdk-0992.contract.ts` và compile-check bằng các declaration `@earendil-works/pi-coding-agent@0.99.2` đã cài đặt. Code nhận dependency thay vì tạo resource thật trong lúc kiểm tra.
 
-Trước khi import public root đó trên Node.js `>=22.19.0`, hãy cài SDK bằng `npm install @earendil-works/pi-coding-agent@0.87.1`.
+Trước khi import public root đó trên Node.js `>=22.19.0`, hãy cài SDK bằng `npm install @earendil-works/pi-coding-agent@0.99.2`. Hướng dẫn này được audit theo Pi `v0.99.2`, commit `005af57d88ee23b33778f343a9595b32e67ff788`.
+
+Với RPC prompt, input được handle tại Extension boundary trước mọi quyết định streaming queue và trả disposition `handled` mà không start hay queue một run. Prompt chưa được handle nhận trong lúc streaming phải đặt `streamingBehavior` thành `steer` hoặc `followUp`; preflight disposition chuẩn khi đó phân biệt `started` với `queued`. Vì vậy Extension command và input handler vẫn giữ interception boundary, còn response chỉ xác nhận prompt đã được chấp nhận chứ không xác nhận Agent run đã hoàn tất.
+
+Khi replacement, `abort()` dừng active run và runtime await nó settle trước khi replacement teardown tiếp tục, nhờ đó aborted turn cùng Tool result đã hoàn tất vẫn được ghi trong session sắp rời đi. Boundary này là non-transactional: replacement failure sau teardown không rollback về old session đã dispose. Host không được phép công khai runtime bị thay dở vì thế cần fail-closed wrapper được mô tả bên dưới.
 
 ## Kết quả
 
@@ -544,7 +548,7 @@ Khi replacement, teardown nội bộ của Pi trước hết await `oldSession.a
 
 `SessionManager` append record JSONL của Pi qua chính session operation; `AgentSessionRuntime` không có public method `flush()` bất đồng bộ. `flushPersistence()` trong ví dụ chỉ dành cho persistence, event projection hoặc durable queue do host sở hữu. Nó chạy sau mỗi rebind thành công. Nếu flush reject, installed replacement không còn an toàn để công khai: adapter chuyển sang terminal, clear subscription, thử `runtime.dispose()` rồi reject operation.
 
-Pi `0.87.1` cũng sửa bốn edge case khi thay session. JSONL import trùng filename nhận suffix số thay vì ghi đè session file hiện có, còn share session đồng thời không ghi đè lẫn nhau. Fork giữ nguyên ranh giới compaction. Với fork in-memory được yêu cầu trước khi active turn settle, teardown của runtime await `abort()` trước khi mutate manager dùng chung, nên fork quan sát outgoing turn đã settle. Đây là các bảo đảm collision và ordering có phạm vi hẹp, không phải bảo đảm transaction tổng quát hoặc validate schema đầy đủ cho JSONL import.
+Pi `0.99.2` cũng sửa bốn edge case khi thay session. JSONL import trùng filename nhận suffix số thay vì ghi đè session file hiện có, còn share session đồng thời không ghi đè lẫn nhau. Fork giữ nguyên ranh giới compaction. Với fork in-memory được yêu cầu trước khi active turn settle, teardown của runtime await `abort()` trước khi mutate manager dùng chung, nên fork quan sát outgoing turn đã settle. Đây là các bảo đảm collision và ordering có phạm vi hẹp, không phải bảo đảm transaction tổng quát hoặc validate schema đầy đủ cho JSONL import.
 
 Final shutdown cũng được tuần tự hóa, nhưng có thể được yêu cầu khi một healthy replacement đang giữ host lock. Lần gọi `host.dispose()` đầu tiên không chạy `assertAvailable()` và không reject chỉ vì `replacementInFlight` đang set. Nó atomically set `disposed` cùng `unusable`, rồi enqueue cleanup sau `tail` hiện tại. In-flight operation settle trước; operation đã queue hoặc đến sau sẽ chạm terminal guard mà không gọi thêm runtime method. Getter reject ngay lập tức. Lần gọi `dispose()` lặp lại reject bằng disposed-state error đã định nghĩa và không schedule cleanup trùng.
 
@@ -552,7 +556,7 @@ Final cleanup thử độc lập `runtime.session.abort()`, flush host persisten
 
 ## 9. Xử lý factory failure mà không để lộ half-replaced session
 
-Replacement trong Pi `0.87.1` không phải rollback transaction. `AgentSessionRuntime` dispose session cũ trước khi await factory mới. Nếu factory reject, runtime propagate error và không chạy bước apply hoặc rebind nội bộ; object cũ đã mất hiệu lực còn replacement dùng được chưa tồn tại.
+Replacement trong Pi `0.99.2` không phải rollback transaction. `AgentSessionRuntime` dispose session cũ trước khi await factory mới. Nếu factory reject, runtime propagate error và không chạy bước apply hoặc rebind nội bộ; object cũ đã mất hiệu lực còn replacement dùng được chưa tồn tại.
 
 Wrapper phát hiện đúng boundary này vì `setBeforeSessionInvalidate()` đã đặt `replacementInFlight`, còn `setRebindSession()` thành công chỉ xóa flag sau khi Extension binding và host binding hoàn tất. Callback đồng bộ không bao giờ throw: unsubscribe failure được giữ lại cho awaited boundary. Factory rejection xảy ra trước apply nên không có replacement cần dispose; wrapper propagate nó làm primary và nối cleanup failure đã giữ lại. Invalidation-cleanup rejection, `bindExtensions(...)`, host subscription, diagnostic reporting hoặc post-rebind persistence rejection sau apply đều dispose installed replacement trước khi propagate. `finally` giữ wrapper unusable kể cả khi disposal thất bại. Không có raw session nào được public, còn operation và state getter sau đó đều reject. Đây là policy no-half-replacement, fail-closed bắt buộc.
 
@@ -585,16 +589,16 @@ Xác minh các invariant sau:
 
 Với acceptance run thật, tạo session trong hai thư mục cwd tạm, switch qua lại và assert project-local settings cùng resource đến từ cwd đã chọn. Dùng in-memory hoặc faux provider để lifecycle evidence không phụ thuộc network hay credential.
 
-## Bản đồ nguồn cho Pi 0.87.1
+## Bản đồ nguồn cho Pi 0.99.2
 
-Mọi claim ở trên đều được khóa tại release commit `f07218c4d4bbc12bef056a7058c3dd49dfe41abe`:
+Mọi claim ở trên đều được khóa tại release commit `005af57d88ee23b33778f343a9595b32e67ff788`:
 
 | Nguồn | Contract được xác minh |
 | --- | --- |
-| [`agent-session.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/agent-session.ts) | Parameter public của `AgentSession.bindExtensions(...)`, apply Extension binding, `session_start` và thứ tự mở rộng resource |
-| [`agent-session-runtime.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/agent-session-runtime.ts) | Factory/result type, getter, method new/resume/fork/import, callback order, teardown-before-create, apply, thay diagnostic và disposal |
-| [`agent-session-services.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/agent-session-services.ts) | Tạo service gắn với cwd, diagnostic và tạo session từ bộ service nhất quán |
-| [`sdk.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/sdk.ts) | Contract trực tiếp của `createAgentSession()` và các public re-export dùng trong hướng dẫn |
+| [`agent-session.ts`](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/agent-session.ts) | Parameter public của `AgentSession.bindExtensions(...)`, apply Extension binding, `session_start` và thứ tự mở rộng resource |
+| [`agent-session-runtime.ts`](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/agent-session-runtime.ts) | Factory/result type, getter, method new/resume/fork/import, callback order, teardown-before-create, apply, thay diagnostic và disposal |
+| [`agent-session-services.ts`](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/agent-session-services.ts) | Tạo service gắn với cwd, diagnostic và tạo session từ bộ service nhất quán |
+| [`sdk.ts`](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/sdk.ts) | Contract trực tiếp của `createAgentSession()` và các public re-export dùng trong hướng dẫn |
 
 ## Bước tiếp theo
 

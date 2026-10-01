@@ -6,8 +6,8 @@ language: en
 chapter: 10
 source_url: "https://www.dgzhuya.com/modules/ch10-session"
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/sessions.md"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/modes/interactive/bug-report.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/docs/sessions.md"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/modes/interactive/bug-report.ts"
 terms_used:
   - Session
   - Session Tree
@@ -16,7 +16,7 @@ terms_used:
   - CompactionEntry
   - BranchSummaryEntry
 status: reviewed
-last_updated: "2026-09-23"
+last_updated: "2026-10-01"
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -548,6 +548,8 @@ The two user messages are consecutive because this example called `branch("e2")`
 
 State extraction walks the complete selected path from root to leaf. `thinkingLevel` starts as `"off"`. Every `thinking_level_change` overwrites it. `model` starts as `null`; every `model_change` overwrites it, and an assistant message also updates it from the provider and model that produced that response.
 
+With a selected Virtual Model, the `model_change` entry is the session/tree state for that selection, while router state is stored separately in a `custom` entry named `pi.virtual-model-state`. Restore or branch selection reconstructs the registered virtual selection from the active path; if that Virtual Model is unregistered, Pi falls back to the latest physical response on the branch. The physical model used for each assistant turn is recorded on the assistant message. Compaction changes the canonical context projection; it does not replay a past routing decision or reroute stored turns.
+
 ```text
 e1 model_change anthropic/claude-sonnet-4-6 -> model = that pair
 e7 assistant from the same pair             -> model = that pair
@@ -606,18 +608,18 @@ Entry IDs come from the first eight characters of a random UUID, with up to 100 
 
 JSONL makes the common write a line append instead of serializing one growing JSON array. It also exposes the branch: two records with the same `parentId` are siblings even when many physical lines separate them.
 
-### Delay disk creation until an assistant arrives
+### Delay disk creation until the conversation begins
 
-A fresh persisted manager allocates a path and buffers entries in `fileEntries`, but normally does not create the file until the first assistant message has been appended. The policy in `_persist()` is:
+Creating a `SessionManager` or session object allocates a prospective path and may append setup entries, but does not create the session file. In a normal prompt flow, the session file is created when the first user message is appended, before the provider produces an assistant response. Internally, `_hasConversation()` accepts either a user or assistant message, so a host that appends an assistant message directly also crosses the boundary. The policy in `_persist()` is:
 
-| Assistant exists anywhere in `fileEntries` | `flushed` | Write behavior                                                                               |
-| ------------------------------------------ | --------- | -------------------------------------------------------------------------------------------- |
-| No                                         | `false`   | Keep entries in memory; no file is created                                                   |
-| No                                         | `true`    | Append the current entry, an edge used after opening an already flushed file                 |
-| Yes                                        | `false`   | Open the new path with `"wx"`, write the header and every buffered entry, then set `flushed` |
-| Yes                                        | `true`    | Append only the current entry with `appendFileSync`                                          |
+| User or assistant exists in `fileEntries` | `flushed` | Write behavior                                                                               |
+| ----------------------------------------- | --------- | -------------------------------------------------------------------------------------------- |
+| No                                        | `false`   | Keep setup entries in memory; no file is created                                             |
+| No                                        | `true`    | Append the current entry, an edge used after opening an already flushed file                 |
+| Yes                                       | `false`   | Open the new path with `"wx"`, write the header and every buffered entry, then set `flushed` |
+| Yes                                       | `true`    | Append only the current entry with `appendFileSync`                                          |
 
-The delay prevents a fresh failed request from leaving a new session file that contains only the user's question. It does not guarantee that every persisted turn is complete forever. Later user messages append immediately after the first flush, and a crash or provider failure may leave one without a following assistant response.
+The delay prevents opening and closing Pi without chatting from leaving a setup-only file. Persisting from the first user message preserves the prompt when the first turn never produces an assistant response. It does not guarantee that every persisted turn is complete forever: a crash or provider failure may still leave a user message without a following assistant response.
 
 `isPersisted()` reports whether the manager is configured for persistence. It does not check whether lazy creation has produced the file. A persisted manager can therefore return a prospective `getSessionFile()` path that does not exist yet.
 
@@ -659,7 +661,7 @@ The confirmation flow lets you include or omit the session transcript. If you om
 
 Radius upload does not require login; an authenticated Radius session attributes the report so maintainers can follow up. After upload, Pi records the report ID in the session as a `pi.bug-report` entry. Process crashes are recorded separately in `~/.pi/agent/crashes.json`, announced once at the next startup, and attached to the next report. That crash file is diagnostic state, not a substitute for the session JSONL.
 
-### Session reliability corrections retained in Pi 0.87.1
+### Session reliability corrections retained in Pi 0.99.2
 
 Four fixes tighten specific workflows without changing the storage model. Imported JSONL with the same filename as an existing destination now receives a numeric suffix instead of overwriting that file. Concurrent session shares do not overwrite one another. A fork now retains the applicable compaction boundary, so its reconstructed context respects the source checkpoint. An in-memory session fork requested before an active turn settles is handled only after runtime teardown has awaited the active response, preserving the completed or aborted turn before the manager is mutated.
 
@@ -667,7 +669,7 @@ These are collision and ordering fixes, not a new transaction layer. Coding Agen
 
 ## 7. Separate the two persistence layers and use SessionManager
 
-Pi 0.87.1 contains two session systems with related ideas and incompatible contracts:
+Pi 0.99.2 contains two session systems with related ideas and incompatible contracts:
 
 | Property              | Pi Agent Core harness                                                          | Coding Agent `SessionManager`                                               |
 | --------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
@@ -775,9 +777,9 @@ Chapters 3 through 10 now connect the full runtime path: the loop emits messages
 
 Pi's extension system sits on both sides of this boundary. Extensions can append `custom` state, inject `custom_message` context, provide compaction or branch summaries, label entries, and observe navigation. The source files to read next are:
 
-- Coding Agent [`schema`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/session-manager.ts), [`projection`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/session-manager.ts), and [`SessionManager`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/session-manager.ts) implementation;
-- branch-summary [`collection`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/compaction/branch-summarization.ts) and [`generation`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/compaction/branch-summarization.ts);
-- generic-harness [`entry and storage contracts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/harness/session/types.ts) and [`JSONL safety implementation`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/harness/session/jsonl/storage.ts);
-- [Current CLI behavior](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/sessions.md).
+- Coding Agent [`schema`](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/session-manager.ts), [`projection`](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/session-manager.ts), and [`SessionManager`](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/session-manager.ts) implementation;
+- branch-summary [`collection`](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/compaction/branch-summarization.ts) and [`generation`](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/compaction/branch-summarization.ts);
+- generic-harness [`entry and storage contracts`](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/harness/session/types.ts) and [`JSONL safety implementation`](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/harness/session/jsonl/storage.ts);
+- [Current CLI behavior](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/docs/sessions.md).
 
-This chapter targets Pi `0.87.1` at commit `f07218c4d4bbc12bef056a7058c3dd49dfe41abe`.
+This chapter targets Pi `0.99.2` at commit `005af57d88ee23b33778f343a9595b32e67ff788`.

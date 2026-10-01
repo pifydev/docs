@@ -1,29 +1,33 @@
 ---
 title: Host a replaceable Pi session runtime
-description: Build a serialized host around Pi 0.87.1 that safely replaces sessions across new, resume, fork, clone, and import operations.
+description: Build a serialized host around Pi 0.99.2 that safely replaces sessions across new, resume, fork, clone, and import operations.
 translation_key: how-to-host-session-runtime
 language: en
 source_url: "https://docs.pify.dev/en/how-to/host-session-runtime"
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/agent-session.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/agent-session-runtime.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/agent-session-services.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/sdk.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/agent-session.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/agent-session-runtime.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/agent-session-services.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/sdk.ts"
 terms_used:
   - composition root
   - fail-closed
   - harness
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 translator: Pify maintainers
 ---
 
-A long-running server, desktop shell, or RPC process cannot treat an `AgentSession` as permanent when users can start a new session, resume another project, fork history, clone a branch, or import JSONL. Pi `0.87.1` provides `AgentSessionRuntime` as the replacement boundary: it owns the current session and its cwd-bound services, while the host remains responsible for serialization, subscriptions, diagnostics, and failure policy.
+A long-running server, desktop shell, or RPC process cannot treat an `AgentSession` as permanent when users can start a new session, resume another project, fork history, clone a branch, or import JSONL. Pi `0.99.2` provides `AgentSessionRuntime` as the replacement boundary: it owns the current session and its cwd-bound services, while the host remains responsible for serialization, subscriptions, diagnostics, and failure policy.
 
-This guide builds that host boundary with only public exports originally documented for `@earendil-works/pi-coding-agent@0.87.1`. The complete TypeScript shape is synchronized with `tests/fixtures/pi-sdk-0992.contract.ts` and compile-checked against the installed `@earendil-works/pi-coding-agent@0.99.2` declarations. It accepts dependencies instead of constructing real resources during the check.
+This guide builds that host boundary with only public exports originally documented for `@earendil-works/pi-coding-agent@0.99.2`. The complete TypeScript shape is synchronized with `tests/fixtures/pi-sdk-0992.contract.ts` and compile-checked against the installed `@earendil-works/pi-coding-agent@0.99.2` declarations. It accepts dependencies instead of constructing real resources during the check.
 
-Before importing that public root on Node.js `>=22.19.0`, install the SDK with `npm install @earendil-works/pi-coding-agent@0.87.1`.
+Before importing that public root on Node.js `>=22.19.0`, install the SDK with `npm install @earendil-works/pi-coding-agent@0.99.2`. This guide was audited against Pi `v0.99.2`, commit `005af57d88ee23b33778f343a9595b32e67ff788`.
+
+For RPC prompts, a handled input is resolved before any streaming queue decision and produces disposition `handled` without starting or queueing a run. An unhandled prompt received while streaming must set `streamingBehavior` to `steer` or `followUp`; the authoritative preflight disposition then distinguishes `started` from `queued`. Extension commands and input handlers therefore keep their interception boundary, and the response acknowledges prompt acceptance rather than completion of the resulting Agent run.
+
+For replacement, `abort()` stops the active run and the runtime awaits it to settle before replacement teardown continues, preserving the aborted turn and completed Tool results in the outgoing session. The boundary is non-transactional: a replacement failure after teardown has no rollback to the disposed old session. A host that must not expose a half-replaced runtime therefore needs the fail-closed wrapper described below.
 
 ## Outcome
 
@@ -544,7 +548,7 @@ For a replacement, Pi's internal teardown first awaits `oldSession.abort()`. Thi
 
 `SessionManager` appends Pi's JSONL records through its own session operations; there is no public asynchronous `flush()` method on `AgentSessionRuntime`. The example's `flushPersistence()` is explicitly for host-owned persistence, event projection, or durable queues. It runs after each successful rebind. If that flush rejects, the installed replacement is not safe to publish: the adapter becomes terminal, clears its subscription, attempts `runtime.dispose()`, and rejects the operation.
 
-Pi `0.87.1` also closes four replacement edge cases. Imported JSONL with the same filename receives a numeric suffix instead of overwriting an existing session file, and concurrent session shares do not overwrite one another. A fork retains its compaction boundary. For an in-memory fork requested before the active turn settles, runtime teardown awaits `abort()` before mutating the shared manager, so the fork sees the settled outgoing turn. These are targeted collision and ordering guarantees, not general transaction guarantees or full schema validation of imported JSONL.
+Pi `0.99.2` also closes four replacement edge cases. Imported JSONL with the same filename receives a numeric suffix instead of overwriting an existing session file, and concurrent session shares do not overwrite one another. A fork retains its compaction boundary. For an in-memory fork requested before the active turn settles, runtime teardown awaits `abort()` before mutating the shared manager, so the fork sees the settled outgoing turn. These are targeted collision and ordering guarantees, not general transaction guarantees or full schema validation of imported JSONL.
 
 Final shutdown is also serialized, but it is requestable while a healthy replacement already owns the host lock. The first `host.dispose()` call does not run `assertAvailable()` or reject merely because `replacementInFlight` is set. It atomically sets `disposed` and `unusable`, then enqueues cleanup behind the current `tail`. The in-flight operation settles first; already queued or later operations reach the terminal guard without invoking another runtime method. Getters reject immediately. A repeated `dispose()` call rejects with the defined disposed-state error and never schedules duplicate cleanup.
 
@@ -552,7 +556,7 @@ Final cleanup attempts `runtime.session.abort()`, host persistence flush, `runti
 
 ## 9. Handle factory failure without a half-replaced session
 
-Replacement in Pi `0.87.1` is not rollback-transactional. `AgentSessionRuntime` disposes the old session before awaiting the new factory. If that factory rejects, it propagates the error and does not call its internal apply or rebind steps; the old object is already invalid and there is no usable replacement.
+Replacement in Pi `0.99.2` is not rollback-transactional. `AgentSessionRuntime` disposes the old session before awaiting the new factory. If that factory rejects, it propagates the error and does not call its internal apply or rebind steps; the old object is already invalid and there is no usable replacement.
 
 The wrapper detects this exact boundary because `setBeforeSessionInvalidate()` set `replacementInFlight`, while a successful `setRebindSession()` clears it only after Extension and host binding complete. The synchronous callback never throws: unsubscribe failure is retained for the awaited boundary. A factory rejection occurs before apply and leaves no replacement to dispose, so it is propagated as primary with that retained cleanup failure appended. An invalidation-cleanup, `bindExtensions(...)`, host-subscription, diagnostic-reporting, or post-rebind persistence rejection after apply disposes the installed replacement before propagating. `finally` keeps the wrapper unusable even if disposal fails. No raw session is public, and later operations or state getters reject. This is the required no-half-replacement, fail-closed policy.
 
@@ -585,16 +589,16 @@ Verify these invariants:
 
 For a real acceptance run, create sessions in two temporary cwd directories, switch between them, and assert that project-local settings and resources come from the selected cwd. Use an in-memory or faux provider so lifecycle evidence does not depend on network access or credentials.
 
-## Source map for Pi 0.87.1
+## Source map for Pi 0.99.2
 
-All claims above are pinned to release commit `f07218c4d4bbc12bef056a7058c3dd49dfe41abe`:
+All claims above are pinned to release commit `005af57d88ee23b33778f343a9595b32e67ff788`:
 
 | Source | Contract verified |
 | --- | --- |
-| [`agent-session.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/agent-session.ts) | Public `AgentSession.bindExtensions(...)` parameter, Extension binding application, `session_start`, and resource extension order |
-| [`agent-session-runtime.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/agent-session-runtime.ts) | Factory/result types, getters, new/resume/fork/import methods, callback order, teardown-before-create, apply, diagnostics replacement, and disposal |
-| [`agent-session-services.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/agent-session-services.ts) | Cwd-bound service creation, diagnostics, and session creation from coherent services |
-| [`sdk.ts`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/sdk.ts) | Direct `createAgentSession()` contract and public re-exports used by the guide |
+| [`agent-session.ts`](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/agent-session.ts) | Public `AgentSession.bindExtensions(...)` parameter, Extension binding application, `session_start`, and resource extension order |
+| [`agent-session-runtime.ts`](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/agent-session-runtime.ts) | Factory/result types, getters, new/resume/fork/import methods, callback order, teardown-before-create, apply, diagnostics replacement, and disposal |
+| [`agent-session-services.ts`](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/agent-session-services.ts) | Cwd-bound service creation, diagnostics, and session creation from coherent services |
+| [`sdk.ts`](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/sdk.ts) | Direct `createAgentSession()` contract and public re-exports used by the guide |
 
 ## Next steps
 

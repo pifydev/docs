@@ -6,15 +6,15 @@ language: en
 chapter: 9
 source_url: 'https://www.dgzhuya.com/modules/ch09-compaction'
 official_refs:
-  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/docs/compaction.md'
-  - 'https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/cache-warmer.ts'
+  - 'https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/docs/compaction.md'
+  - 'https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/cache-warmer.ts'
 terms_used:
   - Context Compaction
   - CompactionEntry
   - BranchSummaryEntry
   - Session
 status: reviewed
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -130,7 +130,7 @@ Within `compaction.modelOverrides`, each `reserveTokens` and `keepRecentTokens` 
 
 ### Current usage comes from provider data first
 
-The older implementation description treated `chars / 4` as the current context size. Pi `0.87.1` prefers the last valid assistant `usage`. `calculateContextTokens()` takes `usage.totalTokens` when it is nonzero; otherwise it adds `input + output + cacheRead + cacheWrite`.
+The older implementation description treated `chars / 4` as the current context size. Pi `0.99.2` prefers the last valid assistant `usage`. `calculateContextTokens()` takes `usage.totalTokens` when it is nonzero; otherwise it adds `input + output + cacheRead + cacheWrite`.
 
 For a normal assistant response with nonzero usage, `_checkCompaction()` tests that value directly. For an error response or all-zero usage, `estimateContextTokens()` finds the last non-error, non-aborted assistant usage in the active messages and adds estimates for messages after it. If no valid usage exists, it estimates every message.
 
@@ -180,7 +180,7 @@ Pi therefore retains three checks: the mid-run check above, the check after the 
 
 ### Prompt-cache warming around long Tool execution
 
-Pi `0.87.1` can keep an eligible provider prompt cache alive while a long Tool execution delays the next model request. The default `cacheWarming: "streaming"` mode schedules refreshes only while the Agent run remains active. `cacheWarming: "idle"` optionally keeps scheduling after the Agent settles, while `"off"` disables the feature. A model is eligible only when its metadata declares a `promptCache` lifetime for the request's active retention tier; a missing lifetime stops warming.
+Pi `0.99.2` can keep an eligible provider prompt cache alive while a long Tool execution delays the next model request. The default `cacheWarming: "streaming"` mode schedules refreshes only while the Agent run remains active. `cacheWarming: "idle"` optionally keeps scheduling after the Agent settles, while `"off"` disables the feature. A model is eligible only when its metadata declares a `promptCache` lifetime for the request's active retention tier; a missing lifetime stops warming.
 
 The decision is cost-aware. Pi compares the estimated cost of a cache read plus one output token with the expected extra cost of a later cache miss, and warms only when estimated savings reach the pinned runtime's threshold. Warming usage counts toward session totals but does not enter model context. This does not eliminate provider charges and cannot guarantee a cache hit: the provider still owns cache admission, expiry, and billing.
 
@@ -222,6 +222,8 @@ header  user    assistant tool   user    assistant tool
 
 `firstKeptEntryId` identifies an entry in the session tree rather than an array position. This lets reconstruction resolve the boundary after reload and across parent-linked paths. If a legacy session cannot supply an id for the selected entry, preparation returns `undefined` instead of writing an unusable checkpoint.
 
+Pi derives `firstKeptEntryId` from a valid cut in the canonical projected entries of the selected branch, and the summary covers the older projected messages before that boundary. A plain `custom` entry is excluded from LLM context and cannot be a cut point; a `custom_message` projects to role `custom` and can be a valid cut. Appending the checkpoint changes future projection but does not delete the raw tree.
+
 ### Backward budget walk and repeated-compaction boundary
 
 The cut search walks from `boundaryEnd - 1` toward `boundaryStart`, adding estimated tokens from every message projected by each entry. Once the total reaches `keepRecentTokens`, it chooses the closest valid cut point at or after that position. If no message reaches the budget, the initial candidate is the earliest valid cut point; preparation later returns `undefined` if this leaves nothing to summarize.
@@ -260,6 +262,8 @@ next preparation
 messages [boundaryStart, new cut) → new summary input
 messages [new cut, current leaf]   → retained region
 ```
+
+With a selected Virtual Model, the `model_change` entry is the session/tree state for that selection, while router state is stored separately in a `custom` entry named `pi.virtual-model-state`. Restore or branch selection reconstructs the registered virtual selection from the active path; if that Virtual Model is unregistered, Pi falls back to the latest physical response on the branch. The physical model used for each assistant turn is recorded on the assistant message. Compaction changes the canonical context projection; it does not replay a past routing decision or reroute stored turns.
 
 ## 4. What replaces the older messages
 
@@ -318,7 +322,7 @@ The request uses `SUMMARIZATION_SYSTEM_PROMPT`, supplies no Tool definitions, do
 
 ### Reject incomplete summaries
 
-Pi 0.87.1 runs `getSummarizationFailure` after each built-in history summary and turn-prefix summary request, and branch summarization uses the same check. A response with `stopReason: "length"` is incomplete, so Pi reports a failure and does not append or persist its partial text as a `CompactionEntry` or `BranchSummaryEntry`. The main and prefix paths throw into the documented compaction-failure lifecycle; the branch path returns an error result. `getSummarizationFailure` is not exported from the package root.
+Pi 0.99.2 runs `getSummarizationFailure` after each built-in history summary and turn-prefix summary request, and branch summarization uses the same check. A response with `stopReason: "length"` is incomplete, so Pi reports a failure and does not append or persist its partial text as a `CompactionEntry` or `BranchSummaryEntry`. The main and prefix paths throw into the documented compaction-failure lifecycle; the branch path returns an error result. `getSummarizationFailure` is not exported from the package root.
 
 Branch summarization now permits a 4,096-token output cap, bounded by a smaller positive `model.maxTokens`, rather than the old 2,048-token cap. This fixes failures where reasoning consumed the prior allowance before enough final summary text could be emitted. The larger cap does not weaken validation: the history summary, turn-prefix summary, and branch summary all still reject `stopReason: "length"`.
 
@@ -694,15 +698,15 @@ Before handing off a compaction integration, verify these cases:
 
 [Chapter 10](ch10-session.md) follows the parent-linked JSONL tree behind `getBranch()`, `appendCompaction()`, `buildContextEntries()`, rewind, and branch navigation. That storage model explains why compaction can omit old entries from the next model request without deleting them.
 
-The implementation references for this chapter are pinned to Pi `0.87.1` at `f07218c4d4bbc12bef056a7058c3dd49dfe41abe`:
+The implementation references for this chapter are pinned to Pi `0.99.2` at `005af57d88ee23b33778f343a9595b32e67ff788`:
 
-- [Compaction defaults, token accounting, cut points, templates, preparation, and generation](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/compaction/compaction.ts)
-- [Summary serialization and file-operation tracking](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/compaction/utils.ts)
-- [`CompactionEntry`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/session-manager.ts), [`appendCompaction()`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/session-manager.ts), and [`buildSessionContext()`](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/session-manager.ts)
-- [Manual and automatic lifecycle, retry, abort, and failure paths](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/agent-session.ts)
-- [Extension context compaction contracts](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/extensions/types.ts) and [event hooks](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/extensions/types.ts)
-- [Compaction-summary message conversion](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/messages.ts) and [per-call transform order](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent-loop.ts)
-- [Global/project setting merge](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/settings-manager.ts), [SDK overrides](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/settings-manager.ts), and [effective compaction defaults](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/settings-manager.ts)
-- [Generic Agent `retainedTail` schema](https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/harness/session/types.ts), which is distinct from Coding Agent `SessionManager`
+- [Compaction defaults, token accounting, cut points, templates, preparation, and generation](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/compaction/compaction.ts)
+- [Summary serialization and file-operation tracking](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/compaction/utils.ts)
+- [`CompactionEntry`](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/session-manager.ts), [`appendCompaction()`](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/session-manager.ts), and [`buildSessionContext()`](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/session-manager.ts)
+- [Manual and automatic lifecycle, retry, abort, and failure paths](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/agent-session.ts)
+- [Extension context compaction contracts](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/extensions/types.ts) and [event hooks](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/extensions/types.ts)
+- [Compaction-summary message conversion](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/messages.ts) and [per-call transform order](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/agent-loop.ts)
+- [Global/project setting merge](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/settings-manager.ts), [SDK overrides](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/settings-manager.ts), and [effective compaction defaults](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/settings-manager.ts)
+- [Generic Agent `retainedTail` schema](https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/harness/session/types.ts), which is distinct from Coding Agent `SessionManager`
 
 > **Next up:** [Chapter 10: Session Management](ch10-session.md)

@@ -111,6 +111,17 @@ const activeReleaseAuditPages = [
   "reference/environment-variables.md",
 ];
 
+const task9SessionRuntimePages = [
+  "ch08-context-engineering.md",
+  "ch09-compaction.md",
+  "ch10-session.md",
+  "ch11-testing-evaluation.md",
+  "how-to/persist-sessions.md",
+  "how-to/test-agent-deterministically.md",
+  "how-to/run-pi-evals.md",
+  "how-to/host-session-runtime.md",
+];
+
 function assertSameParagraph(markdown, needle, patterns, context) {
   const paragraph = paragraphContaining(markdown, needle);
   for (const pattern of patterns) {
@@ -495,7 +506,7 @@ test("active release contracts use Pi 0.99.2 capabilities and authority", async 
       const context = `${locale} ${relativePath}`;
       assert.match(
         source,
-        /^last_updated: '2026-10-01'$/m,
+        /^last_updated: ["']2026-10-01["']$/m,
         `${context} must use the current review date`,
       );
       assert.doesNotMatch(
@@ -843,6 +854,220 @@ test("active release relationship guards reject inverted Pi 0.99.2 mappings", as
         ),
       assert.AssertionError,
     );
+  }
+});
+
+test("session lifecycle, runtime, compaction, and eval guides use 0.99.2 boundaries", async () => {
+  const pagesByLocale = new Map();
+
+  for (const locale of ["en", "vi"]) {
+    const pages = new Map(
+      await Promise.all(
+        task9SessionRuntimePages.map(async (relativePath) => [
+          relativePath,
+          await readFile(
+            new URL(`content/${locale}/${relativePath}`, repositoryRoot),
+            "utf8",
+          ),
+        ]),
+      ),
+    );
+    pagesByLocale.set(locale, pages);
+
+    for (const [relativePath, source] of pages) {
+      const context = `${locale} ${relativePath} Task 9 authority`;
+      assert.match(
+        source,
+        /^last_updated: ["']2026-10-01["']$/m,
+        `${context} must use the audit date`,
+      );
+      assert.match(source, /0\.99\.2/, `${context} must name Pi 0.99.2`);
+      assert.ok(
+        source.includes(expectedRelease.commit),
+        `${context} must cite the full reviewed commit`,
+      );
+      assert.doesNotMatch(
+        source,
+        /github\.com\/earendil-works\/pi\/(?:blob|tree)\/(?:main|latest)\//,
+        `${context} must not use a floating Pi source ref`,
+      );
+      assert.doesNotMatch(
+        source,
+        /@earendil-works\/pi-[a-z-]+@latest\b/,
+        `${context} must not use a floating Pi package version`,
+      );
+      for (const [, ref] of source.matchAll(
+        /github\.com\/earendil-works\/pi\/(?:blob|tree)\/([^/]+)\//g,
+      )) {
+        assert.equal(
+          ref,
+          expectedRelease.commit,
+          `${context} must pin every Pi source link to the reviewed commit`,
+        );
+      }
+      for (const [command] of source.matchAll(/npm install[^\r\n`]*/g)) {
+        for (const [packageArgument] of command.matchAll(
+          /@earendil-works\/pi-[a-z-]+(?:@[^\s]+)?/g,
+        )) {
+          assert.match(
+            packageArgument,
+            /@0\.99\.2$/,
+            `${context} must exactly pin every active Pi install`,
+          );
+        }
+      }
+    }
+  }
+
+  for (const locale of ["en", "vi"]) {
+    const pages = pagesByLocale.get(locale);
+    const sessionLifecyclePatterns =
+      locale === "en"
+        ? [
+            /creating[^.]*`SessionManager`[^.]*session object[^.]*does not create[^.]*session file/i,
+            /session file[^.]*created[^.]*first user message/i,
+          ]
+        : [
+            /tạo[^.]*`SessionManager`[^.]*session object[^.]*không tạo[^.]*session file/i,
+            /session file[^.]*được tạo[^.]*user message đầu tiên/i,
+          ];
+    for (const relativePath of [
+      "ch10-session.md",
+      "how-to/persist-sessions.md",
+    ]) {
+      assertSameParagraph(
+        pages.get(relativePath),
+        locale === "en" ? "first user message" : "user message đầu tiên",
+        sessionLifecyclePatterns,
+        `${locale} ${relativePath} lazy session-file creation`,
+      );
+    }
+
+    const modelStatePatterns =
+      locale === "en"
+        ? [
+            /selected Virtual Model[^.]*`model_change`[^.]*session\/tree state/i,
+            /router state[^.]*`custom`[^.]*`pi\.virtual-model-state`/i,
+            /restore[^.]*branch[^.]*reconstructs[^.]*registered[^.]*selection/i,
+            /unregistered[^.]*falls back[^.]*physical/i,
+            /physical model[^.]*assistant turn[^.]*recorded[^.]*assistant message/i,
+            /compaction[^.]*does not replay[^.]*routing decision[^.]*reroute[^.]*stored turns/i,
+          ]
+        : [
+            /Virtual Model đã chọn[^.]*`model_change`[^.]*session\/tree state/i,
+            /router state[^.]*`custom`[^.]*`pi\.virtual-model-state`/i,
+            /restore[^.]*branch[^.]*dựng lại[^.]*selection[^.]*đã đăng ký/i,
+            /không còn đăng ký[^.]*fallback[^.]*physical/i,
+            /physical model[^.]*assistant turn[^.]*được ghi[^.]*assistant message/i,
+            /compaction[^.]*không replay[^.]*routing decision[^.]*không reroute[^.]*turn đã lưu/i,
+          ];
+    for (const relativePath of [
+      "ch08-context-engineering.md",
+      "ch09-compaction.md",
+      "ch10-session.md",
+    ]) {
+      assertSameParagraph(
+        pages.get(relativePath),
+        locale === "en" ? "selected Virtual Model" : "Virtual Model đã chọn",
+        modelStatePatterns,
+        `${locale} ${relativePath} Virtual/physical model state`,
+      );
+    }
+
+    assertSameParagraph(
+      pages.get("ch09-compaction.md"),
+      locale === "en" ? "A plain `custom` entry" : "Plain `custom` entry",
+      locale === "en"
+        ? [
+            /valid cut[^.]*canonical projected[^.]*selected branch/i,
+            /summary[^.]*older projected messages/i,
+            /plain `custom` entry[^.]*excluded[^.]*LLM context[^.]*cannot[^.]*cut/i,
+            /`custom_message`[^.]*role `custom`[^.]*valid cut/i,
+            /does not delete[^.]*raw tree/i,
+          ]
+        : [
+            /điểm cắt hợp lệ[^.]*canonical projected[^.]*branch đã chọn/i,
+            /summary[^.]*projected message cũ hơn/i,
+            /plain `custom` entry[^.]*bị loại[^.]*LLM context[^.]*không thể[^.]*điểm cắt/i,
+            /`custom_message`[^.]*role `custom`[^.]*điểm cắt hợp lệ/i,
+            /không xóa[^.]*raw tree/i,
+          ],
+      `${locale} compaction cut and projection boundary`,
+    );
+
+    const runtime = pages.get("how-to/host-session-runtime.md");
+    assertSameParagraph(
+      runtime,
+      "`streamingBehavior`",
+      locale === "en"
+        ? [
+            /handled[^.]*input[^.]*before[^.]*streaming queue/i,
+            /unhandled prompt[^.]*streaming[^.]*`steer`[^.]*`followUp`/i,
+            /disposition[^.]*`started`[^.]*`queued`/i,
+          ]
+        : [
+            /input[^.]*được handle[^.]*trước[^.]*streaming queue/i,
+            /prompt chưa được handle[^.]*streaming[^.]*`steer`[^.]*`followUp`/i,
+            /disposition[^.]*`started`[^.]*`queued`/i,
+          ],
+      `${locale} host runtime RPC disposition`,
+    );
+    assertSameParagraph(
+      runtime,
+      "`abort()`",
+      locale === "en"
+        ? [/active run/i, /await[^.]*settle/i, /before[^.]*replacement/i]
+        : [/active run/i, /await[^.]*settle/i, /trước[^.]*replacement/i],
+      `${locale} host runtime abort boundary`,
+    );
+    assertSameParagraph(
+      runtime,
+      "non-transactional",
+      locale === "en"
+        ? [/replacement failure/i, /no rollback/i, /fail-closed/i]
+        : [/replacement failure/i, /không rollback/i, /fail-closed/i],
+      `${locale} host runtime replacement failure boundary`,
+    );
+
+    for (const relativePath of [
+      "ch11-testing-evaluation.md",
+      "how-to/test-agent-deterministically.md",
+    ]) {
+      assertSameParagraph(
+        pages.get(relativePath),
+        "`tests/fixtures/pi-sdk-0992.contract.ts`",
+        locale === "en"
+          ? [/compile/i, /offline/i, /no network/i]
+          : [/compile/i, /offline/i, /không cần network/i],
+        `${locale} ${relativePath} deterministic fixture boundary`,
+      );
+    }
+
+    for (const relativePath of [
+      "ch11-testing-evaluation.md",
+      "how-to/run-pi-evals.md",
+    ]) {
+      assertSameParagraph(
+        pages.get(relativePath),
+        "`without_docs`",
+        locale === "en"
+          ? [
+              /`without_docs`[^.]*control/i,
+              /`with_docs`[^.]*treatment/i,
+              /same cohort[^.]*task[^.]*model[^.]*run number/i,
+              /same runtime[^.]*scoring/i,
+              /only[^.]*documentation exposure differs/i,
+            ]
+          : [
+              /`without_docs`[^.]*control/i,
+              /`with_docs`[^.]*treatment/i,
+              /cùng cohort[^.]*task[^.]*model[^.]*run number/i,
+              /cùng runtime[^.]*scoring/i,
+              /chỉ[^.]*mức tiếp cận tài liệu[^.]*khác nhau/i,
+            ],
+        `${locale} ${relativePath} eval treatment/control symmetry`,
+      );
+    }
   }
 });
 
