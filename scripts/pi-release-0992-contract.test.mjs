@@ -640,6 +640,7 @@ test("Virtual Model guides separate selection, dispatch, state, and accounting",
             registration: "## Register a virtual model",
             reasons: "## Route user, continuation, retry, and direct requests",
             sticky: "## Keep sticky turns and retries correct",
+            resume: "## Restore sessions and branches",
             accounting: "## Account for context, compaction, and cost",
             operations: "## Use classifier and image operations deliberately",
             failures: "## Failure modes and operational checklist",
@@ -650,6 +651,7 @@ test("Virtual Model guides separate selection, dispatch, state, and accounting",
             reasons:
               "## Định tuyến request user, continuation, retry và direct",
             sticky: "## Giữ đúng sticky turn và retry",
+            resume: "## Khôi phục session và branch",
             accounting: "## Tính context, compaction và cost",
             operations: "## Dùng classifier và image operation có chủ đích",
             failures: "## Failure mode và checklist vận hành",
@@ -664,6 +666,7 @@ test("Virtual Model guides separate selection, dispatch, state, and accounting",
     );
     const reasonsSection = sectionContaining(guide, localizedHeadings.reasons);
     const stickySection = sectionContaining(guide, localizedHeadings.sticky);
+    const resumeSection = sectionContaining(guide, localizedHeadings.resume);
     const accountingSection = sectionContaining(
       guide,
       localizedHeadings.accounting,
@@ -712,9 +715,9 @@ test("Virtual Model guides separate selection, dispatch, state, and accounting",
     assert.match(
       messages,
       locale === "en"
-        ? /Provider requests receive only[^.]*physical[^.]*assistant message produced by that dispatch records[^.]*physical/i
-        : /Provider request chỉ nhận[^.]*physical[^.]*assistant message do dispatch đó tạo ra[^.]*ghi lại physical/i,
-      `${locale} provider requests and assistant messages must use physical models`,
+        ? /Provider requests receive only the physical dispatched model and thinking level[^.]*assistant message produced by that dispatch records the physical model[^.]*`provider`[^.]*`api`[^.]*`model`[^.]*`thinkingLevel` fields/i
+        : /Provider request chỉ nhận physical model và thinking level đã dispatch[^.]*assistant message do dispatch đó tạo ra[^.]*ghi lại physical model[^.]*`provider`[^.]*`api`[^.]*`model`[^.]*`thinkingLevel`/i,
+      `${locale} provider dispatch and assistant records must keep the physical model and thinking level`,
     );
     assert.match(
       messages,
@@ -901,14 +904,26 @@ test("Virtual Model guides separate selection, dispatch, state, and accounting",
       `${locale} invalid routing and missing credentials must end in an error response`,
     );
 
-    const resume = paragraphContaining(
-      guide,
+    const registeredResume = paragraphContaining(
+      resumeSection,
+      locale === "en" ? "latest `model_change`" : "`model_change` mới nhất",
+    );
+    assert.match(
+      registeredResume,
+      locale === "en"
+        ? /restores a registered virtual selection[^.]*latest `model_change` entry[^.]*later assistant messages name physical models[\s\S]*Branch navigation and forks restore the router state attached to their own branch[^.]*two branches can advance independently/i
+        : /khôi phục virtual selection đã đăng ký[^.]*entry `model_change` mới nhất[^.]*assistant message[^.]*physical model[\s\S]*Điều hướng branch và fork khôi phục router state gắn với chính branch đó[^.]*hai branch[^.]*độc lập/i,
+      `${locale} registered resume and fork or /tree navigation must restore branch-local virtual selection and state`,
+    );
+
+    const fallbackResume = paragraphContaining(
+      resumeSection,
       locale === "en"
         ? "If the selected Virtual Model is no longer registered"
         : "Nếu Virtual Model đã chọn không còn được đăng ký",
     );
     assert.match(
-      resume,
+      fallbackResume,
       locale === "en"
         ? /falls back[^.]*latest successful physical response[\s\S]*`getBranchSelection\(\)`[^.]*without filtering[^.]*`error`[^.]*`aborted`[^.]*failed routing message remains virtual/i
         : /fallback[^.]*successful physical response gần nhất[\s\S]*`getBranchSelection\(\)`[^.]*không filter[^.]*`error`[^.]*`aborted`[^.]*routing thất bại vẫn là virtual/i,
