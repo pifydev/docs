@@ -389,8 +389,26 @@ function assertConfigurationRelationships(source, locale) {
       `${locale} defaultTools must relate ${pattern}`,
     );
   }
+
+  const positiveThemeDefault =
+    locale === "en"
+      ? /`system` theme[^.]*(?:is|remains|continues to be)\s+(?:the\s+)?default\b|(?:the\s+)?default theme[^.]*(?:is|remains|continues to be)\s+`system`\b/i
+      : /`system` theme[^.]*(?:là|vẫn là|tiếp tục là)\s+(?:theme\s+)?default\b|default theme[^.]*(?:là|vẫn là|tiếp tục là)\s+`system`\b/i;
+  const negatedThemeDefault =
+    locale === "en"
+      ? /`system` theme[^.]*(?:\bnot\b|\bnever\b)[^.]*\bdefault\b|\bdefault theme[^.]*(?:\bnot\b|\bnever\b)[^.]*`system`/i
+      : /`system` theme[^.]*(?:không phải|không còn|không)\s+(?:là\s+)?[^.]*\bdefault\b|default theme[^.]*(?:không phải|không còn|không)\s+(?:là\s+)?[^.]*`system`/i;
+  assert.doesNotMatch(
+    theme,
+    negatedThemeDefault,
+    `${locale} system theme default relationship must not be negated`,
+  );
+  assert.match(
+    theme,
+    positiveThemeDefault,
+    `${locale} system theme must be the default`,
+  );
   for (const pattern of [
-    /`system` theme[^.]*default|`system` theme là default/i,
     /exactly six color forms|đúng sáu dạng màu/i,
     /3-digit[^.]*6-digit[^.]*OKLCH[^.]*OKHSL[^.]*ANSI 256[^.]*variable reference[^.]*empty string/i,
     /empty string[^.]*terminal default/i,
@@ -754,11 +772,14 @@ test("active release relationship guards reject inverted Pi 0.99.2 mappings", as
     assert.throws(
       () =>
         assertConfigurationRelationships(
-          replaceParagraph(
+          replaceOnce(
             configuration,
-            "`system` theme",
-            (paragraph) =>
-              paragraph.replace("`system` theme", "A custom theme"),
+            locale === "en"
+              ? "`system` theme is the default"
+              : "`system` theme là default",
+            locale === "en"
+              ? "`system` theme is not the default"
+              : "`system` theme không phải là default",
             `${locale} system theme default inversion`,
           ),
           locale,

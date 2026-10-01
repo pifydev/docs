@@ -3212,7 +3212,7 @@ function findStaleLifecycleGuidance(activeSources) {
   return stale;
 }
 
-test("0.87.0 session context and lifecycle removes obsolete current guidance", async () => {
+test("session context and lifecycle guidance introduced in Pi 0.87 remains current in 0.99.2: obsolete guidance removed", async () => {
   const activeSources = await readActiveSources();
   const stale = findStaleLifecycleGuidance(activeSources);
 
@@ -3478,7 +3478,7 @@ function validateLifecycleTechnicalContracts(localized) {
   }
 }
 
-test("0.87.0 session context and lifecycle preserves stable bilingual boundary relationships", async () => {
+test("session context and lifecycle contracts introduced in Pi 0.87 remain accurate in 0.99.2", async () => {
   validateLifecycleTechnicalContracts(await readLifecycleScopedContent());
 });
 
@@ -3886,7 +3886,7 @@ test("installed Pi 0.99.2 enforces hard turn exits before the recovery boundary"
   );
 });
 
-test("0.87.0 session context and lifecycle mutation guards use real published sections", async () => {
+test("session context and lifecycle contracts introduced in Pi 0.87 remain accurate in 0.99.2: mutation guards", async () => {
   const localized = await readLifecycleScopedContent();
   validateLifecycleTechnicalContracts(localized);
   validateLowLevelLoopExamples(localized);
@@ -4127,7 +4127,7 @@ several sentences without changing the machine-checked contract below.
   }
 });
 
-test("0.86.x operational features preserve runtime boundaries in both locales", async () => {
+test("operational features introduced in Pi 0.86 retain bilingual runtime boundaries in 0.99.2", async () => {
   const scopedFiles = [
     "ch07-event-driven.md",
     "ch08-context-engineering.md",
@@ -5926,7 +5926,7 @@ test("historical rollup accuracy guard rejects attribution and resilience regres
   }
 });
 
-test("both Chapter 2 locales document the Pi 0.85.0 experimental service architecture", async () => {
+test("the experimental service architecture introduced in Pi 0.85 remains in current 0.99.2 Chapter 2 locales", async () => {
   const [chapters, references] = await Promise.all([
     readLocalizedContent("ch02-three-layer-arch.md"),
     readLocalizedContent("reference/api.md"),
@@ -9087,7 +9087,7 @@ test("provider, API, and configuration guidance distinguish Google API and norma
   }
 });
 
-test("both model guides bind Pi 0.85 compatibility flags to their exact interfaces and semantics", async () => {
+test("model compatibility flags introduced in Pi 0.85 retain exact interfaces and semantics in 0.99.2", async () => {
   const documentContracts = [
     {
       path: "ch04-model-invocation.md",
