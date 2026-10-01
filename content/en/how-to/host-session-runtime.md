@@ -21,7 +21,7 @@ translator: Pify maintainers
 
 A long-running server, desktop shell, or RPC process cannot treat an `AgentSession` as permanent when users can start a new session, resume another project, fork history, clone a branch, or import JSONL. Pi `0.87.1` provides `AgentSessionRuntime` as the replacement boundary: it owns the current session and its cwd-bound services, while the host remains responsible for serialization, subscriptions, diagnostics, and failure policy.
 
-This guide builds that host boundary with only public exports from `@earendil-works/pi-coding-agent@0.87.1`. The complete TypeScript shape is compile-checked in this documentation repository. It accepts dependencies instead of constructing real resources during the check.
+This guide builds that host boundary with only public exports originally documented for `@earendil-works/pi-coding-agent@0.87.1`. The complete TypeScript shape is synchronized with `tests/fixtures/pi-sdk-0992.contract.ts` and compile-checked against the installed `@earendil-works/pi-coding-agent@0.99.2` declarations. It accepts dependencies instead of constructing real resources during the check.
 
 Before importing that public root on Node.js `>=22.19.0`, install the SDK with `npm install @earendil-works/pi-coding-agent@0.87.1`.
 

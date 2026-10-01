@@ -57,3 +57,70 @@ test("all six Pi direct dependencies use exact 0.99.2 pins", async () => {
     );
   }
 });
+
+function assertTypeScriptFixtureCompiles(relativePath) {
+  const fixturePath = fileURLToPath(new URL(relativePath, repositoryRoot));
+  const program = ts.createProgram([fixturePath], {
+    target: ts.ScriptTarget.ES2022,
+    module: ts.ModuleKind.ESNext,
+    moduleResolution: ts.ModuleResolutionKind.Bundler,
+    strict: true,
+    noEmit: true,
+    skipLibCheck: true,
+    esModuleInterop: true,
+    types: ["node"],
+  });
+  const diagnostics = ts.getPreEmitDiagnostics(program);
+  assert.equal(
+    diagnostics.length,
+    0,
+    ts.formatDiagnostics(diagnostics, {
+      getCanonicalFileName: (fileName) => fileName,
+      getCurrentDirectory: () => fileURLToPath(repositoryRoot),
+      getNewLine: () => "\n",
+    }),
+  );
+}
+
+for (const relativePath of [
+  "tests/fixtures/pi-sdk-0992.contract.ts",
+  "tests/fixtures/pi-coding-agent-0992.contract.ts",
+  "tests/fixtures/pi-durable-0992.contract.ts",
+]) {
+  test(`Pi 0.99.2 compile contract typechecks: ${relativePath}`, () => {
+    assertTypeScriptFixtureCompiles(relativePath);
+  });
+}
+
+test("Pi 0.99.2 durable Harness opens and closes offline", async () => {
+  const [{ BACKGROUND_CONTEXT }, { createModels }, durable] = await Promise.all(
+    [
+      import("@earendil-works/chord/context"),
+      import("@earendil-works/pi-ai/models"),
+      import("@earendil-works/pi-durable"),
+    ],
+  );
+  const { createRegistry, Harness, MemoryStorage } = durable;
+  let harness;
+
+  try {
+    harness = await Harness.open(
+      new MemoryStorage(),
+      {
+        models: createModels(),
+        registry: createRegistry(),
+      },
+      BACKGROUND_CONTEXT,
+    );
+    const root = await harness.root(BACKGROUND_CONTEXT);
+    const view = await root.viewState(BACKGROUND_CONTEXT);
+    try {
+      assert.equal(root.id, 1);
+      assert.equal(view.value.conversation.id, root.id);
+    } finally {
+      view.dispose();
+    }
+  } finally {
+    await harness?.close(BACKGROUND_CONTEXT);
+  }
+});

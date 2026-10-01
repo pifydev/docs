@@ -94,7 +94,7 @@ These assertions localize regressions. A wrong Tool argument is not reported as 
 
 ## Complete compile-checked test
 
-The function below is synchronized with `tests/fixtures/pi-sdk-0871.contract.ts` and compiled against exact public dependencies `@earendil-works/pi-ai@0.87.1` and `@earendil-works/pi-agent-core@0.87.1`. The same code is shown in the Vietnamese edition.
+The function below is synchronized with `tests/fixtures/pi-sdk-0992.contract.ts` and compiled against exact public dependencies `@earendil-works/pi-ai@0.99.2` and `@earendil-works/pi-agent-core@0.99.2`. The same code is shown in the Vietnamese edition.
 
 ```typescript title="deterministic-agent.test.ts"
 import assert from "node:assert/strict";

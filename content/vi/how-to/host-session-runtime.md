@@ -21,7 +21,7 @@ translator: Pify maintainers
 
 Một server chạy lâu, desktop shell hoặc RPC process không thể coi `AgentSession` là cố định khi người dùng có thể tạo session mới, resume project khác, fork lịch sử, clone một branch hoặc import JSONL. Pi `0.87.1` cung cấp `AgentSessionRuntime` làm boundary thay thế: nó sở hữu session hiện tại cùng các service gắn với cwd, còn host chịu trách nhiệm tuần tự hóa, subscription, diagnostic và failure policy.
 
-Hướng dẫn này xây boundary đó chỉ bằng public export từ `@earendil-works/pi-coding-agent@0.87.1`. Toàn bộ TypeScript shape được compile-check trong repository tài liệu này. Code nhận dependency thay vì tạo resource thật trong lúc kiểm tra.
+Hướng dẫn này xây boundary đó chỉ bằng các public export ban đầu được ghi nhận cho `@earendil-works/pi-coding-agent@0.87.1`. Toàn bộ TypeScript shape được đồng bộ với `tests/fixtures/pi-sdk-0992.contract.ts` và compile-check bằng các declaration `@earendil-works/pi-coding-agent@0.99.2` đã cài đặt. Code nhận dependency thay vì tạo resource thật trong lúc kiểm tra.
 
 Trước khi import public root đó trên Node.js `>=22.19.0`, hãy cài SDK bằng `npm install @earendil-works/pi-coding-agent@0.87.1`.
 

@@ -31,7 +31,7 @@ reviewed_by: Pify maintainers
 
 Chương 10 kết thúc ở Session Tree bền vững. Cơ chế lưu bền vững giúp kiểm tra lại một lần chạy Agent, nhưng việc transcript tồn tại trên đĩa không chứng minh Agent đã hoạt động đúng. Một chiến lược kiểm thử hữu ích phải xác lập nhiều sự thật khác nhau: provider adapter tuân thủ streaming protocol, Agent Loop ghép đúng từng lệnh gọi Tool với kết quả, đường dẫn session đang hoạt động vẫn nhất quán, ứng dụng hoàn thành một tác vụ thực tế, và một thay đổi đề xuất hoạt động tốt hơn baseline đủ thường xuyên để đáng phát hành.
 
-Không thể gộp các sự thật đó thành một con số “chất lượng Agent”. Chương này xây dựng mô hình bằng chứng theo tầng quanh Pi `0.87.1`, giải thích loại lỗi thuộc về từng tầng và kết thúc bằng một ma trận sẵn sàng cho release. Ví dụ deterministic chỉ biên dịch với các export công khai của `@earendil-works/pi-ai@0.87.1` và `@earendil-works/pi-agent-core@0.87.1`. Phần đánh giá cũng trỏ vào monorepo của Pi tại release đã pin vì `packages/evals` là công cụ workspace private, không phải package SDK đã phát hành.
+Không thể gộp các sự thật đó thành một con số “chất lượng Agent”. Chương này xây dựng mô hình bằng chứng theo tầng quanh Pi `0.87.1`, giải thích loại lỗi thuộc về từng tầng và kết thúc bằng một ma trận sẵn sàng cho release. Ví dụ deterministic biên dịch bằng các export công khai của `@earendil-works/pi-ai@0.99.2` và `@earendil-works/pi-agent-core@0.99.2`. Phần đánh giá cũng trỏ vào monorepo của Pi tại release đã pin vì `packages/evals` là công cụ workspace private, không phải package SDK đã phát hành.
 
 ## 1. Xem kiểm thử là bằng chứng theo tầng, không phải một điểm end-to-end
 
@@ -101,7 +101,7 @@ Dùng contract fixture cho các biến thể protocol được hỗ trợ và m�
 
 Handle cung cấp `setResponses()`, `appendResponses()`, `getPendingResponseCount()`, `getModel()` và các counter trong `state`. Khác với cơ chế đăng ký compatibility cũ, handle tường minh này không có method `unregister()`. Khi cleanup, hãy xóa provider của nó khỏi collection cô lập bằng `models.deleteProvider(faux.provider.id)`.
 
-Function dưới đây được đồng bộ với `tests/fixtures/pi-sdk-0871.contract.ts` và biên dịch bằng đúng các public dependency `@earendil-works/pi-ai@0.87.1` cùng `@earendil-works/pi-agent-core@0.87.1`. Function bao phủ trọn một vòng khứ hồi qua Tool mà không dùng API key, environment secret, filesystem hay network request; timer duy nhất là failure-only watchdog dùng để abort rồi chờ một Agent bị treo settle hoàn toàn. Scripted response đầu chứa text giải thích và một `ToolCall`; response thứ hai là assistant response cuối. Các assertion kiểm tra cả provider request lẫn transcript của Agent.
+Function dưới đây được đồng bộ với `tests/fixtures/pi-sdk-0992.contract.ts` và biên dịch bằng đúng các public dependency `@earendil-works/pi-ai@0.99.2` cùng `@earendil-works/pi-agent-core@0.99.2`. Function bao phủ trọn một vòng khứ hồi qua Tool mà không dùng API key, environment secret, filesystem hay network request; timer duy nhất là failure-only watchdog dùng để abort rồi chờ một Agent bị treo settle hoàn toàn. Scripted response đầu chứa text giải thích và một `ToolCall`; response thứ hai là assistant response cuối. Các assertion kiểm tra cả provider request lẫn transcript của Agent.
 
 ```typescript
 import assert from "node:assert/strict";
@@ -503,7 +503,7 @@ Release gate nhỏ nhất có độ tin cậy phải bao phủ mọi tầng mà 
 | Held-out evaluation baseline/candidate | Trước release làm thay đổi hành vi | Đạt ngưỡng với số eligible pair và diagnostic được báo cáo |
 | Audit artifact và cleanup | Trước khi bật trace hoặc judge mới | Kiểm tra redaction, access, retention và deletion đều pass |
 
-Với ví dụ code deterministic trong chương này, tiêu chí chấp nhận là release contract biên dịch và gọi cùng function từ `tests/fixtures/pi-sdk-0871.contract.ts` bằng đúng các dependency `@earendil-works/pi-ai@0.87.1` và `@earendil-works/pi-agent-core@0.87.1`. Lần chạy offline phải settle và cleanup provider xong trong giới hạn watchdog.
+Với ví dụ code deterministic trong chương này, tiêu chí chấp nhận là release contract biên dịch và gọi cùng function từ `tests/fixtures/pi-sdk-0992.contract.ts` bằng đúng các dependency `@earendil-works/pi-ai@0.99.2` và `@earendil-works/pi-agent-core@0.99.2`. Lần chạy offline phải settle và cleanup provider xong trong giới hạn watchdog.
 
 Trước khi phát hành thay đổi hành vi Agent, hãy trả lời các câu hỏi sau bằng bằng chứng:
 

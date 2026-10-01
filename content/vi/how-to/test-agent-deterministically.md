@@ -94,7 +94,7 @@ Các assertion này giúp định vị regression. Tool argument sai không bị
 
 ## Test hoàn chỉnh đã được compile-check
 
-Function bên dưới được đồng bộ với `tests/fixtures/pi-sdk-0871.contract.ts` và compile bằng đúng các public dependency `@earendil-works/pi-ai@0.87.1` và `@earendil-works/pi-agent-core@0.87.1`. Code cũng hoàn toàn giống bản tiếng Anh.
+Function bên dưới được đồng bộ với `tests/fixtures/pi-sdk-0992.contract.ts` và compile bằng đúng các public dependency `@earendil-works/pi-ai@0.99.2` và `@earendil-works/pi-agent-core@0.99.2`. Code cũng hoàn toàn giống bản tiếng Anh.
 
 ```typescript title="deterministic-agent.test.ts"
 import assert from "node:assert/strict";

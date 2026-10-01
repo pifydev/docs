@@ -31,7 +31,7 @@ reviewed_by: Pify maintainers
 
 Chapter 10 ended at the durable Session Tree. Persistence makes an Agent run inspectable, but a transcript existing on disk does not prove that the Agent behaved correctly. A useful testing strategy must establish several different facts: the provider adapter obeyed the streaming protocol, the Agent Loop paired every Tool call with a result, the active session path stayed coherent, the application completed a realistic task, and a proposed change performed better than a baseline often enough to justify release.
 
-Those facts do not collapse into one “Agent quality” number. This chapter builds a layered evidence model around Pi `0.87.1`, explains which failures belong at each layer, and ends with a release-ready matrix. The deterministic example compiles only against the public `@earendil-works/pi-ai@0.87.1` and `@earendil-works/pi-agent-core@0.87.1` exports. The evaluation material also points into Pi's release-pinned monorepo because `packages/evals` is private workspace tooling, not a published SDK package.
+Those facts do not collapse into one “Agent quality” number. This chapter builds a layered evidence model around Pi `0.87.1`, explains which failures belong at each layer, and ends with a release-ready matrix. The deterministic example compiles against the public `@earendil-works/pi-ai@0.99.2` and `@earendil-works/pi-agent-core@0.99.2` exports. The evaluation material also points into Pi's release-pinned monorepo because `packages/evals` is private workspace tooling, not a published SDK package.
 
 ## 1. Treat testing as layered evidence, not one end-to-end score
 
@@ -101,7 +101,7 @@ Use contract fixtures for supported protocol variants and a small integration te
 
 The handle exposes `setResponses()`, `appendResponses()`, `getPendingResponseCount()`, `getModel()`, and counters in `state`. Unlike the legacy compatibility registration, this explicit handle has no `unregister()` method. Cleanup removes its provider from the isolated collection with `models.deleteProvider(faux.provider.id)`.
 
-The following function is synchronized with `tests/fixtures/pi-sdk-0871.contract.ts` and compiled against exact public dependencies `@earendil-works/pi-ai@0.87.1` and `@earendil-works/pi-agent-core@0.87.1`. It covers one complete Tool round trip without an API key, environment secret, filesystem, or network request; its only timer is a failure-only watchdog that aborts and drains a stalled Agent. The first scripted response contains explanatory text and a `ToolCall`; the second is the final assistant response. Assertions inspect both provider requests and the Agent transcript.
+The following function is synchronized with `tests/fixtures/pi-sdk-0992.contract.ts` and compiled against exact public dependencies `@earendil-works/pi-ai@0.99.2` and `@earendil-works/pi-agent-core@0.99.2`. It covers one complete Tool round trip without an API key, environment secret, filesystem, or network request; its only timer is a failure-only watchdog that aborts and drains a stalled Agent. The first scripted response contains explanatory text and a `ToolCall`; the second is the final assistant response. Assertions inspect both provider requests and the Agent transcript.
 
 ```typescript
 import assert from "node:assert/strict";
@@ -503,7 +503,7 @@ The smallest credible release gate covers every layer without making every pull 
 | Baseline/candidate held-out evaluation | Before behavior-changing release | Threshold met with eligible-pair count and diagnostics reported |
 | Artifact and cleanup audit | Before enabling new traces or judges | Redaction, access, retention, and deletion checks pass |
 
-For the deterministic code example in this chapter, acceptance means the release contract compiles and invokes the same function from `tests/fixtures/pi-sdk-0871.contract.ts` against exact `@earendil-works/pi-ai@0.87.1` and `@earendil-works/pi-agent-core@0.87.1` dependencies. The offline run must settle and complete provider cleanup within its watchdog bound.
+For the deterministic code example in this chapter, acceptance means the release contract compiles and invokes the same function from `tests/fixtures/pi-sdk-0992.contract.ts` against exact `@earendil-works/pi-ai@0.99.2` and `@earendil-works/pi-agent-core@0.99.2` dependencies. The offline run must settle and complete provider cleanup within its watchdog bound.
 
 Before releasing an Agent behavior change, answer these questions from evidence:
 
