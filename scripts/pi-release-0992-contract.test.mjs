@@ -1387,6 +1387,18 @@ void verify;`,
         ? /background Task[^.]*abort boundary[\s\S]*bottom-up/i
         : /Task background[^.]*abort boundary[\s\S]*từ dưới lên/i,
     );
+    assert.match(
+      abortBoundary,
+      locale === "en"
+        ? /child Tasks[^.]*terminal[^.]*owned Conversation scopes[^.]*idle[^.]*before[^.]*owner Task's abort handler starts/i
+        : /child Task[^.]*terminal[^.]*scope Conversation được sở hữu[^.]*idle[^.]*trước khi[^.]*abort handler của owner Task bắt đầu/i,
+    );
+    assert.doesNotMatch(
+      abortBoundary,
+      locale === "en"
+        ? /owned Conversations?[^.]*settle/i
+        : /owned Conversation[^.]*settle/i,
+    );
 
     const storageTradeoffs = paragraphContaining(
       storageSection,

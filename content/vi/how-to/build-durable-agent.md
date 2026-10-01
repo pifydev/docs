@@ -197,7 +197,7 @@ Child foreground thuộc về parent, giữ parent ở trạng thái busy và ph
 
 `background: true` chỉ hợp lệ với Task do Conversation sở hữu; child do Task sở hữu nếu dùng option này sẽ bị từ chối. Background xác định nơi ordinary abort và idle wait dừng lại; nó không phải ownership độc lập, và Task vẫn thuộc về Conversation của nó.
 
-Task background là một abort boundary. Ordinary abort dừng non-background owned work, còn `abort(context, { background: true })` vượt qua cả background boundary đã tồn tại. Abort diễn ra từ dưới lên: owned Conversation và child Task settle trước, rồi abort handler của owner mới chạy, để mỗi Task có thể undo effect của chính nó sau khi descendant dừng.
+Task background là một abort boundary. Ordinary abort dừng non-background owned work, còn `abort(context, { background: true })` vượt qua cả background boundary đã tồn tại. Abort diễn ra từ dưới lên: các child Task mà traversal đi tới trở thành terminal và các scope Conversation được sở hữu trở thành idle trước khi abort handler của owner Task bắt đầu, để mỗi Task có thể undo effect của chính nó sau khi descendant dừng.
 
 Dùng foreground ownership khi Tool phải trả lời bằng kết quả của child và failure cần cancel child. Dùng background anchor Task cho subagent hoặc reporter bền vững có lifecycle dài hơn một run. Host phải cung cấp stop operation riêng cho background work đó và wait nó khi shutdown cuối cùng.
 

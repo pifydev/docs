@@ -197,7 +197,7 @@ Foreground children belong to the parent, keep it busy, and must join before it 
 
 `background: true` is valid only for a conversation-owned Task; a task-owned child using it is rejected. Background defines where ordinary abort and idle waits stop; it is not independent ownership, and the Task remains owned by its Conversation.
 
-A background Task is an abort boundary. Ordinary abort stops non-background owned work, whereas `abort(context, { background: true })` crosses existing background boundaries too. Abort proceeds bottom-up: owned Conversations and child Tasks settle first, then the owner's abort handler runs, so each Task can undo its own effects after its descendants stop.
+A background Task is an abort boundary. Ordinary abort stops non-background owned work, whereas `abort(context, { background: true })` crosses existing background boundaries too. Abort proceeds bottom-up: reached child Tasks become terminal and reached owned Conversation scopes become idle before the owner Task's abort handler starts, so each Task can undo its own effects after its descendants stop.
 
 Use foreground ownership when a Tool must return the child's answer and failure should cancel the child. Use a background anchor Task for persistent subagents or reporters whose lifecycle outlasts one run. The host must expose a separate stop operation for that background work and wait for it during final shutdown.
 
