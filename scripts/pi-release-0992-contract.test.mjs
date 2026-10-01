@@ -53,6 +53,26 @@ function codeFenceCount(markdown) {
   return (markdown.match(/^```/gm) ?? []).length;
 }
 
+function headings(markdown) {
+  return [...markdown.matchAll(/^(#{1,6})\s+(.+)$/gm)].map(
+    ([, hashes, title]) => `${hashes} ${title}`,
+  );
+}
+
+function codeFences(markdown) {
+  return [...markdown.matchAll(/^```[^\n]*\n[\s\S]*?^```$/gm)].map(
+    ([fence]) => fence,
+  );
+}
+
+function paragraphContaining(markdown, needle) {
+  const paragraph = markdown
+    .split(/\r?\n\r?\n/)
+    .find((candidate) => candidate.includes(needle));
+  assert.ok(paragraph, `guide must contain paragraph with ${needle}`);
+  return paragraph;
+}
+
 test("release fixture identifies the exact published Pi 0.99.2 authority", async () => {
   assert.deepEqual(await readJson(releaseFixtureURL), expectedRelease);
 });
@@ -88,6 +108,60 @@ function assertTypeScriptFixtureCompiles(relativePath) {
     types: ["node"],
   });
   const diagnostics = ts.getPreEmitDiagnostics(program);
+  assert.equal(
+    diagnostics.length,
+    0,
+    ts.formatDiagnostics(diagnostics, {
+      getCanonicalFileName: (fileName) => fileName,
+      getCurrentDirectory: () => fileURLToPath(repositoryRoot),
+      getNewLine: () => "\n",
+    }),
+  );
+}
+
+function assertTypeScriptSourceCompiles(relativePath, source) {
+  const sourcePath = fileURLToPath(new URL(relativePath, repositoryRoot));
+  const options = {
+    target: ts.ScriptTarget.ES2022,
+    module: ts.ModuleKind.ESNext,
+    moduleResolution: ts.ModuleResolutionKind.Bundler,
+    strict: true,
+    noEmit: true,
+    skipLibCheck: true,
+    esModuleInterop: true,
+    types: ["node"],
+  };
+  const host = ts.createCompilerHost(options);
+  const normalizePath = (fileName) =>
+    fileName.replaceAll("\\", "/").toLowerCase();
+  const sourceKey = normalizePath(sourcePath);
+  const isSource = (fileName) => normalizePath(fileName) === sourceKey;
+  const defaultFileExists = host.fileExists.bind(host);
+  const defaultReadFile = host.readFile.bind(host);
+  const defaultGetSourceFile = host.getSourceFile.bind(host);
+
+  host.fileExists = (fileName) =>
+    isSource(fileName) || defaultFileExists(fileName);
+  host.readFile = (fileName) =>
+    isSource(fileName) ? source : defaultReadFile(fileName);
+  host.getSourceFile = (
+    fileName,
+    languageVersion,
+    onError,
+    shouldCreateNewSourceFile,
+  ) =>
+    isSource(fileName)
+      ? ts.createSourceFile(fileName, source, languageVersion, true)
+      : defaultGetSourceFile(
+          fileName,
+          languageVersion,
+          onError,
+          shouldCreateNewSourceFile,
+        );
+
+  const diagnostics = ts.getPreEmitDiagnostics(
+    ts.createProgram([sourcePath], options, host),
+  );
   assert.equal(
     diagnostics.length,
     0,
@@ -151,10 +225,6 @@ test("Codemode and MCP guides preserve paired structure and safety boundaries", 
   assert.deepEqual(headingShape(english), headingShape(vietnamese));
   assert.equal(codeFenceCount(english), codeFenceCount(vietnamese));
 
-  const headings = (markdown) =>
-    [...markdown.matchAll(/^(#{1,6})\s+(.+)$/gm)].map(
-      ([, hashes, title]) => `${hashes} ${title}`,
-    );
   assert.deepEqual(headings(english), [
     "# Use Codemode and MCP",
     "## Mental model",
@@ -186,19 +256,7 @@ test("Codemode and MCP guides preserve paired structure and safety boundaries", 
     "## Nguồn được ghim theo release",
   ]);
 
-  const codeFences = (markdown) =>
-    [...markdown.matchAll(/^```[^\n]*\n[\s\S]*?^```$/gm)].map(
-      ([fence]) => fence,
-    );
   assert.deepEqual(codeFences(english), codeFences(vietnamese));
-
-  const paragraphContaining = (markdown, needle) => {
-    const paragraph = markdown
-      .split(/\r?\n\r?\n/)
-      .find((candidate) => candidate.includes(needle));
-    assert.ok(paragraph, `guide must contain paragraph with ${needle}`);
-    return paragraph;
-  };
 
   const requiredTerms = [
     "QuickJS",
@@ -431,6 +489,222 @@ test("Codemode and MCP guides preserve paired structure and safety boundaries", 
       guide,
       projectTrustPattern,
       `${locale} guide must distinguish trust from sandbox and authorization`,
+    );
+  }
+});
+
+test("Virtual Model guides separate selection, dispatch, state, and accounting", async () => {
+  const [english, vietnamese, fixture] = await Promise.all([
+    readGuide("en", "route-virtual-models"),
+    readGuide("vi", "route-virtual-models"),
+    readFile(
+      new URL(
+        "tests/fixtures/pi-coding-agent-0992.contract.ts",
+        repositoryRoot,
+      ),
+      "utf8",
+    ),
+  ]);
+
+  assert.deepEqual(headings(english), [
+    "# Route requests with Virtual Models",
+    "## Selection and dispatch",
+    "## Register a virtual model",
+    "## Route user, continuation, retry, and direct requests",
+    "## Keep sticky turns and retries correct",
+    "## Persist JSON router state",
+    "## Restore sessions and branches",
+    "## Account for context, compaction, and cost",
+    "## Use classifier and image operations deliberately",
+    "## Failure modes and operational checklist",
+    "## Release-pinned sources",
+  ]);
+  assert.deepEqual(headings(vietnamese), [
+    "# Định tuyến request bằng Virtual Model",
+    "## Selection và dispatch",
+    "## Đăng ký Virtual Model",
+    "## Định tuyến request user, continuation, retry và direct",
+    "## Giữ đúng sticky turn và retry",
+    "## Duy trì JSON router state",
+    "## Khôi phục session và branch",
+    "## Tính context, compaction và cost",
+    "## Dùng classifier và image operation có chủ đích",
+    "## Failure mode và checklist vận hành",
+    "## Nguồn được ghim theo release",
+  ]);
+  assert.deepEqual(headingShape(english), headingShape(vietnamese));
+  assert.equal(codeFenceCount(english), codeFenceCount(vietnamese));
+  const englishFences = codeFences(english);
+  const vietnameseFences = codeFences(vietnamese);
+  assert.deepEqual(englishFences, vietnameseFences);
+  assert.equal(englishFences.length, 1);
+  assertTypeScriptSourceCompiles(
+    "tests/fixtures/route-virtual-models-guide.contract.ts",
+    englishFences[0].replace(/^```[^\n]*\n/, "").replace(/\n```$/, ""),
+  );
+
+  const registrationStart = fixture.indexOf(
+    "  pi.registerVirtualModel<RouterState>({",
+  );
+  const registrationEnd =
+    fixture.indexOf("\n  });", registrationStart) + "\n  });".length;
+  assert.notEqual(registrationStart, -1);
+  assert.ok(registrationEnd > registrationStart);
+  assert.ok(
+    englishFences[0].includes(
+      fixture.slice(registrationStart, registrationEnd),
+    ),
+    "guide registration must stay synchronized with the compile-checked fixture",
+  );
+
+  const requiredTerms = [
+    "registerVirtualModel",
+    "ModelRouteReason",
+    "user",
+    "continuation",
+    "retry",
+    "direct",
+    "request.previous",
+    "request.failed",
+    "request.state",
+    "gpt-6.1-sol",
+  ];
+  const pinnedRoot =
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/";
+  const pinnedPaths = [
+    "packages/coding-agent/docs/virtual-models.md",
+    "packages/coding-agent/src/core/virtual-models.ts",
+    "packages/coding-agent/src/core/extensions/types.ts",
+    "packages/ai/src/models.ts",
+    "packages/coding-agent/CHANGELOG.md",
+  ];
+
+  for (const [locale, guide] of [
+    ["en", english],
+    ["vi", vietnamese],
+  ]) {
+    for (const term of requiredTerms) {
+      assert.ok(guide.includes(term), `${locale} guide must include ${term}`);
+    }
+    for (const sourcePath of pinnedPaths) {
+      assert.ok(
+        guide.includes(`${pinnedRoot}${sourcePath}`),
+        `${locale} guide must pin ${sourcePath}`,
+      );
+    }
+    assert.ok(
+      guide.includes(
+        "https://github.com/earendil-works/pi/commit/005af57d88ee23b33778f343a9595b32e67ff788",
+      ),
+      `${locale} guide must link the exact release commit page`,
+    );
+    for (const tag of ["v0.99.0", "v0.99.1", "v0.99.2"]) {
+      assert.ok(
+        guide.includes(
+          `https://github.com/earendil-works/pi/releases/tag/${tag}`,
+        ),
+        `${locale} guide must link release ${tag}`,
+      );
+    }
+    assert.doesNotMatch(guide, /\/(?:blob|tree)\/main\/|\/latest(?:\/|\b)/);
+
+    const selection = paragraphContaining(
+      guide,
+      locale === "en" ? "The selected pair" : "Cặp được chọn",
+    );
+    assert.match(
+      selection,
+      locale === "en"
+        ? /selected pair[^.]*virtual provider\/model[^.]*virtual thinking level[^.]*separate[^.]*per-request dispatched pair[^.]*physical provider\/model[^.]*physical thinking level/i
+        : /Cặp được chọn[^.]*virtual provider\/model[^.]*virtual thinking level[^.]*tách biệt[^.]*cặp dispatch theo từng request[^.]*physical provider\/model[^.]*physical thinking level/i,
+      `${locale} guide must distinguish virtual selection from physical dispatch`,
+    );
+
+    const messages = paragraphContaining(
+      guide,
+      locale === "en"
+        ? "Provider requests receive only"
+        : "Provider request chỉ nhận",
+    );
+    assert.match(
+      messages,
+      locale === "en"
+        ? /Provider requests receive only[^.]*physical[^.]*assistant message produced by that dispatch records[^.]*physical/i
+        : /Provider request chỉ nhận[^.]*physical[^.]*assistant message do dispatch đó tạo ra[^.]*ghi lại physical/i,
+      `${locale} provider requests and assistant messages must use physical models`,
+    );
+    assert.match(
+      messages,
+      locale === "en"
+        ? /routing fails before dispatch[^.]*error assistant message retains the virtual model/i
+        : /routing thất bại trước dispatch[^.]*error assistant message vẫn giữ virtual model/i,
+      `${locale} guide must preserve the virtual model on routing failures`,
+    );
+
+    const state = paragraphContaining(
+      guide,
+      locale === "en"
+        ? "Router state must be JSON-serializable"
+        : "Router state phải JSON-serializable",
+    );
+    assert.match(
+      state,
+      locale === "en"
+        ? /JSON-serializable[^.]*session branch[^.]*forks[^.]*survives compaction[^.]*before dispatch[^.]*request later fails[^.]*new object only when[^.]*changes/i
+        : /JSON-serializable[^.]*session branch[^.]*fork[^.]*sống qua compaction[^.]*trước dispatch[^.]*request lỗi sau đó[^.]*chỉ return object mới khi[^.]*thay đổi/i,
+      `${locale} guide must explain durable state without unnecessary churn`,
+    );
+
+    const directState = paragraphContaining(
+      guide,
+      locale === "en"
+        ? "A direct request has no router state"
+        : "Direct request không có router state",
+    );
+    assert.match(
+      directState,
+      locale === "en"
+        ? /direct request has no router state[\s\S]*returned state is ignored/i
+        : /Direct request không có router state[\s\S]*state được return cũng bị bỏ qua/i,
+      `${locale} direct requests must not read or persist router state`,
+    );
+
+    const accounting = paragraphContaining(
+      guide,
+      locale === "en" ? "Usage and cost belong" : "Usage và cost thuộc",
+    );
+    assert.match(
+      accounting,
+      locale === "en"
+        ? /Usage and cost belong[^.]*physical model[^.]*Context[^.]*physical[^.]*Compaction[^.]*physical model selected for each dispatch/i
+        : /Usage và cost thuộc[^.]*physical model[^.]*Context[^.]*physical[^.]*Compaction[^.]*physical model được chọn cho từng dispatch/i,
+      `${locale} accounting, context, and compaction must follow physical models`,
+    );
+
+    const guarantee = paragraphContaining(
+      guide,
+      locale === "en" ? "Pi does not guarantee" : "Pi không bảo đảm",
+    );
+    assert.match(
+      guarantee,
+      locale === "en"
+        ? /does not guarantee[^.]*optimal choice/i
+        : /không bảo đảm[^.]*lựa chọn tối ưu/i,
+      `${locale} guide must reject an optimal-routing guarantee`,
+    );
+
+    const resume = paragraphContaining(
+      guide,
+      locale === "en"
+        ? "If the selected Virtual Model is no longer registered"
+        : "Nếu Virtual Model đã chọn không còn được đăng ký",
+    );
+    assert.match(
+      resume,
+      locale === "en"
+        ? /falls back[^.]*latest successful physical response[\s\S]*`getBranchSelection\(\)`[^.]*without filtering[^.]*`error`[^.]*`aborted`[^.]*failed routing message remains virtual/i
+        : /fallback[^.]*successful physical response gần nhất[\s\S]*`getBranchSelection\(\)`[^.]*không filter[^.]*`error`[^.]*`aborted`[^.]*routing thất bại vẫn là virtual/i,
+      `${locale} guide must explain resume fallback and its 0.99.2 stop-reason edge case`,
     );
   }
 });
