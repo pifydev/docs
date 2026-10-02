@@ -11289,7 +11289,7 @@ function assertNoUnclassifiedStaleAuthority(entries, allowlist = []) {
         descriptor.filename === occurrence.filename &&
         descriptor.marker === occurrence.marker &&
         descriptor.scope === occurrence.scope &&
-        occurrence.lineContext.includes(descriptor.lineContext),
+        occurrence.lineContext === descriptor.lineContext,
     );
     if (descriptorIndex === -1) {
       unclassified.push(occurrence);
@@ -11640,6 +11640,31 @@ test("stale-authority classifier rejects a substituted marker in an unrelated te
             marker: "old-version",
             lineContext: `const stale = "${oldVersion}";`,
             scope: 'test("historical migration", () => {',
+            reason: "historical rejection fixture",
+          },
+        ],
+      ),
+    /unclassified stale authority/,
+  );
+});
+
+test("stale-authority classifier rejects an augmented marker in its original test scope", () => {
+  const oldVersion = "0.87" + ".1";
+  const originalLine = `const stale = "${oldVersion}";`;
+  const augmented = {
+    filename: "scripts/course-content.test.mjs",
+    source: `test("historical migration", () => {\n  ${originalLine} // current Pi 0.99.2 authority\n});`,
+  };
+  assert.throws(
+    () =>
+      assertNoUnclassifiedStaleAuthority(
+        [augmented],
+        [
+          {
+            filename: augmented.filename,
+            marker: "old-version",
+            lineContext: originalLine,
+            scope: "test:historical migration",
             reason: "historical rejection fixture",
           },
         ],
