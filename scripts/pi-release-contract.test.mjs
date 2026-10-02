@@ -1527,20 +1527,27 @@ function assertRouteMetadataIsRowScoped(section, locale, context) {
   }
 }
 
-function assertFableTroubleshooting(section, table, locale, context) {
-  const row = table.rows.find(
-    (candidate) => candidate[0] === "Claude Fable 5.1 + split-turn compaction",
-  );
-  assert.ok(row, context + " must keep the Claude Fable 5.1 edge");
-  assert.match(row[1], locale === "en" ? /\brefus(?:e|ed|al)\b/i : /từ chối/i);
-  assert.match(row[2], /Conversation/);
-  assert.match(row[2], /Instructions/);
-  assert.match(row[2], locale === "en" ? /continuation/i : /tiếp tục/i);
-  assert.match(
+function assertFaqToolResultBoundary(section, locale, context) {
+  const paragraph = findParagraphContaining(
     section,
-    locale === "en"
-      ? /no public [^.\n]{0,30}(?:option|knob)/i
-      : /không có public [^.\n]{0,30}(?:option|knob)/i,
+    [
+      "AgentTool.execute",
+      "AgentToolResult",
+      "ToolResultMessage",
+      "ToolCall",
+      "tool_execution_end",
+    ],
+    context,
+  );
+  assert.match(
+    paragraph,
+    locale === "en" ? /does not construct/i : /không tự dựng/i,
+    context + " must keep result-message ownership with Agent Core",
+  );
+  assert.match(
+    paragraph,
+    locale === "en" ? /matching call ID/i : /call ID.*khớp/i,
+    context + " must associate the result with the matching ToolCall",
   );
 }
 
@@ -1690,20 +1697,10 @@ function validateModelConfigurationContracts(localized) {
       headings.pitfalls,
       context,
     ).body;
-    tables.faqEdges = assertTechnicalContractRows(
+    assertFaqToolResultBoundary(
       pitfallsSection,
-      [
-        [[0, "OpenAI-compatible"]],
-        [[0, "Claude Fable 5.1 + split-turn compaction"]],
-      ],
-      context + " provider troubleshooting edges",
-      { ordered: true },
-    );
-    assertFableTroubleshooting(
-      pitfallsSection,
-      tables.faqEdges,
       locale,
-      context,
+      context + " Tool-result troubleshooting boundary",
     );
 
     const configuration = localized.get(locale + "/reference/configuration.md");
@@ -1799,15 +1796,6 @@ function validateModelConfigurationContracts(localized) {
         "API key",
         "OpenAI Codex subscription",
         "GitHub Copilot subscription",
-      ],
-    },
-    faqEdges: {
-      stableColumns: [0],
-      allowedIdentifiers: [
-        "text part",
-        "image block",
-        "Conversation",
-        "Instructions",
       ],
     },
     xaiDefault: {
@@ -2071,16 +2059,16 @@ test("0.99.2 models and image limits mutation guards reject wrong routes and edg
       "chỉ thuộc Anthropic; hãy kiểm tra metadata riêng của từng route thay vì áp các giá trị ấy sang route khác",
     ],
     [
-      "Fable refusal symptom",
+      "English Tool-result ownership",
       "en/help/faq.md",
-      "`summary could receive a refusal`",
-      "`could treat the summary as a new task`",
+      "it does not construct a `ToolResultMessage`",
+      "it constructs a `ToolResultMessage`",
     ],
     [
-      "copied English descriptive prose",
+      "Vietnamese Tool-result ownership",
       "vi/help/faq.md",
-      "`request chỉ có image có thể kèm empty text part`",
-      "`image-only request could include an empty text part`",
+      "implementation không tự dựng `ToolResultMessage`",
+      "implementation tự dựng `ToolResultMessage`",
     ],
     [
       "copied English generic header",
@@ -11004,4 +10992,219 @@ test("active Course comparisons use strict Pi 0.99.2 authority", async () => {
     () => assertActiveCourseComparisonAuthority(mutatedSource),
     assert.AssertionError,
   );
+});
+
+const expectedAuditKeysText = `home
+quickstart
+glossary
+how-to-add-custom-tool
+how-to-plug-new-model
+how-to-stream-output
+how-to-persist-sessions
+how-to-customize-system-prompt
+how-to-test-agent-deterministically
+how-to-run-pi-evals
+how-to-host-session-runtime
+how-to-use-codemode-and-mcp
+how-to-route-virtual-models
+how-to-build-durable-agent
+reference-api
+reference-configuration
+reference-environment-variables
+ch01-overview
+ch02-three-layer-arch
+ch03-agent-loop
+ch04-model-invocation
+ch05-tool-system
+ch06-messages
+ch07-event-driven
+ch08-context-engineering
+ch09-compaction
+ch10-session
+ch11-testing-evaluation
+course-overview
+course-00-complete-agent-trace
+course-01-typescript-protocols
+course-02-event-stream
+course-03-message-ir
+course-04-deterministic-model
+course-05-provider-adapter
+course-06-tool-contract
+course-07-agent-loop
+course-08-coding-tools
+course-09-stateful-agent
+course-10-session-tree
+course-11-context-compaction
+course-12-resources-extensions
+course-13-runtime-composition
+course-14-agent-evaluation
+faq
+changelog`;
+
+function markdownTableCells(line) {
+  return line
+    .trim()
+    .replace(/^\|/, "")
+    .replace(/\|$/, "")
+    .split("|")
+    .map((cell) => cell.trim());
+}
+
+function auditLedgerRows(ledger) {
+  const lines = normalizeLineEndings(ledger).split("\n");
+  const header =
+    "| Key | Outcome | Evidence | Files checked | Code fences EN/VI | Deletion |";
+  const headerIndex = lines.indexOf(header);
+  assert.notEqual(
+    headerIndex,
+    -1,
+    "audit ledger must use the exact six-cell header",
+  );
+  const separator = markdownTableCells(lines[headerIndex + 1] ?? "");
+  assert.equal(separator.length, 6, "audit ledger must have six table columns");
+  for (const cell of separator) {
+    assert.match(
+      cell,
+      /^:?-{3,}:?$/,
+      "audit ledger must have a Markdown separator",
+    );
+  }
+
+  const rows = [];
+  for (const line of lines.slice(headerIndex + 2)) {
+    if (!line.startsWith("|")) break;
+    const cells = markdownTableCells(line);
+    if (cells[0] === "Totals") break;
+    rows.push(cells);
+  }
+  return rows;
+}
+
+test("Pi 0.99.2 bilingual audit ledger covers every public pair", async () => {
+  const [ledger, manifest] = await Promise.all([
+    readFile(
+      new URL("docs/translation-review/2026-10-01-pi-0992.md", repositoryRoot),
+      "utf8",
+    ),
+    readFile(
+      new URL("content/translation-manifest.json", repositoryRoot),
+      "utf8",
+    ).then(JSON.parse),
+  ]);
+  const expectedKeys = expectedAuditKeysText.split("\n");
+  assert.deepEqual(
+    manifest.pages.map(({ key }) => key),
+    expectedKeys,
+  );
+
+  const rows = auditLedgerRows(ledger);
+  assert.equal(
+    rows.length,
+    46,
+    "audit ledger must contain one row per manifest key",
+  );
+  assert.deepEqual(
+    rows.map(([key]) => key.replaceAll("`", "")),
+    expectedKeys,
+  );
+  assert.equal(new Set(rows.map(([key]) => key)).size, 46);
+
+  const totals = { substantive: 0, "pin-only": 0, "verified unchanged": 0 };
+  for (const [index, row] of rows.entries()) {
+    assert.equal(
+      row.length,
+      6,
+      `${expectedKeys[index]}: audit row must have six cells`,
+    );
+    const [, outcome, evidence, files, fenceCounts, deletion] = row;
+    assert.ok(
+      Object.hasOwn(totals, outcome),
+      `${expectedKeys[index]}: audit outcome`,
+    );
+    totals[outcome] += 1;
+    assert.match(
+      evidence,
+      /005af57d88ee23b33778f343a9595b32e67ff788|releases\/tag\/v0\.99\.[012]/,
+      `${expectedKeys[index]}: release evidence`,
+    );
+    const page = manifest.pages[index];
+    const enPath = `content/en/${page.en}`;
+    const viPath = `content/vi/${page.vi}`;
+    assert.ok(files.includes(enPath), `${page.key}: EN path evidence`);
+    assert.ok(files.includes(viPath), `${page.key}: VI path evidence`);
+    const counts = /^([0-9]+)\/([0-9]+) audited$/.exec(fenceCounts);
+    assert.ok(counts, `${page.key}: audited EN/VI fence count`);
+    const [english, vietnamese] = await Promise.all([
+      readFile(new URL(enPath, repositoryRoot), "utf8"),
+      readFile(new URL(viPath, repositoryRoot), "utf8"),
+    ]);
+    assert.deepEqual(
+      [Number(counts[1]), Number(counts[2])],
+      [
+        codeFenceLanguages(english).length,
+        codeFenceLanguages(vietnamese).length,
+      ],
+      `${page.key}: fence count must be measured from both files`,
+    );
+    assert.notEqual(
+      deletion.toLowerCase(),
+      "",
+      `${page.key}: deletion disposition`,
+    );
+  }
+  assert.equal(
+    Object.values(totals).reduce((sum, count) => sum + count, 0),
+    46,
+  );
+  const footer =
+    /\*\*Totals:\*\* substantive (\d+); pin-only (\d+); verified unchanged (\d+); total (\d+)\./.exec(
+      ledger,
+    );
+  assert.ok(footer, "audit ledger must publish outcome totals");
+  assert.deepEqual(footer.slice(1).map(Number), [
+    totals.substantive,
+    totals["pin-only"],
+    totals["verified unchanged"],
+    46,
+  ]);
+});
+
+test("stale active authority and moving source pins are absent", async () => {
+  const manifest = await readFile(
+    new URL("content/translation-manifest.json", repositoryRoot),
+    "utf8",
+  ).then(JSON.parse);
+  const entries = [
+    {
+      filename: "README.md",
+      source: await readFile(new URL("README.md", repositoryRoot), "utf8"),
+    },
+    {
+      filename: "CONTRIBUTING.md",
+      source: await readFile(
+        new URL("CONTRIBUTING.md", repositoryRoot),
+        "utf8",
+      ),
+    },
+    ...(await Promise.all(
+      manifest.pages
+        .flatMap((page) => [`content/en/${page.en}`, `content/vi/${page.vi}`])
+        .map(async (filename) => ({
+          filename,
+          source: await readFile(new URL(filename, repositoryRoot), "utf8"),
+        })),
+    )),
+  ];
+  const forbidden =
+    /Pi SDK 0\.87\.1|f07218c4d4bbc12bef056a7058c3dd49dfe41abe|pi-release-0871\.json|pi-sdk-0871\.contract\.ts|https:\/\/github\.com\/earendil-works\/pi\/(?:blob|tree)\/main(?:\/|$)/i;
+  for (const entry of entries) {
+    const datedHeadings = [
+      ...entry.source.matchAll(/^## \d{4}-\d{2}-\d{2}$/gm),
+    ];
+    const activeSource =
+      entry.filename.endsWith("/changelog.md") && datedHeadings.length > 1
+        ? entry.source.slice(0, datedHeadings[1].index)
+        : entry.source;
+    assert.doesNotMatch(activeSource, forbidden, entry.filename);
+  }
 });

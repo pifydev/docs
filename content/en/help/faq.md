@@ -87,15 +87,6 @@ The [documentation glossary](../glossary.md) defines canonical terms. Preserve i
 
 ## Common pitfalls
 
-Two `0.87.1` fixes matter when diagnosing provider-specific failures:
-
-| Case | Older behavior | `0.87.1` behavior |
-|---|---|---|
-| `OpenAI-compatible` | `image-only request could include an empty text part` | `omit empty text part; preserve image block` |
-| `Claude Fable 5.1 + split-turn compaction` | `summary could receive a refusal` | `separate Conversation and Instructions; use continuation guidance` |
-
-These implementation corrections expose no public API. If an OpenAI-compatible endpoint still rejects an image-only turn, inspect the serialized content parts. In older builds, a split-turn compaction summary could receive a refusal from Claude Fable 5.1. Version `0.87.1` separates the earlier `Conversation` from `Instructions` that provide continuation guidance. No public compaction knob controls this behavior.
-
 ### My tool result does not reach the model
 
 An `AgentTool.execute` implementation returns an `AgentToolResult` with `content` and optional `details` or `usage`; it does not construct a `ToolResultMessage`. Agent Core associates the result with the current `ToolCall` and creates the protocol message with the matching call ID and Tool name. If no result reaches the model, inspect the returned content blocks and the `tool_execution_end` event.

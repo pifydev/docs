@@ -87,15 +87,6 @@ Có. Hãy gửi đủ file tiếng Anh và tiếng Việt, giữ cấu trúc hea
 
 ## Lỗi thường gặp
 
-Hai bản sửa trong `0.87.1` cần được tính đến khi chẩn đoán lỗi riêng của provider:
-
-| Trường hợp | Hành vi ở bản cũ | Hành vi trong `0.87.1` |
-|---|---|---|
-| `OpenAI-compatible` | `request chỉ có image có thể kèm empty text part` | `bỏ empty text part; giữ image block` |
-| `Claude Fable 5.1 + split-turn compaction` | `summary có thể bị từ chối` | `tách Conversation và Instructions; dùng chỉ dẫn để tiếp tục` |
-
-Các sửa đổi implementation này không expose public API. Nếu endpoint tương thích OpenAI vẫn từ chối lượt chỉ có image, hãy kiểm tra các content part đã serialize. Ở bản cũ, split-turn compaction summary có thể bị Claude Fable 5.1 từ chối. Phiên bản `0.87.1` tách `Conversation` trước đó khỏi `Instructions` chứa chỉ dẫn để tiếp tục. Không có public compaction knob cho hành vi này.
-
 ### Kết quả Tool không đến được model
 
 Implementation của `AgentTool.execute` trả về `AgentToolResult` gồm `content` cùng `details` hoặc `usage` tùy chọn; implementation không tự dựng `ToolResultMessage`. Agent Core liên kết result với `ToolCall` hiện tại rồi tạo protocol message có call ID và tên Tool khớp. Nếu model không nhận được kết quả, hãy kiểm tra các content block được trả về và sự kiện `tool_execution_end`.

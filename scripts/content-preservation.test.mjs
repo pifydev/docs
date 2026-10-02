@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
@@ -184,6 +185,22 @@ function validRule(path) {
     approvedDeletions: [],
   };
 }
+
+const historicalPreservationManifestSha256 =
+  "4308f425a72aa7e1a75f0090f7eb90c6e38e265fd019ccb833016b520ee0b880";
+const expectedNewPublicTranslationKeys = [
+  "how-to-use-codemode-and-mcp",
+  "how-to-route-virtual-models",
+  "how-to-build-durable-agent",
+];
+const expectedNewPublicPaths = [
+  "en/how-to/use-codemode-and-mcp.md",
+  "vi/how-to/use-codemode-and-mcp.md",
+  "en/how-to/route-virtual-models.md",
+  "vi/how-to/route-virtual-models.md",
+  "en/how-to/build-durable-agent.md",
+  "vi/how-to/build-durable-agent.md",
+];
 
 test("validatePreservation resolves locale paths below the content root", async () => {
   const rule = validRule("en/index.mdx");
@@ -376,8 +393,13 @@ test("historical preservation prefix rejects a coordinated route rename", async 
       "utf8",
     ).then(JSON.parse),
   ]);
+  const historicalTranslations = {
+    pages: translations.pages.filter((page) =>
+      manifest.pages.some((record) => record.key === page.key),
+    ),
+  };
   const mutatedManifest = structuredClone(manifest);
-  const mutatedTranslations = structuredClone(translations);
+  const mutatedTranslations = structuredClone(historicalTranslations);
   const translation = mutatedTranslations.pages.find(
     (page) => page.key === "quickstart",
   );
@@ -402,21 +424,53 @@ test("historical preservation prefix rejects a coordinated route rename", async 
 });
 
 test("the repository content satisfies the historical preservation baseline", async () => {
-  const [manifest, translations] = await Promise.all([
+  const [manifestSource, translations] = await Promise.all([
     readFile(
       new URL("../content/preservation-manifest.json", import.meta.url),
       "utf8",
-    ).then(JSON.parse),
+    ),
     readFile(
       new URL("../content/translation-manifest.json", import.meta.url),
       "utf8",
     ).then(JSON.parse),
   ]);
+  const manifest = JSON.parse(manifestSource);
+  assert.equal(
+    createHash("sha256").update(manifestSource).digest("hex"),
+    historicalPreservationManifestSha256,
+    "the immutable 86-record historical preservation baseline must remain byte-identical",
+  );
   assert.equal(manifest.pages.length, 86);
-  assert.equal(translations.pages.length, 43);
+  assert.equal(translations.pages.length, 46);
+  const translationKeyByPath = new Map(
+    translations.pages.flatMap((page) => [
+      [`en/${page.en}`, page.key],
+      [`vi/${page.vi}`, page.key],
+    ]),
+  );
+  assert.equal(new Set(manifest.pages.map((record) => record.path)).size, 86);
+  for (const record of manifest.pages) {
+    assert.equal(
+      translationKeyByPath.get(record.path),
+      record.key,
+      `${record.path} must remain mapped to its historical translation key`,
+    );
+  }
+  const historicalKeys = new Set(manifest.pages.map((record) => record.key));
   assert.deepEqual(
-    preservationManifestCoverageErrors(translations, manifest),
-    [],
+    translations.pages
+      .filter((page) => !historicalKeys.has(page.key))
+      .map((page) => page.key),
+    expectedNewPublicTranslationKeys,
+    "only the three current public pairs may sit outside the immutable historical baseline",
+  );
+  const historicalPaths = new Set(manifest.pages.map((record) => record.path));
+  assert.deepEqual(
+    translations.pages
+      .flatMap((page) => [`en/${page.en}`, `vi/${page.vi}`])
+      .filter((path) => !historicalPaths.has(path)),
+    expectedNewPublicPaths,
+    "the six current locale files must be the only additions outside the immutable historical baseline",
   );
   assert.deepEqual(historicalPreservationPrefixErrors(manifest), []);
 
