@@ -235,6 +235,258 @@ const changedComparisonIdentifiers = {
   ],
 };
 
+const courseSemanticRelationshipContracts = {
+  "06-tool-contract": {
+    en: [
+      {
+        label: "outputSchema governs structuredContent",
+        pattern:
+          /When an `AgentTool` declares `outputSchema`, a successful `AgentToolResult` should set `structuredContent` to data that matches that schema/,
+      },
+      {
+        label: "replay governs recovery after an unknown outcome",
+        pattern:
+          /The `replay` policy says whether an effect with durable intent but an unknown outcome may run again during recovery\./,
+      },
+      {
+        label: "termination requires the complete Tool batch",
+        pattern:
+          /set `terminate` to request early termination, which occurs only when every finalized result in the Tool batch requests it/,
+      },
+    ],
+    vi: [
+      {
+        label: "outputSchema governs structuredContent",
+        pattern:
+          /Khi `AgentTool` khai báo `outputSchema`, `AgentToolResult` thành công phải đặt `structuredContent` thành dữ liệu khớp schema đó/,
+      },
+      {
+        label: "replay governs recovery after an unknown outcome",
+        pattern:
+          /Policy `replay` cho biết effect có durable intent nhưng chưa xác định outcome có được chạy lại khi recovery hay không\./,
+      },
+      {
+        label: "termination requires the complete Tool batch",
+        pattern:
+          /đặt `terminate` để yêu cầu kết thúc sớm, nhưng chỉ kết thúc khi mọi result đã finalize trong Tool batch đều yêu cầu/,
+      },
+    ],
+  },
+  "10-session-tree": {
+    en: [
+      {
+        label: "pi-durable is separate from SessionManager and Course",
+        pattern:
+          /separate, experimental `@earendil-works\/pi-durable`[\s\S]{0,400}are not `SessionManager` semantics, and this Course tree implements neither API/,
+      },
+      {
+        label: "durable commits, checkpoints, and resumes",
+        pattern:
+          /commits state before observers see it, persists task checkpoints, and can resume work after a restart/,
+      },
+    ],
+    vi: [
+      {
+        label: "pi-durable is separate from SessionManager and Course",
+        pattern:
+          /harness thử nghiệm `@earendil-works\/pi-durable` như một gói riêng[\s\S]{0,400}không thuộc contract của `SessionManager`; Course Session Tree cũng không triển khai API nào của `pi-durable`/,
+      },
+      {
+        label: "durable commits, checkpoints, and resumes",
+        pattern:
+          /commit state trước khi observer nhìn thấy, lưu task checkpoint và có thể tiếp tục công việc sau khi khởi động lại/,
+      },
+    ],
+  },
+  "12-resources-extensions": {
+    en: [
+      {
+        label: "Codemode and MCP use their matching factories",
+        pattern:
+          /Pi 0\.99\.2 ships Codemode and MCP as built-in Extensions: Codemode is exposed through `createCodemodeExtension\(\)`, and MCP through `createMcpExtension\(\)`/,
+      },
+      {
+        label: "MCP exposure does not bypass trust",
+        pattern:
+          /MCP exposure follows its configured mode[\s\S]{0,300}registering either factory does not bypass project trust or expose every MCP Tool directly/,
+      },
+    ],
+    vi: [
+      {
+        label: "Codemode and MCP use their matching factories",
+        pattern:
+          /Pi 0\.99\.2 cung cấp Codemode và MCP dưới dạng Extension tích hợp sẵn: Codemode được công bố qua `createCodemodeExtension\(\)`, còn MCP qua `createMcpExtension\(\)`/,
+      },
+      {
+        label: "MCP exposure does not bypass trust",
+        pattern:
+          /Mức exposure của MCP tuân theo mode đã cấu hình[\s\S]{0,300}đăng ký một trong hai factory không bỏ qua project trust hoặc expose trực tiếp mọi MCP Tool/,
+      },
+    ],
+  },
+  "13-runtime-composition": {
+    en: [
+      {
+        label: "Virtual Models route selection per request",
+        pattern:
+          /selected virtual catalog entry chooses a physical model and thinking level for each request/,
+      },
+      {
+        label: "assistant records the physical route",
+        pattern: /successful assistant messages record the physical route/,
+      },
+      {
+        label: "recorded route is not a replay promise",
+        pattern:
+          /That record is evidence of the completed physical route, not a promise that replay will choose the same route\./,
+      },
+    ],
+    vi: [
+      {
+        label: "Virtual Models route selection per request",
+        pattern:
+          /virtual catalog entry đã chọn sẽ quyết định physical model và thinking level cho từng request/,
+      },
+      {
+        label: "assistant records the physical route",
+        pattern: /assistant message thành công ghi lại physical route/,
+      },
+      {
+        label: "recorded route is not a replay promise",
+        pattern:
+          /Record này xác nhận physical route đã hoàn tất; đây không phải lời hứa rằng replay sẽ chọn lại cùng route\./,
+      },
+    ],
+  },
+};
+
+const courseSemanticMutations = {
+  "06-tool-contract": {
+    en: [
+      [
+        "outputSchema to structuredContent",
+        "When an `AgentTool` declares `outputSchema`, a successful `AgentToolResult` should set `structuredContent` to data that matches that schema",
+        "When an `AgentTool` declares `outputSchema`, a successful `AgentToolResult` should leave `structuredContent` unset even when data matches that schema",
+      ],
+      [
+        "replay recovery policy",
+        "The `replay` policy says whether an effect with durable intent but an unknown outcome may run again during recovery.",
+        "The `replay` policy says every effect with durable intent and an unknown outcome must run again during recovery.",
+      ],
+      [
+        "terminating batch rule",
+        "set `terminate` to request early termination, which occurs only when every finalized result in the Tool batch requests it",
+        "set `terminate` to request early termination, which occurs when any finalized result in the Tool batch requests it",
+      ],
+    ],
+    vi: [
+      [
+        "outputSchema to structuredContent",
+        "Khi `AgentTool` khai báo `outputSchema`, `AgentToolResult` thành công phải đặt `structuredContent` thành dữ liệu khớp schema đó",
+        "Khi `AgentTool` khai báo `outputSchema`, `AgentToolResult` thành công phải bỏ trống `structuredContent` ngay cả khi dữ liệu khớp schema đó",
+      ],
+      [
+        "replay recovery policy",
+        "Policy `replay` cho biết effect có durable intent nhưng chưa xác định outcome có được chạy lại khi recovery hay không.",
+        "Policy `replay` yêu cầu mọi effect có durable intent nhưng chưa xác định outcome luôn chạy lại khi recovery.",
+      ],
+      [
+        "terminating batch rule",
+        "đặt `terminate` để yêu cầu kết thúc sớm, nhưng chỉ kết thúc khi mọi result đã finalize trong Tool batch đều yêu cầu",
+        "đặt `terminate` để yêu cầu kết thúc sớm ngay khi bất kỳ result đã finalize nào trong Tool batch yêu cầu",
+      ],
+    ],
+  },
+  "10-session-tree": {
+    en: [
+      [
+        "separate durable boundary",
+        "are not `SessionManager` semantics, and this Course tree implements neither API",
+        "are `SessionManager` semantics, and this Course tree implements both APIs",
+      ],
+      [
+        "durable checkpoint recovery",
+        "commits state before observers see it, persists task checkpoints, and can resume work after a restart",
+        "shows state before commit, discards task checkpoints, and cannot resume work after a restart",
+      ],
+    ],
+    vi: [
+      [
+        "separate durable boundary",
+        "không thuộc contract của `SessionManager`; Course Session Tree cũng không triển khai API nào của `pi-durable`",
+        "thuộc contract của `SessionManager`; Course Session Tree triển khai toàn bộ API của `pi-durable`",
+      ],
+      [
+        "durable checkpoint recovery",
+        "commit state trước khi observer nhìn thấy, lưu task checkpoint và có thể tiếp tục công việc sau khi khởi động lại",
+        "cho observer thấy state trước commit, bỏ task checkpoint và không thể tiếp tục công việc sau khi khởi động lại",
+      ],
+    ],
+  },
+  "12-resources-extensions": {
+    en: [
+      [
+        "matching Extension factories",
+        "Codemode is exposed through `createCodemodeExtension()`, and MCP through `createMcpExtension()`",
+        "Codemode is exposed through `createMcpExtension()`, and MCP through `createCodemodeExtension()`",
+      ],
+      [
+        "trust and exposure boundary",
+        "registering either factory does not bypass project trust or expose every MCP Tool directly",
+        "registering either factory bypasses project trust and exposes every MCP Tool directly",
+      ],
+    ],
+    vi: [
+      [
+        "matching Extension factories",
+        "Codemode được công bố qua `createCodemodeExtension()`, còn MCP qua `createMcpExtension()`",
+        "Codemode được công bố qua `createMcpExtension()`, còn MCP qua `createCodemodeExtension()`",
+      ],
+      [
+        "trust and exposure boundary",
+        "đăng ký một trong hai factory không bỏ qua project trust hoặc expose trực tiếp mọi MCP Tool",
+        "đăng ký một trong hai factory bỏ qua project trust và expose trực tiếp mọi MCP Tool",
+      ],
+    ],
+  },
+  "13-runtime-composition": {
+    en: [
+      [
+        "per-request physical routing",
+        "chooses a physical model and thinking level for each request",
+        "reuses one physical model and thinking level instead of routing each request",
+      ],
+      [
+        "assistant physical-route record",
+        "successful assistant messages record the physical route",
+        "successful assistant messages record only the virtual selection, not the physical route",
+      ],
+      [
+        "no replay-route promise",
+        "not a promise that replay will choose the same route",
+        "a promise that replay will choose the same route",
+      ],
+    ],
+    vi: [
+      [
+        "per-request physical routing",
+        "quyết định physical model và thinking level cho từng request",
+        "dùng lại một physical model và thinking level thay vì route từng request",
+      ],
+      [
+        "assistant physical-route record",
+        "assistant message thành công ghi lại physical route",
+        "assistant message thành công chỉ ghi virtual selection, không ghi physical route",
+      ],
+      [
+        "no replay-route promise",
+        "không phải lời hứa rằng replay sẽ chọn lại cùng route",
+        "là lời hứa rằng replay sẽ chọn lại cùng route",
+      ],
+    ],
+  },
+};
+
 async function exists(relativePath) {
   return access(new URL(relativePath, repositoryRoot)).then(
     () => true,
@@ -810,6 +1062,33 @@ function assertCheckpointReleaseContract(source, locale, checkpoint) {
       `${relativePath}: changed API relationship includes ${identifier}`,
     );
   }
+
+  for (const relationship of courseSemanticRelationshipContracts[
+    checkpoint.slug
+  ]?.[locale] ?? []) {
+    assert.match(
+      comparisonSection,
+      relationship.pattern,
+      `${relativePath}: ${relationship.label}`,
+    );
+  }
+}
+
+function mutateCourseRelationship(source, mutation, relativePath) {
+  const [label, original, replacement] = mutation;
+  const occurrences = source.split(original).length - 1;
+  assert.equal(
+    occurrences,
+    1,
+    `${relativePath}: ${label} mutation must replace exactly one real relationship`,
+  );
+  const mutated = source.replace(original, replacement);
+  assert.notEqual(
+    mutated,
+    source,
+    `${relativePath}: ${label} mutation must change the source`,
+  );
+  return { label, mutated };
 }
 
 test("Course comparison authority rejects stale pins, headings, dates, unpinned paths, and changed API drift", async () => {
@@ -865,6 +1144,30 @@ test("Course comparison authority rejects stale pins, headings, dates, unpinned 
       () => assertCheckpointReleaseContract(mutation, "en", checkpoint),
       assert.AssertionError,
     );
+  }
+});
+
+test("Course semantic relationship mutations reject inverted 0.99.2 behavior in both locales", async () => {
+  for (const [slug, locales] of Object.entries(courseSemanticMutations)) {
+    const checkpoint = checkpoints.find((entry) => entry.slug === slug);
+    assert.ok(checkpoint, `${slug}: checkpoint contract exists`);
+
+    for (const locale of ["en", "vi"]) {
+      const source = await readCoursePage(locale, `${slug}.md`);
+      const relativePath = `content/${locale}/course/${slug}.md`;
+      for (const mutation of locales[locale]) {
+        const { label, mutated } = mutateCourseRelationship(
+          source,
+          mutation,
+          relativePath,
+        );
+        assert.throws(
+          () => assertCheckpointReleaseContract(mutated, locale, checkpoint),
+          assert.AssertionError,
+          `${relativePath}: ${label} inversion must be rejected`,
+        );
+      }
+    }
   }
 });
 

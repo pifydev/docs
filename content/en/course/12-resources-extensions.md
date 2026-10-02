@@ -204,7 +204,7 @@ Pi's `DefaultResourceLoader` coordinates project and agent resources such as Ext
 
 The current boundary lifecycle makes `TurnEndEvent` and `AgentBeforeSettleEvent` actionable: handlers can return append-only entry drafts and request one continuation. Hosts dispatch these boundaries through `emitBoundary(baseEvent, buildContext)`, which rebuilds the projected preview after each handler. For request transforms, `context` receives conversation messages without system messages and Pi restores prompt/Tool state; `context_with_system` receives the full transcript and its returned list is used verbatim.
 
-Codemode and MCP are concrete built-in Extensions in Pi 0.99.2, exposed through `createCodemodeExtension()` and `createMcpExtension()`. They still run inside Pi's Extension and project-trust boundaries; the Course host does not implement either integration.
+Pi 0.99.2 ships Codemode and MCP as built-in Extensions: Codemode is exposed through `createCodemodeExtension()`, and MCP through `createMcpExtension()`. MCP exposure follows its configured mode. Both run inside Pi's Extension boundaries; registering either factory does not bypass project trust or expose every MCP Tool directly. The Course host does not implement either integration.
 
 The course splits a much smaller problem into two visible boundaries: a text-only trusted-root loader and an explicit `discover()`/`activate()` transaction. Its `ResourceLoader`, `ExtensionHost`, status model, fixed byte cap, hook diagnostics, and rollback codes do not exist as Pi public APIs. Use Pi's exported loader and Extension contracts when building on Pi, including Pi's project-trust policy; use the course types only to study ownership and atomic publication.
 

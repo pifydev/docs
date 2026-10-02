@@ -226,7 +226,7 @@ Pi's `createAgentSession()` is the usual programmatic composition entry point. `
 
 Within a live session, `SessionManager` remains canonical for the next provider request. Directly assigning `session.agent.state.messages` changes only the exposed Agent state and does not replace future request history. Runtime composition that restores or edits history must navigate or append through the session manager and call `session.refreshContext()` after an external append so the finalized public view matches the current projection.
 
-Virtual Models add a routing layer inside Pi 0.99.2: a selected virtual catalog entry chooses a physical model and thinking level for each request, while successful assistant messages record the physical route. The Course runtime has no equivalent model-routing layer.
+Virtual Models add a routing layer inside Pi 0.99.2: a selected virtual catalog entry chooses a physical model and thinking level for each request, while successful assistant messages record the physical route. That record is evidence of the completed physical route, not a promise that replay will choose the same route. The Course runtime has no equivalent model-routing layer.
 
 The course rebuilds a smaller offline graph and records ownership in a defensive construction ledger. Its manager queue, `current` swap, `flush()`, event-persistence algorithm, factory fallback, and error codes are workshop-specific. For a Pi host, use the public session factories and `AgentSessionRuntime`, rebind host subscriptions through its supported callback, and follow Pi's replacement lifecycle rather than copying the course manager API.
 

@@ -226,7 +226,7 @@ Chạy lại focused command. Replacement phải reject, các value do candidate
 
 Trong một session đang chạy, `SessionManager` vẫn là nguồn canonical cho provider request tiếp theo. Gán trực tiếp `session.agent.state.messages` chỉ đổi Agent state được công bố, không thay thế request history sau này. Runtime composition cần restore hoặc edit history phải navigate hay append qua session manager, rồi gọi `session.refreshContext()` sau external append để finalized public view khớp current projection.
 
-Virtual Models bổ sung một routing layer trong Pi 0.99.2: virtual catalog entry đã chọn sẽ quyết định physical model và thinking level cho từng request, còn assistant message thành công ghi lại physical route. Course runtime không có model-routing layer tương đương.
+Virtual Models bổ sung một routing layer trong Pi 0.99.2: virtual catalog entry đã chọn sẽ quyết định physical model và thinking level cho từng request, còn assistant message thành công ghi lại physical route. Record này xác nhận physical route đã hoàn tất; đây không phải lời hứa rằng replay sẽ chọn lại cùng route. Course runtime không có model-routing layer tương đương.
 
 Khóa học dựng lại một graph offline nhỏ hơn và ghi ownership trong construction ledger có kiểm tra chặt. Manager queue, phép swap `current`, `flush()`, thuật toán event persistence, factory fallback và error code đều dành riêng cho workshop. Với host dùng Pi, hãy dùng public session factory cùng `AgentSessionRuntime`, bind lại host subscription qua callback được hỗ trợ và tuân theo replacement lifecycle của Pi thay vì sao chép API course manager.
 

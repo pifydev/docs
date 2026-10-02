@@ -170,7 +170,7 @@ Pi's pinned `SessionManager` is the canonical source for future provider context
 
 Changing `session.agent.state.messages` does not replace that canonical projection. Use session APIs for navigation, append through `session.sessionManager`, then call `session.refreshContext()` when an external append must refresh the public finalized transcript. `appendContextEdit(targetId, null)` appends an omission without rewriting the target; a non-null replacement has the shape `{ content }`. Raw transcript and UI history remain append-only.
 
-Pi 0.99.2 also publishes the separate, experimental `@earendil-works/pi-durable` harness. Its commit-before-observe storage model and restartable task runtime are not `SessionManager` semantics, and this Course tree implements neither API.
+Pi 0.99.2 also publishes the separate, experimental `@earendil-works/pi-durable` harness. It commits state before observers see it, persists task checkpoints, and can resume work after a restart. These are not `SessionManager` semantics, and this Course tree implements neither API.
 
 The course format version is `1`, stores only the header plus Message IR entries, uses a workshop-specific atomic whole-generation commit and recovery-marker protocol, and chooses the newest record as the loaded active leaf. Its JSONL file is not accepted as a Pi session, and Pi session files are not accepted by this loader. Use Pi's `SessionManager` and migration functions for real Pi sessions.
 

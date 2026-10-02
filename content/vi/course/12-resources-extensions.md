@@ -204,7 +204,7 @@ Chạy lại focused command. Thử nghiệm chỉ pass khi disposer chạy đú
 
 Boundary lifecycle hiện tại biến `TurnEndEvent` và `AgentBeforeSettleEvent` thành event có thể hành động: handler có thể trả về append-only entry draft và yêu cầu một continuation. Host dispatch các boundary này qua `emitBoundary(baseEvent, buildContext)`, hàm sẽ dựng lại projected preview sau mỗi handler. Với request transform, `context` nhận conversation message không có system message và Pi khôi phục trạng thái prompt/Tool; `context_with_system` nhận full transcript và danh sách nó trả về được dùng nguyên văn.
 
-Codemode và MCP là hai Extension tích hợp sẵn của Pi 0.99.2, được công bố qua `createCodemodeExtension()` và `createMcpExtension()`. Chúng vẫn tuân theo các boundary về Extension và project trust của Pi; Course host không triển khai Codemode hoặc MCP.
+Pi 0.99.2 cung cấp Codemode và MCP dưới dạng Extension tích hợp sẵn: Codemode được công bố qua `createCodemodeExtension()`, còn MCP qua `createMcpExtension()`. Mức exposure của MCP tuân theo mode đã cấu hình. Cả hai chạy trong boundary Extension của Pi; đăng ký một trong hai factory không bỏ qua project trust hoặc expose trực tiếp mọi MCP Tool. Course host không triển khai Codemode hoặc MCP.
 
 Khóa học tách một bài toán nhỏ hơn thành hai boundary dễ quan sát: loader chỉ đọc text trong trusted root và transaction `discover()`/`activate()` tường minh. `ResourceLoader`, `ExtensionHost`, status model, fixed byte cap, hook diagnostic và rollback code của khóa học không tồn tại như public API của Pi. Khi xây trên Pi, hãy dùng loader cùng Extension contract do Pi export, bao gồm project-trust policy của Pi; chỉ dùng type của khóa học để nghiên cứu ownership và atomic publication.
 

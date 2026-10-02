@@ -170,7 +170,7 @@ Hai đoạn dùng đúng hàm hỗ trợ và dữ liệu từ `course/test/10-se
 
 Gán `session.agent.state.messages` không thay thế canonical projection đó. Hãy dùng session API để navigate, append qua `session.sessionManager`, rồi gọi `session.refreshContext()` khi external append cần làm mới public finalized transcript. `appendContextEdit(targetId, null)` append một omission mà không viết lại target; replacement khác null có shape `{ content }`. Raw transcript và UI history vẫn append-only.
 
-Pi 0.99.2 còn phát hành harness thử nghiệm `@earendil-works/pi-durable` như một gói riêng. Mô hình lưu trữ commit trước khi công bố và task runtime có thể tiếp tục sau khi khởi động lại của gói này không thuộc contract của `SessionManager`; Course Session Tree cũng không triển khai API nào của `pi-durable`.
+Pi 0.99.2 còn phát hành harness thử nghiệm `@earendil-works/pi-durable` như một gói riêng. Harness này commit state trước khi observer nhìn thấy, lưu task checkpoint và có thể tiếp tục công việc sau khi khởi động lại. Các hành vi này không thuộc contract của `SessionManager`; Course Session Tree cũng không triển khai API nào của `pi-durable`.
 
 Định dạng của khóa học là phiên bản `1`, chỉ lưu header cùng entry Message IR, dùng commit atomic cho toàn bộ thế hệ và giao thức dấu mốc phục hồi riêng cho workshop, đồng thời lấy bản ghi mới nhất làm leaf hiện tại sau khi tải. Tệp JSONL của khóa học không phải phiên làm việc Pi, và loader này cũng không nhận tệp phiên làm việc Pi. Hãy dùng `SessionManager` cùng hàm chuyển đổi phiên bản của Pi cho phiên làm việc thực tế.
 
