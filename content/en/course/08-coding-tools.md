@@ -5,11 +5,11 @@ translation_key: course-08-coding-tools
 language: en
 checkpoint: 8
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/index.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/sdk.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/tools/index.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/index.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/sdk.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/tools/index.ts"
 status: reviewed
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -210,9 +210,9 @@ Save this runnable Vitest file beside `course/test/08-coding-tools.test.ts`, so 
 - Cancellation and timeout terminate active process work and settle without leaving `.pify-node-*` or `.pify-tmp-*` artifacts.
 - The traversal failure experiment leaves no `outside.txt` beyond the temporary root.
 
-## Compare with Pi SDK 0.87.1
+## Compare with Pi SDK 0.99.2
 
-:::info[Pi SDK 0.87.1]
+:::info[Pi SDK 0.99.2]
 
 `@earendil-works/pi-coding-agent` publicly exports `createCodingTools()`, `createReadOnlyTools()`, `createReadTool()`, `createWriteTool()`, `createBashTool()`, `createPowerShellTool()`, `createEditTool()`, `createGrepTool()`, `createFindTool()`, and `createLsTool()` for a caller-supplied `cwd`.
 
@@ -221,6 +221,8 @@ Save this runnable Vitest file beside `course/test/08-coding-tools.test.ts`, so 
 At the pinned release, Pi's `createCodingTools(cwd)` composes read, Bash, edit, and write Tools; `createReadOnlyTools(cwd)` composes read, grep, find, and list Tools. The public tool package also has option and operation types, truncation helpers, mutation queuing, and platform-specific process Tools.
 
 The course exposes only three Tools and intentionally replaces a shell with bounded JavaScript through `process.execPath`. Its fixed byte values, `read_file`/`write_file`/`node_process` names, portable-path grammar, error codes, and temporary-file algorithm are not Pi API promises. Use Pi's public factories and options for Pi integration, and apply the host's trust and isolation controls appropriate to the code being executed.
+
+The Course implementation is an original, smaller teaching implementation and makes no Pi API-compatibility promise.
 
 ## Next checkpoint
 

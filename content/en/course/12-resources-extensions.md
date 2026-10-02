@@ -5,12 +5,14 @@ translation_key: course-12-resources-extensions
 language: en
 checkpoint: 12
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/index.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/resource-loader.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/extensions/index.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/extensions/loader.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/index.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/resource-loader.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/extensions/index.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/extensions/loader.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/extensions/codemode/index.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/extensions/mcp/index.ts"
 status: reviewed
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -190,9 +192,9 @@ Run the focused command again. The experiment passes only when the disposer runs
 - Failed activation attempts every acquired disposer in reverse order, aggregates rollback failures, and publishes no partial contribution.
 - Host disposal reverses Extension activation and per-Extension resource registration, attempts every cleanup, and aggregates failures.
 
-## Compare with Pi SDK 0.87.1
+## Compare with Pi SDK 0.99.2
 
-:::info[Pi SDK 0.87.1]
+:::info[Pi SDK 0.99.2]
 
 `@earendil-works/pi-coding-agent` publicly exports `DefaultResourceLoader`, the `ResourceLoader` type, `loadProjectContextFiles()`, `discoverAndLoadExtensions()`, `createExtensionRuntime()`, `ExtensionRunner`, `defineTool()`, and the documented Extension types from its package entry point.
 
@@ -202,7 +204,11 @@ Pi's `DefaultResourceLoader` coordinates project and agent resources such as Ext
 
 The current boundary lifecycle makes `TurnEndEvent` and `AgentBeforeSettleEvent` actionable: handlers can return append-only entry drafts and request one continuation. Hosts dispatch these boundaries through `emitBoundary(baseEvent, buildContext)`, which rebuilds the projected preview after each handler. For request transforms, `context` receives conversation messages without system messages and Pi restores prompt/Tool state; `context_with_system` receives the full transcript and its returned list is used verbatim.
 
+Codemode and MCP are concrete built-in Extensions in Pi 0.99.2, exposed through `createCodemodeExtension()` and `createMcpExtension()`. They still run inside Pi's Extension and project-trust boundaries; the Course host does not implement either integration.
+
 The course splits a much smaller problem into two visible boundaries: a text-only trusted-root loader and an explicit `discover()`/`activate()` transaction. Its `ResourceLoader`, `ExtensionHost`, status model, fixed byte cap, hook diagnostics, and rollback codes do not exist as Pi public APIs. Use Pi's exported loader and Extension contracts when building on Pi, including Pi's project-trust policy; use the course types only to study ownership and atomic publication.
+
+The Course implementation is an original, smaller teaching implementation and makes no Pi API-compatibility promise.
 
 ## Next checkpoint
 

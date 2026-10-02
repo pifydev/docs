@@ -3,9 +3,11 @@ title: Tự xây Pi-style Agent
 description: Xây dựng Agent stack offline bằng TypeScript, từ protocol và truyền dữ liệu theo luồng (streaming) đến phiên làm việc (session), Runtime Composition và đánh giá deterministic.
 translation_key: course-overview
 language: vi
+official_refs:
+  - "https://github.com/earendil-works/pi/tree/005af57d88ee23b33778f343a9595b32e67ff788/packages"
 status: reviewed
 reviewed_by: Pify maintainers
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 translator: Pify maintainers
 ---
 
@@ -13,7 +15,7 @@ Khóa học này dành cho lập trình viên TypeScript muốn hiểu Agent b�
 
 :::caution[Phục vụ học tập và không chính thức]
 
-Code trong `course/src/` là **Course implementation**. Đây là hệ thống phục vụ giảng dạy, đã được đơn giản hóa và do Pify tự xây dựng, duy trì. Nó không phải gói Pi (Pi package) chính thức, không import phần nội bộ chưa phát hành của Pi và không cam kết tương thích API với Pi. Chỉ nội dung mang nhãn **Pi SDK 0.87.1** mới mô tả bản SDK được phát hành riêng hoặc gọi tên export công khai đã được kiểm chứng của bản đó.
+Code trong `course/src/` là **Course implementation**. Course implementation là bản triển khai giảng dạy nguyên bản do Pify tự xây dựng, có phạm vi nhỏ hơn và không cam kết tương thích API với Pi. Đây không phải gói Pi chính thức và không import phần nội bộ chưa phát hành của Pi. Chỉ nội dung mang nhãn **Pi SDK 0.99.2** mới mô tả bản SDK được phát hành riêng hoặc gọi tên export công khai đã được kiểm chứng của bản đó.
 
 :::
 
@@ -131,13 +133,13 @@ npm run test:course
 
 Kết quả red do queue exhaustion chỉ có ý nghĩa khi thử nghiệm yêu cầu thêm một response vượt quá script hữu hạn. TypeScript compile error, file selector sai, lỗi cài dependency hoặc checkpoint khác bị fail không chứng minh hành vi đó. Hãy giữ thử nghiệm đủ hẹp để thông báo lỗi chỉ đúng cơ chế được mô tả trên trang.
 
-## Course implementation và Pi SDK 0.87.1
+## So sánh với Pi SDK 0.99.2
 
 Callout **Course implementation** mô tả type và function được export từ `course/src/` trong repository này. Các tên như `EventStream`, `ScriptedModel`, `ToolRegistry`, `SessionTree` và `CourseRuntimeManager` giúp workshop tách riêng từng mối quan tâm. Signature, giới hạn, error class, định dạng lưu trữ và quy tắc vòng đời của chúng đều thuộc về workshop.
 
-Callout **Pi SDK 0.87.1** so sánh mối quan tâm đó với các gói Pi đã phát hành ở phiên bản `0.87.1`. Nội dung so sánh có thể gọi tên một export công khai đã kiểm chứng, hoặc giải thích rằng Pi có contract phong phú hơn về provider, Tool, sự kiện, phiên làm việc hay runtime. Đây là hướng dẫn đọc, không phải chỉ dẫn đưa object thuộc Course vào một function của Pi. Đừng suy ra khả năng tương thích API chỉ vì có các thuật ngữ giống nhau như Agent, Tool, message, phiên làm việc hoặc nén ngữ cảnh.
+Callout **Pi SDK 0.99.2** so sánh mối quan tâm đó với các gói Pi đã phát hành ở phiên bản `0.99.2`. Nội dung so sánh có thể gọi tên một export công khai đã kiểm chứng, hoặc giải thích rằng Pi có contract phong phú hơn về provider, Tool, sự kiện, phiên làm việc hay runtime. Đây là hướng dẫn đọc, không phải chỉ dẫn đưa object thuộc Course vào một function của Pi. Đừng suy ra khả năng tương thích API chỉ vì có các thuật ngữ giống nhau như Agent, Tool, message, phiên làm việc hoặc nén ngữ cảnh.
 
-Sự phân tách này cũng xác định căn cứ khi hai bên khác nhau. Focused test của course là chuẩn cho Course implementation. Gói `0.87.1` đã phát hành và mã nguồn tương ứng của release đó là chuẩn cho phần so sánh Pi SDK. Hành vi trên upstream chưa phát hành nằm ngoài khóa học, trừ khi một trang ghi rõ đó là nội dung chưa phát hành.
+Sự phân tách này cũng xác định căn cứ khi hai bên khác nhau. Focused test của course là chuẩn cho Course implementation. Gói `0.99.2` đã phát hành và mã nguồn tương ứng của release đó là chuẩn cho phần so sánh Pi SDK. Hành vi trên upstream chưa phát hành nằm ngoài khóa học, trừ khi một trang ghi rõ đó là nội dung chưa phát hành.
 
 ## Tiêu chí hoàn thành
 
@@ -150,6 +152,6 @@ Bạn hoàn thành khóa học khi chứng minh được các contract, không p
 - bạn giải thích được thành phần nào sở hữu iteration, cơ chế hủy, thay đổi transcript, lưu phiên làm việc, thay thế runtime và dọn dẹp ở từng ranh giới;
 - thử nghiệm lỗi fail đúng invariant dự kiến và trở lại green sau khi khôi phục;
 - bạn phân biệt được task failure với infrastructure failure và xác định evidence nào an toàn để lưu;
-- bạn chỉ đúng **Course implementation** khi nói về workshop và **Pi SDK 0.87.1** khi nói về production SDK mà không trộn API của hai bên.
+- bạn chỉ đúng **Course implementation** khi nói về workshop và **Pi SDK 0.99.2** khi nói về production SDK mà không trộn API của hai bên.
 
 Bắt đầu với [checkpoint 00](00-complete-agent-trace.md). Trang đó cho bạn một dấu vết hoàn chỉnh trước khi checkpoint `01` tách dấu vết thành các protocol.

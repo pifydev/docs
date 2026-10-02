@@ -5,11 +5,11 @@ translation_key: course-06-tool-contract
 language: en
 checkpoint: 6
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/types.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/types.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent-loop.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/types.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/types.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/agent-loop.ts"
 status: reviewed
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -157,19 +157,21 @@ Then change only the validator to return `{ ok: true, value: { left: 20, right: 
 - Serialized content never exceeds `4096` Unicode code points including one truncation marker, and traversal obeys the explicit work budgets.
 - Invalid arguments sent to the spy Tool produce `TOOL_ARGUMENTS_INVALID` and zero side effects.
 
-## Compare with Pi SDK 0.87.1
+## Compare with Pi SDK 0.99.2
 
-:::info[Pi SDK 0.87.1]
+:::info[Pi SDK 0.99.2]
 
 `@earendil-works/pi-ai` exports `Tool`, `ToolCall`, `ToolResultMessage`, `Type`, `Static`, `TSchema`, and `validateToolArguments()`. `@earendil-works/pi-agent-core` exports the richer `AgentTool`, `AgentToolResult`, and Tool lifecycle members of `AgentEvent`.
 
 :::
 
-Pi's public `Tool` uses a TypeBox `parameters` schema. At the model boundary, `ToolCall.arguments` is a JSON-compatible `JsonObject`. `AgentTool` adds a UI `label`, optional `prepareArguments`, asynchronous `execute(toolCallId, params, signal, onUpdate)`, optional `executionMode`, and structured `AgentToolResult` content/details/usage. Persisted `ToolResultMessage.details` must have a valid `JsonValue` representation, including readonly arrays; an incompatible generic details type makes `ToolResultMessage<TDetails>` resolve to `never`. The Pi Agent Loop validates arguments before execution, can run Tool calls sequentially or in parallel, emits start/update/end events, and turns ordinary Tool failures into Tool-result records.
+Pi's public `Tool` uses a TypeBox `parameters` schema. At the model boundary, `ToolCall.arguments` is a JSON-compatible `JsonObject`. `AgentTool` adds a UI `label`, optional `prepareArguments` and `outputSchema`, asynchronous `execute(toolCallId, params, signal, onUpdate)`, plus optional `replay` and `executionMode` policies. `AgentToolResult` separates model-facing `content` from `details` and optional `structuredContent`/`usage`; it can report `isError` without throwing or request early termination, which occurs only when every finalized result in the Tool batch requests it. Persisted `ToolResultMessage.details` must have a valid `JsonValue` representation, including readonly arrays; an incompatible generic details type makes `ToolResultMessage<TDetails>` resolve to `never`. The Pi Agent Loop validates arguments before execution, can run Tool calls sequentially or in parallel, emits start/update/end events, and turns ordinary Tool failures into Tool-result records.
 
 The course contract is simpler and stricter in different places. Its validator returns an explicit synchronous decision, its executor receives a context object, results contain one string rather than Pi text/image blocks and details, and its custom serializer/output caps are workshop behavior. `ToolRegistry`, `ToolContractError`, `NonRecoverableToolError`, and `COURSE_TOOL_*` constants are not Pi exports.
 
 Use Pi's released TypeBox schemas and `AgentTool` shape in a Pi application. Preserve the transferable invariants: validate before effects, carry `toolCallId` through every event/result, pass cancellation to execution, treat Tool failures as model-visible data when recovery is possible, and bound anything stored in a long-lived transcript.
+
+The Course implementation is an original, smaller teaching implementation and makes no Pi API-compatibility promise.
 
 ## Next checkpoint
 

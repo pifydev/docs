@@ -5,10 +5,10 @@ translation_key: course-09-stateful-agent
 language: vi
 checkpoint: 9
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/index.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/index.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/agent.ts"
 status: reviewed
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -170,9 +170,9 @@ Nếu model nhận hai request thì hai mã gọi đã cùng lúc giữ một tr
 - Khi hoàn tất, bị hủy, vượt sức chứa hoặc gặp lỗi nội bộ, Agent đều xóa chủ sở hữu đang chạy để lần `continue()` hợp lệ sau đó có thể phục hồi.
 - Phép dành trước cho hàng đợi/transcript từ chối công việc không thể chứa trước khi vượt `256` message trong hàng đợi hoặc `4096` message do Agent sở hữu.
 
-## So sánh với Pi SDK 0.87.1
+## So sánh với Pi SDK 0.99.2
 
-:::info[Pi SDK 0.87.1]
+:::info[Pi SDK 0.99.2]
 
 `@earendil-works/pi-agent-core` xuất công khai `Agent`, `AgentOptions`, `AgentState`, `AgentEvent` cùng các kiểu liên quan tới hàng đợi. `Agent` của Pi cung cấp `prompt()`, `continue()`, `steer()`, `followUp()`, `subscribe()`, `abort()`, `waitForIdle()`, cơ chế điều khiển hàng đợi và `reset()`.
 
@@ -180,7 +180,9 @@ Nếu model nhận hai request thì hai mã gọi đã cùng lúc giữ một tr
 
 `Agent` công khai của Pi cũng từ chối các lần xử lý chồng lấn và cung cấp hàng đợi cho steering/follow-up message. Ở release đã ghim, mã gọi có thể cấu hình chế độ rút hàng đợi, `prompt()` resolve `Promise<void>`, `abort()` không nhận chuỗi lý do như khóa học, còn Promise của subscriber được `await` theo thứ tự đăng ký như một phần của quá trình settle run. Chính sách sau turn dùng `finishTurn`: `{ action: "end" }` kết thúc normal response, còn `undefined` giữ nguyên scheduling và để response lỗi hoặc bị abort theo hard-exit path mặc định. Pi còn cung cấp state, chính sách thực thi Tool, retry config và event lifecycle phong phú hơn.
 
-Khóa học trả `EventStream<AgentEvent, RunResult>`, quan sát nhưng không `await` Promise của subscriber, chỉ nhận văn bản trong hàm hỗ trợ hàng đợi, cố định cách lập lịch từng message một và áp dụng quy tắc sức chứa riêng cho workshop. Đây là giới hạn phục vụ giảng dạy có chủ đích, không phải lớp tương thích. Với mã Pi, hãy import và làm theo contract của Pi SDK `0.87.1`.
+Khóa học trả `EventStream<AgentEvent, RunResult>`, quan sát nhưng không `await` Promise của subscriber, chỉ nhận văn bản trong hàm hỗ trợ hàng đợi, cố định cách lập lịch từng message một và áp dụng quy tắc sức chứa riêng cho workshop. Đây là giới hạn phục vụ giảng dạy có chủ đích, không phải lớp tương thích. Với mã Pi, hãy import và làm theo contract của Pi SDK `0.99.2`.
+
+Course implementation là bản triển khai giảng dạy nguyên bản do Pify tự xây dựng, có phạm vi nhỏ hơn và không cam kết tương thích API với Pi.
 
 ## Checkpoint tiếp theo
 

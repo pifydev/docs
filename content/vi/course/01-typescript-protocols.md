@@ -5,10 +5,10 @@ translation_key: course-01-typescript-protocols
 language: vi
 checkpoint: 1
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/types.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/types.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/types.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/types.ts"
 status: reviewed
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -177,9 +177,9 @@ npm run typecheck
 - Mỗi `RunResult` status đi vào một branch tường minh và default branch nhận `never`.
 - Thêm union member chưa được xử lý làm `npm run typecheck` fail tại exhaustive switch.
 
-## So sánh với Pi SDK 0.87.1
+## So sánh với Pi SDK 0.99.2
 
-:::info[Pi SDK 0.87.1]
+:::info[Pi SDK 0.99.2]
 
 `@earendil-works/pi-ai` export `Message`, `UserMessage`, `AssistantMessage`, `ToolResultMessage`, `ToolCall`, `AssistantMessageEvent` cùng các model type liên quan. `@earendil-works/pi-agent-core` export `AgentMessage`, `AgentEvent`, `AgentState` và `AgentTool`. Đây là các public release type cần dùng khi tích hợp Pi.
 
@@ -188,6 +188,8 @@ npm run typecheck
 Các union của Pi rộng hơn và có cấu trúc khác. `AgentMessage` gồm Pi AI message cộng với custom message do application định nghĩa qua TypeScript declaration merging. Pi assistant content có thể chứa text, thinking và Tool call. `AgentEvent` của Pi mô tả Agent lifecycle thật, không phải union năm sự kiện trong workshop.
 
 Course dùng union đóng cùng compile-time readonly field rộng rãi để nhánh bị thiếu tạo ra type error rõ ràng. Public interface của Pi có mutable array và provider metadata phong phú hơn vì production runtime tích lũy message, content, usage và streaming state. Không thể thay thế một shape bằng shape còn lại. Hãy giữ discriminant tường minh, Tool-call identity ổn định, validation trước execution và một quyết định cụ thể cho từng union member, đồng thời import đúng type do SDK export.
+
+Course implementation là bản triển khai giảng dạy nguyên bản do Pify tự xây dựng, có phạm vi nhỏ hơn và không cam kết tương thích API với Pi.
 
 ## Checkpoint tiếp theo
 

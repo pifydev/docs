@@ -5,11 +5,12 @@ translation_key: course-13-runtime-composition
 language: en
 checkpoint: 13
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/index.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/sdk.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/agent-session-runtime.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/index.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/sdk.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/agent-session-runtime.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/virtual-models.ts"
 status: reviewed
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -213,9 +214,9 @@ Run the focused command again. The replacement must reject, candidate-owned valu
 - Publication rebinds Session persistence and Extension hooks to the candidate before old cleanup begins.
 - Failed replacement leaves the old runtime live; failure to dispose an old runtime leaves the already-published candidate live and reports cleanup failure.
 
-## Compare with Pi SDK 0.87.1
+## Compare with Pi SDK 0.99.2
 
-:::info[Pi SDK 0.87.1]
+:::info[Pi SDK 0.99.2]
 
 `@earendil-works/pi-coding-agent` publicly exports `createAgentSession()`, `createAgentSessionRuntime()`, `AgentSessionRuntime`, `createAgentSessionServices()`, `createAgentSessionFromServices()`, their options and result types, and `SessionManager`.
 
@@ -225,7 +226,11 @@ Pi's `createAgentSession()` is the usual programmatic composition entry point. `
 
 Within a live session, `SessionManager` remains canonical for the next provider request. Directly assigning `session.agent.state.messages` changes only the exposed Agent state and does not replace future request history. Runtime composition that restores or edits history must navigate or append through the session manager and call `session.refreshContext()` after an external append so the finalized public view matches the current projection.
 
+Virtual Models add a routing layer inside Pi 0.99.2: a selected virtual catalog entry chooses a physical model and thinking level for each request, while successful assistant messages record the physical route. The Course runtime has no equivalent model-routing layer.
+
 The course rebuilds a smaller offline graph and records ownership in a defensive construction ledger. Its manager queue, `current` swap, `flush()`, event-persistence algorithm, factory fallback, and error codes are workshop-specific. For a Pi host, use the public session factories and `AgentSessionRuntime`, rebind host subscriptions through its supported callback, and follow Pi's replacement lifecycle rather than copying the course manager API.
+
+The Course implementation is an original, smaller teaching implementation and makes no Pi API-compatibility promise.
 
 ## Next checkpoint
 

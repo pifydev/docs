@@ -5,10 +5,11 @@ translation_key: course-10-session-tree
 language: vi
 checkpoint: 10
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/index.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/session-manager.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/index.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/session-manager.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/durable/README.md"
 status: reviewed
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -157,9 +158,9 @@ Hai đoạn dùng đúng hàm hỗ trợ và dữ liệu từ `course/test/10-se
 - Append/flush commit qua tệp tạm đã kiểm tra định danh, dấu mốc phục hồi, đổi tên, đồng bộ thư mục, dọn dẹp và rollback; bộ nhớ chỉ đổi sau commit.
 - Giới hạn giữ nguyên `65,536` byte mỗi dòng, `4,194,304` byte mỗi tệp và `4,096` entry.
 
-## So sánh với Pi SDK 0.87.1
+## So sánh với Pi SDK 0.99.2
 
-:::info[Pi SDK 0.87.1]
+:::info[Pi SDK 0.99.2]
 
 `@earendil-works/pi-coding-agent` xuất công khai `SessionManager`, `SessionEntry`, `SessionHeader`, `SessionTreeNode`, `buildContextEntries()`, `buildSessionContext()` và `CURRENT_SESSION_VERSION`.
 
@@ -169,7 +170,11 @@ Hai đoạn dùng đúng hàm hỗ trợ và dữ liệu từ `course/test/10-se
 
 Gán `session.agent.state.messages` không thay thế canonical projection đó. Hãy dùng session API để navigate, append qua `session.sessionManager`, rồi gọi `session.refreshContext()` khi external append cần làm mới public finalized transcript. `appendContextEdit(targetId, null)` append một omission mà không viết lại target; replacement khác null có shape `{ content }`. Raw transcript và UI history vẫn append-only.
 
+Pi 0.99.2 còn phát hành harness thử nghiệm `@earendil-works/pi-durable` như một gói riêng. Mô hình lưu trữ commit trước khi công bố và task runtime có thể tiếp tục sau khi khởi động lại của gói này không thuộc contract của `SessionManager`; Course Session Tree cũng không triển khai API nào của `pi-durable`.
+
 Định dạng của khóa học là phiên bản `1`, chỉ lưu header cùng entry Message IR, dùng commit atomic cho toàn bộ thế hệ và giao thức dấu mốc phục hồi riêng cho workshop, đồng thời lấy bản ghi mới nhất làm leaf hiện tại sau khi tải. Tệp JSONL của khóa học không phải phiên làm việc Pi, và loader này cũng không nhận tệp phiên làm việc Pi. Hãy dùng `SessionManager` cùng hàm chuyển đổi phiên bản của Pi cho phiên làm việc thực tế.
+
+Course implementation là bản triển khai giảng dạy nguyên bản do Pify tự xây dựng, có phạm vi nhỏ hơn và không cam kết tương thích API với Pi.
 
 ## Checkpoint tiếp theo
 

@@ -5,10 +5,10 @@ translation_key: course-04-deterministic-model
 language: en
 checkpoint: 4
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/providers/faux.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/utils/event-stream.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/providers/faux.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/utils/event-stream.ts"
 status: reviewed
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -163,9 +163,9 @@ Run the focused command. Both consumption paths reject with the same typed code,
 - One response iterator cannot be shared across calls or model instances.
 - Queue exhaustion rejects event iteration and `stream.result` with `SCRIPT_EXHAUSTED` while retaining call evidence.
 
-## Compare with Pi SDK 0.87.1
+## Compare with Pi SDK 0.99.2
 
-:::info[Pi SDK 0.87.1]
+:::info[Pi SDK 0.99.2]
 
 `@earendil-works/pi-ai` exports the testing helpers `fauxProvider()`, `fauxAssistantMessage()`, `fauxToolCall()`, `FauxResponseFactory`, and `FauxProviderHandle`. The same package exports `EventStream` and `AssistantMessageEventStream` for its richer streaming protocol.
 
@@ -176,6 +176,8 @@ Pi's faux provider has a production-shaped `Provider`, models collection integra
 The course implementation is intentionally smaller. It accepts only `textDelta` and complete `toolCall` chunks, uses the course Message IR, has two stop reasons, and requires the test to choose every ID and usage value. It also uses a property named `result`; Pi's `EventStream` exposes `result()` as a method. Do not substitute one interface for the other.
 
 Use Pi's exported faux helpers when testing a Pi integration against release-shaped `AssistantMessage` and provider behavior. Use `ScriptedModel` to study FIFO demand, correlation, cancellation boundaries, and deterministic Agent Loop traces within this workshop.
+
+The Course implementation is an original, smaller teaching implementation and makes no Pi API-compatibility promise.
 
 ## Next checkpoint
 

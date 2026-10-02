@@ -5,10 +5,10 @@ translation_key: course-04-deterministic-model
 language: vi
 checkpoint: 4
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/providers/faux.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/utils/event-stream.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/providers/faux.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/utils/event-stream.ts"
 status: reviewed
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -163,9 +163,9 @@ Chạy lệnh kiểm thử tập trung. Cả phép lặp lẫn `stream.result` �
 - Một iterator phản hồi không thể được chia sẻ giữa nhiều lượt gọi hoặc instance của model.
 - Khi hàng đợi hết, phép lặp sự kiện và `stream.result` cùng bị từ chối bằng `SCRIPT_EXHAUSTED`, nhưng bằng chứng về lượt gọi vẫn được giữ lại.
 
-## So sánh với Pi SDK 0.87.1
+## So sánh với Pi SDK 0.99.2
 
-:::info[Pi SDK 0.87.1]
+:::info[Pi SDK 0.99.2]
 
 `@earendil-works/pi-ai` xuất các helper kiểm thử `fauxProvider()`, `fauxAssistantMessage()`, `fauxToolCall()`, `FauxResponseFactory` và `FauxProviderHandle`. Cùng package đó còn xuất `EventStream` và `AssistantMessageEventStream` cho protocol truyền dữ liệu theo luồng (streaming) phong phú hơn.
 
@@ -176,6 +176,8 @@ Faux provider của Pi tạo `Provider` có hình dạng dùng trong production,
 Phần triển khai của khóa học được thu gọn có chủ đích. Nó chỉ nhận `textDelta` và chunk `toolCall` đã hoàn chỉnh, dùng Message IR của khóa học, có hai lý do dừng và yêu cầu bài kiểm thử chỉ định mọi ID cùng giá trị usage. Nó dùng thuộc tính `result`, còn `EventStream` của Pi cung cấp phương thức `result()`. Hai interface này không thể thay thế trực tiếp cho nhau.
 
 Hãy dùng các faux helper do Pi xuất khi kiểm thử một tích hợp Pi với `AssistantMessage` và hành vi provider đúng theo bản phát hành. Dùng `ScriptedModel` để nghiên cứu nhu cầu gọi theo FIFO, cách liên kết ID, ranh giới hủy và dấu vết Agent Loop deterministic trong workshop này.
+
+Course implementation là bản triển khai giảng dạy nguyên bản do Pify tự xây dựng, có phạm vi nhỏ hơn và không cam kết tương thích API với Pi.
 
 ## Checkpoint tiếp theo
 

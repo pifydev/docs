@@ -5,11 +5,11 @@ translation_key: course-07-agent-loop
 language: vi
 checkpoint: 7
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent-loop.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/types.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/agent-loop.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/types.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/agent.ts"
 status: reviewed
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -223,9 +223,9 @@ expect(events.at(-1)).toMatchObject({
 - Việc hủy chỉ giữ các message hoàn chỉnh và không bao giờ bịa Tool result cho lần thực thi bị ngắt.
 - Với `maxSteps: 1`, batch Tool hiện tại hoàn tất, không có yêu cầu tiếp nối nào được mở và kết quả cuối là `maxSteps`.
 
-## So sánh với Pi SDK 0.87.1
+## So sánh với Pi SDK 0.99.2
 
-:::info[Pi SDK 0.87.1]
+:::info[Pi SDK 0.99.2]
 
 `@earendil-works/pi-agent-core` xuất `Agent`, `agentLoop()`, `agentLoopContinue()`, `runAgentLoop()`, `runAgentLoopContinue()`, `AgentContext`, `AgentLoopConfig`, `AgentTool` và `AgentEvent`.
 
@@ -235,7 +235,9 @@ Agent Loop của Pi dùng `AgentMessage` xuyên suốt rồi chuyển thành mes
 
 Vòng lặp của khóa học dùng một bộ khái niệm transcript, năm loại sự kiện, cách thực thi Tool tuần tự, không có hàng đợi message hay hook cho ngữ cảnh, và có trần riêng của workshop là `64` bước model. Các ID như `request-001`, trạng thái `RunResult`, hành vi `maxSteps` và hằng số tài nguyên không thuộc API công khai của Pi.
 
-Hãy dùng trực tiếp các export của Pi khi tích hợp vào production. Workshop cung cấp một mô hình luồng điều khiển nhỏ hơn để phân tích quyền sở hữu transcript, một lượt Tool hoàn chỉnh, cách kết thúc, việc hủy và thứ tự toàn phần mà bên quan sát thấy. Khi hành vi khác nhau, Pi SDK `0.87.1` là nguồn có thẩm quyền.
+Hãy dùng trực tiếp các export của Pi khi tích hợp vào production. Workshop cung cấp một mô hình luồng điều khiển nhỏ hơn để phân tích quyền sở hữu transcript, một lượt Tool hoàn chỉnh, cách kết thúc, việc hủy và thứ tự toàn phần mà bên quan sát thấy. Khi hành vi khác nhau, Pi SDK `0.99.2` là nguồn có thẩm quyền.
+
+Course implementation là bản triển khai giảng dạy nguyên bản do Pify tự xây dựng, có phạm vi nhỏ hơn và không cam kết tương thích API với Pi.
 
 ## Checkpoint tiếp theo
 

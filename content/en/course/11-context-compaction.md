@@ -5,11 +5,11 @@ translation_key: course-11-context-compaction
 language: en
 checkpoint: 11
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/index.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/compaction/compaction.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/compaction/index.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/index.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/compaction/compaction.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/compaction/index.ts"
 status: reviewed
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -184,9 +184,9 @@ This is the exact boundary assertion from `course/test/11-context-compaction.tes
 - Cancellation before, during, or after summary selection returns a stable error and appends no record.
 - Any failure leaves the prior context unchanged; success appends exactly one frozen record after complete prospective validation.
 
-## Compare with Pi SDK 0.87.1
+## Compare with Pi SDK 0.99.2
 
-:::info[Pi SDK 0.87.1]
+:::info[Pi SDK 0.99.2]
 
 `@earendil-works/pi-coding-agent` exports `compact()`, `shouldCompact()`, `findCutPoint()`, `findTurnStartIndex()`, `estimateTokens()`, `calculateContextTokens()`, `DEFAULT_COMPACTION_SETTINGS`, and related result/settings types.
 
@@ -197,6 +197,8 @@ Pi's pinned compaction implementation estimates model context usage, finds turn-
 Context accounting follows the projected branch, including `context_edit` replacements or omissions, rather than treating every raw entry as provider-visible. Abandoned retry or recovery attempts may remain in append-only history while being omitted from future provider context. The course's smaller summary record has no equivalent projection/edit contract.
 
 The course uses provider-independent deterministic units, an injected offline summarizer, explicit requirement/summary channels, and Tool-call/result grouping over its smaller Message IR. Its `summaryMaxUnits`, IDs, records, thenable defenses, and boundaries are workshop-specific. Use Pi's public compaction and session APIs for Pi applications; do not convert course units into model token claims.
+
+The Course implementation is an original, smaller teaching implementation and makes no Pi API-compatibility promise.
 
 ## Next checkpoint
 

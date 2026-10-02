@@ -5,10 +5,10 @@ translation_key: course-01-typescript-protocols
 language: en
 checkpoint: 1
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/types.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/types.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/types.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/types.ts"
 status: reviewed
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -177,9 +177,9 @@ npm run typecheck
 - Every `RunResult` status reaches one explicit branch and the default branch receives `never`.
 - Adding an unhandled union member makes `npm run typecheck` fail at the exhaustive switch.
 
-## Compare with Pi SDK 0.87.1
+## Compare with Pi SDK 0.99.2
 
-:::info[Pi SDK 0.87.1]
+:::info[Pi SDK 0.99.2]
 
 `@earendil-works/pi-ai` exports `Message`, `UserMessage`, `AssistantMessage`, `ToolResultMessage`, `ToolCall`, `AssistantMessageEvent`, and related model types. `@earendil-works/pi-agent-core` exports `AgentMessage`, `AgentEvent`, `AgentState`, and `AgentTool`. These are the public release types to use in a Pi integration.
 
@@ -188,6 +188,8 @@ npm run typecheck
 Pi's unions are intentionally broader and structurally different. `AgentMessage` includes Pi AI messages plus application-defined custom messages through TypeScript declaration merging. Pi assistant content can include text, thinking, and Tool calls. Pi's `AgentEvent` describes its actual Agent lifecycle, not the five-event union in this workshop.
 
 The course favors closed unions and pervasive compile-time readonly fields so a missing branch produces a visible type error. Pi's public interfaces include mutable arrays and richer provider metadata because the production runtime accumulates messages, content, usage, and streaming state. Neither shape can be substituted for the other. Carry over explicit discriminants, stable Tool-call identity, validation before execution, and a deliberate decision for every union member, while importing the SDK's own exported types.
+
+The Course implementation is an original, smaller teaching implementation and makes no Pi API-compatibility promise.
 
 ## Next checkpoint
 

@@ -16,9 +16,26 @@ import test from "node:test";
 import matter from "gray-matter";
 
 const repositoryRoot = new URL("../", import.meta.url);
-const releaseCommit = "f07218c4d4bbc12bef056a7058c3dd49dfe41abe";
-const staleReleaseCommit = "107d79f11072bbc8a3a757ed7fd69596bee7d68c";
-const courseComparisonCallout = "Pi SDK 0.87.1";
+const releaseCommit = "005af57d88ee23b33778f343a9595b32e67ff788";
+const staleReleaseCommits = [
+  "f07218c4d4bbc12bef056a7058c3dd49dfe41abe",
+  "107d79f11072bbc8a3a757ed7fd69596bee7d68c",
+];
+const staleComparisonVersions = ["0.87.1", "0.85.0"];
+const courseComparisonCallout = "Pi SDK 0.99.2";
+const courseReviewDate = "2026-10-01";
+const courseBoundaryContracts = {
+  en: {
+    teaching:
+      /Course implementation[^.]*original[^.]*smaller teaching implementation/i,
+    compatibility: /makes no Pi API-compatibility promise/i,
+  },
+  vi: {
+    teaching:
+      /Course implementation[^.]*bản triển khai giảng dạy nguyên bản[^.]*nhỏ hơn/i,
+    compatibility: /không cam kết tương thích API với Pi/i,
+  },
+};
 
 const checkpoints = [
   ["00-complete-agent-trace", "course/src/demo/prologue.ts"],
@@ -78,7 +95,7 @@ const headingContracts = {
     "Run the focused test",
     "Failure experiment",
     "Acceptance criteria",
-    "Compare with Pi SDK 0.87.1",
+    "Compare with Pi SDK 0.99.2",
     "Next checkpoint",
   ],
   vi: [
@@ -90,7 +107,7 @@ const headingContracts = {
     "Chạy focused test",
     "Thử nghiệm lỗi",
     "Tiêu chí chấp nhận",
-    "So sánh với Pi SDK 0.87.1",
+    "So sánh với Pi SDK 0.99.2",
     "Checkpoint tiếp theo",
   ],
 };
@@ -143,6 +160,7 @@ const expectedOfficialSourcePaths = {
   "10-session-tree": [
     "packages/coding-agent/src/index.ts",
     "packages/coding-agent/src/core/session-manager.ts",
+    "packages/durable/README.md",
   ],
   "11-context-compaction": [
     "packages/coding-agent/src/index.ts",
@@ -154,11 +172,14 @@ const expectedOfficialSourcePaths = {
     "packages/coding-agent/src/core/resource-loader.ts",
     "packages/coding-agent/src/core/extensions/index.ts",
     "packages/coding-agent/src/core/extensions/loader.ts",
+    "packages/coding-agent/src/extensions/codemode/index.ts",
+    "packages/coding-agent/src/extensions/mcp/index.ts",
   ],
   "13-runtime-composition": [
     "packages/coding-agent/src/index.ts",
     "packages/coding-agent/src/core/sdk.ts",
     "packages/coding-agent/src/core/agent-session-runtime.ts",
+    "packages/coding-agent/src/core/virtual-models.ts",
   ],
   "14-agent-evaluation": [
     "packages/evals/package.json",
@@ -167,6 +188,10 @@ const expectedOfficialSourcePaths = {
     "packages/evals/src/report.ts",
   ],
 };
+
+const courseOverviewOfficialRefs = [
+  `https://github.com/earendil-works/pi/tree/${releaseCommit}/packages`,
+];
 
 const changedComparisonIdentifiers = {
   "03-message-ir": [
@@ -731,18 +756,32 @@ function assertCheckpointReleaseContract(source, locale, checkpoint) {
 
   assert.equal(
     parsed.data.last_updated,
-    "2026-09-23",
+    courseReviewDate,
     `${relativePath}: current review date`,
   );
   assert.deepEqual(
     parsed.data.official_refs,
     expectedRefs,
-    `${relativePath}: exact audited Pi 0.87.1 source paths`,
+    `${relativePath}: exact audited Pi 0.99.2 source paths`,
   );
+  for (const staleReleaseCommit of staleReleaseCommits) {
+    assert.doesNotMatch(
+      source,
+      new RegExp(staleReleaseCommit, "i"),
+      `${relativePath}: stale Pi source commit`,
+    );
+  }
+  for (const staleVersion of staleComparisonVersions) {
+    assert.doesNotMatch(
+      source,
+      new RegExp(`Pi SDK ${escapeRegExp(staleVersion)}`, "i"),
+      `${relativePath}: stale Pi comparison label`,
+    );
+  }
   assert.doesNotMatch(
     source,
-    new RegExp(staleReleaseCommit, "i"),
-    `${relativePath}: stale Pi source commit`,
+    /https:\/\/github\.com\/earendil-works\/pi\/(?:blob|tree)\/(?:main|latest)(?:\/|$)|https:\/\/github\.com\/earendil-works\/pi\/latest(?:\/|$)/i,
+    `${relativePath}: unpinned Pi source path`,
   );
   assert.ok(
     comparisonSection,
@@ -752,6 +791,16 @@ function assertCheckpointReleaseContract(source, locale, checkpoint) {
     comparisonSection,
     new RegExp(`^:::info\\[${escapeRegExp(courseComparisonCallout)}\\]$`, "m"),
     `${relativePath}: current Pi comparison callout`,
+  );
+  assert.match(
+    comparisonSection,
+    courseBoundaryContracts[locale].teaching,
+    `${relativePath}: original smaller teaching implementation boundary`,
+  );
+  assert.match(
+    comparisonSection,
+    courseBoundaryContracts[locale].compatibility,
+    `${relativePath}: no Pi API-compatibility promise`,
   );
 
   for (const identifier of changedComparisonIdentifiers[checkpoint.slug] ??
@@ -763,24 +812,50 @@ function assertCheckpointReleaseContract(source, locale, checkpoint) {
   }
 }
 
-test("Course comparison authority rejects stale pins, headings, and changed API drift", async () => {
+test("Course comparison authority rejects stale pins, headings, dates, unpinned paths, and changed API drift", async () => {
   const source = await readCoursePage("en", "10-session-tree.md");
   const checkpoint = checkpoints.find(({ slug }) => slug === "10-session-tree");
   assert.ok(checkpoint);
 
   const mutations = [
-    source.replace(releaseCommit, staleReleaseCommit),
-    source.replace("Compare with Pi SDK 0.87.1", "Compare with Pi SDK 0.84.3"),
+    source.replace(releaseCommit, staleReleaseCommits[0]),
+    source.replace("Compare with Pi SDK 0.99.2", "Compare with Pi SDK 0.87.1"),
+    source.replace("Compare with Pi SDK 0.99.2", "Compare with Pi SDK 0.85.0"),
+    source.replace(
+      `last_updated: '${courseReviewDate}'`,
+      "last_updated: '2026-09-23'",
+    ),
+    source.replace(
+      "## Next checkpoint",
+      "[Unpinned blob](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/src/index.ts)\n\n## Next checkpoint",
+    ),
+    source.replace(
+      "## Next checkpoint",
+      "[Unpinned tree](https://github.com/earendil-works/pi/tree/main/packages/coding-agent)\n\n## Next checkpoint",
+    ),
+    source.replace(
+      "## Next checkpoint",
+      "[Latest source](https://github.com/earendil-works/pi/latest/packages/coding-agent)\n\n## Next checkpoint",
+    ),
     source.replace("appendContextEdit", "append replacement entry"),
   ];
   assert.notEqual(mutations[0], source, "the real source pin must mutate");
   assert.notEqual(
     mutations[1],
     source,
-    "the real comparison heading must mutate",
+    "the current comparison heading must mutate",
   );
   assert.notEqual(
     mutations[2],
+    source,
+    "the other stale comparison heading must mutate",
+  );
+  assert.notEqual(mutations[3], source, "the current review date must mutate");
+  assert.notEqual(mutations[4], source, "the blob/main path must be inserted");
+  assert.notEqual(mutations[5], source, "the tree/main path must be inserted");
+  assert.notEqual(mutations[6], source, "the latest path must be inserted");
+  assert.notEqual(
+    mutations[7],
     source,
     "the real context-edit identifier must mutate",
   );
@@ -793,18 +868,23 @@ test("Course comparison authority rejects stale pins, headings, and changed API 
   }
 });
 
-test("Course overview keeps the teaching-model boundary at Pi SDK 0.87.1", async () => {
+test("Course overview keeps the teaching-model boundary at Pi SDK 0.99.2", async () => {
   for (const locale of ["en", "vi"]) {
     const source = await readCoursePage(locale, "index.mdx");
     const parsed = matter(source);
-    assert.equal(parsed.data.last_updated, "2026-09-23");
-    assert.doesNotMatch(source, /Pi SDK 0\.85\.0|`0\.85\.0`/);
-    assert.match(source, /Pi SDK 0\.87\.1/);
+    assert.equal(parsed.data.last_updated, courseReviewDate);
+    assert.deepEqual(parsed.data.official_refs, courseOverviewOfficialRefs);
+    assert.doesNotMatch(source, /Pi SDK 0\.(?:85\.0|87\.1)/);
     assert.match(
       source,
-      locale === "en"
-        ? /teaching system[\s\S]*not an official Pi package[\s\S]*no promise of API compatibility/i
-        : /hệ thống phục vụ giảng dạy[\s\S]*không phải gói Pi[\s\S]*không cam kết tương thích API/i,
+      new RegExp(`^## ${escapeRegExp(headingContracts[locale][8])}$`, "m"),
+    );
+    assert.match(source, /Pi SDK 0\.99\.2/);
+    assert.match(source, courseBoundaryContracts[locale].teaching);
+    assert.match(source, courseBoundaryContracts[locale].compatibility);
+    assert.doesNotMatch(
+      source,
+      /https:\/\/github\.com\/earendil-works\/pi\/(?:blob|tree)\/(?:main|latest)(?:\/|$)|https:\/\/github\.com\/earendil-works\/pi\/latest(?:\/|$)/i,
     );
   }
 });
@@ -869,8 +949,8 @@ test("every checkpoint satisfies the shared content contract", async () => {
         );
         assert.match(
           visibleBody,
-          /^:::info\[Pi SDK 0\.87\.1\]\s*$/m,
-          `${relativePath}: exact Pi SDK 0.87.1 callout label`,
+          /^:::info\[Pi SDK 0\.99\.2\]\s*$/m,
+          `${relativePath}: exact Pi SDK 0.99.2 callout label`,
         );
         assertNoPerPageAttribution(source, relativePath);
       } catch (error) {

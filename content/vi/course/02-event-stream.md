@@ -5,10 +5,10 @@ translation_key: course-02-event-stream
 language: vi
 checkpoint: 2
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/utils/event-stream.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/types.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/utils/event-stream.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/types.ts"
 status: reviewed
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -149,17 +149,19 @@ Chạy focused command. Dòng cuối ném `EventStream is already terminal (fini
 - `push()`, `finish()` và `fail()` từ chối mọi operation sau terminal state.
 - Tài liệu và code không tuyên bố có producer backpressure; buffer được mô tả rõ là unbounded.
 
-## So sánh với Pi SDK 0.87.1
+## So sánh với Pi SDK 0.99.2
 
-:::info[Pi SDK 0.87.1]
+:::info[Pi SDK 0.99.2]
 
 `@earendil-works/pi-ai` export generic `EventStream<T, R>`, `AssistantMessageEventStream` và `createAssistantMessageEventStream()`. `AssistantMessageEventStream` truyền các giá trị `AssistantMessageEvent` và expose `AssistantMessage` cuối qua method `result()`.
 
 :::
 
-Trong Pi 0.87.1, stream nhận diện sự kiện `done` hoặc `error` là terminal và vẫn đưa sự kiện terminal đó vào iteration. `result()` resolve thành `AssistantMessage` cuối; sự kiện `error` mang assistant message có `stopReason` là `error` hoặc `aborted`. Course stream thay vào đó có `finish(result)` và `fail(error)` tường minh, property `result` có thể reject cùng single-active-consumer guard.
+Trong Pi 0.99.2, stream nhận diện sự kiện `done` hoặc `error` là terminal và vẫn đưa sự kiện terminal đó vào iteration. `result()` resolve thành `AssistantMessage` cuối; sự kiện `error` mang assistant message có `stopReason` là `error` hoặc `aborted`. Course stream thay vào đó có `finish(result)` và `fail(error)` tường minh, property `result` có thể reject cùng single-active-consumer guard.
 
 Generic stream của Pi cũng dùng queue và waiting read, còn producer `push()` là synchronous. Điều đó không bảo đảm backpressure. UI hoặc integration consume sự kiện Pi nên giữ callback nhẹ, batch phần rendering tốn kém hoặc chèn bounded handoff riêng tại nơi cần kiểm soát tài nguyên. Hãy dùng stream API do Pi export cho provider code của Pi; dùng checkpoint này để nghiên cứu cách tách sự kiện khỏi result và thực hiện cleanup.
+
+Course implementation là bản triển khai giảng dạy nguyên bản do Pify tự xây dựng, có phạm vi nhỏ hơn và không cam kết tương thích API với Pi.
 
 ## Checkpoint tiếp theo
 

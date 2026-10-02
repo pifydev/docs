@@ -5,11 +5,11 @@ translation_key: course-11-context-compaction
 language: vi
 checkpoint: 11
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/index.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/compaction/compaction.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/compaction/index.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/index.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/compaction/compaction.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/compaction/index.ts"
 status: reviewed
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -184,9 +184,9 @@ expect(
 - Yêu cầu hủy trước, trong hoặc sau lúc chọn bản tóm tắt trả lỗi ổn định và không thêm bản ghi.
 - Mọi lỗi giữ ngữ cảnh trước đó nguyên vẹn; khi thành công, hàm chỉ thêm đúng một bản ghi đã đóng băng sau khi kiểm tra toàn bộ trạng thái dự kiến.
 
-## So sánh với Pi SDK 0.87.1
+## So sánh với Pi SDK 0.99.2
 
-:::info[Pi SDK 0.87.1]
+:::info[Pi SDK 0.99.2]
 
 `@earendil-works/pi-coding-agent` xuất công khai `compact()`, `shouldCompact()`, `findCutPoint()`, `findTurnStartIndex()`, `estimateTokens()`, `calculateContextTokens()`, `DEFAULT_COMPACTION_SETTINGS` cùng các kiểu kết quả/cấu hình liên quan.
 
@@ -197,6 +197,8 @@ Phần triển khai compaction ở release đã ghim của Pi ước lượng mo
 Context accounting theo projected branch, bao gồm replacement hoặc omission từ `context_edit`, thay vì xem mọi raw entry đều hiển thị cho provider. Retry/recovery attempt bị bỏ có thể vẫn nằm trong append-only history nhưng bị loại khỏi provider context sau này. Summary record nhỏ hơn của course không có projection/edit contract tương đương.
 
 Khóa học dùng đơn vị có tính xác định, độc lập với provider; summarizer ngoại tuyến được truyền vào; kênh yêu cầu/bản tóm tắt tách biệt; mô hình nhóm Tool call/result trên Message IR cũng được giản lược hơn. `summaryMaxUnits`, ID, bản ghi, biện pháp phòng vệ trước thenable và ranh giới đều riêng cho workshop. Hãy dùng API nén/phiên làm việc công khai của Pi trong ứng dụng Pi; không diễn giải đơn vị của khóa học thành token của model.
+
+Course implementation là bản triển khai giảng dạy nguyên bản do Pify tự xây dựng, có phạm vi nhỏ hơn và không cam kết tương thích API với Pi.
 
 ## Checkpoint tiếp theo
 

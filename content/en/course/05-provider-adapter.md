@@ -5,11 +5,11 @@ translation_key: course-05-provider-adapter
 language: en
 checkpoint: 5
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/models.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/types.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/utils/event-stream.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/models.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/types.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/utils/event-stream.ts"
 status: reviewed
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -188,9 +188,9 @@ Stream that response and await both the chunks and terminal result. The Tool-cal
 - Unknown events, malformed payloads, transport errors, hostile sources, and queue exhaustion produce stable course-owned codes.
 - Removing `response_end` rejects iteration and result with `PROVIDER_MISSING_TERMINAL`, even after earlier chunks were emitted.
 
-## Compare with Pi SDK 0.87.1
+## Compare with Pi SDK 0.99.2
 
-:::info[Pi SDK 0.87.1]
+:::info[Pi SDK 0.99.2]
 
 `@earendil-works/pi-ai` exports `Provider`, `createProvider()`, `createModels()`, `MutableModels`, `AssistantMessageEventStream`, `AssistantMessageEvent`, `ToolCall`, `Usage`, and `StopReason`. A `Provider.stream()` implementation receives `TranscriptContext`, while public `Models.stream()` accepts `Context` and normalizes it before dispatch. `createProvider()` returns a production-facing provider but does not register it; `createModels()` returns `MutableModels`, whose `models.setProvider(provider)` upserts it.
 
@@ -201,6 +201,8 @@ Pi's assistant stream has lifecycle events for start, text, thinking, Tool-call 
 The course adapter is a smaller parser exercise. It recognizes five transport record types, has no provider registry, emits complete Tool-call chunks rather than start/delta/end Tool-call events, and records only two token counts. Its `FixtureProviderError` codes and `schemaVersion: 1` fixture are not Pi APIs.
 
 When implementing a Pi provider, use the released `Provider` and assistant event contracts and study the appropriate release-pinned provider module. Carry forward the boundary discipline from this checkpoint: parse unknown input, preserve opaque IDs, normalize once, reject contradictory terminal state, and keep transport details outside the Agent Loop.
+
+The Course implementation is an original, smaller teaching implementation and makes no Pi API-compatibility promise.
 
 ## Next checkpoint
 

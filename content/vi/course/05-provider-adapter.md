@@ -5,11 +5,11 @@ translation_key: course-05-provider-adapter
 language: vi
 checkpoint: 5
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/models.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/types.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/utils/event-stream.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/models.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/types.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/utils/event-stream.ts"
 status: reviewed
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -188,9 +188,9 @@ Sao chép fixture thành một giá trị tạm rồi xóa `response_end` khỏi
 - Sự kiện không nhận biết được, payload sai hình dạng, lỗi vận chuyển, nguồn thù địch và trạng thái hết hàng đợi đều tạo mã ổn định do khóa học sở hữu.
 - Xóa `response_end` khiến phép lặp và `result` cùng bị từ chối bằng `PROVIDER_MISSING_TERMINAL`, kể cả sau khi chunk trước đó đã được phát.
 
-## So sánh với Pi SDK 0.87.1
+## So sánh với Pi SDK 0.99.2
 
-:::info[Pi SDK 0.87.1]
+:::info[Pi SDK 0.99.2]
 
 `@earendil-works/pi-ai` xuất `Provider`, `createProvider()`, `createModels()`, `MutableModels`, `AssistantMessageEventStream`, `AssistantMessageEvent`, `ToolCall`, `Usage` và `StopReason`. Implementation của `Provider.stream()` nhận `TranscriptContext`, còn `Models.stream()` công khai nhận `Context` và normalize trước khi dispatch. `createProvider()` trả về provider dùng trong production nhưng không đăng ký nó; `createModels()` trả về `MutableModels`, trong đó `models.setProvider(provider)` sẽ thêm mới hoặc thay thế provider.
 
@@ -201,6 +201,8 @@ Luồng assistant của Pi có các sự kiện vòng đời cho lúc bắt đ�
 Adapter của khóa học là một bài tập parser nhỏ hơn. Nó nhận biết năm loại record vận chuyển, không có registry cho provider, phát Tool-call chunk hoàn chỉnh thay vì chuỗi sự kiện Tool call dạng bắt đầu/delta/kết thúc và chỉ ghi hai giá trị đếm token. Các mã `FixtureProviderError` cùng fixture `schemaVersion: 1` không phải API của Pi.
 
 Khi triển khai provider cho Pi, hãy dùng quy ước `Provider` cùng các sự kiện assistant đã phát hành và đọc module provider tương ứng tại commit của bản phát hành đã ghim. Giữ các nguyên tắc ranh giới từ checkpoint này: phân tích đầu vào `unknown`, bảo toàn ID không diễn giải, chỉ chuẩn hóa một lần, từ chối trạng thái kết thúc mâu thuẫn và giữ chi tiết vận chuyển bên ngoài vòng lặp Agent (Agent Loop).
+
+Course implementation là bản triển khai giảng dạy nguyên bản do Pify tự xây dựng, có phạm vi nhỏ hơn và không cam kết tương thích API với Pi.
 
 ## Checkpoint tiếp theo
 

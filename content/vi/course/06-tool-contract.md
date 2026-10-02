@@ -5,11 +5,11 @@ translation_key: course-06-tool-contract
 language: vi
 checkpoint: 6
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/types.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/types.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent-loop.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/types.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/types.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/agent-loop.ts"
 status: reviewed
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -157,19 +157,21 @@ Sau đó chỉ đổi validator để trả `{ ok: true, value: { left: 20, righ
 - Content đã tuần tự hóa không vượt `4096` Unicode code point tính cả một marker báo cắt, và quá trình duyệt tuân theo ngân sách công việc tường minh.
 - Arguments không hợp lệ gửi đến spy Tool tạo `TOOL_ARGUMENTS_INVALID` và không gây tác dụng phụ.
 
-## So sánh với Pi SDK 0.87.1
+## So sánh với Pi SDK 0.99.2
 
-:::info[Pi SDK 0.87.1]
+:::info[Pi SDK 0.99.2]
 
 `@earendil-works/pi-ai` xuất `Tool`, `ToolCall`, `ToolResultMessage`, `Type`, `Static`, `TSchema` và `validateToolArguments()`. `@earendil-works/pi-agent-core` xuất `AgentTool`, `AgentToolResult` phong phú hơn cùng các member về vòng đời Tool trong `AgentEvent`.
 
 :::
 
-`Tool` công khai của Pi dùng schema `parameters` của TypeBox. Tại ranh giới model, `ToolCall.arguments` là `JsonObject` tương thích JSON. `AgentTool` thêm `label` cho UI, `prepareArguments` tùy chọn, hàm bất đồng bộ `execute(toolCallId, params, signal, onUpdate)`, `executionMode` tùy chọn và `AgentToolResult` có cấu trúc với content/details/usage. `ToolResultMessage.details` được lưu phải có biểu diễn `JsonValue` hợp lệ, bao gồm readonly array; generic details type không tương thích khiến `ToolResultMessage<TDetails>` resolve thành `never`. Pi Agent Loop validate arguments trước khi thực thi, có thể chạy Tool call tuần tự hoặc song song, phát event bắt đầu/cập nhật/kết thúc và chuyển lỗi Tool thông thường thành Tool-result record.
+`Tool` công khai của Pi dùng schema `parameters` của TypeBox. Tại ranh giới model, `ToolCall.arguments` là `JsonObject` tương thích JSON. `AgentTool` thêm `label` cho UI, `prepareArguments` và `outputSchema` tùy chọn, hàm bất đồng bộ `execute(toolCallId, params, signal, onUpdate)`, cùng policy `replay` và `executionMode` tùy chọn. `AgentToolResult` tách `content` dành cho model khỏi `details` và `structuredContent`/`usage` tùy chọn; result có thể báo `isError` mà không throw hoặc yêu cầu kết thúc sớm, nhưng chỉ kết thúc khi mọi result đã finalize trong Tool batch đều yêu cầu. `ToolResultMessage.details` được lưu phải có biểu diễn `JsonValue` hợp lệ, bao gồm readonly array; generic details type không tương thích khiến `ToolResultMessage<TDetails>` resolve thành `never`. Pi Agent Loop validate arguments trước khi thực thi, có thể chạy Tool call tuần tự hoặc song song, phát event bắt đầu/cập nhật/kết thúc và chuyển lỗi Tool thông thường thành Tool-result record.
 
 Quy ước của khóa học đơn giản hơn và nghiêm ngặt theo các hướng khác. Validator trả một quyết định đồng bộ tường minh, hàm thực thi nhận object ngữ cảnh, result chứa một string thay vì block text/image cùng details của Pi, còn bộ tuần tự hóa tùy chỉnh và giới hạn đầu ra là hành vi riêng của workshop. `ToolRegistry`, `ToolContractError`, `NonRecoverableToolError` và các hằng `COURSE_TOOL_*` không phải export của Pi.
 
 Hãy dùng schema TypeBox cùng hình dạng `AgentTool` đã phát hành trong ứng dụng Pi. Giữ các invariant có thể chuyển giao: kiểm tra trước tác dụng phụ, mang `toolCallId` qua mọi sự kiện/result, truyền tín hiệu hủy vào lần thực thi, coi lỗi Tool là dữ liệu model có thể thấy khi vẫn còn khả năng phục hồi và giới hạn mọi nội dung được lưu trong transcript dài hạn.
+
+Course implementation là bản triển khai giảng dạy nguyên bản do Pify tự xây dựng, có phạm vi nhỏ hơn và không cam kết tương thích API với Pi.
 
 ## Checkpoint tiếp theo
 

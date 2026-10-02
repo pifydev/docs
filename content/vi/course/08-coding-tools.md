@@ -5,11 +5,11 @@ translation_key: course-08-coding-tools
 language: vi
 checkpoint: 8
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/index.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/sdk.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/coding-agent/src/core/tools/index.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/index.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/sdk.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/tools/index.ts"
 status: reviewed
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -210,9 +210,9 @@ Hãy lưu tệp Vitest chạy được này bên cạnh `course/test/08-coding-t
 - Việc hủy và hết thời gian dừng tiến trình đang chạy rồi kết thúc mà không để lại tệp `.pify-node-*` hoặc `.pify-tmp-*`.
 - Thử nghiệm traversal không tạo `outside.txt` bên ngoài workspace nhưng bên trong thư mục tạm được quản lý.
 
-## So sánh với Pi SDK 0.87.1
+## So sánh với Pi SDK 0.99.2
 
-:::info[Pi SDK 0.87.1]
+:::info[Pi SDK 0.99.2]
 
 `@earendil-works/pi-coding-agent` xuất công khai `createCodingTools()`, `createReadOnlyTools()`, `createReadTool()`, `createWriteTool()`, `createBashTool()`, `createPowerShellTool()`, `createEditTool()`, `createGrepTool()`, `createFindTool()` và `createLsTool()` cho `cwd` do mã gọi truyền vào.
 
@@ -221,6 +221,8 @@ Hãy lưu tệp Vitest chạy được này bên cạnh `course/test/08-coding-t
 Ở release đã ghim, `createCodingTools(cwd)` của Pi ghép các Tool đọc, Bash, chỉnh sửa và ghi; `createReadOnlyTools(cwd)` ghép các Tool đọc, grep, tìm và liệt kê. Gói Tool công khai còn có các kiểu option/operation, hàm hỗ trợ cắt ngắn, hàng đợi mutation và Tool tiến trình theo từng nền tảng.
 
 Khóa học chỉ cung cấp ba Tool và chủ động thay shell bằng JavaScript có giới hạn qua `process.execPath`. Các giá trị byte cố định, tên `read_file`/`write_file`/`node_process`, văn phạm đường dẫn đa nền tảng, mã lỗi và thuật toán tệp tạm của khóa học không phải cam kết API từ Pi. Khi tích hợp Pi, hãy dùng factory công khai cùng option của Pi và áp dụng cơ chế kiểm soát mức tin cậy/cô lập của host phù hợp với mã sẽ được thực thi.
+
+Course implementation là bản triển khai giảng dạy nguyên bản do Pify tự xây dựng, có phạm vi nhỏ hơn và không cam kết tương thích API với Pi.
 
 ## Checkpoint tiếp theo
 

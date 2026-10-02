@@ -5,10 +5,10 @@ translation_key: course-02-event-stream
 language: en
 checkpoint: 2
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/utils/event-stream.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/types.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/utils/event-stream.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/types.ts"
 status: reviewed
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -149,9 +149,9 @@ Run the focused command. The last line throws `EventStream is already terminal (
 - `push()`, `finish()`, and `fail()` reject any operation after terminal state.
 - Documentation and code make no claim of producer backpressure; the buffer is explicitly unbounded.
 
-## Compare with Pi SDK 0.87.1
+## Compare with Pi SDK 0.99.2
 
-:::info[Pi SDK 0.87.1]
+:::info[Pi SDK 0.99.2]
 
 `@earendil-works/pi-ai` exports a generic `EventStream<T, R>`, `AssistantMessageEventStream`, and `createAssistantMessageEventStream()`. `AssistantMessageEventStream` carries `AssistantMessageEvent` values and exposes the final `AssistantMessage` through its `result()` method.
 
@@ -160,6 +160,8 @@ Run the focused command. The last line throws `EventStream is already terminal (
 The released Pi stream detects `done` or `error` events as terminal and includes that terminal event in iteration. Its `result()` resolves to the final `AssistantMessage`; an `error` event carries an assistant message whose `stopReason` is `error` or `aborted`. The course stream instead has explicit `finish(result)` and `fail(error)`, a `result` property that may reject, and a single-active-consumer guard.
 
 Pi's generic stream also uses a queue and waiting reads, and its producer `push()` is synchronous. That is not a backpressure guarantee. A UI or integration consuming Pi events should keep its callback light, batch expensive rendering, or insert its own bounded handoff where resource control is required. Use Pi's exported stream API for Pi provider code; use this checkpoint to study event/result separation and cleanup.
+
+The Course implementation is an original, smaller teaching implementation and makes no Pi API-compatibility promise.
 
 ## Next checkpoint
 

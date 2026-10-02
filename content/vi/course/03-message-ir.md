@@ -5,10 +5,10 @@ translation_key: course-03-message-ir
 language: vi
 checkpoint: 3
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/ai/src/types.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent-loop.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/types.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/agent-loop.ts"
 status: reviewed
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -173,9 +173,9 @@ Chạy focused command. Validator không được ném lỗi; nó trả `ORPHAN_
 - Valid transcript giữ discriminant và ID sau JSON serialization rồi validate lại sau parsing.
 - Orphan Tool result tạo `ORPHAN_TOOL_RESULT` cho đến khi matching call đứng trước được khôi phục.
 
-## So sánh với Pi SDK 0.87.1
+## So sánh với Pi SDK 0.99.2
 
-:::info[Pi SDK 0.87.1]
+:::info[Pi SDK 0.99.2]
 
 `@earendil-works/pi-ai` export `Message = SystemMessage | UserMessage | AssistantMessage | ToolResultMessage`. Provider code nhận `TranscriptContext` đã normalize; `Message[]` của nó mang prompt và trạng thái Tool qua các record `SystemMessage` thay vì field context tách rời. `ToolResultMessage` vẫn liên kết ngược qua `toolCallId` và `toolName`.
 
@@ -184,6 +184,8 @@ Chạy focused command. Validator không được ném lỗi; nó trả `ORPHAN_
 IR của Pi mang nhiều production data hơn. User content có thể chứa text và image. Assistant content có thể chứa text, thinking và Tool call cùng provider, model, usage, stop reason, timestamp và optional replay metadata. `ToolCall.arguments` là `JsonObject` tương thích JSON; `ToolResultMessage.details` là JSON representation, còn `JsonValue` chấp nhận readonly array. Generic `ToolResultMessage<TDetails>` trở thành `never` nếu details không thể biểu diễn bằng JSON. Tool result chứa text/image block, timestamp, optional details và usage. Pi message không dùng các per-message `id` field của course; Tool result content cũng không bị giới hạn ở string.
 
 `validateTranscript()` và diagnostic code của course không phải Pi API. Provider adapter và Agent Loop của Pi sở hữu các path conversion, ordering, Tool execution và result construction dành riêng cho release. Khi tích hợp Pi, hãy giữ opaque provider metadata và dùng đúng shape được export. Phần có thể áp dụng sang hệ thống khác gồm: normalize tại ranh giới, giữ `toolCallId`, bảo toàn content order, validate giá trị không đáng tin cậy và không suy ra một Tool round hợp lệ chỉ từ rendered text.
+
+Course implementation là bản triển khai giảng dạy nguyên bản do Pify tự xây dựng, có phạm vi nhỏ hơn và không cam kết tương thích API với Pi.
 
 ## Checkpoint tiếp theo
 

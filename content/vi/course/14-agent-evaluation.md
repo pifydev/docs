@@ -5,12 +5,12 @@ translation_key: course-14-agent-evaluation
 language: vi
 checkpoint: 14
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/package.json"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/README.md"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/src/harness.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/evals/src/report.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/evals/package.json"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/evals/README.md"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/evals/src/harness.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/evals/src/report.ts"
 status: reviewed
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -201,9 +201,9 @@ Sau đó bỏ `try`/`catch` và để `run()` throw. `runEvaluation()` phải re
 - Baseline và candidate comparison yêu cầu task/run identity giống nhau và báo rate có thể tái lập riêng cho `pass`, `fail`, `error`.
 - Stable serialization chỉ xuất public allowlist và loại prompt, expected evidence, candidate evidence, transcript cùng file content.
 
-## So sánh với Pi SDK 0.87.1
+## So sánh với Pi SDK 0.99.2
 
-:::info[Pi SDK 0.87.1]
+:::info[Pi SDK 0.99.2]
 
 Workspace `packages/evals` đã pin của Pi có `private: true`. Đây là release source cho evaluation system của chính Pi, không phải public export của `@earendil-works/pi-coding-agent` và không phải npm dependency cho application.
 
@@ -212,6 +212,8 @@ Workspace `packages/evals` đã pin của Pi có `private: true`. Đây là rele
 Private workspace của Pi nối một `AgentSession` thật với `vitest-evals`, tạo project directory và agent directory tạm đã cô lập, chạy hành vi Coding Agent có model hỗ trợ, ghi usage cùng timing và đính kèm Session artifact gốc. Host eval dùng `createPiCodingAgentHarness()`. Documentation eval chạy hai Docker arm cô lập mang tên `without_docs` và `with_docs`; `createTaskPlan()` luân phiên thứ tự của chúng qua các repetition, còn `report.ts` pair chính xác từng arm trước khi công bố pass-rate lift hay telemetry delta. Provider request có thể phát sinh chi phí, còn Session artifact được giữ có thể chứa prompt, response, source code, Tool input và Tool output.
 
 Course implementation là deterministic local harness trên synthetic evidence. Nó không có Pi `AgentSession`, provider telemetry, native Session artifact hay API `vitest-evals`; không type nào của nó nên được import vào application dùng Pi. Để chạy private Pi suite đã pin theo release, hãy làm theo [Chạy Pi eval](../how-to/run-pi-evals.md); hướng dẫn đó bao quát exact checkout, host smoke eval, containerized documentation comparison, kiểm tra artifact, redaction và cleanup.
+
+Course implementation là bản triển khai giảng dạy nguyên bản do Pify tự xây dựng, có phạm vi nhỏ hơn và không cam kết tương thích API với Pi.
 
 ## Checkpoint tiếp theo
 

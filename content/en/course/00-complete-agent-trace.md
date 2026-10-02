@@ -5,10 +5,10 @@ translation_key: course-00-complete-agent-trace
 language: en
 checkpoint: 0
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/types.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent-loop.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/types.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/agent-loop.ts"
 status: reviewed
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -165,9 +165,9 @@ Run the focused command again. The event types still appear in the correct order
 - The run object, event array, individual events, Tool arguments, and terminal result reject mutation.
 - The controlled mismatched-ID edit fails the linkage assertion and passes again after restoration.
 
-## Compare with Pi SDK 0.87.1
+## Compare with Pi SDK 0.99.2
 
-:::info[Pi SDK 0.87.1]
+:::info[Pi SDK 0.99.2]
 
 The released `@earendil-works/pi-agent-core` exports a richer `AgentEvent` union. Its lifecycle includes `agent_start`/`agent_end`, `turn_start`/`turn_end`, message lifecycle events, and `tool_execution_start`/`tool_execution_update`/`tool_execution_end`. Tool events carry `toolCallId`, so consumers can correlate one execution even when Tool names repeat.
 
@@ -176,6 +176,8 @@ The released `@earendil-works/pi-agent-core` exports a richer `AgentEvent` union
 Pi's event names and payloads are not the prologue's event names. Pi also represents model completion through an `AssistantMessage` with a `stopReason`; it does not expose this checkpoint's `{ status, finalText }` result as a compatible public type. Use the prologue to reason about causal order and identity, then use Pi's exported types when integrating the SDK.
 
 The two systems share the underlying engineering requirement: a Tool result must remain associated with the call that produced it, and the Agent lifecycle must settle only after the relevant work has finished. Do not import `runPrologue()` into a Pi application or translate its event strings into claims about the SDK.
+
+The Course implementation is an original, smaller teaching implementation and makes no Pi API-compatibility promise.
 
 ## Next checkpoint
 

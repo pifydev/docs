@@ -749,7 +749,7 @@ const staleCurrentBaselinePatterns = [
 ];
 const pi0871AuditDate = "2026-09-23";
 
-const pi0871BilingualAuditSuffixes = [
+const pi0871HistoricalAuditSuffixes = [
   "ch01-overview.md",
   "ch02-three-layer-arch.md",
   "ch03-agent-loop.md",
@@ -9683,45 +9683,13 @@ test("both environment locales preserve Bash guidance and add concrete PowerShel
   assert.deepEqual(structures[0], structures[1]);
 });
 
-test("active and explicitly deferred content satisfy their published Pi authority contracts", async () => {
+test("active content satisfies the published Pi 0.99.2 authority contract", async () => {
   const release = await readReleaseFixture();
   const activeSources = await readActiveSources();
-  const historicalRelease = {
-    tag: "v0.87.1",
-    commit: "f07218c4d4bbc12bef056a7058c3dd49dfe41abe",
-  };
-  const historicalDeferredSuffixes = new Set(
-    pi0871BilingualAuditSuffixes.filter((suffix) =>
-      suffix.startsWith("course/"),
-    ),
-  );
-  const currentSources = [];
-  const historicalDeferredSources = [];
-
-  for (const entry of activeSources) {
-    const normalizedFilename = entry.filename.replaceAll("\\", "/");
-    const suffix = /content\/(?:en|vi)\/(.+)$/.exec(normalizedFilename)?.[1];
-    if (suffix && historicalDeferredSuffixes.has(suffix)) {
-      assert.match(
-        entry.source,
-        /^last_updated:\s*["']2026-09-23["']$/m,
-        `${entry.filename} must retain its historical/deferred review date`,
-      );
-      historicalDeferredSources.push(entry);
-    } else {
-      currentSources.push(entry);
-    }
-  }
-
-  assert.equal(
-    historicalDeferredSources.length,
-    historicalDeferredSuffixes.size * 2,
-    "every explicitly deferred Pi 0.87.1 page must exist in both locales",
-  );
   const staleFiles = activeSources
     .filter(({ source }) => /0\.84\.2|a470b121/.test(source))
     .map(({ filename }) => filename);
-  const currentAuthoritySources = currentSources.map((entry) => {
+  const currentAuthoritySources = activeSources.map((entry) => {
     if (!entry.filename.endsWith("changelog.md")) return entry;
     const datedHeadings = [
       ...entry.source.matchAll(/^## \d{4}-\d{2}-\d{2}$/gm),
@@ -9736,21 +9704,15 @@ test("active and explicitly deferred content satisfy their published Pi authorit
     currentAuthoritySources,
     release,
   );
-  const invalidHistoricalSourceLinks = invalidPiSourceLinks(
-    historicalDeferredSources,
-    historicalRelease,
-  );
 
   assert.deepEqual(
     {
       staleFiles,
       invalidCurrentSourceLinks,
-      invalidHistoricalSourceLinks,
     },
     {
       staleFiles: [],
       invalidCurrentSourceLinks: [],
-      invalidHistoricalSourceLinks: [],
     },
   );
 });
@@ -10054,7 +10016,7 @@ test("historical Pi 0.87.1 bilingual audit ledger covers every public pair with 
   const rows = parsePi0871AuditRows(ledger);
   assert.deepEqual(
     rows.map(({ suffix }) => suffix),
-    pi0871BilingualAuditSuffixes,
+    pi0871HistoricalAuditSuffixes,
   );
   assert.equal(new Set(rows.map(({ suffix }) => suffix)).size, 43);
 
@@ -10909,19 +10871,41 @@ test("0.99.2 source links point to the published tag or release commit", async (
   }
 });
 
-function assertCourseEvalReleaseAuthority(sources) {
-  const currentCommit = "f07218c4d4bbc12bef056a7058c3dd49dfe41abe";
-  const staleCommit = "107d79f11072bbc8a3a757ed7fd69596bee7d68c";
+function assertActiveCourseComparisonAuthority(sources) {
+  const currentCommit = "005af57d88ee23b33778f343a9595b32e67ff788";
+  const staleCommits = [
+    "f07218c4d4bbc12bef056a7058c3dd49dfe41abe",
+    "107d79f11072bbc8a3a757ed7fd69596bee7d68c",
+  ];
+
+  assert.equal(sources.length, 32, "all 16 Course pairs must be active");
 
   for (const { filename, source } of sources) {
+    assert.match(
+      source,
+      /^last_updated:\s*["']2026-10-01["']$/m,
+      `${filename}: current Course review date`,
+    );
+    assert.doesNotMatch(source, /Pi SDK 0\.(?:85\.0|87\.1)/);
+    for (const staleCommit of staleCommits) {
+      assert.doesNotMatch(
+        source,
+        new RegExp(staleCommit),
+        `${filename}: stale source pin`,
+      );
+    }
     assert.doesNotMatch(
       source,
-      new RegExp(staleCommit),
-      `${filename}: stale source pin`,
+      /https:\/\/github\.com\/earendil-works\/pi\/(?:blob|tree)\/(?:main|latest)(?:\/|$)|https:\/\/github\.com\/earendil-works\/pi\/latest(?:\/|$)/i,
+      `${filename}: unpinned Pi source URL`,
     );
-    for (const match of source.matchAll(
-      /https:\/\/github\.com\/earendil-works\/pi\/blob\/([^/]+)\/[^\s")]+/g,
-    )) {
+    const sourceLinks = [
+      ...source.matchAll(
+        /https:\/\/github\.com\/earendil-works\/pi\/(?:blob|tree)\/([^/]+)\/[^\s")]+/g,
+      ),
+    ];
+    assert.ok(sourceLinks.length > 0, `${filename}: pinned Pi source evidence`);
+    for (const match of sourceLinks) {
       assert.equal(
         match[1],
         currentCommit,
@@ -10929,20 +10913,35 @@ function assertCourseEvalReleaseAuthority(sources) {
       );
     }
 
-    if (!/course\/(?:0\d|1[0-4])-/.test(filename)) continue;
     const vietnamese = filename.startsWith("content/vi/");
     const heading = vietnamese
-      ? "## So sánh với Pi SDK 0.87.1"
-      : "## Compare with Pi SDK 0.87.1";
+      ? "## So sánh với Pi SDK 0.99.2"
+      : "## Compare with Pi SDK 0.99.2";
     assert.match(
       source,
       new RegExp(`^${heading.replaceAll(".", "\\.")}$`, "m"),
     );
-    assert.match(source, /^:::info\[Pi SDK 0\.87\.1\]$/m);
+    if (!filename.endsWith("course/index.mdx")) {
+      assert.match(source, /^:::info\[Pi SDK 0\.99\.2\]$/m);
+    }
+    assert.match(
+      source,
+      vietnamese
+        ? /Course implementation[^.]*bản triển khai giảng dạy nguyên bản[^.]*nhỏ hơn/i
+        : /Course implementation[^.]*original[^.]*smaller teaching implementation/i,
+      `${filename}: original smaller teaching implementation`,
+    );
+    assert.match(
+      source,
+      vietnamese
+        ? /không cam kết tương thích API với Pi/i
+        : /makes no Pi API-compatibility promise/i,
+      `${filename}: no Pi API-compatibility promise`,
+    );
   }
 }
 
-test("historical Course comparisons retain Pi 0.87.1 authority", async () => {
+test("active Course comparisons use strict Pi 0.99.2 authority", async () => {
   const sources = [];
   for (const locale of ["en", "vi"]) {
     const courseDirectory = new URL(
@@ -10960,7 +10959,7 @@ test("historical Course comparisons retain Pi 0.87.1 authority", async () => {
     }
   }
 
-  assertCourseEvalReleaseAuthority(sources);
+  assertActiveCourseComparisonAuthority(sources);
 
   const courseTen = sources.find(
     ({ filename }) => filename === "content/en/course/10-session-tree.md",
@@ -10971,8 +10970,8 @@ test("historical Course comparisons retain Pi 0.87.1 authority", async () => {
     source:
       entry === courseTen
         ? entry.source.replace(
+            "Compare with Pi SDK 0.99.2",
             "Compare with Pi SDK 0.87.1",
-            "Compare with Pi SDK 0.85.0",
           )
         : entry.source,
   }));
@@ -10982,7 +10981,27 @@ test("historical Course comparisons retain Pi 0.87.1 authority", async () => {
     "the current Course heading must mutate",
   );
   assert.throws(
-    () => assertCourseEvalReleaseAuthority(mutatedHeading),
+    () => assertActiveCourseComparisonAuthority(mutatedHeading),
+    assert.AssertionError,
+  );
+
+  const mutatedSource = sources.map((entry) => ({
+    ...entry,
+    source:
+      entry === courseTen
+        ? entry.source.replace(
+            "005af57d88ee23b33778f343a9595b32e67ff788",
+            "main",
+          )
+        : entry.source,
+  }));
+  assert.notDeepEqual(
+    mutatedSource,
+    sources,
+    "the exact Course source pin must mutate",
+  );
+  assert.throws(
+    () => assertActiveCourseComparisonAuthority(mutatedSource),
     assert.AssertionError,
   );
 });

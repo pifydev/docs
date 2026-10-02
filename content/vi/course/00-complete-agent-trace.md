@@ -5,10 +5,10 @@ translation_key: course-00-complete-agent-trace
 language: vi
 checkpoint: 0
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/types.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent-loop.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/types.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/agent-loop.ts"
 status: reviewed
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -165,9 +165,9 @@ Chạy lại focused command. Các loại sự kiện vẫn đúng thứ tự v�
 - Run object, array sự kiện, từng sự kiện, Tool arguments và terminal result đều từ chối mutation.
 - Thay đổi ID không khớp có kiểm soát làm linkage assertion fail và test pass trở lại sau khi khôi phục.
 
-## So sánh với Pi SDK 0.87.1
+## So sánh với Pi SDK 0.99.2
 
-:::info[Pi SDK 0.87.1]
+:::info[Pi SDK 0.99.2]
 
 Package `@earendil-works/pi-agent-core` đã phát hành export một `AgentEvent` union phong phú hơn. Lifecycle của nó gồm `agent_start`/`agent_end`, `turn_start`/`turn_end`, các sự kiện trong vòng đời message và `tool_execution_start`/`tool_execution_update`/`tool_execution_end`. Sự kiện Tool mang `toolCallId`, nhờ đó consumer có thể liên kết đúng một execution ngay cả khi tên Tool lặp lại.
 
@@ -176,6 +176,8 @@ Package `@earendil-works/pi-agent-core` đã phát hành export một `AgentEven
 Tên sự kiện và payload của Pi khác với tên sự kiện trong prologue. Pi còn biểu diễn model completion bằng `AssistantMessage` có `stopReason`; SDK không expose result `{ status, finalText }` của checkpoint này như một public type tương thích. Hãy dùng prologue để suy luận về thứ tự nhân quả và identity, rồi dùng các type Pi export khi tích hợp SDK.
 
 Hai hệ thống có cùng yêu cầu kỹ thuật nền tảng: Tool result phải tiếp tục gắn với call đã tạo ra nó, và Agent lifecycle chỉ settle sau khi công việc liên quan hoàn tất. Không import `runPrologue()` vào ứng dụng Pi hoặc biến các chuỗi sự kiện của nó thành mô tả về SDK.
+
+Course implementation là bản triển khai giảng dạy nguyên bản do Pify tự xây dựng, có phạm vi nhỏ hơn và không cam kết tương thích API với Pi.
 
 ## Checkpoint tiếp theo
 

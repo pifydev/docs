@@ -5,11 +5,11 @@ translation_key: course-07-agent-loop
 language: en
 checkpoint: 7
 official_refs:
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent-loop.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/types.ts"
-  - "https://github.com/earendil-works/pi/blob/f07218c4d4bbc12bef056a7058c3dd49dfe41abe/packages/agent/src/agent.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/agent-loop.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/types.ts"
+  - "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/agent.ts"
 status: reviewed
-last_updated: '2026-09-23'
+last_updated: '2026-10-01'
 translator: Pify maintainers
 reviewed_by: Pify maintainers
 ---
@@ -223,9 +223,9 @@ This fragment is verbatim from the body of `course/test/07-agent-loop.test.ts`; 
 - Cancellation retains only complete messages and never fabricates a Tool result for interrupted execution.
 - With `maxSteps: 1`, the current Tool batch completes, no continuation request opens, and the terminal result is `maxSteps`.
 
-## Compare with Pi SDK 0.87.1
+## Compare with Pi SDK 0.99.2
 
-:::info[Pi SDK 0.87.1]
+:::info[Pi SDK 0.99.2]
 
 `@earendil-works/pi-agent-core` exports `Agent`, `agentLoop()`, `agentLoopContinue()`, `runAgentLoop()`, `runAgentLoopContinue()`, `AgentContext`, `AgentLoopConfig`, `AgentTool`, and `AgentEvent`.
 
@@ -235,7 +235,9 @@ Pi's Agent Loop uses `AgentMessage` throughout and converts to LLM-compatible me
 
 The course loop has one transcript vocabulary, five event types, sequential Tool execution, no message queue, no context hook, and a workshop-specific hard ceiling of `64` model steps. Its `request-001` IDs, `RunResult` statuses, `maxSteps` behavior, and resource constants are not Pi public contracts.
 
-Use Pi's exports directly for production integration. The workshop supplies a smaller control-flow model for reasoning about transcript ownership, complete Tool round trips, terminal settlement, cancellation, and total observer order. When behavior differs, Pi SDK `0.87.1` is authoritative.
+Use Pi's exports directly for production integration. The workshop supplies a smaller control-flow model for reasoning about transcript ownership, complete Tool round trips, terminal settlement, cancellation, and total observer order. When behavior differs, Pi SDK `0.99.2` is authoritative.
+
+The Course implementation is an original, smaller teaching implementation and makes no Pi API-compatibility promise.
 
 ## Next checkpoint
 
