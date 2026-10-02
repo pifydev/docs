@@ -11080,9 +11080,10 @@ function auditLedgerRows(ledger) {
   return rows;
 }
 
-const expectedAuditEvidence = Object.freeze({
+const expectedAuditEvidenceURLs = Object.freeze({
   home: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/index.ts",
-  quickstart: "https://github.com/earendil-works/pi/releases/tag/v0.99.2",
+  quickstart:
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/index.ts",
   glossary:
     "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/types.ts",
   "how-to-add-custom-tool":
@@ -11098,7 +11099,7 @@ const expectedAuditEvidence = Object.freeze({
   "how-to-test-agent-deterministically":
     "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/providers/faux.ts",
   "how-to-run-pi-evals":
-    "https://github.com/earendil-works/pi/releases/tag/v0.99.2",
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/evals/README.md",
   "how-to-host-session-runtime":
     "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/agent-session-runtime.ts",
   "how-to-use-codemode-and-mcp":
@@ -11113,7 +11114,8 @@ const expectedAuditEvidence = Object.freeze({
     "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/docs/settings.md",
   "reference-environment-variables":
     "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/docs/environment-variables.md",
-  "ch01-overview": "https://github.com/earendil-works/pi/releases/tag/v0.99.2",
+  "ch01-overview":
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/index.ts",
   "ch02-three-layer-arch":
     "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/types.ts",
   "ch03-agent-loop":
@@ -11135,9 +11137,9 @@ const expectedAuditEvidence = Object.freeze({
   "ch11-testing-evaluation":
     "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/providers/faux.ts",
   "course-overview":
-    "https://github.com/earendil-works/pi/releases/tag/v0.99.2",
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/agent-loop.ts",
   "course-00-complete-agent-trace":
-    "https://github.com/earendil-works/pi/releases/tag/v0.99.2",
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/agent-loop.ts",
   "course-01-typescript-protocols":
     "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/types.ts",
   "course-02-event-stream":
@@ -11165,67 +11167,246 @@ const expectedAuditEvidence = Object.freeze({
   "course-13-runtime-composition":
     "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/agent-session-runtime.ts",
   "course-14-agent-evaluation":
-    "https://github.com/earendil-works/pi/releases/tag/v0.99.2",
-  faq: "https://github.com/earendil-works/pi/releases/tag/v0.99.2",
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/evals/README.md",
+  faq: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/types.ts",
   changelog: "https://github.com/earendil-works/pi/releases/tag/v0.99.2",
 });
 
 const expectedAuditEvidenceLabels = Object.freeze({
-  home: "home claim authority",
-  quickstart: "quickstart claim authority",
-  glossary: "glossary claim authority",
-  "how-to-add-custom-tool": "how-to-add-custom-tool claim authority",
-  "how-to-plug-new-model": "how-to-plug-new-model claim authority",
-  "how-to-stream-output": "how-to-stream-output claim authority",
-  "how-to-persist-sessions": "how-to-persist-sessions claim authority",
-  "how-to-customize-system-prompt":
-    "how-to-customize-system-prompt claim authority",
-  "how-to-test-agent-deterministically":
-    "how-to-test-agent-deterministically claim authority",
-  "how-to-run-pi-evals": "how-to-run-pi-evals claim authority",
-  "how-to-host-session-runtime": "how-to-host-session-runtime claim authority",
-  "how-to-use-codemode-and-mcp": "how-to-use-codemode-and-mcp claim authority",
-  "how-to-route-virtual-models": "how-to-route-virtual-models claim authority",
-  "how-to-build-durable-agent": "how-to-build-durable-agent claim authority",
-  "reference-api": "reference-api claim authority",
-  "reference-configuration": "settings reference authority",
+  home: "Coding agent entry point",
+  quickstart: "Coding agent public entry point",
+  glossary: "AI type declarations",
+  "how-to-add-custom-tool": "Agent tool type declarations",
+  "how-to-plug-new-model": "Model catalog source",
+  "how-to-stream-output": "Message type declarations",
+  "how-to-persist-sessions": "Session manager source",
+  "how-to-customize-system-prompt": "System prompt source",
+  "how-to-test-agent-deterministically": "Faux provider source",
+  "how-to-run-pi-evals": "Evaluation guide reference",
+  "how-to-host-session-runtime": "Session runtime source",
+  "how-to-use-codemode-and-mcp": "Codemode and MCP reference",
+  "how-to-route-virtual-models": "Virtual model routing source",
+  "how-to-build-durable-agent": "Durable agent entry point",
+  "reference-api": "Coding agent public API",
+  "reference-configuration": "Settings reference authority",
   "reference-environment-variables":
-    "environment variables reference authority",
-  "ch01-overview": "ch01-overview claim authority",
-  "ch02-three-layer-arch": "ch02-three-layer-arch claim authority",
-  "ch03-agent-loop": "ch03-agent-loop claim authority",
-  "ch04-model-invocation": "ch04-model-invocation claim authority",
-  "ch05-tool-system": "ch05-tool-system claim authority",
-  "ch06-messages": "ch06-messages claim authority",
-  "ch07-event-driven": "ch07-event-driven claim authority",
-  "ch08-context-engineering": "ch08-context-engineering claim authority",
-  "ch09-compaction": "ch09-compaction claim authority",
-  "ch10-session": "ch10-session claim authority",
-  "ch11-testing-evaluation": "ch11-testing-evaluation claim authority",
-  "course-overview": "course-overview claim authority",
-  "course-00-complete-agent-trace":
-    "course-00-complete-agent-trace claim authority",
-  "course-01-typescript-protocols":
-    "course-01-typescript-protocols claim authority",
-  "course-02-event-stream": "course-02-event-stream claim authority",
-  "course-03-message-ir": "course-03-message-ir claim authority",
-  "course-04-deterministic-model":
-    "course-04-deterministic-model claim authority",
-  "course-05-provider-adapter": "course-05-provider-adapter claim authority",
-  "course-06-tool-contract": "course-06-tool-contract claim authority",
-  "course-07-agent-loop": "course-07-agent-loop claim authority",
-  "course-08-coding-tools": "course-08-coding-tools claim authority",
-  "course-09-stateful-agent": "course-09-stateful-agent claim authority",
-  "course-10-session-tree": "course-10-session-tree claim authority",
-  "course-11-context-compaction":
-    "course-11-context-compaction claim authority",
-  "course-12-resources-extensions":
-    "course-12-resources-extensions claim authority",
-  "course-13-runtime-composition":
-    "course-13-runtime-composition claim authority",
-  "course-14-agent-evaluation": "course-14-agent-evaluation claim authority",
-  faq: "faq claim authority",
-  changelog: "changelog claim authority",
+    "Environment variables reference authority",
+  "ch01-overview": "Coding agent entry point",
+  "ch02-three-layer-arch": "Agent type declarations",
+  "ch03-agent-loop": "Agent loop source",
+  "ch04-model-invocation": "Model catalog source",
+  "ch05-tool-system": "Agent tool type declarations",
+  "ch06-messages": "Message type declarations",
+  "ch07-event-driven": "Agent session event source",
+  "ch08-context-engineering": "Virtual model routing source",
+  "ch09-compaction": "Session manager compaction source",
+  "ch10-session": "Session manager source",
+  "ch11-testing-evaluation": "Faux provider source",
+  "course-overview": "Agent loop source",
+  "course-00-complete-agent-trace": "Agent loop trace source",
+  "course-01-typescript-protocols": "Agent type declarations",
+  "course-02-event-stream": "Event stream utility source",
+  "course-03-message-ir": "Message type declarations",
+  "course-04-deterministic-model": "Faux provider source",
+  "course-05-provider-adapter": "Model provider source",
+  "course-06-tool-contract": "Agent tool type declarations",
+  "course-07-agent-loop": "Agent loop source",
+  "course-08-coding-tools": "Coding tools source",
+  "course-09-stateful-agent": "Session manager source",
+  "course-10-session-tree": "Session manager tree source",
+  "course-11-context-compaction": "Compaction implementation source",
+  "course-12-resources-extensions": "Extension registry source",
+  "course-13-runtime-composition": "Session runtime source",
+  "course-14-agent-evaluation": "Evaluation harness guide",
+  faq: "Agent tool result source",
+  changelog: "Published v0.99.2 release chronology",
+});
+
+const expectedAuditEvidence = Object.freeze({
+  home: {
+    label: "Coding agent entry point",
+    url: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/index.ts",
+  },
+  quickstart: {
+    label: "Coding agent public entry point",
+    url: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/index.ts",
+  },
+  glossary: {
+    label: "AI type declarations",
+    url: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/types.ts",
+  },
+  "how-to-add-custom-tool": {
+    label: "Agent tool type declarations",
+    url: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/types.ts",
+  },
+  "how-to-plug-new-model": {
+    label: "Model catalog source",
+    url: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/models.ts",
+  },
+  "how-to-stream-output": {
+    label: "Message type declarations",
+    url: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/types.ts",
+  },
+  "how-to-persist-sessions": {
+    label: "Session manager source",
+    url: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/session-manager.ts",
+  },
+  "how-to-customize-system-prompt": {
+    label: "System prompt source",
+    url: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/system-prompt.ts",
+  },
+  "how-to-test-agent-deterministically": {
+    label: "Faux provider source",
+    url: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/providers/faux.ts",
+  },
+  "how-to-run-pi-evals": {
+    label: "Evaluation guide reference",
+    url: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/evals/README.md",
+  },
+  "how-to-host-session-runtime": {
+    label: "Session runtime source",
+    url: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/agent-session-runtime.ts",
+  },
+  "how-to-use-codemode-and-mcp": {
+    label: "Codemode and MCP reference",
+    url: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/extensions/codemode/index.ts",
+  },
+  "how-to-route-virtual-models": {
+    label: "Virtual model routing source",
+    url: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/virtual-models.ts",
+  },
+  "how-to-build-durable-agent": {
+    label: "Durable agent entry point",
+    url: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/durable/src/index.ts",
+  },
+  "reference-api": {
+    label: "Coding agent public API",
+    url: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/index.ts",
+  },
+  "reference-configuration": {
+    label: "Settings reference authority",
+    url: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/docs/settings.md",
+  },
+  "reference-environment-variables": {
+    label: "Environment variables reference authority",
+    url: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/docs/environment-variables.md",
+  },
+  "ch01-overview": {
+    label: "Coding agent entry point",
+    url: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/index.ts",
+  },
+  "ch02-three-layer-arch": {
+    label: "Agent type declarations",
+    url: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/types.ts",
+  },
+  "ch03-agent-loop": {
+    label: "Agent loop source",
+    url: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/agent-loop.ts",
+  },
+  "ch04-model-invocation": {
+    label: "Model catalog source",
+    url: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/models.ts",
+  },
+  "ch05-tool-system": {
+    label: "Agent tool type declarations",
+    url: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/types.ts",
+  },
+  "ch06-messages": {
+    label: "Message type declarations",
+    url: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/types.ts",
+  },
+  "ch07-event-driven": {
+    label: "Agent session event source",
+    url: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/agent-session.ts",
+  },
+  "ch08-context-engineering": {
+    label: "Virtual model routing source",
+    url: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/virtual-models.ts",
+  },
+  "ch09-compaction": {
+    label: "Session manager compaction source",
+    url: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/session-manager.ts",
+  },
+  "ch10-session": {
+    label: "Session manager source",
+    url: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/session-manager.ts",
+  },
+  "ch11-testing-evaluation": {
+    label: "Faux provider source",
+    url: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/providers/faux.ts",
+  },
+  "course-overview": {
+    label: "Agent loop source",
+    url: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/agent-loop.ts",
+  },
+  "course-00-complete-agent-trace": {
+    label: "Agent loop trace source",
+    url: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/agent-loop.ts",
+  },
+  "course-01-typescript-protocols": {
+    label: "Agent type declarations",
+    url: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/types.ts",
+  },
+  "course-02-event-stream": {
+    label: "Event stream utility source",
+    url: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/utils/event-stream.ts",
+  },
+  "course-03-message-ir": {
+    label: "Message type declarations",
+    url: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/types.ts",
+  },
+  "course-04-deterministic-model": {
+    label: "Faux provider source",
+    url: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/providers/faux.ts",
+  },
+  "course-05-provider-adapter": {
+    label: "Model provider source",
+    url: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/models.ts",
+  },
+  "course-06-tool-contract": {
+    label: "Agent tool type declarations",
+    url: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/types.ts",
+  },
+  "course-07-agent-loop": {
+    label: "Agent loop source",
+    url: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/agent-loop.ts",
+  },
+  "course-08-coding-tools": {
+    label: "Coding tools source",
+    url: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/tools/index.ts",
+  },
+  "course-09-stateful-agent": {
+    label: "Session manager source",
+    url: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/session-manager.ts",
+  },
+  "course-10-session-tree": {
+    label: "Session manager tree source",
+    url: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/session-manager.ts",
+  },
+  "course-11-context-compaction": {
+    label: "Compaction implementation source",
+    url: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/compaction/index.ts",
+  },
+  "course-12-resources-extensions": {
+    label: "Extension registry source",
+    url: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/extensions/index.ts",
+  },
+  "course-13-runtime-composition": {
+    label: "Session runtime source",
+    url: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/agent-session-runtime.ts",
+  },
+  "course-14-agent-evaluation": {
+    label: "Evaluation harness guide",
+    url: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/evals/README.md",
+  },
+  faq: {
+    label: "Agent tool result source",
+    url: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/types.ts",
+  },
+  changelog: {
+    label: "Published v0.99.2 release chronology",
+    url: "https://github.com/earendil-works/pi/releases/tag/v0.99.2",
+  },
 });
 
 const expectedAuditDeletions = Object.freeze({
@@ -11982,6 +12163,7 @@ test("Pi 0.99.2 bilingual audit ledger covers every public pair", async () => {
   );
   assert.equal(new Set(rows.map(([key]) => key)).size, 46);
   assert.deepEqual(Object.keys(expectedAuditEvidence), expectedKeys);
+  assert.deepEqual(Object.keys(expectedAuditEvidenceURLs), expectedKeys);
   assert.deepEqual(Object.keys(expectedAuditEvidenceLabels), expectedKeys);
   assert.deepEqual(Object.keys(expectedAuditDeletions), expectedKeys);
   assert.deepEqual(Object.keys(expectedAuditOutcomes), expectedKeys);
@@ -12033,12 +12215,12 @@ test("Pi 0.99.2 bilingual audit ledger covers every public pair", async () => {
     const [, evidenceLabel, evidenceURL] = evidenceMatch;
     assert.equal(
       evidenceLabel,
-      expectedAuditEvidenceLabels[key],
+      expectedAuditEvidence[key].label,
       `${key}: evidence claim label`,
     );
     assert.equal(
       evidenceURL,
-      expectedAuditEvidence[key],
+      expectedAuditEvidence[key].url,
       `${key}: evidence authority/path`,
     );
     assert.doesNotMatch(

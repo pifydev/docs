@@ -347,7 +347,7 @@ test("preservation manifest coverage rejects incomplete and mis-keyed translatio
   ]);
 });
 
-test("preservation coverage keeps non-course pages before course pages", () => {
+test("preservation coverage is path-based and order-independent", () => {
   const translations = {
     pages: [
       { key: "home", group: "start", en: "index.mdx", vi: "index.mdx" },
@@ -379,6 +379,26 @@ test("preservation coverage keeps non-course pages before course pages", () => {
   assert.deepEqual(
     preservationManifestCoverageErrors(translations, manifest),
     [],
+  );
+
+  const reversedManifest = {
+    pages: [...manifest.pages].reverse(),
+  };
+  assert.deepEqual(
+    preservationManifestCoverageErrors(translations, reversedManifest),
+    [],
+    "reordering records cannot hide a missing locale pair",
+  );
+
+  const duplicatePathManifest = structuredClone(reversedManifest);
+  duplicatePathManifest.pages[0].path = duplicatePathManifest.pages[1].path;
+  assert.match(
+    preservationManifestCoverageErrors(
+      translations,
+      duplicatePathManifest,
+    ).join("\n"),
+    /duplicates pages/,
+    "a duplicate path must fail even after a valid shuffle",
   );
 });
 

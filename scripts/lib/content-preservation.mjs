@@ -393,6 +393,17 @@ export function preservationManifestCoverageErrors(translations, manifest) {
   );
   const errors = [];
 
+  manifestPages.forEach((page, index) => {
+    const firstIndex = manifestPages.findIndex(
+      (candidate) => candidate?.path === page?.path,
+    );
+    if (firstIndex !== index) {
+      errors.push(
+        `${MANIFEST_LABEL}: pages[${index}].path duplicates pages[${firstIndex}].path`,
+      );
+    }
+  });
+
   expectedPages.forEach((expected, index) => {
     const actual = manifestByPath.get(expected.path)?.page;
     if (!actual) {

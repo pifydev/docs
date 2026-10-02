@@ -96,7 +96,7 @@ Các chi tiết implementation dưới đây hữu ích khi chẩn đoán lỗi 
 
 Các sửa đổi này không expose public API. Nếu endpoint tương thích OpenAI vẫn từ chối lượt chỉ có image, hãy kiểm tra các content part đã serialize. Với split-turn compaction, việc tách này tránh để chỉ dẫn tiếp tục bị coi là conversation trước đó; không có public compaction option điều khiển hành vi này.
 
-Ở các bản cũ, Claude Fable đôi khi từ chối khi tóm tắt một lượt split-turn. Đây là phép so sánh chẩn đoán lịch sử, không phải cấu hình API hiện tại: hãy kiểm tra transcript trước đó nằm dưới `# Conversation` và chỉ chỉ dẫn tiếp tục nằm dưới `# Instructions`. Hành vi `0.99.2` hiện tại vẫn giữ hai vai trò này tách biệt.
+Ở các bản cũ, Claude Fable đôi khi từ chối khi tóm tắt một lượt split-turn. Đây là phép so sánh chẩn đoán lịch sử, không phải cấu hình API hiện tại: hãy kiểm tra transcript trước đó nằm dưới `# Conversation`, còn riêng phần chỉ dẫn tiếp tục nằm dưới `# Instructions`. Hành vi `0.99.2` hiện tại vẫn giữ hai vai trò này tách biệt.
 
 ### Kết quả Tool không đến được model
 
