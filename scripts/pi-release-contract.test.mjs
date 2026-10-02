@@ -11208,3 +11208,18 @@ test("stale active authority and moving source pins are absent", async () => {
     assert.doesNotMatch(activeSource, forbidden, entry.filename);
   }
 });
+
+test("FAQ troubleshooting preserves current version-neutral provider edges", async () => {
+  for (const { locale, source } of await readLocalizedContent("help/faq.md")) {
+    const section = extractMarkdownSection(
+      source,
+      locale === "en" ? "## Common pitfalls" : "## Lỗi thường gặp",
+      `${locale} FAQ current provider edges`,
+    ).body;
+    assert.match(section, /OpenAI-compatible/);
+    assert.match(section, /Claude Fable 5\.1 \+ split-turn compaction/);
+    assert.match(section, /Conversation/);
+    assert.match(section, /Instructions/);
+    assert.doesNotMatch(section, /0\.87\.1/);
+  }
+});

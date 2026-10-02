@@ -87,6 +87,15 @@ The [documentation glossary](../glossary.md) defines canonical terms. Preserve i
 
 ## Common pitfalls
 
+These implementation details are useful when diagnosing provider-specific failures in the current `0.99.2` baseline:
+
+| Case | Behavior to verify |
+|---|---|
+| `OpenAI-compatible` | Omit an empty text part from an image-only request; preserve the image block. |
+| `Claude Fable 5.1 + split-turn compaction` | Keep earlier content under `# Conversation` and continuation guidance under `# Instructions`. |
+
+These corrections expose no public API. If an OpenAI-compatible endpoint still rejects an image-only turn, inspect the serialized content parts. For split-turn compaction, the separation prevents the continuation guidance from being treated as earlier conversation; no public compaction option controls it.
+
 ### My tool result does not reach the model
 
 An `AgentTool.execute` implementation returns an `AgentToolResult` with `content` and optional `details` or `usage`; it does not construct a `ToolResultMessage`. Agent Core associates the result with the current `ToolCall` and creates the protocol message with the matching call ID and Tool name. If no result reaches the model, inspect the returned content blocks and the `tool_execution_end` event.
