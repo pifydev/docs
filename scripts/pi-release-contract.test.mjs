@@ -11080,6 +11080,370 @@ function auditLedgerRows(ledger) {
   return rows;
 }
 
+const expectedAuditEvidence = Object.freeze({
+  home: "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/index.ts",
+  quickstart: "https://github.com/earendil-works/pi/releases/tag/v0.99.2",
+  glossary:
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/types.ts",
+  "how-to-add-custom-tool":
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/types.ts",
+  "how-to-plug-new-model":
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/models.ts",
+  "how-to-stream-output":
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/types.ts",
+  "how-to-persist-sessions":
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/session-manager.ts",
+  "how-to-customize-system-prompt":
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/system-prompt.ts",
+  "how-to-test-agent-deterministically":
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/providers/faux.ts",
+  "how-to-run-pi-evals":
+    "https://github.com/earendil-works/pi/releases/tag/v0.99.2",
+  "how-to-host-session-runtime":
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/agent-session-runtime.ts",
+  "how-to-use-codemode-and-mcp":
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/extensions/codemode/index.ts",
+  "how-to-route-virtual-models":
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/virtual-models.ts",
+  "how-to-build-durable-agent":
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/durable/src/index.ts",
+  "reference-api":
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/index.ts",
+  "reference-configuration":
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/config.ts",
+  "reference-environment-variables":
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/config.ts",
+  "ch01-overview": "https://github.com/earendil-works/pi/releases/tag/v0.99.2",
+  "ch02-three-layer-arch":
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/types.ts",
+  "ch03-agent-loop":
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/agent-loop.ts",
+  "ch04-model-invocation":
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/models.ts",
+  "ch05-tool-system":
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/types.ts",
+  "ch06-messages":
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/types.ts",
+  "ch07-event-driven":
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/agent-session.ts",
+  "ch08-context-engineering":
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/virtual-models.ts",
+  "ch09-compaction":
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/session-manager.ts",
+  "ch10-session":
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/session-manager.ts",
+  "ch11-testing-evaluation":
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/providers/faux.ts",
+  "course-overview":
+    "https://github.com/earendil-works/pi/releases/tag/v0.99.2",
+  "course-00-complete-agent-trace":
+    "https://github.com/earendil-works/pi/releases/tag/v0.99.2",
+  "course-01-typescript-protocols":
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/types.ts",
+  "course-02-event-stream":
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/utils/event-stream.ts",
+  "course-03-message-ir":
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/types.ts",
+  "course-04-deterministic-model":
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/providers/faux.ts",
+  "course-05-provider-adapter":
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/ai/src/models.ts",
+  "course-06-tool-contract":
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/types.ts",
+  "course-07-agent-loop":
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/agent-loop.ts",
+  "course-08-coding-tools":
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/tools/index.ts",
+  "course-09-stateful-agent":
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/session-manager.ts",
+  "course-10-session-tree":
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/session-manager.ts",
+  "course-11-context-compaction":
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/compaction/index.ts",
+  "course-12-resources-extensions":
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/extensions/index.ts",
+  "course-13-runtime-composition":
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/core/agent-session-runtime.ts",
+  "course-14-agent-evaluation":
+    "https://github.com/earendil-works/pi/releases/tag/v0.99.2",
+  faq: "https://github.com/earendil-works/pi/releases/tag/v0.99.2",
+  changelog: "https://github.com/earendil-works/pi/releases/tag/v0.99.2",
+});
+
+const expectedAuditOutcomes = Object.freeze({
+  home: "substantive",
+  quickstart: "pin-only",
+  glossary: "substantive",
+  "how-to-add-custom-tool": "pin-only",
+  "how-to-plug-new-model": "pin-only",
+  "how-to-stream-output": "pin-only",
+  "how-to-persist-sessions": "substantive",
+  "how-to-customize-system-prompt": "pin-only",
+  "how-to-test-agent-deterministically": "substantive",
+  "how-to-run-pi-evals": "substantive",
+  "how-to-host-session-runtime": "substantive",
+  "how-to-use-codemode-and-mcp": "substantive",
+  "how-to-route-virtual-models": "substantive",
+  "how-to-build-durable-agent": "substantive",
+  "reference-api": "pin-only",
+  "reference-configuration": "substantive",
+  "reference-environment-variables": "substantive",
+  "ch01-overview": "pin-only",
+  "ch02-three-layer-arch": "substantive",
+  "ch03-agent-loop": "pin-only",
+  "ch04-model-invocation": "substantive",
+  "ch05-tool-system": "substantive",
+  "ch06-messages": "pin-only",
+  "ch07-event-driven": "substantive",
+  "ch08-context-engineering": "substantive",
+  "ch09-compaction": "substantive",
+  "ch10-session": "substantive",
+  "ch11-testing-evaluation": "substantive",
+  "course-overview": "substantive",
+  "course-00-complete-agent-trace": "substantive",
+  "course-01-typescript-protocols": "substantive",
+  "course-02-event-stream": "substantive",
+  "course-03-message-ir": "substantive",
+  "course-04-deterministic-model": "substantive",
+  "course-05-provider-adapter": "substantive",
+  "course-06-tool-contract": "substantive",
+  "course-07-agent-loop": "substantive",
+  "course-08-coding-tools": "substantive",
+  "course-09-stateful-agent": "substantive",
+  "course-10-session-tree": "substantive",
+  "course-11-context-compaction": "substantive",
+  "course-12-resources-extensions": "substantive",
+  "course-13-runtime-composition": "substantive",
+  "course-14-agent-evaluation": "substantive",
+  faq: "substantive",
+  changelog: "substantive",
+});
+
+const staleAuthorityPatterns = Object.freeze([
+  { name: "old-version", expression: new RegExp("0\\.87" + "\\.1", "gi") },
+  {
+    name: "old-commit",
+    expression: new RegExp("f07218c4d4bbc12bef056a7058c3dd49dfe41abe", "gi"),
+  },
+  {
+    name: "old-release-fixture",
+    expression: new RegExp("pi-release-0871" + "\\.json", "gi"),
+  },
+  {
+    name: "old-sdk-fixture",
+    expression: new RegExp("pi-sdk-0871" + "\\.contract\\.ts", "gi"),
+  },
+  {
+    name: "moving-pi-source",
+    expression: new RegExp(
+      "https://github\\.com/earendil-works/pi/(?:blob|tree)/main(?:/|$)",
+      "gi",
+    ),
+  },
+]);
+
+function staleAuthorityOccurrences(entries) {
+  return entries.flatMap(({ filename, source }) =>
+    staleAuthorityPatterns.flatMap(({ name, expression }) =>
+      [...source.matchAll(expression)].map((match) => ({
+        filename,
+        marker: name,
+        occurrence: match[0],
+        context: source.slice(
+          Math.max(0, (match.index ?? 0) - 80),
+          (match.index ?? 0) + match[0].length + 80,
+        ),
+      })),
+    ),
+  );
+}
+
+function assertNoUnclassifiedStaleAuthority(entries, allowlist = []) {
+  const occurrences = staleAuthorityOccurrences(entries);
+  const grouped = new Map();
+  for (const { filename, marker } of occurrences) {
+    const key = `${filename}\u0000${marker}`;
+    grouped.set(key, (grouped.get(key) ?? 0) + 1);
+  }
+  const unclassified = [];
+  for (const [key, count] of grouped) {
+    const [filename, marker] = key.split("\u0000");
+    const allowed = allowlist.find(
+      (entry) => entry.filename === filename && entry.marker === marker,
+    );
+    if (!allowed || allowed.count !== count) {
+      unclassified.push({
+        filename,
+        marker,
+        occurrence: `${count} occurrence(s)`,
+      });
+    }
+  }
+  for (const allowed of allowlist) {
+    const key = `${allowed.filename}\u0000${allowed.marker}`;
+    if ((grouped.get(key) ?? 0) !== allowed.count) {
+      unclassified.push({
+        filename: allowed.filename,
+        marker: allowed.marker,
+        occurrence: `${grouped.get(key) ?? 0} occurrence(s), expected ${allowed.count}`,
+      });
+    }
+  }
+  assert.equal(
+    unclassified.length,
+    0,
+    `unclassified stale authority: ${unclassified
+      .map(
+        ({ filename, marker, occurrence }) =>
+          `${filename} (${marker}: ${occurrence})`,
+      )
+      .join(", ")}`,
+  );
+}
+
+const staleAuthorityAllowlist = Object.freeze([
+  {
+    filename: "content/en/changelog.md",
+    marker: "old-version",
+    count: 6,
+    reason: "dated 2026-09-23 release history",
+  },
+  {
+    filename: "content/en/changelog.md",
+    marker: "old-commit",
+    count: 1,
+    reason: "dated 2026-09-23 release history",
+  },
+  {
+    filename: "content/en/changelog.md",
+    marker: "old-release-fixture",
+    count: 1,
+    reason: "dated 2026-09-23 migration history",
+  },
+  {
+    filename: "content/en/changelog.md",
+    marker: "old-sdk-fixture",
+    count: 1,
+    reason: "dated 2026-09-23 migration history",
+  },
+  {
+    filename: "content/vi/changelog.md",
+    marker: "old-version",
+    count: 6,
+    reason: "dated 2026-09-23 release history",
+  },
+  {
+    filename: "content/vi/changelog.md",
+    marker: "old-commit",
+    count: 1,
+    reason: "dated 2026-09-23 release history",
+  },
+  {
+    filename: "content/vi/changelog.md",
+    marker: "old-release-fixture",
+    count: 1,
+    reason: "dated 2026-09-23 migration history",
+  },
+  {
+    filename: "content/vi/changelog.md",
+    marker: "old-sdk-fixture",
+    count: 1,
+    reason: "dated 2026-09-23 migration history",
+  },
+  {
+    filename: "scripts/fixtures/pi-release-0992.json",
+    marker: "old-version",
+    count: 1,
+    reason: "previousDocumentationVersion migration datum",
+  },
+  {
+    filename: "scripts/course-content.test.mjs",
+    marker: "old-version",
+    count: 2,
+    reason: "historical comparison and deliberate stale mutation",
+  },
+  {
+    filename: "scripts/course-content.test.mjs",
+    marker: "old-commit",
+    count: 1,
+    reason: "historical authority assertion",
+  },
+  {
+    filename: "scripts/course-content.test.mjs",
+    marker: "moving-pi-source",
+    count: 2,
+    reason: "deliberate rejection mutations",
+  },
+  {
+    filename: "scripts/pi-release-0992-contract.test.mjs",
+    marker: "old-version",
+    count: 1,
+    reason: "prior documentation-version fixture assertion",
+  },
+  {
+    filename: "scripts/pi-release-0992-contract.test.mjs",
+    marker: "old-commit",
+    count: 1,
+    reason: "historical-authority wording assertion",
+  },
+  {
+    filename: "scripts/pi-release-contract.test.mjs",
+    marker: "old-version",
+    count: 18,
+    reason: "historical ledger assertions and deliberate stale mutations",
+  },
+  {
+    filename: "scripts/pi-release-contract.test.mjs",
+    marker: "old-commit",
+    count: 4,
+    reason: "historical ledger/source assertions",
+  },
+  {
+    filename: "scripts/pi-release-contract.test.mjs",
+    marker: "moving-pi-source",
+    count: 4,
+    reason: "deliberate rejection mutations",
+  },
+]);
+
+async function readStaleAuthoritySources() {
+  async function readTree(relativeDirectory) {
+    const directoryURL = new URL(`${relativeDirectory}/`, repositoryRoot);
+    const entries = await readdir(directoryURL, { withFileTypes: true });
+    return (
+      await Promise.all(
+        entries.map(async (entry) => {
+          const relative = `${relativeDirectory}/${entry.name}`;
+          if (entry.isDirectory()) return readTree(relative);
+          if (!/\.(?:md|mdx|json|mjs|ts)$/.test(entry.name)) return [];
+          return [
+            {
+              filename: relative,
+              source: await readFile(new URL(relative, repositoryRoot), "utf8"),
+            },
+          ];
+        }),
+      )
+    ).flat();
+  }
+  return [
+    {
+      filename: "README.md",
+      source: await readFile(new URL("README.md", repositoryRoot), "utf8"),
+    },
+    {
+      filename: "CONTRIBUTING.md",
+      source: await readFile(
+        new URL("CONTRIBUTING.md", repositoryRoot),
+        "utf8",
+      ),
+    },
+    ...(await readTree("content")),
+    ...(await readTree("scripts")),
+    ...(await readTree("tests")),
+  ];
+}
+
 test("Pi 0.99.2 bilingual audit ledger covers every public pair", async () => {
   const [ledger, manifest] = await Promise.all([
     readFile(
@@ -11108,6 +11472,24 @@ test("Pi 0.99.2 bilingual audit ledger covers every public pair", async () => {
     expectedKeys,
   );
   assert.equal(new Set(rows.map(([key]) => key)).size, 46);
+  assert.deepEqual(Object.keys(expectedAuditEvidence), expectedKeys);
+  assert.deepEqual(Object.keys(expectedAuditOutcomes), expectedKeys);
+  const authorityOrder = [
+    "Exact tag/commit source",
+    "Exact published 0.99.2 declarations/catalog",
+    "Official v0.99.x release chronology",
+    "Local compile/runtime verification",
+    "Prose",
+  ];
+  let priorAuthorityIndex = -1;
+  for (const authority of authorityOrder) {
+    const authorityIndex = ledger.indexOf(authority);
+    assert.ok(
+      authorityIndex > priorAuthorityIndex,
+      `ordered authority: ${authority}`,
+    );
+    priorAuthorityIndex = authorityIndex;
+  }
 
   const totals = { substantive: 0, "pin-only": 0, "verified unchanged": 0 };
   for (const [index, row] of rows.entries()) {
@@ -11116,22 +11498,40 @@ test("Pi 0.99.2 bilingual audit ledger covers every public pair", async () => {
       6,
       `${expectedKeys[index]}: audit row must have six cells`,
     );
-    const [, outcome, evidence, files, fenceCounts, deletion] = row;
+    const [key, outcome, evidence, files, fenceCounts, deletion] = row;
     assert.ok(
       Object.hasOwn(totals, outcome),
       `${expectedKeys[index]}: audit outcome`,
     );
     totals[outcome] += 1;
+    assert.equal(
+      outcome,
+      expectedAuditOutcomes[key],
+      `${key}: audited outcome`,
+    );
+    const evidenceURL = /^\[[^\]]+\]\((https:\/\/[^)]+)\)$/.exec(evidence)?.[1];
+    assert.ok(evidenceURL, `${key}: one exact Markdown evidence URL`);
+    assert.equal(
+      evidenceURL,
+      expectedAuditEvidence[key],
+      `${key}: evidence authority/path`,
+    );
+    assert.doesNotMatch(
+      evidenceURL,
+      /\/(?:blob|tree)\/(?:main|master|latest)(?:\/|$)/,
+    );
     assert.match(
-      evidence,
-      /005af57d88ee23b33778f343a9595b32e67ff788|releases\/tag\/v0\.99\.[012]/,
-      `${expectedKeys[index]}: release evidence`,
+      evidenceURL,
+      /\/releases\/tag\/v0\.99\.2$|\/blob\/005af57d88ee23b33778f343a9595b32e67ff788\//,
     );
     const page = manifest.pages[index];
     const enPath = `content/en/${page.en}`;
     const viPath = `content/vi/${page.vi}`;
-    assert.ok(files.includes(enPath), `${page.key}: EN path evidence`);
-    assert.ok(files.includes(viPath), `${page.key}: VI path evidence`);
+    assert.deepEqual(
+      files.split(";").map((entry) => entry.trim()),
+      [enPath, viPath],
+      `${page.key}: exactly the canonical EN/VI paths`,
+    );
     const counts = /^([0-9]+)\/([0-9]+) audited$/.exec(fenceCounts);
     assert.ok(counts, `${page.key}: audited EN/VI fence count`);
     const [english, vietnamese] = await Promise.all([
@@ -11169,44 +11569,72 @@ test("Pi 0.99.2 bilingual audit ledger covers every public pair", async () => {
   ]);
 });
 
-test("stale active authority and moving source pins are absent", async () => {
-  const manifest = await readFile(
-    new URL("content/translation-manifest.json", repositoryRoot),
-    "utf8",
-  ).then(JSON.parse);
-  const entries = [
+test("stale-authority classifier rejects every protected marker in active material", () => {
+  const oldVersion = "0.87" + ".1";
+  const oldCommit = "f07218c4d4bbc12bef056a7058c3dd49dfe41abe";
+  const mutations = [
     {
-      filename: "README.md",
-      source: await readFile(new URL("README.md", repositoryRoot), "utf8"),
+      filename: "content/en/changelog.md",
+      source: `## 2026-10-01\nBaseline ${oldVersion}`,
     },
     {
-      filename: "CONTRIBUTING.md",
-      source: await readFile(
-        new URL("CONTRIBUTING.md", repositoryRoot),
-        "utf8",
-      ),
+      filename: "content/vi/changelog.md",
+      source: `## 2026-10-01\n${oldCommit}`,
     },
-    ...(await Promise.all(
-      manifest.pages
-        .flatMap((page) => [`content/en/${page.en}`, `content/vi/${page.vi}`])
-        .map(async (filename) => ({
-          filename,
-          source: await readFile(new URL(filename, repositoryRoot), "utf8"),
-        })),
-    )),
+    {
+      filename: "scripts/current-check.mjs",
+      source: "pi-release-0871" + ".json",
+    },
+    {
+      filename: "tests/current-check.mjs",
+      source: "pi-sdk-0871" + ".contract.ts",
+    },
+    {
+      filename: "content/en/changelog.md",
+      source:
+        "## 2025-01-01\nhttps://github.com/earendil-works/pi/blob/main/packages/ai/src/types.ts",
+    },
   ];
-  const forbidden =
-    /Pi SDK 0\.87\.1|f07218c4d4bbc12bef056a7058c3dd49dfe41abe|pi-release-0871\.json|pi-sdk-0871\.contract\.ts|https:\/\/github\.com\/earendil-works\/pi\/(?:blob|tree)\/main(?:\/|$)/i;
-  for (const entry of entries) {
-    const datedHeadings = [
-      ...entry.source.matchAll(/^## \d{4}-\d{2}-\d{2}$/gm),
-    ];
-    const activeSource =
-      entry.filename.endsWith("/changelog.md") && datedHeadings.length > 1
-        ? entry.source.slice(0, datedHeadings[1].index)
-        : entry.source;
-    assert.doesNotMatch(activeSource, forbidden, entry.filename);
+  for (const mutation of mutations) {
+    assert.throws(
+      () => assertNoUnclassifiedStaleAuthority([mutation]),
+      /unclassified stale authority/,
+      mutation.filename,
+    );
   }
+});
+
+test("stale-authority classifier rejects a stale allowlist count", () => {
+  assert.throws(
+    () =>
+      assertNoUnclassifiedStaleAuthority(
+        [{ filename: "scripts/fixture.mjs", source: "" }],
+        [
+          {
+            filename: "scripts/fixture.mjs",
+            marker: "old-version",
+            count: 1,
+            reason: "must remain exact",
+          },
+        ],
+      ),
+    /unclassified stale authority/,
+  );
+});
+
+test("stale active authority and moving source pins are absent", async () => {
+  const entries = await readStaleAuthoritySources();
+  assert.ok(entries.some(({ filename }) => filename === "README.md"));
+  assert.ok(entries.some(({ filename }) => filename === "CONTRIBUTING.md"));
+  assert.ok(entries.some(({ filename }) => filename.startsWith("content/")));
+  assert.ok(entries.some(({ filename }) => filename.startsWith("scripts/")));
+  assert.ok(entries.some(({ filename }) => filename.startsWith("tests/")));
+  for (const allowed of staleAuthorityAllowlist) {
+    assert.match(allowed.filename, /^(?:content|scripts)\//);
+    assert.ok(allowed.count > 0, `${allowed.filename}: exact allowed count`);
+    assert.notEqual(allowed.reason, "", `${allowed.filename}: reason`);
+  }
+  assertNoUnclassifiedStaleAuthority(entries, staleAuthorityAllowlist);
 });
 
 test("FAQ troubleshooting preserves current version-neutral provider edges", async () => {
