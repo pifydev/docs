@@ -29,7 +29,7 @@ Với RPC prompt, input được handle tại Extension boundary trước mọi 
 
 Tách biệt với các option của `prompt`, hai direct RPC wire command có tên chính xác là `steer` và `follow_up`; `followUp` không phải direct wire command. Mỗi command trả về `QueuedInputDisposition`: `handled` khi Extension input handler consume input, hoặc `queued` khi Pi đưa input vào queue. Nếu input handler transform thay vì consume input, Pi queue input đã transform và vẫn báo `queued`. Acknowledgement này mô tả kết quả preflight của command; nó không bảo đảm message vẫn còn trong queue sau đó.
 
-Khi replacement, `abort()` dừng active run và runtime await nó settle trước khi replacement teardown tiếp tục, nhờ đó aborted turn cùng Tool result đã hoàn tất vẫn được ghi trong session sắp rời đi. Boundary này là non-transactional: replacement failure sau teardown không rollback về old session đã dispose. Host không được phép công khai runtime bị thay dở vì thế cần fail-closed wrapper được mô tả bên dưới.
+Khi replacement, `abort()` dừng active run; runtime chờ đến khi run đó kết thúc hẳn rồi mới tiếp tục replacement teardown, nhờ đó aborted turn cùng Tool result đã hoàn tất vẫn được ghi trong session sắp rời đi. Boundary này là non-transactional: replacement failure sau teardown không rollback về old session đã dispose. Host không được phép công khai runtime bị thay dở vì thế cần fail-closed wrapper được mô tả bên dưới.
 
 ## Kết quả
 

@@ -101,7 +101,7 @@ Dùng contract fixture cho các biến thể protocol được hỗ trợ và m�
 
 Handle cung cấp `setResponses()`, `appendResponses()`, `getPendingResponseCount()`, `getModel()` và các counter trong `state`. Khác với cơ chế đăng ký compatibility cũ, handle tường minh này không có method `unregister()`. Khi cleanup, hãy xóa provider của nó khỏi collection cô lập bằng `models.deleteProvider(faux.provider.id)`.
 
-Function dưới đây được đồng bộ với `tests/fixtures/pi-sdk-0992.contract.ts` và biên dịch bằng đúng các public dependency `@earendil-works/pi-ai@0.99.2` cùng `@earendil-works/pi-agent-core@0.99.2`. Fixture đã compile-check này chạy offline và không cần network. Function bao phủ trọn một vòng khứ hồi qua Tool mà không dùng API key, environment secret hay filesystem; timer duy nhất là failure-only watchdog dùng để abort rồi chờ một Agent bị treo settle hoàn toàn. Scripted response đầu chứa text giải thích và một `ToolCall`; response thứ hai là assistant response cuối. Các assertion kiểm tra cả provider request lẫn transcript của Agent.
+Function dưới đây được đồng bộ với `tests/fixtures/pi-sdk-0992.contract.ts` và biên dịch bằng đúng các public dependency `@earendil-works/pi-ai@0.99.2` cùng `@earendil-works/pi-agent-core@0.99.2`. Fixture đã compile-check này chạy offline và không cần network. Function bao phủ trọn một vòng khứ hồi qua Tool mà không dùng API key, environment secret hay filesystem; timer duy nhất là failure-only watchdog dùng để abort, rồi chờ Agent bị treo kết thúc hoàn toàn trước khi tiếp tục. Scripted response đầu chứa text giải thích và một `ToolCall`; response thứ hai là assistant response cuối. Các assertion kiểm tra cả provider request lẫn transcript của Agent.
 
 ```typescript
 import assert from "node:assert/strict";

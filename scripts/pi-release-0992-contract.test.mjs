@@ -985,16 +985,79 @@ test("session lifecycle, runtime, compaction, and eval guides use 0.99.2 boundar
             /physical model[^.]*assistant turn[^.]*được ghi[^.]*assistant message/i,
             /compaction[^.]*không replay[^.]*routing decision[^.]*không reroute[^.]*turn đã lưu/i,
           ];
+    const modelStateNeedle =
+      locale === "en" ? "selected Virtual Model" : "Virtual Model đã chọn";
+    const assertModelState = (source, context) => {
+      const paragraph = assertSameParagraph(
+        source,
+        modelStateNeedle,
+        modelStatePatterns,
+        context,
+      );
+      assert.doesNotMatch(
+        paragraph,
+        locale === "en"
+          ? /selected Virtual Model[^.]*`model_change`[^.]*\bis not\b[^.]*session\/tree state/i
+          : /Virtual Model đã chọn[^.]*`model_change`[^.]*không phải[^.]*session\/tree state/i,
+        `${context} must affirm that model_change stores the selected Virtual Model state`,
+      );
+      assert.doesNotMatch(
+        paragraph,
+        locale === "en"
+          ? /physical model[^.]*assistant turn[^.]*\bnot recorded\b[^.]*assistant message/i
+          : /physical model[^.]*assistant turn[^.]*không được ghi[^.]*assistant message/i,
+        `${context} must affirm that the physical assistant model is recorded`,
+      );
+    };
     for (const relativePath of [
       "ch08-context-engineering.md",
       "ch09-compaction.md",
       "ch10-session.md",
     ]) {
-      assertSameParagraph(
-        pages.get(relativePath),
-        locale === "en" ? "selected Virtual Model" : "Virtual Model đã chọn",
-        modelStatePatterns,
+      const modelStatePage = pages.get(relativePath);
+      assertModelState(
+        modelStatePage,
         `${locale} ${relativePath} Virtual/physical model state`,
+      );
+      const negatedVirtualSelectionState = replaceParagraph(
+        modelStatePage,
+        modelStateNeedle,
+        (paragraph) =>
+          paragraph.replace(
+            locale === "en"
+              ? "is the session/tree state"
+              : "là session/tree state",
+            locale === "en"
+              ? "is not the session/tree state"
+              : "không phải là session/tree state",
+          ),
+        `${locale} ${relativePath} Virtual-selection state negation`,
+      );
+      assert.throws(
+        () =>
+          assertModelState(
+            negatedVirtualSelectionState,
+            `${locale} ${relativePath} negated Virtual selection state`,
+          ),
+        assert.AssertionError,
+      );
+      const negatedPhysicalModelRecord = replaceParagraph(
+        modelStatePage,
+        modelStateNeedle,
+        (paragraph) =>
+          paragraph.replace(
+            locale === "en" ? "is recorded" : "được ghi",
+            locale === "en" ? "is not recorded" : "không được ghi",
+          ),
+        `${locale} ${relativePath} physical-model recording negation`,
+      );
+      assert.throws(
+        () =>
+          assertModelState(
+            negatedPhysicalModelRecord,
+            `${locale} ${relativePath} negated Virtual/physical model state`,
+          ),
+        assert.AssertionError,
       );
     }
 
@@ -1010,7 +1073,7 @@ test("session lifecycle, runtime, compaction, and eval guides use 0.99.2 boundar
             /does not delete[^.]*raw tree/i,
           ]
         : [
-            /điểm cắt hợp lệ[^.]*canonical projected[^.]*branch đã chọn/i,
+            /`projected entry`[^.]*điểm cắt hợp lệ[^.]*canonical projection[^.]*branch đã chọn/i,
             /summary[^.]*projected message cũ hơn/i,
             /plain `custom` entry[^.]*bị loại[^.]*LLM context[^.]*không thể[^.]*điểm cắt/i,
             /`custom_message`[^.]*role `custom`[^.]*điểm cắt hợp lệ/i,
@@ -1088,7 +1151,11 @@ test("session lifecycle, runtime, compaction, and eval guides use 0.99.2 boundar
       "`abort()`",
       locale === "en"
         ? [/active run/i, /await[^.]*settle/i, /before[^.]*replacement/i]
-        : [/active run/i, /await[^.]*settle/i, /trước[^.]*replacement/i],
+        : [
+            /active run/i,
+            /chờ[^.]*run[^.]*kết thúc hẳn/i,
+            /rồi mới[^.]*replacement teardown/i,
+          ],
       `${locale} host runtime abort boundary`,
     );
     assertSameParagraph(

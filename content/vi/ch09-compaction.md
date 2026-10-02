@@ -224,7 +224,7 @@ cắt tại mục người dùng số 4
 
 `firstKeptEntryId` xác định một mục trong cây phiên thay vì vị trí trong mảng. Nhờ đó, bước dựng lại có thể tìm đúng ranh giới sau khi tải lại và trên đường dẫn liên kết qua các mục cha. Nếu một phiên cũ không cung cấp được mã cho mục đã chọn, bước chuẩn bị trả `undefined` thay vì ghi một điểm kiểm tra không thể dùng.
 
-Pi lấy `firstKeptEntryId` từ một điểm cắt hợp lệ trong các canonical projected entry của branch đã chọn, còn summary bao phủ các projected message cũ hơn nằm trước boundary đó. Plain `custom` entry bị loại khỏi LLM context và không thể là điểm cắt; `custom_message` được chiếu thành role `custom` và có thể là điểm cắt hợp lệ. Việc append checkpoint thay đổi projection về sau nhưng không xóa raw tree.
+Pi lấy `firstKeptEntryId` từ một `projected entry` là điểm cắt hợp lệ trong canonical projection của branch đã chọn, còn summary bao phủ các projected message cũ hơn nằm trước boundary đó. Plain `custom` entry bị loại khỏi LLM context và không thể là điểm cắt; `custom_message` được chiếu thành role `custom` và có thể là điểm cắt hợp lệ. Việc append checkpoint thay đổi projection về sau nhưng không xóa raw tree.
 
 ### Đi ngược theo ngân sách và ranh giới của lần nén tiếp theo
 
