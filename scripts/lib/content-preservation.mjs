@@ -17,9 +17,9 @@ const VALID_DELETION_METRICS = new Set([
   "mermaidBlocks",
   "tables",
 ]);
-const HISTORICAL_PRESERVATION_RECORDS = 54;
+const HISTORICAL_PRESERVATION_RECORDS = 86;
 const HISTORICAL_PRESERVATION_PREFIX_SHA256 =
-  "253683dee3be6f51cc2e740cc87e3ad4390e0429c7cdf41c5cdc5c5189a7d3e6";
+  "4a8996d4a310b416369b78b586bdfda7101eff04527c1925308e7ada06b80b81";
 
 function withoutFrontmatter(source) {
   const lines = source.replace(/\r\n?/g, "\n").split("\n");
@@ -388,43 +388,43 @@ export function preservationManifestCoverageErrors(translations, manifest) {
     { key: page.key, path: `vi/${page.vi}` },
   ]);
   const manifestPages = manifest?.pages ?? [];
+  const manifestByPath = new Map(
+    manifestPages.map((page, index) => [page?.path, { page, index }]),
+  );
   const errors = [];
 
   expectedPages.forEach((expected, index) => {
-    const actual = manifestPages[index];
+    const actual = manifestByPath.get(expected.path)?.page;
     if (!actual) {
       errors.push(
-        `${MANIFEST_LABEL}: missing pages[${index}] for translation key ${expected.key} (${expected.path})`,
+        `${MANIFEST_LABEL}: missing translation key ${expected.key} (${expected.path})`,
       );
       return;
     }
     if (actual.key !== expected.key) {
       errors.push(
-        `${MANIFEST_LABEL}: pages[${index}].key must match translation key ${expected.key}`,
-      );
-    }
-    if (actual.path !== expected.path) {
-      errors.push(
-        `${MANIFEST_LABEL}: pages[${index}].path must match translation path ${expected.path}`,
+        `${MANIFEST_LABEL}: ${expected.path} must match translation key ${expected.key}`,
       );
     }
   });
 
-  for (
-    let index = expectedPages.length;
-    index < manifestPages.length;
-    index += 1
-  ) {
-    errors.push(`${MANIFEST_LABEL}: pages[${index}] has no translation entry`);
+  const expectedPaths = new Set(expectedPages.map((page) => page.path));
+  for (const [index, page] of manifestPages.entries()) {
+    if (!expectedPaths.has(page?.path)) {
+      errors.push(
+        `${MANIFEST_LABEL}: pages[${index}] has no translation entry`,
+      );
+    }
   }
 
   return errors;
 }
 
 export function historicalPreservationPrefixErrors(manifest) {
-  const prefix = (manifest?.pages ?? [])
-    .slice(0, HISTORICAL_PRESERVATION_RECORDS)
-    .map(({ key, path }) => ({ key, path }));
+  const prefix = (manifest?.pages ?? []).slice(
+    0,
+    HISTORICAL_PRESERVATION_RECORDS,
+  );
   const digest = createHash("sha256")
     .update(JSON.stringify(prefix))
     .digest("hex");
@@ -432,9 +432,7 @@ export function historicalPreservationPrefixErrors(manifest) {
   return prefix.length === HISTORICAL_PRESERVATION_RECORDS &&
     digest === HISTORICAL_PRESERVATION_PREFIX_SHA256
     ? []
-    : [
-        `${MANIFEST_LABEL}: the immutable 54-record historical key/path prefix changed`,
-      ];
+    : [`${MANIFEST_LABEL}: the immutable 86-record historical prefix changed`];
 }
 
 export async function validatePreservation(rootURL, manifest) {

@@ -1290,6 +1290,72 @@
       "minimumMermaidBlocks": 1,
       "minimumTables": 2,
       "approvedDeletions": []
+    },
+    {
+      "key": "how-to-use-codemode-and-mcp",
+      "path": "en/how-to/use-codemode-and-mcp.md",
+      "baselineWords": 1837,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": { "2": 9, "3": 3, "4": 0 },
+      "minimumCodeFences": 9,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 7,
+      "approvedDeletions": []
+    },
+    {
+      "key": "how-to-use-codemode-and-mcp",
+      "path": "vi/how-to/use-codemode-and-mcp.md",
+      "baselineWords": 2058,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": { "2": 9, "3": 3, "4": 0 },
+      "minimumCodeFences": 9,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 7,
+      "approvedDeletions": []
+    },
+    {
+      "key": "how-to-route-virtual-models",
+      "path": "en/how-to/route-virtual-models.md",
+      "baselineWords": 1426,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": { "2": 10, "3": 0, "4": 0 },
+      "minimumCodeFences": 1,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 2,
+      "approvedDeletions": []
+    },
+    {
+      "key": "how-to-route-virtual-models",
+      "path": "vi/how-to/route-virtual-models.md",
+      "baselineWords": 1607,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": { "2": 10, "3": 0, "4": 0 },
+      "minimumCodeFences": 1,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 2,
+      "approvedDeletions": []
+    },
+    {
+      "key": "how-to-build-durable-agent",
+      "path": "en/how-to/build-durable-agent.md",
+      "baselineWords": 3016,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": { "2": 15, "3": 0, "4": 0 },
+      "minimumCodeFences": 2,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 0,
+      "approvedDeletions": []
+    },
+    {
+      "key": "how-to-build-durable-agent",
+      "path": "vi/how-to/build-durable-agent.md",
+      "baselineWords": 3416,
+      "minimumWordRatio": 0.8,
+      "minimumHeadingCounts": { "2": 15, "3": 0, "4": 0 },
+      "minimumCodeFences": 2,
+      "minimumMermaidBlocks": 0,
+      "minimumTables": 0,
+      "approvedDeletions": []
     }
   ]
 }

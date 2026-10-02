@@ -96,6 +96,8 @@ Các chi tiết implementation dưới đây hữu ích khi chẩn đoán lỗi 
 
 Các sửa đổi này không expose public API. Nếu endpoint tương thích OpenAI vẫn từ chối lượt chỉ có image, hãy kiểm tra các content part đã serialize. Với split-turn compaction, việc tách này tránh để chỉ dẫn tiếp tục bị coi là conversation trước đó; không có public compaction option điều khiển hành vi này.
 
+Ở các bản cũ, Claude Fable đôi khi từ chối khi tóm tắt một lượt split-turn. Đây là phép so sánh chẩn đoán lịch sử, không phải cấu hình API hiện tại: hãy kiểm tra transcript trước đó nằm dưới `# Conversation` và chỉ chỉ dẫn tiếp tục nằm dưới `# Instructions`. Hành vi `0.99.2` hiện tại vẫn giữ hai vai trò này tách biệt.
+
 ### Kết quả Tool không đến được model
 
 Implementation của `AgentTool.execute` trả về `AgentToolResult` gồm `content` cùng `details` hoặc `usage` tùy chọn; implementation không tự dựng `ToolResultMessage`. Agent Core liên kết result với `ToolCall` hiện tại rồi tạo protocol message có call ID và tên Tool khớp. Nếu model không nhận được kết quả, hãy kiểm tra các content block được trả về và sự kiện `tool_execution_end`.

@@ -11110,9 +11110,9 @@ const expectedAuditEvidence = Object.freeze({
   "reference-api":
     "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/index.ts",
   "reference-configuration":
-    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/config.ts",
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/docs/settings.md",
   "reference-environment-variables":
-    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/src/config.ts",
+    "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/coding-agent/docs/environment-variables.md",
   "ch01-overview": "https://github.com/earendil-works/pi/releases/tag/v0.99.2",
   "ch02-three-layer-arch":
     "https://github.com/earendil-works/pi/blob/005af57d88ee23b33778f343a9595b32e67ff788/packages/agent/src/types.ts",
@@ -11168,6 +11168,113 @@ const expectedAuditEvidence = Object.freeze({
     "https://github.com/earendil-works/pi/releases/tag/v0.99.2",
   faq: "https://github.com/earendil-works/pi/releases/tag/v0.99.2",
   changelog: "https://github.com/earendil-works/pi/releases/tag/v0.99.2",
+});
+
+const expectedAuditEvidenceLabels = Object.freeze({
+  home: "home claim authority",
+  quickstart: "quickstart claim authority",
+  glossary: "glossary claim authority",
+  "how-to-add-custom-tool": "how-to-add-custom-tool claim authority",
+  "how-to-plug-new-model": "how-to-plug-new-model claim authority",
+  "how-to-stream-output": "how-to-stream-output claim authority",
+  "how-to-persist-sessions": "how-to-persist-sessions claim authority",
+  "how-to-customize-system-prompt":
+    "how-to-customize-system-prompt claim authority",
+  "how-to-test-agent-deterministically":
+    "how-to-test-agent-deterministically claim authority",
+  "how-to-run-pi-evals": "how-to-run-pi-evals claim authority",
+  "how-to-host-session-runtime": "how-to-host-session-runtime claim authority",
+  "how-to-use-codemode-and-mcp": "how-to-use-codemode-and-mcp claim authority",
+  "how-to-route-virtual-models": "how-to-route-virtual-models claim authority",
+  "how-to-build-durable-agent": "how-to-build-durable-agent claim authority",
+  "reference-api": "reference-api claim authority",
+  "reference-configuration": "settings reference authority",
+  "reference-environment-variables":
+    "environment variables reference authority",
+  "ch01-overview": "ch01-overview claim authority",
+  "ch02-three-layer-arch": "ch02-three-layer-arch claim authority",
+  "ch03-agent-loop": "ch03-agent-loop claim authority",
+  "ch04-model-invocation": "ch04-model-invocation claim authority",
+  "ch05-tool-system": "ch05-tool-system claim authority",
+  "ch06-messages": "ch06-messages claim authority",
+  "ch07-event-driven": "ch07-event-driven claim authority",
+  "ch08-context-engineering": "ch08-context-engineering claim authority",
+  "ch09-compaction": "ch09-compaction claim authority",
+  "ch10-session": "ch10-session claim authority",
+  "ch11-testing-evaluation": "ch11-testing-evaluation claim authority",
+  "course-overview": "course-overview claim authority",
+  "course-00-complete-agent-trace":
+    "course-00-complete-agent-trace claim authority",
+  "course-01-typescript-protocols":
+    "course-01-typescript-protocols claim authority",
+  "course-02-event-stream": "course-02-event-stream claim authority",
+  "course-03-message-ir": "course-03-message-ir claim authority",
+  "course-04-deterministic-model":
+    "course-04-deterministic-model claim authority",
+  "course-05-provider-adapter": "course-05-provider-adapter claim authority",
+  "course-06-tool-contract": "course-06-tool-contract claim authority",
+  "course-07-agent-loop": "course-07-agent-loop claim authority",
+  "course-08-coding-tools": "course-08-coding-tools claim authority",
+  "course-09-stateful-agent": "course-09-stateful-agent claim authority",
+  "course-10-session-tree": "course-10-session-tree claim authority",
+  "course-11-context-compaction":
+    "course-11-context-compaction claim authority",
+  "course-12-resources-extensions":
+    "course-12-resources-extensions claim authority",
+  "course-13-runtime-composition":
+    "course-13-runtime-composition claim authority",
+  "course-14-agent-evaluation": "course-14-agent-evaluation claim authority",
+  faq: "faq claim authority",
+  changelog: "changelog claim authority",
+});
+
+const expectedAuditDeletions = Object.freeze({
+  home: "none",
+  quickstart: "none",
+  glossary: "none",
+  "how-to-add-custom-tool": "none",
+  "how-to-plug-new-model": "none",
+  "how-to-stream-output": "none",
+  "how-to-persist-sessions": "none",
+  "how-to-customize-system-prompt": "none",
+  "how-to-test-agent-deterministically": "none",
+  "how-to-run-pi-evals": "none",
+  "how-to-host-session-runtime": "none",
+  "how-to-use-codemode-and-mcp": "none",
+  "how-to-route-virtual-models": "none",
+  "how-to-build-durable-agent": "none",
+  "reference-api": "none",
+  "reference-configuration": "none",
+  "reference-environment-variables": "none",
+  "ch01-overview": "none",
+  "ch02-three-layer-arch": "none",
+  "ch03-agent-loop": "none",
+  "ch04-model-invocation": "none",
+  "ch05-tool-system": "none",
+  "ch06-messages": "none",
+  "ch07-event-driven": "none",
+  "ch08-context-engineering": "none",
+  "ch09-compaction": "none",
+  "ch10-session": "none",
+  "ch11-testing-evaluation": "none",
+  "course-overview": "none",
+  "course-00-complete-agent-trace": "none",
+  "course-01-typescript-protocols": "none",
+  "course-02-event-stream": "none",
+  "course-03-message-ir": "none",
+  "course-04-deterministic-model": "none",
+  "course-05-provider-adapter": "none",
+  "course-06-tool-contract": "none",
+  "course-07-agent-loop": "none",
+  "course-08-coding-tools": "none",
+  "course-09-stateful-agent": "none",
+  "course-10-session-tree": "none",
+  "course-11-context-compaction": "none",
+  "course-12-resources-extensions": "none",
+  "course-13-runtime-composition": "none",
+  "course-14-agent-evaluation": "none",
+  faq: "none",
+  changelog: "none",
 });
 
 const expectedAuditOutcomes = Object.freeze({
@@ -11271,6 +11378,7 @@ function staleAuthorityOccurrences(entries) {
           filename,
           marker: name,
           occurrence: match[0],
+          lineNumber: lineIndex + 1,
           lineContext: lines[lineIndex].trim(),
           scope: scopeForLine(lineIndex),
         };
@@ -11288,8 +11396,10 @@ function assertNoUnclassifiedStaleAuthority(entries, allowlist = []) {
       (descriptor) =>
         descriptor.filename === occurrence.filename &&
         descriptor.marker === occurrence.marker &&
-        descriptor.scope === occurrence.scope &&
-        occurrence.lineContext === descriptor.lineContext,
+        descriptorValue(descriptor.scopeTemplate, descriptor.marker) ===
+          occurrence.scope &&
+        occurrence.lineContext ===
+          descriptorValue(descriptor.lineContextTemplate, descriptor.marker),
     );
     if (descriptorIndex === -1) {
       unclassified.push(occurrence);
@@ -11301,6 +11411,12 @@ function assertNoUnclassifiedStaleAuthority(entries, allowlist = []) {
     ...remaining.map((descriptor) => ({
       ...descriptor,
       occurrence: "missing expected occurrence",
+      lineNumber: "missing",
+      lineContext: descriptorValue(
+        descriptor.lineContextTemplate,
+        descriptor.marker,
+      ),
+      scope: descriptorValue(descriptor.scopeTemplate, descriptor.marker),
     })),
   );
   assert.equal(
@@ -11308,73 +11424,496 @@ function assertNoUnclassifiedStaleAuthority(entries, allowlist = []) {
     0,
     `unclassified stale authority: ${unclassified
       .map(
-        ({ filename, marker, occurrence, scope }) =>
-          `${filename} (${marker}: ${occurrence}; ${scope ?? "no scope"})`,
+        ({ filename, marker, occurrence, lineNumber, scope, lineContext }) =>
+          `${filename}:${lineNumber} (${marker}: ${occurrence}; ${scope ?? "no scope"}; ${lineContext ?? "no line"})`,
       )
       .join(", ")}`,
   );
 }
 
-function decodeStaleAuthorityDescriptor(encoded) {
-  return JSON.parse(Buffer.from(encoded, "base64").toString("utf8"));
+const staleAuthorityAllowlist = Object.freeze([
+  {
+    filename: "content/en/changelog.md",
+    marker: "old-version",
+    reason: "dated historical entry",
+    lineContextTemplate:
+      "Pify moves its documentation baseline from `0.85.0` to [Pi `<STALE:old-version>`](https://github.com/earendil-works/pi/releases/tag/v<STALE:old-version>). This rollup includes [Pi `0.85.1`](https://github.com/earendil-works/pi/releases/tag/v0.85.1), [Pi `0.86.0`](https://github.com/earendil-works/pi/releases/tag/v0.86.0), [Pi `0.86.1`](https://github.com/earendil-works/pi/releases/tag/v0.86.1), and [Pi `0.87.0`](https://github.com/earendil-works/pi/releases/tag/v0.87.0), with source review pinned to [`f07218c`](https://github.com/earendil-works/pi/commit/<STALE:old-commit>).",
+    scopeTemplate: "## 2026-09-23",
+  },
+  {
+    filename: "content/en/changelog.md",
+    marker: "old-version",
+    reason: "dated historical entry",
+    lineContextTemplate:
+      "Pify moves its documentation baseline from `0.85.0` to [Pi `<STALE:old-version>`](https://github.com/earendil-works/pi/releases/tag/v<STALE:old-version>). This rollup includes [Pi `0.85.1`](https://github.com/earendil-works/pi/releases/tag/v0.85.1), [Pi `0.86.0`](https://github.com/earendil-works/pi/releases/tag/v0.86.0), [Pi `0.86.1`](https://github.com/earendil-works/pi/releases/tag/v0.86.1), and [Pi `0.87.0`](https://github.com/earendil-works/pi/releases/tag/v0.87.0), with source review pinned to [`f07218c`](https://github.com/earendil-works/pi/commit/<STALE:old-commit>).",
+    scopeTemplate: "## 2026-09-23",
+  },
+  {
+    filename: "content/en/changelog.md",
+    marker: "old-version",
+    reason: "dated historical entry",
+    lineContextTemplate:
+      "- `<STALE:old-version>` adds Claude Opus 5.5 through Anthropic, GPT-6 Sol and GPT-6 Luna through OpenAI API keys and OpenAI Codex subscriptions, and all three through supported GitHub Copilot routes. New xAI sessions default to Grok 4.7.",
+    scopeTemplate: "## 2026-09-23",
+  },
+  {
+    filename: "content/en/changelog.md",
+    marker: "old-version",
+    reason: "dated historical entry",
+    lineContextTemplate:
+      "- In `<STALE:old-version>`, split-turn compaction prompts separate the conversation from continuation instructions so Claude Fable 5.1 can summarize it. A missing or invalid `--mode` value now reports an error and exits with a nonzero status.",
+    scopeTemplate: "## 2026-09-23",
+  },
+  {
+    filename: "content/en/changelog.md",
+    marker: "old-version",
+    reason: "dated historical entry",
+    lineContextTemplate:
+      "- This entry publishes Pify's `<STALE:old-version>` baseline authority and release rollup. Detailed chapter, How-to, reference, and source-review migrations are scheduled for the remaining commits in this release series. The Course implementation remains an independent teaching implementation with no promise of Pi API compatibility.",
+    scopeTemplate: "## 2026-09-23",
+  },
+  {
+    filename: "content/en/changelog.md",
+    marker: "old-version",
+    reason: "dated historical entry",
+    lineContextTemplate:
+      "- Package verification pins `@earendil-works/pi-ai`, `@earendil-works/pi-agent-core`, `@earendil-works/pi-coding-agent`, and `@earendil-works/pi-server` to `<STALE:old-version>`. `scripts/fixtures/<STALE:old-release-fixture>` records release authority; `tests/fixtures/<STALE:old-sdk-fixture>` checks public declarations and supplies offline deterministic Agent, session restoration, and runtime-host checks. Content checks cover release links, migration claims, bilingual structure, `lint:sync`, `lint:frontmatter`, `lint:editorial`, and `test:preservation`; these checks do not exercise live provider accounts.",
+    scopeTemplate: "## 2026-09-23",
+  },
+  {
+    filename: "content/en/changelog.md",
+    marker: "old-commit",
+    reason: "dated historical entry",
+    lineContextTemplate:
+      "Pify moves its documentation baseline from `0.85.0` to [Pi `<STALE:old-version>`](https://github.com/earendil-works/pi/releases/tag/v<STALE:old-version>). This rollup includes [Pi `0.85.1`](https://github.com/earendil-works/pi/releases/tag/v0.85.1), [Pi `0.86.0`](https://github.com/earendil-works/pi/releases/tag/v0.86.0), [Pi `0.86.1`](https://github.com/earendil-works/pi/releases/tag/v0.86.1), and [Pi `0.87.0`](https://github.com/earendil-works/pi/releases/tag/v0.87.0), with source review pinned to [`f07218c`](https://github.com/earendil-works/pi/commit/<STALE:old-commit>).",
+    scopeTemplate: "## 2026-09-23",
+  },
+  {
+    filename: "content/en/changelog.md",
+    marker: "old-release-fixture",
+    reason: "dated historical entry",
+    lineContextTemplate:
+      "- Package verification pins `@earendil-works/pi-ai`, `@earendil-works/pi-agent-core`, `@earendil-works/pi-coding-agent`, and `@earendil-works/pi-server` to `<STALE:old-version>`. `scripts/fixtures/<STALE:old-release-fixture>` records release authority; `tests/fixtures/<STALE:old-sdk-fixture>` checks public declarations and supplies offline deterministic Agent, session restoration, and runtime-host checks. Content checks cover release links, migration claims, bilingual structure, `lint:sync`, `lint:frontmatter`, `lint:editorial`, and `test:preservation`; these checks do not exercise live provider accounts.",
+    scopeTemplate: "## 2026-09-23",
+  },
+  {
+    filename: "content/en/changelog.md",
+    marker: "old-sdk-fixture",
+    reason: "dated historical entry",
+    lineContextTemplate:
+      "- Package verification pins `@earendil-works/pi-ai`, `@earendil-works/pi-agent-core`, `@earendil-works/pi-coding-agent`, and `@earendil-works/pi-server` to `<STALE:old-version>`. `scripts/fixtures/<STALE:old-release-fixture>` records release authority; `tests/fixtures/<STALE:old-sdk-fixture>` checks public declarations and supplies offline deterministic Agent, session restoration, and runtime-host checks. Content checks cover release links, migration claims, bilingual structure, `lint:sync`, `lint:frontmatter`, `lint:editorial`, and `test:preservation`; these checks do not exercise live provider accounts.",
+    scopeTemplate: "## 2026-09-23",
+  },
+  {
+    filename: "content/vi/changelog.md",
+    marker: "old-version",
+    reason: "dated historical entry",
+    lineContextTemplate:
+      "Pify chuyển baseline tài liệu từ `0.85.0` lên [Pi `<STALE:old-version>`](https://github.com/earendil-works/pi/releases/tag/v<STALE:old-version>). Đợt cập nhật này bao gồm [Pi `0.85.1`](https://github.com/earendil-works/pi/releases/tag/v0.85.1), [Pi `0.86.0`](https://github.com/earendil-works/pi/releases/tag/v0.86.0), [Pi `0.86.1`](https://github.com/earendil-works/pi/releases/tag/v0.86.1) và [Pi `0.87.0`](https://github.com/earendil-works/pi/releases/tag/v0.87.0), với source review ghim tại [`f07218c`](https://github.com/earendil-works/pi/commit/<STALE:old-commit>).",
+    scopeTemplate: "## 2026-09-23",
+  },
+  {
+    filename: "content/vi/changelog.md",
+    marker: "old-version",
+    reason: "dated historical entry",
+    lineContextTemplate:
+      "Pify chuyển baseline tài liệu từ `0.85.0` lên [Pi `<STALE:old-version>`](https://github.com/earendil-works/pi/releases/tag/v<STALE:old-version>). Đợt cập nhật này bao gồm [Pi `0.85.1`](https://github.com/earendil-works/pi/releases/tag/v0.85.1), [Pi `0.86.0`](https://github.com/earendil-works/pi/releases/tag/v0.86.0), [Pi `0.86.1`](https://github.com/earendil-works/pi/releases/tag/v0.86.1) và [Pi `0.87.0`](https://github.com/earendil-works/pi/releases/tag/v0.87.0), với source review ghim tại [`f07218c`](https://github.com/earendil-works/pi/commit/<STALE:old-commit>).",
+    scopeTemplate: "## 2026-09-23",
+  },
+  {
+    filename: "content/vi/changelog.md",
+    marker: "old-version",
+    reason: "dated historical entry",
+    lineContextTemplate:
+      "- `<STALE:old-version>` bổ sung Claude Opus 5.5 qua Anthropic, GPT-6 Sol và GPT-6 Luna qua OpenAI API key cùng OpenAI Codex subscription, và cả ba model qua các route GitHub Copilot được hỗ trợ. Session xAI mới mặc định dùng Grok 4.7.",
+    scopeTemplate: "## 2026-09-23",
+  },
+  {
+    filename: "content/vi/changelog.md",
+    marker: "old-version",
+    reason: "dated historical entry",
+    lineContextTemplate:
+      "- Trong `<STALE:old-version>`, prompt cho split-turn compaction tách conversation khỏi chỉ dẫn tiếp tục để Claude Fable 5.1 có thể tạo summary. Giá trị `--mode` bị thiếu hoặc không hợp lệ nay báo lỗi và thoát với status nonzero.",
+    scopeTemplate: "## 2026-09-23",
+  },
+  {
+    filename: "content/vi/changelog.md",
+    marker: "old-version",
+    reason: "dated historical entry",
+    lineContextTemplate:
+      "- Mục này công bố baseline `<STALE:old-version>` cùng nguồn xác thực và phần tóm tắt release của Pify. Các cập nhật chi tiết cho chương, hướng dẫn How-to, trang tham khảo và source-review record dự kiến nằm trong các commit còn lại của đợt cập nhật này. Course implementation vẫn là implementation độc lập để học, không cam kết tương thích API của Pi.",
+    scopeTemplate: "## 2026-09-23",
+  },
+  {
+    filename: "content/vi/changelog.md",
+    marker: "old-version",
+    reason: "dated historical entry",
+    lineContextTemplate:
+      "- Phần kiểm chứng package ghim `@earendil-works/pi-ai`, `@earendil-works/pi-agent-core`, `@earendil-works/pi-coding-agent` và `@earendil-works/pi-server` ở `<STALE:old-version>`. `scripts/fixtures/<STALE:old-release-fixture>` ghi nguồn xác thực release; `tests/fixtures/<STALE:old-sdk-fixture>` kiểm tra public declaration và cung cấp các bài kiểm tra offline cho deterministic Agent, session restoration và runtime host. Content check bao gồm release link, các mô tả migration, cấu trúc song ngữ, `lint:sync`, `lint:frontmatter`, `lint:editorial` và `test:preservation`; các kiểm tra này không gọi tài khoản provider thật.",
+    scopeTemplate: "## 2026-09-23",
+  },
+  {
+    filename: "content/vi/changelog.md",
+    marker: "old-commit",
+    reason: "dated historical entry",
+    lineContextTemplate:
+      "Pify chuyển baseline tài liệu từ `0.85.0` lên [Pi `<STALE:old-version>`](https://github.com/earendil-works/pi/releases/tag/v<STALE:old-version>). Đợt cập nhật này bao gồm [Pi `0.85.1`](https://github.com/earendil-works/pi/releases/tag/v0.85.1), [Pi `0.86.0`](https://github.com/earendil-works/pi/releases/tag/v0.86.0), [Pi `0.86.1`](https://github.com/earendil-works/pi/releases/tag/v0.86.1) và [Pi `0.87.0`](https://github.com/earendil-works/pi/releases/tag/v0.87.0), với source review ghim tại [`f07218c`](https://github.com/earendil-works/pi/commit/<STALE:old-commit>).",
+    scopeTemplate: "## 2026-09-23",
+  },
+  {
+    filename: "content/vi/changelog.md",
+    marker: "old-release-fixture",
+    reason: "dated historical entry",
+    lineContextTemplate:
+      "- Phần kiểm chứng package ghim `@earendil-works/pi-ai`, `@earendil-works/pi-agent-core`, `@earendil-works/pi-coding-agent` và `@earendil-works/pi-server` ở `<STALE:old-version>`. `scripts/fixtures/<STALE:old-release-fixture>` ghi nguồn xác thực release; `tests/fixtures/<STALE:old-sdk-fixture>` kiểm tra public declaration và cung cấp các bài kiểm tra offline cho deterministic Agent, session restoration và runtime host. Content check bao gồm release link, các mô tả migration, cấu trúc song ngữ, `lint:sync`, `lint:frontmatter`, `lint:editorial` và `test:preservation`; các kiểm tra này không gọi tài khoản provider thật.",
+    scopeTemplate: "## 2026-09-23",
+  },
+  {
+    filename: "content/vi/changelog.md",
+    marker: "old-sdk-fixture",
+    reason: "dated historical entry",
+    lineContextTemplate:
+      "- Phần kiểm chứng package ghim `@earendil-works/pi-ai`, `@earendil-works/pi-agent-core`, `@earendil-works/pi-coding-agent` và `@earendil-works/pi-server` ở `<STALE:old-version>`. `scripts/fixtures/<STALE:old-release-fixture>` ghi nguồn xác thực release; `tests/fixtures/<STALE:old-sdk-fixture>` kiểm tra public declaration và cung cấp các bài kiểm tra offline cho deterministic Agent, session restoration và runtime host. Content check bao gồm release link, các mô tả migration, cấu trúc song ngữ, `lint:sync`, `lint:frontmatter`, `lint:editorial` và `test:preservation`; các kiểm tra này không gọi tài khoản provider thật.",
+    scopeTemplate: "## 2026-09-23",
+  },
+  {
+    filename: "scripts/fixtures/pi-release-0992.json",
+    marker: "old-version",
+    reason: "migration fixture field",
+    lineContextTemplate:
+      '"previousDocumentationVersion": "<STALE:old-version>",',
+    scopeTemplate: "JSON migration fixture",
+  },
+  {
+    filename: "scripts/course-content.test.mjs",
+    marker: "old-version",
+    reason: "historical/migration/rejection test scope",
+    lineContextTemplate:
+      'const staleComparisonVersions = ["<STALE:old-version>", "0.85.0"];',
+    scopeTemplate: "const:staleComparisonVersions",
+  },
+  {
+    filename: "scripts/course-content.test.mjs",
+    marker: "old-version",
+    reason: "historical/migration/rejection test scope",
+    lineContextTemplate:
+      'source.replace("Compare with Pi SDK 0.99.2", "Compare with Pi SDK <STALE:old-version>"),',
+    scopeTemplate:
+      "test:Course comparison authority rejects stale pins, headings, dates, unpinned paths, and changed API drift",
+  },
+  {
+    filename: "scripts/course-content.test.mjs",
+    marker: "old-commit",
+    reason: "historical/migration/rejection test scope",
+    lineContextTemplate: '"<STALE:old-commit>",',
+    scopeTemplate: "const:staleReleaseCommits",
+  },
+  {
+    filename: "scripts/course-content.test.mjs",
+    marker: "moving-pi-source",
+    reason: "historical/migration/rejection test scope",
+    lineContextTemplate:
+      '"[Unpinned blob](<STALE:moving-pi-source-blob>packages/coding-agent/src/index.ts)\\n\\n## Next checkpoint",',
+    scopeTemplate:
+      "test:Course comparison authority rejects stale pins, headings, dates, unpinned paths, and changed API drift",
+  },
+  {
+    filename: "scripts/course-content.test.mjs",
+    marker: "moving-pi-source",
+    reason: "historical/migration/rejection test scope",
+    lineContextTemplate:
+      '"[Unpinned tree](<STALE:moving-pi-source-tree>packages/coding-agent)\\n\\n## Next checkpoint",',
+    scopeTemplate:
+      "test:Course comparison authority rejects stale pins, headings, dates, unpinned paths, and changed API drift",
+  },
+  {
+    filename: "scripts/pi-release-0992-contract.test.mjs",
+    marker: "old-version",
+    reason: "historical/migration/rejection test scope",
+    lineContextTemplate: 'previousDocumentationVersion: "<STALE:old-version>",',
+    scopeTemplate: "const:expectedRelease",
+  },
+  {
+    filename: "scripts/pi-release-0992-contract.test.mjs",
+    marker: "old-commit",
+    reason: "historical/migration/rejection test scope",
+    lineContextTemplate:
+      '"Historical authorities 20dd3a7 and <STALE:old-commit> remain valid.",',
+    scopeTemplate:
+      "test:current public docs use the exact Pi 0.99.2 revision in plain text and links",
+  },
+  {
+    filename: "scripts/pi-release-contract.test.mjs",
+    marker: "old-version",
+    reason: "historical/migration/rejection test scope",
+    lineContextTemplate:
+      'assert.equal(release.previousDocumentationVersion, "<STALE:old-version>");',
+    scopeTemplate:
+      "test:release fixture identifies published Pi 0.99.2 authority",
+  },
+  {
+    filename: "scripts/pi-release-contract.test.mjs",
+    marker: "old-version",
+    reason: "historical/migration/rejection test scope",
+    lineContextTemplate:
+      'test("the historical bilingual changelog preserves the structured Pi <STALE:old-version> documentation rollup", async () => {',
+    scopeTemplate:
+      "test:the historical bilingual changelog preserves the structured Pi <STALE:old-version> documentation rollup",
+  },
+  {
+    filename: "scripts/pi-release-contract.test.mjs",
+    marker: "old-version",
+    reason: "historical/migration/rejection test scope",
+    lineContextTemplate:
+      "const context = `${locale} historical Pi <STALE:old-version> changelog entry`;",
+    scopeTemplate:
+      "test:the historical bilingual changelog preserves the structured Pi <STALE:old-version> documentation rollup",
+  },
+  {
+    filename: "scripts/pi-release-contract.test.mjs",
+    marker: "old-version",
+    reason: "historical/migration/rejection test scope",
+    lineContextTemplate:
+      'for (const tag of ["v0.85.1", "v0.86.0", "v0.86.1", "v0.87.0", "v<STALE:old-version>"]) {',
+    scopeTemplate:
+      "test:the historical bilingual changelog preserves the structured Pi <STALE:old-version> documentation rollup",
+  },
+  {
+    filename: "scripts/pi-release-contract.test.mjs",
+    marker: "old-version",
+    reason: "historical/migration/rejection test scope",
+    lineContextTemplate:
+      'test("historical Pi <STALE:old-version> changelog accuracy guard rejects migration and scope regressions", async () => {',
+    scopeTemplate:
+      "test:historical Pi <STALE:old-version> changelog accuracy guard rejects migration and scope regressions",
+  },
+  {
+    filename: "scripts/pi-release-contract.test.mjs",
+    marker: "old-version",
+    reason: "historical/migration/rejection test scope",
+    lineContextTemplate:
+      '"EN historical Pi <STALE:old-version> rollup mutation baseline",',
+    scopeTemplate:
+      "test:historical Pi <STALE:old-version> changelog accuracy guard rejects migration and scope regressions",
+  },
+  {
+    filename: "scripts/pi-release-contract.test.mjs",
+    marker: "old-version",
+    reason: "historical/migration/rejection test scope",
+    lineContextTemplate:
+      '"EN historical Pi <STALE:old-version> rollup mutation baseline",',
+    scopeTemplate:
+      "test:historical Pi <STALE:old-version> changelog accuracy guard rejects migration and scope regressions",
+  },
+  {
+    filename: "scripts/pi-release-contract.test.mjs",
+    marker: "old-version",
+    reason: "historical/migration/rejection test scope",
+    lineContextTemplate:
+      'test("historical Pi <STALE:old-version> changelog guard rejects deleted or reordered reliability topics", async () => {',
+    scopeTemplate:
+      "test:historical Pi <STALE:old-version> changelog guard rejects deleted or reordered reliability topics",
+  },
+  {
+    filename: "scripts/pi-release-contract.test.mjs",
+    marker: "old-version",
+    reason: "historical/migration/rejection test scope",
+    lineContextTemplate:
+      'test("historical Pi <STALE:old-version> changelog distinguishes publication scope and includes GPT-6 Astra", async () => {',
+    scopeTemplate:
+      "test:historical Pi <STALE:old-version> changelog distinguishes publication scope and includes GPT-6 Astra",
+  },
+  {
+    filename: "scripts/pi-release-contract.test.mjs",
+    marker: "old-version",
+    reason: "historical/migration/rejection test scope",
+    lineContextTemplate:
+      'test("historical Pi <STALE:old-version> changelog publication guard allows rewrites and rejects known overclaim fragments", async () => {',
+    scopeTemplate:
+      "test:historical Pi <STALE:old-version> changelog publication guard allows rewrites and rejects known overclaim fragments",
+  },
+  {
+    filename: "scripts/pi-release-contract.test.mjs",
+    marker: "old-version",
+    reason: "historical/migration/rejection test scope",
+    lineContextTemplate:
+      '"Pify now records the source authority for baseline <STALE:old-version> and a summary of the releases.",',
+    scopeTemplate:
+      "test:historical Pi <STALE:old-version> changelog publication guard allows rewrites and rejects known overclaim fragments",
+  },
+  {
+    filename: "scripts/pi-release-contract.test.mjs",
+    marker: "old-version",
+    reason: "historical/migration/rejection test scope",
+    lineContextTemplate:
+      '"Pify công bố nguồn xác thực cho baseline <STALE:old-version> và bản tổng hợp release.",',
+    scopeTemplate:
+      "test:historical Pi <STALE:old-version> changelog publication guard allows rewrites and rejects known overclaim fragments",
+  },
+  {
+    filename: "scripts/pi-release-contract.test.mjs",
+    marker: "old-version",
+    reason: "historical/migration/rejection test scope",
+    lineContextTemplate:
+      'test("historical Pi <STALE:old-version> changelog scope checks leave unrestricted wording to editorial review", async () => {',
+    scopeTemplate:
+      "test:historical Pi <STALE:old-version> changelog scope checks leave unrestricted wording to editorial review",
+  },
+  {
+    filename: "scripts/pi-release-contract.test.mjs",
+    marker: "old-version",
+    reason: "historical/migration/rejection test scope",
+    lineContextTemplate:
+      "`Pify moves its documentation baseline from \\`${staleVersion}\\` to Pi \\`<STALE:old-version>\\`.`,",
+    scopeTemplate:
+      "test:stale current-baseline scanner evaluates each changelog occurrence",
+  },
+  {
+    filename: "scripts/pi-release-contract.test.mjs",
+    marker: "old-version",
+    reason: "historical/migration/rejection test scope",
+    lineContextTemplate:
+      "`Pify chuyển baseline tài liệu từ \\`${staleVersion}\\` lên Pi \\`<STALE:old-version>\\`.`,",
+    scopeTemplate:
+      "test:stale current-baseline scanner evaluates each changelog occurrence",
+  },
+  {
+    filename: "scripts/pi-release-contract.test.mjs",
+    marker: "old-version",
+    reason: "historical/migration/rejection test scope",
+    lineContextTemplate:
+      "`Pify moves its documentation baseline from \\`${staleVersion}\\` to Pi \\`<STALE:old-version>\\`, but still says it is authoritative for current guidance.`,",
+    scopeTemplate:
+      "test:stale current-baseline scanner rejects mixed migration and current claims",
+  },
+  {
+    filename: "scripts/pi-release-contract.test.mjs",
+    marker: "old-version",
+    reason: "historical/migration/rejection test scope",
+    lineContextTemplate:
+      'test("historical Pi <STALE:old-version> bilingual audit ledger covers every public pair with file evidence", async () => {',
+    scopeTemplate:
+      "test:historical Pi <STALE:old-version> bilingual audit ledger covers every public pair with file evidence",
+  },
+  {
+    filename: "scripts/pi-release-contract.test.mjs",
+    marker: "old-version",
+    reason: "historical/migration/rejection test scope",
+    lineContextTemplate: '"Compare with Pi SDK <STALE:old-version>",',
+    scopeTemplate:
+      "test:active Course comparisons use strict Pi 0.99.2 authority",
+  },
+  {
+    filename: "scripts/pi-release-contract.test.mjs",
+    marker: "old-commit",
+    reason: "historical/migration/rejection test scope",
+    lineContextTemplate: 'const commit = "<STALE:old-commit>";',
+    scopeTemplate:
+      "test:historical Pi <STALE:old-version> bilingual audit ledger covers every public pair with file evidence",
+  },
+  {
+    filename: "scripts/pi-release-contract.test.mjs",
+    marker: "old-commit",
+    reason: "historical/migration/rejection test scope",
+    lineContextTemplate: '"<STALE:old-commit>",',
+    scopeTemplate: "function:assertActiveCourseComparisonAuthority",
+  },
+  {
+    filename: "scripts/pi-release-contract.test.mjs",
+    marker: "old-commit",
+    reason: "historical/migration/rejection test scope",
+    lineContextTemplate: 'expression: new RegExp("<STALE:old-commit>", "gi"),',
+    scopeTemplate: "const:staleAuthorityPatterns",
+  },
+  {
+    filename: "scripts/pi-release-contract.test.mjs",
+    marker: "old-commit",
+    reason: "historical/migration/rejection test scope",
+    lineContextTemplate: 'const oldCommit = "<STALE:old-commit>";',
+    scopeTemplate:
+      "test:stale-authority classifier rejects every protected marker in active material",
+  },
+  {
+    filename: "scripts/pi-release-contract.test.mjs",
+    marker: "moving-pi-source",
+    reason: "historical/migration/rejection test scope",
+    lineContextTemplate:
+      '"<STALE:moving-pi-source-blob>docs/v0.84.3-notes.md",',
+    scopeTemplate:
+      "test:active content uses the maintained Pi repository authority",
+  },
+  {
+    filename: "scripts/pi-release-contract.test.mjs",
+    marker: "moving-pi-source",
+    reason: "historical/migration/rejection test scope",
+    lineContextTemplate:
+      '"See <STALE:moving-pi-source-blob>packages/ai/src/index.ts for implementation details.",',
+    scopeTemplate:
+      "test:detects invalid Pi source refs without a release version claim",
+  },
+  {
+    filename: "scripts/pi-release-contract.test.mjs",
+    marker: "moving-pi-source",
+    reason: "historical/migration/rejection test scope",
+    lineContextTemplate:
+      'link: "<STALE:moving-pi-source-blob>packages/ai/src/index.ts",',
+    scopeTemplate:
+      "test:detects invalid Pi source refs without a release version claim",
+  },
+  {
+    filename: "scripts/pi-release-contract.test.mjs",
+    marker: "moving-pi-source",
+    reason: "historical/migration/rejection test scope",
+    lineContextTemplate:
+      '"## 2025-01-01\\n<STALE:moving-pi-source-blob>packages/ai/src/types.ts",',
+    scopeTemplate:
+      "test:stale-authority classifier rejects every protected marker in active material",
+  },
+]);
+
+// <STALE> prevents the raw scanner from matching its own descriptors; it is
+// an encoding convenience, not a security boundary. Call
+// formatStaleAuthorityDescriptorTemplates(entries) when reviewing an
+// intentional historical occurrence.
+const staleDescriptorValues = Object.freeze({
+  "<STALE:old-version>": "0.87" + ".1",
+  "<STALE:old-commit>": "f07218c4d4bbc12bef056" + "a7058c3dd49dfe41abe",
+  "<STALE:old-release-fixture>": "pi-release-0871" + ".json",
+  "<STALE:old-sdk-fixture>": "pi-sdk-0871" + ".contract.ts",
+  "<STALE:moving-pi-source-blob>":
+    "https://github.com/earendil-works/pi/blob/" + "main/",
+  "<STALE:moving-pi-source-tree>":
+    "https://github.com/earendil-works/pi/tree/" + "main/",
+});
+
+function descriptorValue(template, marker) {
+  let value = template;
+  for (const [token, markerValue] of Object.entries(staleDescriptorValues)) {
+    value = value.replaceAll(token, markerValue);
+  }
+  return value;
 }
 
-const staleAuthorityAllowlist = Object.freeze(
-  [
-    "eyJmaWxlbmFtZSI6ImNvbnRlbnQvZW4vY2hhbmdlbG9nLm1kIiwibWFya2VyIjoib2xkLXZlcnNpb24iLCJsaW5lQ29udGV4dCI6IlBpZnkgbW92ZXMgaXRzIGRvY3VtZW50YXRpb24gYmFzZWxpbmUgZnJvbSBgMC44NS4wYCB0byBbUGkgYDAuODcuMWBdKGh0dHBzOi8vZ2l0aHViLmNvbS9lYXJlbmRpbC13b3Jrcy9waS9yZWxlYXNlcy90YWcvdjAuODcuMSkuIFRoaXMgcm9sbHVwIGluY2x1ZGVzIFtQaSBgMC44NS4xYF0oaHR0cHM6Ly9naXRodWIuY29tL2VhcmVuZGlsLXdvcmtzL3BpL3JlbGVhc2VzL3RhZy92MC44NS4xKSwgW1BpIGAwLjg2LjBgXShodHRwczovL2dpdGh1Yi5jb20vZWFyZW5kaWwtd29ya3MvcGkvcmVsZWFzZXMvdGFnL3YwLjg2LjApLCBbUGkgYDAuODYuMWBdKGh0dHBzOi8vZ2l0aHViLmNvbS9lYXJlbmRpbC13b3Jrcy9waS9yZWxlYXNlcy90YWcvdjAuODYuMSksIGFuZCBbUGkgYDAuODcuMGBdKGh0dHBzOi8vZ2l0aHViLmNvbS9lYXJlbmRpbC13b3Jrcy9waS9yZWxlYXNlcy90YWcvdjAuODcuMCksIHdpdGggc291cmNlIHJldmlldyBwaW5uZWQgdG8gW2BmMDcyMThjYF0oaHR0cHM6Ly9naXRodWIuY29tL2VhcmVuZGlsLXdvcmtzL3BpL2NvbW1pdC9mMDcyMThjNGQ0YmJjMTJiZWYwNTZhNzA1OGMzZGQ0OWRmZTQxYWJlKS4iLCJzY29wZSI6IiMjIDIwMjYtMDktMjMiLCJyZWFzb24iOiJkYXRlZCBoaXN0b3JpY2FsIGVudHJ5In0=",
-    "eyJmaWxlbmFtZSI6ImNvbnRlbnQvZW4vY2hhbmdlbG9nLm1kIiwibWFya2VyIjoib2xkLXZlcnNpb24iLCJsaW5lQ29udGV4dCI6IlBpZnkgbW92ZXMgaXRzIGRvY3VtZW50YXRpb24gYmFzZWxpbmUgZnJvbSBgMC44NS4wYCB0byBbUGkgYDAuODcuMWBdKGh0dHBzOi8vZ2l0aHViLmNvbS9lYXJlbmRpbC13b3Jrcy9waS9yZWxlYXNlcy90YWcvdjAuODcuMSkuIFRoaXMgcm9sbHVwIGluY2x1ZGVzIFtQaSBgMC44NS4xYF0oaHR0cHM6Ly9naXRodWIuY29tL2VhcmVuZGlsLXdvcmtzL3BpL3JlbGVhc2VzL3RhZy92MC44NS4xKSwgW1BpIGAwLjg2LjBgXShodHRwczovL2dpdGh1Yi5jb20vZWFyZW5kaWwtd29ya3MvcGkvcmVsZWFzZXMvdGFnL3YwLjg2LjApLCBbUGkgYDAuODYuMWBdKGh0dHBzOi8vZ2l0aHViLmNvbS9lYXJlbmRpbC13b3Jrcy9waS9yZWxlYXNlcy90YWcvdjAuODYuMSksIGFuZCBbUGkgYDAuODcuMGBdKGh0dHBzOi8vZ2l0aHViLmNvbS9lYXJlbmRpbC13b3Jrcy9waS9yZWxlYXNlcy90YWcvdjAuODcuMCksIHdpdGggc291cmNlIHJldmlldyBwaW5uZWQgdG8gW2BmMDcyMThjYF0oaHR0cHM6Ly9naXRodWIuY29tL2VhcmVuZGlsLXdvcmtzL3BpL2NvbW1pdC9mMDcyMThjNGQ0YmJjMTJiZWYwNTZhNzA1OGMzZGQ0OWRmZTQxYWJlKS4iLCJzY29wZSI6IiMjIDIwMjYtMDktMjMiLCJyZWFzb24iOiJkYXRlZCBoaXN0b3JpY2FsIGVudHJ5In0=",
-    "eyJmaWxlbmFtZSI6ImNvbnRlbnQvZW4vY2hhbmdlbG9nLm1kIiwibWFya2VyIjoib2xkLXZlcnNpb24iLCJsaW5lQ29udGV4dCI6Ii0gYDAuODcuMWAgYWRkcyBDbGF1ZGUgT3B1cyA1LjUgdGhyb3VnaCBBbnRocm9waWMsIEdQVC02IFNvbCBhbmQgR1BULTYgTHVuYSB0aHJvdWdoIE9wZW5BSSBBUEkga2V5cyBhbmQgT3BlbkFJIENvZGV4IHN1YnNjcmlwdGlvbnMsIGFuZCBhbGwgdGhyZWUgdGhyb3VnaCBzdXBwb3J0ZWQgR2l0SHViIENvcGlsb3Qgcm91dGVzLiBOZXcgeEFJIHNlc3Npb25zIGRlZmF1bHQgdG8gR3JvayA0LjcuIiwic2NvcGUiOiIjIyAyMDI2LTA5LTIzIiwicmVhc29uIjoiZGF0ZWQgaGlzdG9yaWNhbCBlbnRyeSJ9",
-    "eyJmaWxlbmFtZSI6ImNvbnRlbnQvZW4vY2hhbmdlbG9nLm1kIiwibWFya2VyIjoib2xkLXZlcnNpb24iLCJsaW5lQ29udGV4dCI6Ii0gSW4gYDAuODcuMWAsIHNwbGl0LXR1cm4gY29tcGFjdGlvbiBwcm9tcHRzIHNlcGFyYXRlIHRoZSBjb252ZXJzYXRpb24gZnJvbSBjb250aW51YXRpb24gaW5zdHJ1Y3Rpb25zIHNvIENsYXVkZSBGYWJsZSA1LjEgY2FuIHN1bW1hcml6ZSBpdC4gQSBtaXNzaW5nIG9yIGludmFsaWQgYC0tbW9kZWAgdmFsdWUgbm93IHJlcG9ydHMgYW4gZXJyb3IgYW5kIGV4aXRzIHdpdGggYSBub256ZXJvIHN0YXR1cy4iLCJzY29wZSI6IiMjIDIwMjYtMDktMjMiLCJyZWFzb24iOiJkYXRlZCBoaXN0b3JpY2FsIGVudHJ5In0=",
-    "eyJmaWxlbmFtZSI6ImNvbnRlbnQvZW4vY2hhbmdlbG9nLm1kIiwibWFya2VyIjoib2xkLXZlcnNpb24iLCJsaW5lQ29udGV4dCI6Ii0gVGhpcyBlbnRyeSBwdWJsaXNoZXMgUGlmeSdzIGAwLjg3LjFgIGJhc2VsaW5lIGF1dGhvcml0eSBhbmQgcmVsZWFzZSByb2xsdXAuIERldGFpbGVkIGNoYXB0ZXIsIEhvdy10bywgcmVmZXJlbmNlLCBhbmQgc291cmNlLXJldmlldyBtaWdyYXRpb25zIGFyZSBzY2hlZHVsZWQgZm9yIHRoZSByZW1haW5pbmcgY29tbWl0cyBpbiB0aGlzIHJlbGVhc2Ugc2VyaWVzLiBUaGUgQ291cnNlIGltcGxlbWVudGF0aW9uIHJlbWFpbnMgYW4gaW5kZXBlbmRlbnQgdGVhY2hpbmcgaW1wbGVtZW50YXRpb24gd2l0aCBubyBwcm9taXNlIG9mIFBpIEFQSSBjb21wYXRpYmlsaXR5LiIsInNjb3BlIjoiIyMgMjAyNi0wOS0yMyIsInJlYXNvbiI6ImRhdGVkIGhpc3RvcmljYWwgZW50cnkifQ==",
-    "eyJmaWxlbmFtZSI6ImNvbnRlbnQvZW4vY2hhbmdlbG9nLm1kIiwibWFya2VyIjoib2xkLXZlcnNpb24iLCJsaW5lQ29udGV4dCI6Ii0gUGFja2FnZSB2ZXJpZmljYXRpb24gcGlucyBgQGVhcmVuZGlsLXdvcmtzL3BpLWFpYCwgYEBlYXJlbmRpbC13b3Jrcy9waS1hZ2VudC1jb3JlYCwgYEBlYXJlbmRpbC13b3Jrcy9waS1jb2RpbmctYWdlbnRgLCBhbmQgYEBlYXJlbmRpbC13b3Jrcy9waS1zZXJ2ZXJgIHRvIGAwLjg3LjFgLiBgc2NyaXB0cy9maXh0dXJlcy9waS1yZWxlYXNlLTA4NzEuanNvbmAgcmVjb3JkcyByZWxlYXNlIGF1dGhvcml0eTsgYHRlc3RzL2ZpeHR1cmVzL3BpLXNkay0wODcxLmNvbnRyYWN0LnRzYCBjaGVja3MgcHVibGljIGRlY2xhcmF0aW9ucyBhbmQgc3VwcGxpZXMgb2ZmbGluZSBkZXRlcm1pbmlzdGljIEFnZW50LCBzZXNzaW9uIHJlc3RvcmF0aW9uLCBhbmQgcnVudGltZS1ob3N0IGNoZWNrcy4gQ29udGVudCBjaGVja3MgY292ZXIgcmVsZWFzZSBsaW5rcywgbWlncmF0aW9uIGNsYWltcywgYmlsaW5ndWFsIHN0cnVjdHVyZSwgYGxpbnQ6c3luY2AsIGBsaW50OmZyb250bWF0dGVyYCwgYGxpbnQ6ZWRpdG9yaWFsYCwgYW5kIGB0ZXN0OnByZXNlcnZhdGlvbmA7IHRoZXNlIGNoZWNrcyBkbyBub3QgZXhlcmNpc2UgbGl2ZSBwcm92aWRlciBhY2NvdW50cy4iLCJzY29wZSI6IiMjIDIwMjYtMDktMjMiLCJyZWFzb24iOiJkYXRlZCBoaXN0b3JpY2FsIGVudHJ5In0=",
-    "eyJmaWxlbmFtZSI6ImNvbnRlbnQvZW4vY2hhbmdlbG9nLm1kIiwibWFya2VyIjoib2xkLWNvbW1pdCIsImxpbmVDb250ZXh0IjoiUGlmeSBtb3ZlcyBpdHMgZG9jdW1lbnRhdGlvbiBiYXNlbGluZSBmcm9tIGAwLjg1LjBgIHRvIFtQaSBgMC44Ny4xYF0oaHR0cHM6Ly9naXRodWIuY29tL2VhcmVuZGlsLXdvcmtzL3BpL3JlbGVhc2VzL3RhZy92MC44Ny4xKS4gVGhpcyByb2xsdXAgaW5jbHVkZXMgW1BpIGAwLjg1LjFgXShodHRwczovL2dpdGh1Yi5jb20vZWFyZW5kaWwtd29ya3MvcGkvcmVsZWFzZXMvdGFnL3YwLjg1LjEpLCBbUGkgYDAuODYuMGBdKGh0dHBzOi8vZ2l0aHViLmNvbS9lYXJlbmRpbC13b3Jrcy9waS9yZWxlYXNlcy90YWcvdjAuODYuMCksIFtQaSBgMC44Ni4xYF0oaHR0cHM6Ly9naXRodWIuY29tL2VhcmVuZGlsLXdvcmtzL3BpL3JlbGVhc2VzL3RhZy92MC44Ni4xKSwgYW5kIFtQaSBgMC44Ny4wYF0oaHR0cHM6Ly9naXRodWIuY29tL2VhcmVuZGlsLXdvcmtzL3BpL3JlbGVhc2VzL3RhZy92MC44Ny4wKSwgd2l0aCBzb3VyY2UgcmV2aWV3IHBpbm5lZCB0byBbYGYwNzIxOGNgXShodHRwczovL2dpdGh1Yi5jb20vZWFyZW5kaWwtd29ya3MvcGkvY29tbWl0L2YwNzIxOGM0ZDRiYmMxMmJlZjA1NmE3MDU4YzNkZDQ5ZGZlNDFhYmUpLiIsInNjb3BlIjoiIyMgMjAyNi0wOS0yMyIsInJlYXNvbiI6ImRhdGVkIGhpc3RvcmljYWwgZW50cnkifQ==",
-    "eyJmaWxlbmFtZSI6ImNvbnRlbnQvZW4vY2hhbmdlbG9nLm1kIiwibWFya2VyIjoib2xkLXJlbGVhc2UtZml4dHVyZSIsImxpbmVDb250ZXh0IjoiLSBQYWNrYWdlIHZlcmlmaWNhdGlvbiBwaW5zIGBAZWFyZW5kaWwtd29ya3MvcGktYWlgLCBgQGVhcmVuZGlsLXdvcmtzL3BpLWFnZW50LWNvcmVgLCBgQGVhcmVuZGlsLXdvcmtzL3BpLWNvZGluZy1hZ2VudGAsIGFuZCBgQGVhcmVuZGlsLXdvcmtzL3BpLXNlcnZlcmAgdG8gYDAuODcuMWAuIGBzY3JpcHRzL2ZpeHR1cmVzL3BpLXJlbGVhc2UtMDg3MS5qc29uYCByZWNvcmRzIHJlbGVhc2UgYXV0aG9yaXR5OyBgdGVzdHMvZml4dHVyZXMvcGktc2RrLTA4NzEuY29udHJhY3QudHNgIGNoZWNrcyBwdWJsaWMgZGVjbGFyYXRpb25zIGFuZCBzdXBwbGllcyBvZmZsaW5lIGRldGVybWluaXN0aWMgQWdlbnQsIHNlc3Npb24gcmVzdG9yYXRpb24sIGFuZCBydW50aW1lLWhvc3QgY2hlY2tzLiBDb250ZW50IGNoZWNrcyBjb3ZlciByZWxlYXNlIGxpbmtzLCBtaWdyYXRpb24gY2xhaW1zLCBiaWxpbmd1YWwgc3RydWN0dXJlLCBgbGludDpzeW5jYCwgYGxpbnQ6ZnJvbnRtYXR0ZXJgLCBgbGludDplZGl0b3JpYWxgLCBhbmQgYHRlc3Q6cHJlc2VydmF0aW9uYDsgdGhlc2UgY2hlY2tzIGRvIG5vdCBleGVyY2lzZSBsaXZlIHByb3ZpZGVyIGFjY291bnRzLiIsInNjb3BlIjoiIyMgMjAyNi0wOS0yMyIsInJlYXNvbiI6ImRhdGVkIGhpc3RvcmljYWwgZW50cnkifQ==",
-    "eyJmaWxlbmFtZSI6ImNvbnRlbnQvZW4vY2hhbmdlbG9nLm1kIiwibWFya2VyIjoib2xkLXNkay1maXh0dXJlIiwibGluZUNvbnRleHQiOiItIFBhY2thZ2UgdmVyaWZpY2F0aW9uIHBpbnMgYEBlYXJlbmRpbC13b3Jrcy9waS1haWAsIGBAZWFyZW5kaWwtd29ya3MvcGktYWdlbnQtY29yZWAsIGBAZWFyZW5kaWwtd29ya3MvcGktY29kaW5nLWFnZW50YCwgYW5kIGBAZWFyZW5kaWwtd29ya3MvcGktc2VydmVyYCB0byBgMC44Ny4xYC4gYHNjcmlwdHMvZml4dHVyZXMvcGktcmVsZWFzZS0wODcxLmpzb25gIHJlY29yZHMgcmVsZWFzZSBhdXRob3JpdHk7IGB0ZXN0cy9maXh0dXJlcy9waS1zZGstMDg3MS5jb250cmFjdC50c2AgY2hlY2tzIHB1YmxpYyBkZWNsYXJhdGlvbnMgYW5kIHN1cHBsaWVzIG9mZmxpbmUgZGV0ZXJtaW5pc3RpYyBBZ2VudCwgc2Vzc2lvbiByZXN0b3JhdGlvbiwgYW5kIHJ1bnRpbWUtaG9zdCBjaGVja3MuIENvbnRlbnQgY2hlY2tzIGNvdmVyIHJlbGVhc2UgbGlua3MsIG1pZ3JhdGlvbiBjbGFpbXMsIGJpbGluZ3VhbCBzdHJ1Y3R1cmUsIGBsaW50OnN5bmNgLCBgbGludDpmcm9udG1hdHRlcmAsIGBsaW50OmVkaXRvcmlhbGAsIGFuZCBgdGVzdDpwcmVzZXJ2YXRpb25gOyB0aGVzZSBjaGVja3MgZG8gbm90IGV4ZXJjaXNlIGxpdmUgcHJvdmlkZXIgYWNjb3VudHMuIiwic2NvcGUiOiIjIyAyMDI2LTA5LTIzIiwicmVhc29uIjoiZGF0ZWQgaGlzdG9yaWNhbCBlbnRyeSJ9",
-    "eyJmaWxlbmFtZSI6ImNvbnRlbnQvdmkvY2hhbmdlbG9nLm1kIiwibWFya2VyIjoib2xkLXZlcnNpb24iLCJsaW5lQ29udGV4dCI6IlBpZnkgY2h1eeG7g24gYmFzZWxpbmUgdMOgaSBsaeG7h3UgdOG7qyBgMC44NS4wYCBsw6puIFtQaSBgMC44Ny4xYF0oaHR0cHM6Ly9naXRodWIuY29tL2VhcmVuZGlsLXdvcmtzL3BpL3JlbGVhc2VzL3RhZy92MC44Ny4xKS4gxJDhu6N0IGPhuq1wIG5o4bqtdCBuw6B5IGJhbyBn4buTbSBbUGkgYDAuODUuMWBdKGh0dHBzOi8vZ2l0aHViLmNvbS9lYXJlbmRpbC13b3Jrcy9waS9yZWxlYXNlcy90YWcvdjAuODUuMSksIFtQaSBgMC44Ni4wYF0oaHR0cHM6Ly9naXRodWIuY29tL2VhcmVuZGlsLXdvcmtzL3BpL3JlbGVhc2VzL3RhZy92MC44Ni4wKSwgW1BpIGAwLjg2LjFgXShodHRwczovL2dpdGh1Yi5jb20vZWFyZW5kaWwtd29ya3MvcGkvcmVsZWFzZXMvdGFnL3YwLjg2LjEpIHbDoCBbUGkgYDAuODcuMGBdKGh0dHBzOi8vZ2l0aHViLmNvbS9lYXJlbmRpbC13b3Jrcy9waS9yZWxlYXNlcy90YWcvdjAuODcuMCksIHbhu5tpIHNvdXJjZSByZXZpZXcgZ2hpbSB04bqhaSBbYGYwNzIxOGNgXShodHRwczovL2dpdGh1Yi5jb20vZWFyZW5kaWwtd29ya3MvcGkvY29tbWl0L2YwNzIxOGM0ZDRiYmMxMmJlZjA1NmE3MDU4YzNkZDQ5ZGZlNDFhYmUpLiIsInNjb3BlIjoiIyMgMjAyNi0wOS0yMyIsInJlYXNvbiI6ImRhdGVkIGhpc3RvcmljYWwgZW50cnkifQ==",
-    "eyJmaWxlbmFtZSI6ImNvbnRlbnQvdmkvY2hhbmdlbG9nLm1kIiwibWFya2VyIjoib2xkLXZlcnNpb24iLCJsaW5lQ29udGV4dCI6IlBpZnkgY2h1eeG7g24gYmFzZWxpbmUgdMOgaSBsaeG7h3UgdOG7qyBgMC44NS4wYCBsw6puIFtQaSBgMC44Ny4xYF0oaHR0cHM6Ly9naXRodWIuY29tL2VhcmVuZGlsLXdvcmtzL3BpL3JlbGVhc2VzL3RhZy92MC44Ny4xKS4gxJDhu6N0IGPhuq1wIG5o4bqtdCBuw6B5IGJhbyBn4buTbSBbUGkgYDAuODUuMWBdKGh0dHBzOi8vZ2l0aHViLmNvbS9lYXJlbmRpbC13b3Jrcy9waS9yZWxlYXNlcy90YWcvdjAuODUuMSksIFtQaSBgMC44Ni4wYF0oaHR0cHM6Ly9naXRodWIuY29tL2VhcmVuZGlsLXdvcmtzL3BpL3JlbGVhc2VzL3RhZy92MC44Ni4wKSwgW1BpIGAwLjg2LjFgXShodHRwczovL2dpdGh1Yi5jb20vZWFyZW5kaWwtd29ya3MvcGkvcmVsZWFzZXMvdGFnL3YwLjg2LjEpIHbDoCBbUGkgYDAuODcuMGBdKGh0dHBzOi8vZ2l0aHViLmNvbS9lYXJlbmRpbC13b3Jrcy9waS9yZWxlYXNlcy90YWcvdjAuODcuMCksIHbhu5tpIHNvdXJjZSByZXZpZXcgZ2hpbSB04bqhaSBbYGYwNzIxOGNgXShodHRwczovL2dpdGh1Yi5jb20vZWFyZW5kaWwtd29ya3MvcGkvY29tbWl0L2YwNzIxOGM0ZDRiYmMxMmJlZjA1NmE3MDU4YzNkZDQ5ZGZlNDFhYmUpLiIsInNjb3BlIjoiIyMgMjAyNi0wOS0yMyIsInJlYXNvbiI6ImRhdGVkIGhpc3RvcmljYWwgZW50cnkifQ==",
-    "eyJmaWxlbmFtZSI6ImNvbnRlbnQvdmkvY2hhbmdlbG9nLm1kIiwibWFya2VyIjoib2xkLXZlcnNpb24iLCJsaW5lQ29udGV4dCI6Ii0gYDAuODcuMWAgYuG7lSBzdW5nIENsYXVkZSBPcHVzIDUuNSBxdWEgQW50aHJvcGljLCBHUFQtNiBTb2wgdsOgIEdQVC02IEx1bmEgcXVhIE9wZW5BSSBBUEkga2V5IGPDuW5nIE9wZW5BSSBDb2RleCBzdWJzY3JpcHRpb24sIHbDoCBj4bqjIGJhIG1vZGVsIHF1YSBjw6FjIHJvdXRlIEdpdEh1YiBDb3BpbG90IMSRxrDhu6NjIGjhu5cgdHLhu6MuIFNlc3Npb24geEFJIG3hu5tpIG3hurdjIMSR4buLbmggZMO5bmcgR3JvayA0LjcuIiwic2NvcGUiOiIjIyAyMDI2LTA5LTIzIiwicmVhc29uIjoiZGF0ZWQgaGlzdG9yaWNhbCBlbnRyeSJ9",
-    "eyJmaWxlbmFtZSI6ImNvbnRlbnQvdmkvY2hhbmdlbG9nLm1kIiwibWFya2VyIjoib2xkLXZlcnNpb24iLCJsaW5lQ29udGV4dCI6Ii0gVHJvbmcgYDAuODcuMWAsIHByb21wdCBjaG8gc3BsaXQtdHVybiBjb21wYWN0aW9uIHTDoWNoIGNvbnZlcnNhdGlvbiBraOG7j2kgY2jhu4kgZOG6q24gdGnhur9wIHThu6VjIMSR4buDIENsYXVkZSBGYWJsZSA1LjEgY8OzIHRo4buDIHThuqFvIHN1bW1hcnkuIEdpw6EgdHLhu4sgYC0tbW9kZWAgYuG7iyB0aGnhur91IGhv4bq3YyBraMO0bmcgaOG7o3AgbOG7hyBuYXkgYsOhbyBs4buXaSB2w6AgdGhvw6F0IHbhu5tpIHN0YXR1cyBub256ZXJvLiIsInNjb3BlIjoiIyMgMjAyNi0wOS0yMyIsInJlYXNvbiI6ImRhdGVkIGhpc3RvcmljYWwgZW50cnkifQ==",
-    "eyJmaWxlbmFtZSI6ImNvbnRlbnQvdmkvY2hhbmdlbG9nLm1kIiwibWFya2VyIjoib2xkLXZlcnNpb24iLCJsaW5lQ29udGV4dCI6Ii0gTeG7pWMgbsOgeSBjw7RuZyBi4buRIGJhc2VsaW5lIGAwLjg3LjFgIGPDuW5nIG5ndeG7k24geMOhYyB0aOG7sWMgdsOgIHBo4bqnbiB0w7NtIHThuq90IHJlbGVhc2UgY+G7p2EgUGlmeS4gQ8OhYyBj4bqtcCBuaOG6rXQgY2hpIHRp4bq/dCBjaG8gY2jGsMahbmcsIGjGsOG7m25nIGThuqtuIEhvdy10bywgdHJhbmcgdGhhbSBraOG6o28gdsOgIHNvdXJjZS1yZXZpZXcgcmVjb3JkIGThu7Ega2nhur9uIG7hurFtIHRyb25nIGPDoWMgY29tbWl0IGPDsm4gbOG6oWkgY+G7p2EgxJHhu6N0IGPhuq1wIG5o4bqtdCBuw6B5LiBDb3Vyc2UgaW1wbGVtZW50YXRpb24gduG6q24gbMOgIGltcGxlbWVudGF0aW9uIMSR4buZYyBs4bqtcCDEkeG7gyBo4buNYywga2jDtG5nIGNhbSBr4bq/dCB0xrDGoW5nIHRow61jaCBBUEkgY+G7p2EgUGkuIiwic2NvcGUiOiIjIyAyMDI2LTA5LTIzIiwicmVhc29uIjoiZGF0ZWQgaGlzdG9yaWNhbCBlbnRyeSJ9",
-    "eyJmaWxlbmFtZSI6ImNvbnRlbnQvdmkvY2hhbmdlbG9nLm1kIiwibWFya2VyIjoib2xkLXZlcnNpb24iLCJsaW5lQ29udGV4dCI6Ii0gUGjhuqduIGtp4buDbSBjaOG7qW5nIHBhY2thZ2UgZ2hpbSBgQGVhcmVuZGlsLXdvcmtzL3BpLWFpYCwgYEBlYXJlbmRpbC13b3Jrcy9waS1hZ2VudC1jb3JlYCwgYEBlYXJlbmRpbC13b3Jrcy9waS1jb2RpbmctYWdlbnRgIHbDoCBgQGVhcmVuZGlsLXdvcmtzL3BpLXNlcnZlcmAg4bufIGAwLjg3LjFgLiBgc2NyaXB0cy9maXh0dXJlcy9waS1yZWxlYXNlLTA4NzEuanNvbmAgZ2hpIG5ndeG7k24geMOhYyB0aOG7sWMgcmVsZWFzZTsgYHRlc3RzL2ZpeHR1cmVzL3BpLXNkay0wODcxLmNvbnRyYWN0LnRzYCBraeG7g20gdHJhIHB1YmxpYyBkZWNsYXJhdGlvbiB2w6AgY3VuZyBj4bqlcCBjw6FjIGLDoGkga2nhu4NtIHRyYSBvZmZsaW5lIGNobyBkZXRlcm1pbmlzdGljIEFnZW50LCBzZXNzaW9uIHJlc3RvcmF0aW9uIHbDoCBydW50aW1lIGhvc3QuIENvbnRlbnQgY2hlY2sgYmFvIGfhu5NtIHJlbGVhc2UgbGluaywgY8OhYyBtw7QgdOG6oyBtaWdyYXRpb24sIGPhuqV1IHRyw7pjIHNvbmcgbmfhu68sIGBsaW50OnN5bmNgLCBgbGludDpmcm9udG1hdHRlcmAsIGBsaW50OmVkaXRvcmlhbGAgdsOgIGB0ZXN0OnByZXNlcnZhdGlvbmA7IGPDoWMga2nhu4NtIHRyYSBuw6B5IGtow7RuZyBn4buNaSB0w6BpIGtob+G6o24gcHJvdmlkZXIgdGjhuq10LiIsInNjb3BlIjoiIyMgMjAyNi0wOS0yMyIsInJlYXNvbiI6ImRhdGVkIGhpc3RvcmljYWwgZW50cnkifQ==",
-    "eyJmaWxlbmFtZSI6ImNvbnRlbnQvdmkvY2hhbmdlbG9nLm1kIiwibWFya2VyIjoib2xkLWNvbW1pdCIsImxpbmVDb250ZXh0IjoiUGlmeSBjaHV54buDbiBiYXNlbGluZSB0w6BpIGxp4buHdSB04burIGAwLjg1LjBgIGzDqm4gW1BpIGAwLjg3LjFgXShodHRwczovL2dpdGh1Yi5jb20vZWFyZW5kaWwtd29ya3MvcGkvcmVsZWFzZXMvdGFnL3YwLjg3LjEpLiDEkOG7o3QgY+G6rXAgbmjhuq10IG7DoHkgYmFvIGfhu5NtIFtQaSBgMC44NS4xYF0oaHR0cHM6Ly9naXRodWIuY29tL2VhcmVuZGlsLXdvcmtzL3BpL3JlbGVhc2VzL3RhZy92MC44NS4xKSwgW1BpIGAwLjg2LjBgXShodHRwczovL2dpdGh1Yi5jb20vZWFyZW5kaWwtd29ya3MvcGkvcmVsZWFzZXMvdGFnL3YwLjg2LjApLCBbUGkgYDAuODYuMWBdKGh0dHBzOi8vZ2l0aHViLmNvbS9lYXJlbmRpbC13b3Jrcy9waS9yZWxlYXNlcy90YWcvdjAuODYuMSkgdsOgIFtQaSBgMC44Ny4wYF0oaHR0cHM6Ly9naXRodWIuY29tL2VhcmVuZGlsLXdvcmtzL3BpL3JlbGVhc2VzL3RhZy92MC44Ny4wKSwgduG7m2kgc291cmNlIHJldmlldyBnaGltIHThuqFpIFtgZjA3MjE4Y2BdKGh0dHBzOi8vZ2l0aHViLmNvbS9lYXJlbmRpbC13b3Jrcy9waS9jb21taXQvZjA3MjE4YzRkNGJiYzEyYmVmMDU2YTcwNThjM2RkNDlkZmU0MWFiZSkuIiwic2NvcGUiOiIjIyAyMDI2LTA5LTIzIiwicmVhc29uIjoiZGF0ZWQgaGlzdG9yaWNhbCBlbnRyeSJ9",
-    "eyJmaWxlbmFtZSI6ImNvbnRlbnQvdmkvY2hhbmdlbG9nLm1kIiwibWFya2VyIjoib2xkLXJlbGVhc2UtZml4dHVyZSIsImxpbmVDb250ZXh0IjoiLSBQaOG6p24ga2nhu4NtIGNo4bupbmcgcGFja2FnZSBnaGltIGBAZWFyZW5kaWwtd29ya3MvcGktYWlgLCBgQGVhcmVuZGlsLXdvcmtzL3BpLWFnZW50LWNvcmVgLCBgQGVhcmVuZGlsLXdvcmtzL3BpLWNvZGluZy1hZ2VudGAgdsOgIGBAZWFyZW5kaWwtd29ya3MvcGktc2VydmVyYCDhu58gYDAuODcuMWAuIGBzY3JpcHRzL2ZpeHR1cmVzL3BpLXJlbGVhc2UtMDg3MS5qc29uYCBnaGkgbmd14buTbiB4w6FjIHRo4buxYyByZWxlYXNlOyBgdGVzdHMvZml4dHVyZXMvcGktc2RrLTA4NzEuY29udHJhY3QudHNgIGtp4buDbSB0cmEgcHVibGljIGRlY2xhcmF0aW9uIHbDoCBjdW5nIGPhuqVwIGPDoWMgYsOgaSBraeG7g20gdHJhIG9mZmxpbmUgY2hvIGRldGVybWluaXN0aWMgQWdlbnQsIHNlc3Npb24gcmVzdG9yYXRpb24gdsOgIHJ1bnRpbWUgaG9zdC4gQ29udGVudCBjaGVjayBiYW8gZ+G7k20gcmVsZWFzZSBsaW5rLCBjw6FjIG3DtCB04bqjIG1pZ3JhdGlvbiwgY+G6pXUgdHLDumMgc29uZyBuZ+G7rywgYGxpbnQ6c3luY2AsIGBsaW50OmZyb250bWF0dGVyYCwgYGxpbnQ6ZWRpdG9yaWFsYCB2w6AgYHRlc3Q6cHJlc2VydmF0aW9uYDsgY8OhYyBraeG7g20gdHJhIG7DoHkga2jDtG5nIGfhu41pIHTDoGkga2hv4bqjbiBwcm92aWRlciB0aOG6rXQuIiwic2NvcGUiOiIjIyAyMDI2LTA5LTIzIiwicmVhc29uIjoiZGF0ZWQgaGlzdG9yaWNhbCBlbnRyeSJ9",
-    "eyJmaWxlbmFtZSI6ImNvbnRlbnQvdmkvY2hhbmdlbG9nLm1kIiwibWFya2VyIjoib2xkLXNkay1maXh0dXJlIiwibGluZUNvbnRleHQiOiItIFBo4bqnbiBraeG7g20gY2jhu6luZyBwYWNrYWdlIGdoaW0gYEBlYXJlbmRpbC13b3Jrcy9waS1haWAsIGBAZWFyZW5kaWwtd29ya3MvcGktYWdlbnQtY29yZWAsIGBAZWFyZW5kaWwtd29ya3MvcGktY29kaW5nLWFnZW50YCB2w6AgYEBlYXJlbmRpbC13b3Jrcy9waS1zZXJ2ZXJgIOG7nyBgMC44Ny4xYC4gYHNjcmlwdHMvZml4dHVyZXMvcGktcmVsZWFzZS0wODcxLmpzb25gIGdoaSBuZ3Xhu5NuIHjDoWMgdGjhu7FjIHJlbGVhc2U7IGB0ZXN0cy9maXh0dXJlcy9waS1zZGstMDg3MS5jb250cmFjdC50c2Aga2nhu4NtIHRyYSBwdWJsaWMgZGVjbGFyYXRpb24gdsOgIGN1bmcgY+G6pXAgY8OhYyBiw6BpIGtp4buDbSB0cmEgb2ZmbGluZSBjaG8gZGV0ZXJtaW5pc3RpYyBBZ2VudCwgc2Vzc2lvbiByZXN0b3JhdGlvbiB2w6AgcnVudGltZSBob3N0LiBDb250ZW50IGNoZWNrIGJhbyBn4buTbSByZWxlYXNlIGxpbmssIGPDoWMgbcO0IHThuqMgbWlncmF0aW9uLCBj4bqldSB0csO6YyBzb25nIG5n4buvLCBgbGludDpzeW5jYCwgYGxpbnQ6ZnJvbnRtYXR0ZXJgLCBgbGludDplZGl0b3JpYWxgIHbDoCBgdGVzdDpwcmVzZXJ2YXRpb25gOyBjw6FjIGtp4buDbSB0cmEgbsOgeSBraMO0bmcgZ+G7jWkgdMOgaSBraG/huqNuIHByb3ZpZGVyIHRo4bqtdC4iLCJzY29wZSI6IiMjIDIwMjYtMDktMjMiLCJyZWFzb24iOiJkYXRlZCBoaXN0b3JpY2FsIGVudHJ5In0=",
-    "eyJmaWxlbmFtZSI6InNjcmlwdHMvZml4dHVyZXMvcGktcmVsZWFzZS0wOTkyLmpzb24iLCJtYXJrZXIiOiJvbGQtdmVyc2lvbiIsImxpbmVDb250ZXh0IjoiXCJwcmV2aW91c0RvY3VtZW50YXRpb25WZXJzaW9uXCI6IFwiMC44Ny4xXCIsIiwic2NvcGUiOiJKU09OIG1pZ3JhdGlvbiBmaXh0dXJlIiwicmVhc29uIjoibWlncmF0aW9uIGZpeHR1cmUgZmllbGQifQ==",
-    "eyJmaWxlbmFtZSI6InNjcmlwdHMvY291cnNlLWNvbnRlbnQudGVzdC5tanMiLCJtYXJrZXIiOiJvbGQtdmVyc2lvbiIsImxpbmVDb250ZXh0IjoiY29uc3Qgc3RhbGVDb21wYXJpc29uVmVyc2lvbnMgPSBbXCIwLjg3LjFcIiwgXCIwLjg1LjBcIl07Iiwic2NvcGUiOiJjb25zdDpzdGFsZUNvbXBhcmlzb25WZXJzaW9ucyIsInJlYXNvbiI6Imhpc3RvcmljYWwvbWlncmF0aW9uL3JlamVjdGlvbiB0ZXN0IHNjb3BlIn0=",
-    "eyJmaWxlbmFtZSI6InNjcmlwdHMvY291cnNlLWNvbnRlbnQudGVzdC5tanMiLCJtYXJrZXIiOiJvbGQtdmVyc2lvbiIsImxpbmVDb250ZXh0Ijoic291cmNlLnJlcGxhY2UoXCJDb21wYXJlIHdpdGggUGkgU0RLIDAuOTkuMlwiLCBcIkNvbXBhcmUgd2l0aCBQaSBTREsgMC44Ny4xXCIpLCIsInNjb3BlIjoidGVzdDpDb3Vyc2UgY29tcGFyaXNvbiBhdXRob3JpdHkgcmVqZWN0cyBzdGFsZSBwaW5zLCBoZWFkaW5ncywgZGF0ZXMsIHVucGlubmVkIHBhdGhzLCBhbmQgY2hhbmdlZCBBUEkgZHJpZnQiLCJyZWFzb24iOiJoaXN0b3JpY2FsL21pZ3JhdGlvbi9yZWplY3Rpb24gdGVzdCBzY29wZSJ9",
-    "eyJmaWxlbmFtZSI6InNjcmlwdHMvY291cnNlLWNvbnRlbnQudGVzdC5tanMiLCJtYXJrZXIiOiJvbGQtY29tbWl0IiwibGluZUNvbnRleHQiOiJcImYwNzIxOGM0ZDRiYmMxMmJlZjA1NmE3MDU4YzNkZDQ5ZGZlNDFhYmVcIiwiLCJzY29wZSI6ImNvbnN0OnN0YWxlUmVsZWFzZUNvbW1pdHMiLCJyZWFzb24iOiJoaXN0b3JpY2FsL21pZ3JhdGlvbi9yZWplY3Rpb24gdGVzdCBzY29wZSJ9",
-    "eyJmaWxlbmFtZSI6InNjcmlwdHMvY291cnNlLWNvbnRlbnQudGVzdC5tanMiLCJtYXJrZXIiOiJtb3ZpbmctcGktc291cmNlIiwibGluZUNvbnRleHQiOiJcIltVbnBpbm5lZCBibG9iXShodHRwczovL2dpdGh1Yi5jb20vZWFyZW5kaWwtd29ya3MvcGkvYmxvYi9tYWluL3BhY2thZ2VzL2NvZGluZy1hZ2VudC9zcmMvaW5kZXgudHMpXFxuXFxuIyMgTmV4dCBjaGVja3BvaW50XCIsIiwic2NvcGUiOiJ0ZXN0OkNvdXJzZSBjb21wYXJpc29uIGF1dGhvcml0eSByZWplY3RzIHN0YWxlIHBpbnMsIGhlYWRpbmdzLCBkYXRlcywgdW5waW5uZWQgcGF0aHMsIGFuZCBjaGFuZ2VkIEFQSSBkcmlmdCIsInJlYXNvbiI6Imhpc3RvcmljYWwvbWlncmF0aW9uL3JlamVjdGlvbiB0ZXN0IHNjb3BlIn0=",
-    "eyJmaWxlbmFtZSI6InNjcmlwdHMvY291cnNlLWNvbnRlbnQudGVzdC5tanMiLCJtYXJrZXIiOiJtb3ZpbmctcGktc291cmNlIiwibGluZUNvbnRleHQiOiJcIltVbnBpbm5lZCB0cmVlXShodHRwczovL2dpdGh1Yi5jb20vZWFyZW5kaWwtd29ya3MvcGkvdHJlZS9tYWluL3BhY2thZ2VzL2NvZGluZy1hZ2VudClcXG5cXG4jIyBOZXh0IGNoZWNrcG9pbnRcIiwiLCJzY29wZSI6InRlc3Q6Q291cnNlIGNvbXBhcmlzb24gYXV0aG9yaXR5IHJlamVjdHMgc3RhbGUgcGlucywgaGVhZGluZ3MsIGRhdGVzLCB1bnBpbm5lZCBwYXRocywgYW5kIGNoYW5nZWQgQVBJIGRyaWZ0IiwicmVhc29uIjoiaGlzdG9yaWNhbC9taWdyYXRpb24vcmVqZWN0aW9uIHRlc3Qgc2NvcGUifQ==",
-    "eyJmaWxlbmFtZSI6InNjcmlwdHMvcGktcmVsZWFzZS0wOTkyLWNvbnRyYWN0LnRlc3QubWpzIiwibWFya2VyIjoib2xkLXZlcnNpb24iLCJsaW5lQ29udGV4dCI6InByZXZpb3VzRG9jdW1lbnRhdGlvblZlcnNpb246IFwiMC44Ny4xXCIsIiwic2NvcGUiOiJjb25zdDpleHBlY3RlZFJlbGVhc2UiLCJyZWFzb24iOiJoaXN0b3JpY2FsL21pZ3JhdGlvbi9yZWplY3Rpb24gdGVzdCBzY29wZSJ9",
-    "eyJmaWxlbmFtZSI6InNjcmlwdHMvcGktcmVsZWFzZS0wOTkyLWNvbnRyYWN0LnRlc3QubWpzIiwibWFya2VyIjoib2xkLWNvbW1pdCIsImxpbmVDb250ZXh0IjoiXCJIaXN0b3JpY2FsIGF1dGhvcml0aWVzIDIwZGQzYTcgYW5kIGYwNzIxOGM0ZDRiYmMxMmJlZjA1NmE3MDU4YzNkZDQ5ZGZlNDFhYmUgcmVtYWluIHZhbGlkLlwiLCIsInNjb3BlIjoidGVzdDpjdXJyZW50IHB1YmxpYyBkb2NzIHVzZSB0aGUgZXhhY3QgUGkgMC45OS4yIHJldmlzaW9uIGluIHBsYWluIHRleHQgYW5kIGxpbmtzIiwicmVhc29uIjoiaGlzdG9yaWNhbC9taWdyYXRpb24vcmVqZWN0aW9uIHRlc3Qgc2NvcGUifQ==",
-    "eyJmaWxlbmFtZSI6InNjcmlwdHMvcGktcmVsZWFzZS1jb250cmFjdC50ZXN0Lm1qcyIsIm1hcmtlciI6Im9sZC12ZXJzaW9uIiwibGluZUNvbnRleHQiOiJhc3NlcnQuZXF1YWwocmVsZWFzZS5wcmV2aW91c0RvY3VtZW50YXRpb25WZXJzaW9uLCBcIjAuODcuMVwiKTsiLCJzY29wZSI6InRlc3Q6cmVsZWFzZSBmaXh0dXJlIGlkZW50aWZpZXMgcHVibGlzaGVkIFBpIDAuOTkuMiBhdXRob3JpdHkiLCJyZWFzb24iOiJoaXN0b3JpY2FsL21pZ3JhdGlvbi9yZWplY3Rpb24gdGVzdCBzY29wZSJ9",
-    "eyJmaWxlbmFtZSI6InNjcmlwdHMvcGktcmVsZWFzZS1jb250cmFjdC50ZXN0Lm1qcyIsIm1hcmtlciI6Im9sZC12ZXJzaW9uIiwibGluZUNvbnRleHQiOiJ0ZXN0KFwidGhlIGhpc3RvcmljYWwgYmlsaW5ndWFsIGNoYW5nZWxvZyBwcmVzZXJ2ZXMgdGhlIHN0cnVjdHVyZWQgUGkgMC44Ny4xIGRvY3VtZW50YXRpb24gcm9sbHVwXCIsIGFzeW5jICgpID0+IHsiLCJzY29wZSI6InRlc3Q6dGhlIGhpc3RvcmljYWwgYmlsaW5ndWFsIGNoYW5nZWxvZyBwcmVzZXJ2ZXMgdGhlIHN0cnVjdHVyZWQgUGkgMC44Ny4xIGRvY3VtZW50YXRpb24gcm9sbHVwIiwicmVhc29uIjoiaGlzdG9yaWNhbC9taWdyYXRpb24vcmVqZWN0aW9uIHRlc3Qgc2NvcGUifQ==",
-    "eyJmaWxlbmFtZSI6InNjcmlwdHMvcGktcmVsZWFzZS1jb250cmFjdC50ZXN0Lm1qcyIsIm1hcmtlciI6Im9sZC12ZXJzaW9uIiwibGluZUNvbnRleHQiOiJjb25zdCBjb250ZXh0ID0gYCR7bG9jYWxlfSBoaXN0b3JpY2FsIFBpIDAuODcuMSBjaGFuZ2Vsb2cgZW50cnlgOyIsInNjb3BlIjoidGVzdDp0aGUgaGlzdG9yaWNhbCBiaWxpbmd1YWwgY2hhbmdlbG9nIHByZXNlcnZlcyB0aGUgc3RydWN0dXJlZCBQaSAwLjg3LjEgZG9jdW1lbnRhdGlvbiByb2xsdXAiLCJyZWFzb24iOiJoaXN0b3JpY2FsL21pZ3JhdGlvbi9yZWplY3Rpb24gdGVzdCBzY29wZSJ9",
-    "eyJmaWxlbmFtZSI6InNjcmlwdHMvcGktcmVsZWFzZS1jb250cmFjdC50ZXN0Lm1qcyIsIm1hcmtlciI6Im9sZC12ZXJzaW9uIiwibGluZUNvbnRleHQiOiJmb3IgKGNvbnN0IHRhZyBvZiBbXCJ2MC44NS4xXCIsIFwidjAuODYuMFwiLCBcInYwLjg2LjFcIiwgXCJ2MC44Ny4wXCIsIFwidjAuODcuMVwiXSkgeyIsInNjb3BlIjoidGVzdDp0aGUgaGlzdG9yaWNhbCBiaWxpbmd1YWwgY2hhbmdlbG9nIHByZXNlcnZlcyB0aGUgc3RydWN0dXJlZCBQaSAwLjg3LjEgZG9jdW1lbnRhdGlvbiByb2xsdXAiLCJyZWFzb24iOiJoaXN0b3JpY2FsL21pZ3JhdGlvbi9yZWplY3Rpb24gdGVzdCBzY29wZSJ9",
-    "eyJmaWxlbmFtZSI6InNjcmlwdHMvcGktcmVsZWFzZS1jb250cmFjdC50ZXN0Lm1qcyIsIm1hcmtlciI6Im9sZC12ZXJzaW9uIiwibGluZUNvbnRleHQiOiJ0ZXN0KFwiaGlzdG9yaWNhbCBQaSAwLjg3LjEgY2hhbmdlbG9nIGFjY3VyYWN5IGd1YXJkIHJlamVjdHMgbWlncmF0aW9uIGFuZCBzY29wZSByZWdyZXNzaW9uc1wiLCBhc3luYyAoKSA9PiB7Iiwic2NvcGUiOiJ0ZXN0Omhpc3RvcmljYWwgUGkgMC44Ny4xIGNoYW5nZWxvZyBhY2N1cmFjeSBndWFyZCByZWplY3RzIG1pZ3JhdGlvbiBhbmQgc2NvcGUgcmVncmVzc2lvbnMiLCJyZWFzb24iOiJoaXN0b3JpY2FsL21pZ3JhdGlvbi9yZWplY3Rpb24gdGVzdCBzY29wZSJ9",
-    "eyJmaWxlbmFtZSI6InNjcmlwdHMvcGktcmVsZWFzZS1jb250cmFjdC50ZXN0Lm1qcyIsIm1hcmtlciI6Im9sZC12ZXJzaW9uIiwibGluZUNvbnRleHQiOiJcIkVOIGhpc3RvcmljYWwgUGkgMC44Ny4xIHJvbGx1cCBtdXRhdGlvbiBiYXNlbGluZVwiLCIsInNjb3BlIjoidGVzdDpoaXN0b3JpY2FsIFBpIDAuODcuMSBjaGFuZ2Vsb2cgYWNjdXJhY3kgZ3VhcmQgcmVqZWN0cyBtaWdyYXRpb24gYW5kIHNjb3BlIHJlZ3Jlc3Npb25zIiwicmVhc29uIjoiaGlzdG9yaWNhbC9taWdyYXRpb24vcmVqZWN0aW9uIHRlc3Qgc2NvcGUifQ==",
-    "eyJmaWxlbmFtZSI6InNjcmlwdHMvcGktcmVsZWFzZS1jb250cmFjdC50ZXN0Lm1qcyIsIm1hcmtlciI6Im9sZC12ZXJzaW9uIiwibGluZUNvbnRleHQiOiJcIkVOIGhpc3RvcmljYWwgUGkgMC44Ny4xIHJvbGx1cCBtdXRhdGlvbiBiYXNlbGluZVwiLCIsInNjb3BlIjoidGVzdDpoaXN0b3JpY2FsIFBpIDAuODcuMSBjaGFuZ2Vsb2cgYWNjdXJhY3kgZ3VhcmQgcmVqZWN0cyBtaWdyYXRpb24gYW5kIHNjb3BlIHJlZ3Jlc3Npb25zIiwicmVhc29uIjoiaGlzdG9yaWNhbC9taWdyYXRpb24vcmVqZWN0aW9uIHRlc3Qgc2NvcGUifQ==",
-    "eyJmaWxlbmFtZSI6InNjcmlwdHMvcGktcmVsZWFzZS1jb250cmFjdC50ZXN0Lm1qcyIsIm1hcmtlciI6Im9sZC12ZXJzaW9uIiwibGluZUNvbnRleHQiOiJ0ZXN0KFwiaGlzdG9yaWNhbCBQaSAwLjg3LjEgY2hhbmdlbG9nIGd1YXJkIHJlamVjdHMgZGVsZXRlZCBvciByZW9yZGVyZWQgcmVsaWFiaWxpdHkgdG9waWNzXCIsIGFzeW5jICgpID0+IHsiLCJzY29wZSI6InRlc3Q6aGlzdG9yaWNhbCBQaSAwLjg3LjEgY2hhbmdlbG9nIGd1YXJkIHJlamVjdHMgZGVsZXRlZCBvciByZW9yZGVyZWQgcmVsaWFiaWxpdHkgdG9waWNzIiwicmVhc29uIjoiaGlzdG9yaWNhbC9taWdyYXRpb24vcmVqZWN0aW9uIHRlc3Qgc2NvcGUifQ==",
-    "eyJmaWxlbmFtZSI6InNjcmlwdHMvcGktcmVsZWFzZS1jb250cmFjdC50ZXN0Lm1qcyIsIm1hcmtlciI6Im9sZC12ZXJzaW9uIiwibGluZUNvbnRleHQiOiJ0ZXN0KFwiaGlzdG9yaWNhbCBQaSAwLjg3LjEgY2hhbmdlbG9nIGRpc3Rpbmd1aXNoZXMgcHVibGljYXRpb24gc2NvcGUgYW5kIGluY2x1ZGVzIEdQVC02IEFzdHJhXCIsIGFzeW5jICgpID0+IHsiLCJzY29wZSI6InRlc3Q6aGlzdG9yaWNhbCBQaSAwLjg3LjEgY2hhbmdlbG9nIGRpc3Rpbmd1aXNoZXMgcHVibGljYXRpb24gc2NvcGUgYW5kIGluY2x1ZGVzIEdQVC02IEFzdHJhIiwicmVhc29uIjoiaGlzdG9yaWNhbC9taWdyYXRpb24vcmVqZWN0aW9uIHRlc3Qgc2NvcGUifQ==",
-    "eyJmaWxlbmFtZSI6InNjcmlwdHMvcGktcmVsZWFzZS1jb250cmFjdC50ZXN0Lm1qcyIsIm1hcmtlciI6Im9sZC12ZXJzaW9uIiwibGluZUNvbnRleHQiOiJ0ZXN0KFwiaGlzdG9yaWNhbCBQaSAwLjg3LjEgY2hhbmdlbG9nIHB1YmxpY2F0aW9uIGd1YXJkIGFsbG93cyByZXdyaXRlcyBhbmQgcmVqZWN0cyBrbm93biBvdmVyY2xhaW0gZnJhZ21lbnRzXCIsIGFzeW5jICgpID0+IHsiLCJzY29wZSI6InRlc3Q6aGlzdG9yaWNhbCBQaSAwLjg3LjEgY2hhbmdlbG9nIHB1YmxpY2F0aW9uIGd1YXJkIGFsbG93cyByZXdyaXRlcyBhbmQgcmVqZWN0cyBrbm93biBvdmVyY2xhaW0gZnJhZ21lbnRzIiwicmVhc29uIjoiaGlzdG9yaWNhbC9taWdyYXRpb24vcmVqZWN0aW9uIHRlc3Qgc2NvcGUifQ==",
-    "eyJmaWxlbmFtZSI6InNjcmlwdHMvcGktcmVsZWFzZS1jb250cmFjdC50ZXN0Lm1qcyIsIm1hcmtlciI6Im9sZC12ZXJzaW9uIiwibGluZUNvbnRleHQiOiJcIlBpZnkgbm93IHJlY29yZHMgdGhlIHNvdXJjZSBhdXRob3JpdHkgZm9yIGJhc2VsaW5lIDAuODcuMSBhbmQgYSBzdW1tYXJ5IG9mIHRoZSByZWxlYXNlcy5cIiwiLCJzY29wZSI6InRlc3Q6aGlzdG9yaWNhbCBQaSAwLjg3LjEgY2hhbmdlbG9nIHB1YmxpY2F0aW9uIGd1YXJkIGFsbG93cyByZXdyaXRlcyBhbmQgcmVqZWN0cyBrbm93biBvdmVyY2xhaW0gZnJhZ21lbnRzIiwicmVhc29uIjoiaGlzdG9yaWNhbC9taWdyYXRpb24vcmVqZWN0aW9uIHRlc3Qgc2NvcGUifQ==",
-    "eyJmaWxlbmFtZSI6InNjcmlwdHMvcGktcmVsZWFzZS1jb250cmFjdC50ZXN0Lm1qcyIsIm1hcmtlciI6Im9sZC12ZXJzaW9uIiwibGluZUNvbnRleHQiOiJcIlBpZnkgY8O0bmcgYuG7kSBuZ3Xhu5NuIHjDoWMgdGjhu7FjIGNobyBiYXNlbGluZSAwLjg3LjEgdsOgIGLhuqNuIHThu5VuZyBo4bujcCByZWxlYXNlLlwiLCIsInNjb3BlIjoidGVzdDpoaXN0b3JpY2FsIFBpIDAuODcuMSBjaGFuZ2Vsb2cgcHVibGljYXRpb24gZ3VhcmQgYWxsb3dzIHJld3JpdGVzIGFuZCByZWplY3RzIGtub3duIG92ZXJjbGFpbSBmcmFnbWVudHMiLCJyZWFzb24iOiJoaXN0b3JpY2FsL21pZ3JhdGlvbi9yZWplY3Rpb24gdGVzdCBzY29wZSJ9",
-    "eyJmaWxlbmFtZSI6InNjcmlwdHMvcGktcmVsZWFzZS1jb250cmFjdC50ZXN0Lm1qcyIsIm1hcmtlciI6Im9sZC12ZXJzaW9uIiwibGluZUNvbnRleHQiOiJ0ZXN0KFwiaGlzdG9yaWNhbCBQaSAwLjg3LjEgY2hhbmdlbG9nIHNjb3BlIGNoZWNrcyBsZWF2ZSB1bnJlc3RyaWN0ZWQgd29yZGluZyB0byBlZGl0b3JpYWwgcmV2aWV3XCIsIGFzeW5jICgpID0+IHsiLCJzY29wZSI6InRlc3Q6aGlzdG9yaWNhbCBQaSAwLjg3LjEgY2hhbmdlbG9nIHNjb3BlIGNoZWNrcyBsZWF2ZSB1bnJlc3RyaWN0ZWQgd29yZGluZyB0byBlZGl0b3JpYWwgcmV2aWV3IiwicmVhc29uIjoiaGlzdG9yaWNhbC9taWdyYXRpb24vcmVqZWN0aW9uIHRlc3Qgc2NvcGUifQ==",
-    "eyJmaWxlbmFtZSI6InNjcmlwdHMvcGktcmVsZWFzZS1jb250cmFjdC50ZXN0Lm1qcyIsIm1hcmtlciI6Im9sZC12ZXJzaW9uIiwibGluZUNvbnRleHQiOiJgUGlmeSBtb3ZlcyBpdHMgZG9jdW1lbnRhdGlvbiBiYXNlbGluZSBmcm9tIFxcYCR7c3RhbGVWZXJzaW9ufVxcYCB0byBQaSBcXGAwLjg3LjFcXGAuYCwiLCJzY29wZSI6InRlc3Q6c3RhbGUgY3VycmVudC1iYXNlbGluZSBzY2FubmVyIGV2YWx1YXRlcyBlYWNoIGNoYW5nZWxvZyBvY2N1cnJlbmNlIiwicmVhc29uIjoiaGlzdG9yaWNhbC9taWdyYXRpb24vcmVqZWN0aW9uIHRlc3Qgc2NvcGUifQ==",
-    "eyJmaWxlbmFtZSI6InNjcmlwdHMvcGktcmVsZWFzZS1jb250cmFjdC50ZXN0Lm1qcyIsIm1hcmtlciI6Im9sZC12ZXJzaW9uIiwibGluZUNvbnRleHQiOiJgUGlmeSBjaHV54buDbiBiYXNlbGluZSB0w6BpIGxp4buHdSB04burIFxcYCR7c3RhbGVWZXJzaW9ufVxcYCBsw6puIFBpIFxcYDAuODcuMVxcYC5gLCIsInNjb3BlIjoidGVzdDpzdGFsZSBjdXJyZW50LWJhc2VsaW5lIHNjYW5uZXIgZXZhbHVhdGVzIGVhY2ggY2hhbmdlbG9nIG9jY3VycmVuY2UiLCJyZWFzb24iOiJoaXN0b3JpY2FsL21pZ3JhdGlvbi9yZWplY3Rpb24gdGVzdCBzY29wZSJ9",
-    "eyJmaWxlbmFtZSI6InNjcmlwdHMvcGktcmVsZWFzZS1jb250cmFjdC50ZXN0Lm1qcyIsIm1hcmtlciI6Im9sZC12ZXJzaW9uIiwibGluZUNvbnRleHQiOiJgUGlmeSBtb3ZlcyBpdHMgZG9jdW1lbnRhdGlvbiBiYXNlbGluZSBmcm9tIFxcYCR7c3RhbGVWZXJzaW9ufVxcYCB0byBQaSBcXGAwLjg3LjFcXGAsIGJ1dCBzdGlsbCBzYXlzIGl0IGlzIGF1dGhvcml0YXRpdmUgZm9yIGN1cnJlbnQgZ3VpZGFuY2UuYCwiLCJzY29wZSI6InRlc3Q6c3RhbGUgY3VycmVudC1iYXNlbGluZSBzY2FubmVyIHJlamVjdHMgbWl4ZWQgbWlncmF0aW9uIGFuZCBjdXJyZW50IGNsYWltcyIsInJlYXNvbiI6Imhpc3RvcmljYWwvbWlncmF0aW9uL3JlamVjdGlvbiB0ZXN0IHNjb3BlIn0=",
-    "eyJmaWxlbmFtZSI6InNjcmlwdHMvcGktcmVsZWFzZS1jb250cmFjdC50ZXN0Lm1qcyIsIm1hcmtlciI6Im9sZC12ZXJzaW9uIiwibGluZUNvbnRleHQiOiJ0ZXN0KFwiaGlzdG9yaWNhbCBQaSAwLjg3LjEgYmlsaW5ndWFsIGF1ZGl0IGxlZGdlciBjb3ZlcnMgZXZlcnkgcHVibGljIHBhaXIgd2l0aCBmaWxlIGV2aWRlbmNlXCIsIGFzeW5jICgpID0+IHsiLCJzY29wZSI6InRlc3Q6aGlzdG9yaWNhbCBQaSAwLjg3LjEgYmlsaW5ndWFsIGF1ZGl0IGxlZGdlciBjb3ZlcnMgZXZlcnkgcHVibGljIHBhaXIgd2l0aCBmaWxlIGV2aWRlbmNlIiwicmVhc29uIjoiaGlzdG9yaWNhbC9taWdyYXRpb24vcmVqZWN0aW9uIHRlc3Qgc2NvcGUifQ==",
-    "eyJmaWxlbmFtZSI6InNjcmlwdHMvcGktcmVsZWFzZS1jb250cmFjdC50ZXN0Lm1qcyIsIm1hcmtlciI6Im9sZC12ZXJzaW9uIiwibGluZUNvbnRleHQiOiJcIkNvbXBhcmUgd2l0aCBQaSBTREsgMC44Ny4xXCIsIiwic2NvcGUiOiJ0ZXN0OmFjdGl2ZSBDb3Vyc2UgY29tcGFyaXNvbnMgdXNlIHN0cmljdCBQaSAwLjk5LjIgYXV0aG9yaXR5IiwicmVhc29uIjoiaGlzdG9yaWNhbC9taWdyYXRpb24vcmVqZWN0aW9uIHRlc3Qgc2NvcGUifQ==",
-    "eyJmaWxlbmFtZSI6InNjcmlwdHMvcGktcmVsZWFzZS1jb250cmFjdC50ZXN0Lm1qcyIsIm1hcmtlciI6Im9sZC1jb21taXQiLCJsaW5lQ29udGV4dCI6ImNvbnN0IGNvbW1pdCA9IFwiZjA3MjE4YzRkNGJiYzEyYmVmMDU2YTcwNThjM2RkNDlkZmU0MWFiZVwiOyIsInNjb3BlIjoidGVzdDpoaXN0b3JpY2FsIFBpIDAuODcuMSBiaWxpbmd1YWwgYXVkaXQgbGVkZ2VyIGNvdmVycyBldmVyeSBwdWJsaWMgcGFpciB3aXRoIGZpbGUgZXZpZGVuY2UiLCJyZWFzb24iOiJoaXN0b3JpY2FsL21pZ3JhdGlvbi9yZWplY3Rpb24gdGVzdCBzY29wZSJ9",
-    "eyJmaWxlbmFtZSI6InNjcmlwdHMvcGktcmVsZWFzZS1jb250cmFjdC50ZXN0Lm1qcyIsIm1hcmtlciI6Im9sZC1jb21taXQiLCJsaW5lQ29udGV4dCI6IlwiZjA3MjE4YzRkNGJiYzEyYmVmMDU2YTcwNThjM2RkNDlkZmU0MWFiZVwiLCIsInNjb3BlIjoiZnVuY3Rpb246YXNzZXJ0QWN0aXZlQ291cnNlQ29tcGFyaXNvbkF1dGhvcml0eSIsInJlYXNvbiI6Imhpc3RvcmljYWwvbWlncmF0aW9uL3JlamVjdGlvbiB0ZXN0IHNjb3BlIn0=",
-    "eyJmaWxlbmFtZSI6InNjcmlwdHMvcGktcmVsZWFzZS1jb250cmFjdC50ZXN0Lm1qcyIsIm1hcmtlciI6Im9sZC1jb21taXQiLCJsaW5lQ29udGV4dCI6ImV4cHJlc3Npb246IG5ldyBSZWdFeHAoXCJmMDcyMThjNGQ0YmJjMTJiZWYwNTZhNzA1OGMzZGQ0OWRmZTQxYWJlXCIsIFwiZ2lcIiksIiwic2NvcGUiOiJjb25zdDpzdGFsZUF1dGhvcml0eVBhdHRlcm5zIiwicmVhc29uIjoiaGlzdG9yaWNhbC9taWdyYXRpb24vcmVqZWN0aW9uIHRlc3Qgc2NvcGUifQ==",
-    "eyJmaWxlbmFtZSI6InNjcmlwdHMvcGktcmVsZWFzZS1jb250cmFjdC50ZXN0Lm1qcyIsIm1hcmtlciI6Im9sZC1jb21taXQiLCJsaW5lQ29udGV4dCI6ImNvbnN0IG9sZENvbW1pdCA9IFwiZjA3MjE4YzRkNGJiYzEyYmVmMDU2YTcwNThjM2RkNDlkZmU0MWFiZVwiOyIsInNjb3BlIjoidGVzdDpzdGFsZS1hdXRob3JpdHkgY2xhc3NpZmllciByZWplY3RzIGV2ZXJ5IHByb3RlY3RlZCBtYXJrZXIgaW4gYWN0aXZlIG1hdGVyaWFsIiwicmVhc29uIjoiaGlzdG9yaWNhbC9taWdyYXRpb24vcmVqZWN0aW9uIHRlc3Qgc2NvcGUifQ==",
-    "eyJmaWxlbmFtZSI6InNjcmlwdHMvcGktcmVsZWFzZS1jb250cmFjdC50ZXN0Lm1qcyIsIm1hcmtlciI6Im1vdmluZy1waS1zb3VyY2UiLCJsaW5lQ29udGV4dCI6IlwiaHR0cHM6Ly9naXRodWIuY29tL2VhcmVuZGlsLXdvcmtzL3BpL2Jsb2IvbWFpbi9kb2NzL3YwLjg0LjMtbm90ZXMubWRcIiwiLCJzY29wZSI6InRlc3Q6YWN0aXZlIGNvbnRlbnQgdXNlcyB0aGUgbWFpbnRhaW5lZCBQaSByZXBvc2l0b3J5IGF1dGhvcml0eSIsInJlYXNvbiI6Imhpc3RvcmljYWwvbWlncmF0aW9uL3JlamVjdGlvbiB0ZXN0IHNjb3BlIn0=",
-    "eyJmaWxlbmFtZSI6InNjcmlwdHMvcGktcmVsZWFzZS1jb250cmFjdC50ZXN0Lm1qcyIsIm1hcmtlciI6Im1vdmluZy1waS1zb3VyY2UiLCJsaW5lQ29udGV4dCI6IlwiU2VlIGh0dHBzOi8vZ2l0aHViLmNvbS9lYXJlbmRpbC13b3Jrcy9waS9ibG9iL21haW4vcGFja2FnZXMvYWkvc3JjL2luZGV4LnRzIGZvciBpbXBsZW1lbnRhdGlvbiBkZXRhaWxzLlwiLCIsInNjb3BlIjoidGVzdDpkZXRlY3RzIGludmFsaWQgUGkgc291cmNlIHJlZnMgd2l0aG91dCBhIHJlbGVhc2UgdmVyc2lvbiBjbGFpbSIsInJlYXNvbiI6Imhpc3RvcmljYWwvbWlncmF0aW9uL3JlamVjdGlvbiB0ZXN0IHNjb3BlIn0=",
-    "eyJmaWxlbmFtZSI6InNjcmlwdHMvcGktcmVsZWFzZS1jb250cmFjdC50ZXN0Lm1qcyIsIm1hcmtlciI6Im1vdmluZy1waS1zb3VyY2UiLCJsaW5lQ29udGV4dCI6Imxpbms6IFwiaHR0cHM6Ly9naXRodWIuY29tL2VhcmVuZGlsLXdvcmtzL3BpL2Jsb2IvbWFpbi9wYWNrYWdlcy9haS9zcmMvaW5kZXgudHNcIiwiLCJzY29wZSI6InRlc3Q6ZGV0ZWN0cyBpbnZhbGlkIFBpIHNvdXJjZSByZWZzIHdpdGhvdXQgYSByZWxlYXNlIHZlcnNpb24gY2xhaW0iLCJyZWFzb24iOiJoaXN0b3JpY2FsL21pZ3JhdGlvbi9yZWplY3Rpb24gdGVzdCBzY29wZSJ9",
-    "eyJmaWxlbmFtZSI6InNjcmlwdHMvcGktcmVsZWFzZS1jb250cmFjdC50ZXN0Lm1qcyIsIm1hcmtlciI6Im1vdmluZy1waS1zb3VyY2UiLCJsaW5lQ29udGV4dCI6IlwiIyMgMjAyNS0wMS0wMVxcbmh0dHBzOi8vZ2l0aHViLmNvbS9lYXJlbmRpbC13b3Jrcy9waS9ibG9iL21haW4vcGFja2FnZXMvYWkvc3JjL3R5cGVzLnRzXCIsIiwic2NvcGUiOiJ0ZXN0OnN0YWxlLWF1dGhvcml0eSBjbGFzc2lmaWVyIHJlamVjdHMgZXZlcnkgcHJvdGVjdGVkIG1hcmtlciBpbiBhY3RpdmUgbWF0ZXJpYWwiLCJyZWFzb24iOiJoaXN0b3JpY2FsL21pZ3JhdGlvbi9yZWplY3Rpb24gdGVzdCBzY29wZSJ9",
-  ].map(decodeStaleAuthorityDescriptor),
-);
+function descriptorTemplate(value) {
+  let template = value;
+  for (const [token, markerValue] of Object.entries(staleDescriptorValues)) {
+    template = template.split(markerValue).join(token);
+  }
+  return template;
+}
+
+function formatStaleAuthorityDescriptorTemplates(entries) {
+  return JSON.stringify(
+    staleAuthorityOccurrences(entries).map((occurrence) => ({
+      filename: occurrence.filename,
+      marker: occurrence.marker,
+      lineContextTemplate: descriptorTemplate(occurrence.lineContext),
+      scopeTemplate: descriptorTemplate(occurrence.scope),
+    })),
+    null,
+    2,
+  );
+}
 
 async function readStaleAuthoritySources() {
   async function readTree(relativeDirectory) {
@@ -11443,6 +11982,8 @@ test("Pi 0.99.2 bilingual audit ledger covers every public pair", async () => {
   );
   assert.equal(new Set(rows.map(([key]) => key)).size, 46);
   assert.deepEqual(Object.keys(expectedAuditEvidence), expectedKeys);
+  assert.deepEqual(Object.keys(expectedAuditEvidenceLabels), expectedKeys);
+  assert.deepEqual(Object.keys(expectedAuditDeletions), expectedKeys);
   assert.deepEqual(Object.keys(expectedAuditOutcomes), expectedKeys);
   const authorityOrder = [
     "Published GitHub releases v0.99.2, v0.99.1, v0.99.0",
@@ -11487,8 +12028,14 @@ test("Pi 0.99.2 bilingual audit ledger covers every public pair", async () => {
       expectedAuditOutcomes[key],
       `${key}: audited outcome`,
     );
-    const evidenceURL = /^\[[^\]]+\]\((https:\/\/[^)]+)\)$/.exec(evidence)?.[1];
-    assert.ok(evidenceURL, `${key}: one exact Markdown evidence URL`);
+    const evidenceMatch = /^\[([^\]]+)\]\((https:\/\/[^)]+)\)$/.exec(evidence);
+    assert.ok(evidenceMatch, `${key}: one exact Markdown evidence URL`);
+    const [, evidenceLabel, evidenceURL] = evidenceMatch;
+    assert.equal(
+      evidenceLabel,
+      expectedAuditEvidenceLabels[key],
+      `${key}: evidence claim label`,
+    );
     assert.equal(
       evidenceURL,
       expectedAuditEvidence[key],
@@ -11524,9 +12071,9 @@ test("Pi 0.99.2 bilingual audit ledger covers every public pair", async () => {
       ],
       `${page.key}: fence count must be measured from both files`,
     );
-    assert.notEqual(
-      deletion.toLowerCase(),
-      "",
+    assert.equal(
+      deletion,
+      expectedAuditDeletions[key],
       `${page.key}: deletion disposition`,
     );
   }
@@ -11574,6 +12121,7 @@ test("stale-authority classifier rejects every protected marker in active materi
     },
   ];
   for (const mutation of mutations) {
+    exactFixtureDescriptor(mutation, "positive control for protected marker");
     assert.throws(
       () => assertNoUnclassifiedStaleAuthority([mutation]),
       /unclassified stale authority/,
@@ -11582,21 +12130,41 @@ test("stale-authority classifier rejects every protected marker in active materi
   }
 });
 
-test("stale-authority classifier rejects a stale allowlist count", () => {
-  assert.throws(
-    () =>
-      assertNoUnclassifiedStaleAuthority(
-        [{ filename: "scripts/fixture.mjs", source: "" }],
-        [
-          {
-            filename: "scripts/fixture.mjs",
-            marker: "old-version",
-            count: 1,
-            reason: "must remain exact",
-          },
-        ],
-      ),
-    /unclassified stale authority/,
+function exactFixtureDescriptor(entry, reason) {
+  const occurrences = staleAuthorityOccurrences([entry]);
+  assert.equal(
+    occurrences.length,
+    1,
+    "fixture must contain one protected marker",
+  );
+  const [occurrence] = occurrences;
+  const descriptor = {
+    filename: occurrence.filename,
+    marker: occurrence.marker,
+    lineContextTemplate: descriptorTemplate(occurrence.lineContext),
+    scopeTemplate: descriptorTemplate(occurrence.scope),
+    reason,
+  };
+  assert.doesNotThrow(() =>
+    assertNoUnclassifiedStaleAuthority([entry], [descriptor]),
+  );
+  return descriptor;
+}
+
+test("stale-authority descriptor templates positive-control their exact fixture", () => {
+  const oldVersion = "0.87" + ".1";
+  const entry = {
+    filename: "scripts/fixture.mjs",
+    source: `test("historical migration", () => {\n  const stale = "${oldVersion}";\n});`,
+  };
+  const descriptor = exactFixtureDescriptor(
+    entry,
+    "historical rejection fixture",
+  );
+  assert.equal(descriptor.scopeTemplate, "test:historical migration");
+  assert.equal(
+    descriptor.lineContextTemplate,
+    'const stale = "<STALE:old-version>";',
   );
 });
 
@@ -11606,20 +12174,13 @@ test("stale-authority classifier rejects a relocated historical changelog marker
     filename: "content/en/changelog.md",
     source: `## 2026-10-01\nBaseline ${oldVersion}\n\n## 2026-09-23\nNo legacy marker`,
   };
+  const original = {
+    filename: relocated.filename,
+    source: `## 2026-09-23\nBaseline ${oldVersion}`,
+  };
+  const descriptor = exactFixtureDescriptor(original, "dated historical entry");
   assert.throws(
-    () =>
-      assertNoUnclassifiedStaleAuthority(
-        [relocated],
-        [
-          {
-            filename: relocated.filename,
-            marker: "old-version",
-            lineContext: `Baseline ${oldVersion}`,
-            scope: "## 2026-09-23",
-            reason: "dated historical entry",
-          },
-        ],
-      ),
+    () => assertNoUnclassifiedStaleAuthority([relocated], [descriptor]),
     /unclassified stale authority/,
   );
 });
@@ -11630,20 +12191,16 @@ test("stale-authority classifier rejects a substituted marker in an unrelated te
     filename: "scripts/course-content.test.mjs",
     source: `test("current behavior", () => {\n  const stale = "${oldVersion}";\n});`,
   };
+  const original = {
+    filename: substituted.filename,
+    source: `test("historical migration", () => {\n  const stale = "${oldVersion}";\n});`,
+  };
+  const descriptor = exactFixtureDescriptor(
+    original,
+    "historical rejection fixture",
+  );
   assert.throws(
-    () =>
-      assertNoUnclassifiedStaleAuthority(
-        [substituted],
-        [
-          {
-            filename: substituted.filename,
-            marker: "old-version",
-            lineContext: `const stale = "${oldVersion}";`,
-            scope: 'test("historical migration", () => {',
-            reason: "historical rejection fixture",
-          },
-        ],
-      ),
+    () => assertNoUnclassifiedStaleAuthority([substituted], [descriptor]),
     /unclassified stale authority/,
   );
 });
@@ -11655,26 +12212,27 @@ test("stale-authority classifier rejects an augmented marker in its original tes
     filename: "scripts/course-content.test.mjs",
     source: `test("historical migration", () => {\n  ${originalLine} // current Pi 0.99.2 authority\n});`,
   };
+  const original = {
+    filename: augmented.filename,
+    source: `test("historical migration", () => {\n  ${originalLine}\n});`,
+  };
+  const descriptor = exactFixtureDescriptor(
+    original,
+    "historical rejection fixture",
+  );
   assert.throws(
-    () =>
-      assertNoUnclassifiedStaleAuthority(
-        [augmented],
-        [
-          {
-            filename: augmented.filename,
-            marker: "old-version",
-            lineContext: originalLine,
-            scope: "test:historical migration",
-            reason: "historical rejection fixture",
-          },
-        ],
-      ),
+    () => assertNoUnclassifiedStaleAuthority([augmented], [descriptor]),
     /unclassified stale authority/,
   );
 });
 
 test("stale active authority and moving source pins are absent", async () => {
   const entries = await readStaleAuthoritySources();
+  assert.equal(
+    staleAuthorityAllowlist.length,
+    52,
+    "all reviewed descriptors remain explicit",
+  );
   assert.ok(entries.some(({ filename }) => filename === "README.md"));
   assert.ok(entries.some(({ filename }) => filename === "CONTRIBUTING.md"));
   assert.ok(entries.some(({ filename }) => filename.startsWith("content/")));
@@ -11683,19 +12241,51 @@ test("stale active authority and moving source pins are absent", async () => {
   for (const allowed of staleAuthorityAllowlist) {
     assert.match(allowed.filename, /^(?:content|scripts)\//);
     assert.notEqual(
-      allowed.lineContext,
+      allowed.lineContextTemplate,
       "",
       `${allowed.filename}: exact line context`,
     );
-    assert.notEqual(allowed.scope, "", `${allowed.filename}: enclosing scope`);
+    assert.notEqual(
+      allowed.scopeTemplate,
+      "",
+      `${allowed.filename}: enclosing scope`,
+    );
     assert.notEqual(allowed.reason, "", `${allowed.filename}: reason`);
     if (allowed.filename.endsWith("/changelog.md")) {
-      assert.equal(allowed.scope, "## 2026-09-23");
+      assert.equal(allowed.scopeTemplate, "## 2026-09-23");
       assert.notEqual(allowed.marker, "moving-pi-source");
     }
   }
   assertNoUnclassifiedStaleAuthority(entries, staleAuthorityAllowlist);
 });
+
+function assertFaqTroubleshootingRelationships(section, locale) {
+  const english = locale === "en";
+  assert.match(
+    section,
+    english
+      ? /OpenAI-compatible` \| Omit an empty text part from an image-only request; preserve the image block\./
+      : /OpenAI-compatible` \| Bỏ text part rỗng khỏi request chỉ có image; giữ nguyên image block\./,
+  );
+  assert.match(
+    section,
+    english
+      ? /earlier content under `# Conversation` and continuation guidance under `# Instructions`/
+      : /nội dung trước đó dưới `# Conversation` và chỉ dẫn tiếp tục dưới `# Instructions`/,
+  );
+  assert.match(
+    section,
+    english
+      ? /no public compaction option controls it\./
+      : /không có public compaction option điều khiển hành vi này\./,
+  );
+  assert.match(
+    section,
+    english
+      ? /AgentTool\.execute` implementation returns an `AgentToolResult`[\s\S]*does not construct a `ToolResultMessage`[\s\S]*Agent Core associates the result with the current `ToolCall`/
+      : /AgentTool\.execute` trả về `AgentToolResult`[\s\S]*không tự dựng `ToolResultMessage`[\s\S]*Agent Core liên kết result với `ToolCall` hiện tại/,
+  );
+}
 
 test("FAQ troubleshooting preserves current version-neutral provider edges", async () => {
   for (const { locale, source } of await readLocalizedContent("help/faq.md")) {
@@ -11704,10 +12294,52 @@ test("FAQ troubleshooting preserves current version-neutral provider edges", asy
       locale === "en" ? "## Common pitfalls" : "## Lỗi thường gặp",
       `${locale} FAQ current provider edges`,
     ).body;
-    assert.match(section, /OpenAI-compatible/);
-    assert.match(section, /Claude Fable 5\.1 \+ split-turn compaction/);
-    assert.match(section, /Conversation/);
-    assert.match(section, /Instructions/);
+    assertFaqTroubleshootingRelationships(section, locale);
+    const mutations =
+      locale === "en"
+        ? [
+            ["preserve the image block", "drop the image block"],
+            [
+              "continuation guidance under `# Instructions`",
+              "continuation guidance under `# Conversation`",
+            ],
+            [
+              "no public compaction option controls it",
+              "a public compaction option controls it",
+            ],
+            [
+              "does not construct a `ToolResultMessage`",
+              "constructs a `ToolResultMessage`",
+            ],
+          ]
+        : [
+            ["giữ nguyên image block", "bỏ image block"],
+            [
+              "chỉ dẫn tiếp tục dưới `# Instructions`",
+              "chỉ dẫn tiếp tục dưới `# Conversation`",
+            ],
+            [
+              "không có public compaction option điều khiển hành vi này",
+              "có public compaction option điều khiển hành vi này",
+            ],
+            [
+              "không tự dựng `ToolResultMessage`",
+              "tự dựng `ToolResultMessage`",
+            ],
+          ];
+    for (const [from, to] of mutations) {
+      assert.notEqual(
+        section,
+        section.replace(from, to),
+        `${locale}: mutation must alter FAQ`,
+      );
+      assert.throws(() =>
+        assertFaqTroubleshootingRelationships(
+          section.replace(from, to),
+          locale,
+        ),
+      );
+    }
     assert.doesNotMatch(section, /0\.87\.1/);
   }
 });

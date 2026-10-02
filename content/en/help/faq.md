@@ -96,6 +96,8 @@ These implementation details are useful when diagnosing provider-specific failur
 
 These corrections expose no public API. If an OpenAI-compatible endpoint still rejects an image-only turn, inspect the serialized content parts. For split-turn compaction, the separation prevents the continuation guidance from being treated as earlier conversation; no public compaction option controls it.
 
+Older releases could report a Claude Fable refusal while summarizing a split turn. Treat that as a historical diagnostic comparison, not a current API setting: verify that prior transcript remains under `# Conversation` and only the continuation guidance appears under `# Instructions`. The current `0.99.2` behavior keeps those roles separate.
+
 ### My tool result does not reach the model
 
 An `AgentTool.execute` implementation returns an `AgentToolResult` with `content` and optional `details` or `usage`; it does not construct a `ToolResultMessage`. Agent Core associates the result with the current `ToolCall` and creates the protocol message with the matching call ID and Tool name. If no result reaches the model, inspect the returned content blocks and the `tool_execution_end` event.

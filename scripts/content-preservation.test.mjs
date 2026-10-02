@@ -186,8 +186,8 @@ function validRule(path) {
   };
 }
 
-const historicalPreservationManifestSha256 =
-  "4308f425a72aa7e1a75f0090f7eb90c6e38e265fd019ccb833016b520ee0b880";
+const historicalPreservationPrefixSha256 =
+  "4a8996d4a310b416369b78b586bdfda7101eff04527c1925308e7ada06b80b81";
 const expectedNewPublicTranslationKeys = [
   "how-to-use-codemode-and-mcp",
   "how-to-route-virtual-models",
@@ -342,8 +342,8 @@ test("preservation manifest coverage rejects incomplete and mis-keyed translatio
   manifest.pages[0].key = "home";
 
   assert.deepEqual(preservationManifestCoverageErrors(translations, manifest), [
-    "preservation-manifest.json: pages[1].key must match translation key home",
-    "preservation-manifest.json: missing pages[3] for translation key quickstart (vi/quickstart.md)",
+    "preservation-manifest.json: vi/index.mdx must match translation key home",
+    "preservation-manifest.json: missing translation key quickstart (vi/quickstart.md)",
   ]);
 });
 
@@ -395,10 +395,13 @@ test("historical preservation prefix rejects a coordinated route rename", async 
   ]);
   const historicalTranslations = {
     pages: translations.pages.filter((page) =>
-      manifest.pages.some((record) => record.key === page.key),
+      manifest.pages.slice(0, 86).some((record) => record.key === page.key),
     ),
   };
-  const mutatedManifest = structuredClone(manifest);
+  const mutatedManifest = {
+    ...structuredClone(manifest),
+    pages: structuredClone(manifest.pages.slice(0, 86)),
+  };
   const mutatedTranslations = structuredClone(historicalTranslations);
   const translation = mutatedTranslations.pages.find(
     (page) => page.key === "quickstart",
@@ -419,7 +422,7 @@ test("historical preservation prefix rejects a coordinated route rename", async 
     "a coordinated manifest/frontmatter rename remains structurally consistent",
   );
   assert.deepEqual(historicalPreservationPrefixErrors(mutatedManifest), [
-    "preservation-manifest.json: the immutable 54-record historical key/path prefix changed",
+    "preservation-manifest.json: the immutable 86-record historical prefix changed",
   ]);
 });
 
@@ -436,11 +439,13 @@ test("the repository content satisfies the historical preservation baseline", as
   ]);
   const manifest = JSON.parse(manifestSource);
   assert.equal(
-    createHash("sha256").update(manifestSource).digest("hex"),
-    historicalPreservationManifestSha256,
-    "the immutable 86-record historical preservation baseline must remain byte-identical",
+    createHash("sha256")
+      .update(JSON.stringify(manifest.pages.slice(0, 86)))
+      .digest("hex"),
+    historicalPreservationPrefixSha256,
+    "the immutable 86-record historical preservation prefix must remain semantically identical",
   );
-  assert.equal(manifest.pages.length, 86);
+  assert.equal(manifest.pages.length, 92);
   assert.equal(translations.pages.length, 46);
   const translationKeyByPath = new Map(
     translations.pages.flatMap((page) => [
@@ -448,7 +453,7 @@ test("the repository content satisfies the historical preservation baseline", as
       [`vi/${page.vi}`, page.key],
     ]),
   );
-  assert.equal(new Set(manifest.pages.map((record) => record.path)).size, 86);
+  assert.equal(new Set(manifest.pages.map((record) => record.path)).size, 92);
   for (const record of manifest.pages) {
     assert.equal(
       translationKeyByPath.get(record.path),
@@ -456,7 +461,8 @@ test("the repository content satisfies the historical preservation baseline", as
       `${record.path} must remain mapped to its historical translation key`,
     );
   }
-  const historicalKeys = new Set(manifest.pages.map((record) => record.key));
+  const historicalPages = manifest.pages.slice(0, 86);
+  const historicalKeys = new Set(historicalPages.map((record) => record.key));
   assert.deepEqual(
     translations.pages
       .filter((page) => !historicalKeys.has(page.key))
@@ -464,7 +470,7 @@ test("the repository content satisfies the historical preservation baseline", as
     expectedNewPublicTranslationKeys,
     "only the three current public pairs may sit outside the immutable historical baseline",
   );
-  const historicalPaths = new Set(manifest.pages.map((record) => record.path));
+  const historicalPaths = new Set(historicalPages.map((record) => record.path));
   assert.deepEqual(
     translations.pages
       .flatMap((page) => [`en/${page.en}`, `vi/${page.vi}`])
