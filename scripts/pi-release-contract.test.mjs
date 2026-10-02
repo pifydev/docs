@@ -11388,10 +11388,9 @@ function assertNoUnclassifiedStaleAuthority(entries, allowlist = []) {
       (descriptor) =>
         descriptor.filename === occurrence.filename &&
         descriptor.marker === occurrence.marker &&
-        descriptorValue(descriptor.scopeTemplate, descriptor.marker) ===
-          occurrence.scope &&
+        descriptorValue(descriptor.scopeTemplate) === occurrence.scope &&
         occurrence.lineContext ===
-          descriptorValue(descriptor.lineContextTemplate, descriptor.marker),
+          descriptorValue(descriptor.lineContextTemplate),
     );
     if (descriptorIndex === -1) {
       unclassified.push(occurrence);
@@ -11404,11 +11403,8 @@ function assertNoUnclassifiedStaleAuthority(entries, allowlist = []) {
       ...descriptor,
       occurrence: "missing expected occurrence",
       lineNumber: "missing",
-      lineContext: descriptorValue(
-        descriptor.lineContextTemplate,
-        descriptor.marker,
-      ),
-      scope: descriptorValue(descriptor.scopeTemplate, descriptor.marker),
+      lineContext: descriptorValue(descriptor.lineContextTemplate),
+      scope: descriptorValue(descriptor.scopeTemplate),
     })),
   );
   assert.equal(
@@ -11878,7 +11874,7 @@ const staleDescriptorValues = Object.freeze({
     "https://github.com/earendil-works/pi/tree/" + "main/",
 });
 
-function descriptorValue(template, marker) {
+function descriptorValue(template) {
   let value = template;
   for (const [token, markerValue] of Object.entries(staleDescriptorValues)) {
     value = value.replaceAll(token, markerValue);
@@ -11906,6 +11902,27 @@ function formatStaleAuthorityDescriptorTemplates(entries) {
     2,
   );
 }
+
+test("stale descriptor formatter emits readable exact historical templates", () => {
+  const historicalVersion = "0.87" + ".1";
+  const templates = JSON.parse(
+    formatStaleAuthorityDescriptorTemplates([
+      {
+        filename: "fixtures/historical-migration.mjs",
+        source: `test("historical fixture", () => {\n  const version = "${historicalVersion}";\n});`,
+      },
+    ]),
+  );
+
+  assert.deepEqual(templates, [
+    {
+      filename: "fixtures/historical-migration.mjs",
+      marker: "old-version",
+      lineContextTemplate: 'const version = "<STALE:old-version>";',
+      scopeTemplate: "test:historical fixture",
+    },
+  ]);
+});
 
 async function readStaleAuthoritySources() {
   async function readTree(relativeDirectory) {

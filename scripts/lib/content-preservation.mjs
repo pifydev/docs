@@ -404,7 +404,7 @@ export function preservationManifestCoverageErrors(translations, manifest) {
     }
   });
 
-  expectedPages.forEach((expected, index) => {
+  expectedPages.forEach((expected) => {
     const actual = manifestByPath.get(expected.path)?.page;
     if (!actual) {
       errors.push(
